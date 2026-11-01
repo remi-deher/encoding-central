@@ -1,0 +1,11 @@
+bin/
+obj/
+.vs/
+*.user
+*.db
+*.db-wal
+*.db-shm
+data/
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/

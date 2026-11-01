@@ -1,0 +1,12 @@
+services:
+  server:
+    image: encoding-central:dev
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - server-data:/var/lib/encoding
+    restart: unless-stopped
+
+volumes:
+  server-data:

@@ -1,0 +1,90 @@
+<a class="skip-to-content-link" href="#main-content">Aller au contenu principal</a>
+
+<div
+  class="application-shell"
+  [class.auth-shell]="authMode()"
+  [class.rail-navigation-shell]="rail()"
+  [class.compact-navigation-shell]="showDock()"
+>
+  @if (authMode()) {
+    <header class="auth-header">
+      <a class="brand" routerLink="/" aria-label="Encoding, accueil">
+        <span class="brand-mark" aria-hidden="true">E</span>
+        <span class="brand-name">Encoding</span>
+      </a>
+      <button type="button" class="icon-button" (click)="appearance.toggleTheme()" [attr.aria-label]="appearance.theme() === 'dark' ? 'Thème clair' : 'Thème sombre'">
+        {{ appearance.theme() === 'dark' ? 'Clair' : 'Sombre' }}
+      </button>
+    </header>
+  }
+
+  <div class="application-navigation-layout" [class.auth-navigation-layout]="authMode()">
+    @if (showSidebar()) {
+      <aside class="application-sidebar" [class.is-collapsed]="rail()" aria-label="Navigation principale">
+        <div class="sidebar-content">
+          <a class="brand sidebar-brand" routerLink="/" aria-label="Encoding, accueil">
+            <span class="brand-mark" aria-hidden="true">E</span>
+            @if (!rail()) {
+              <span class="brand-name">Encoding</span>
+            }
+          </a>
+          <app-primary-navigation class="sidebar-navigation" [collapsed]="rail()" />
+          <div class="sidebar-footer" [class.is-collapsed]="rail()">
+            <div class="sidebar-footer-controls">
+              <button
+                type="button"
+                class="sidebar-collapse-btn"
+                [hidden]="tabletHidden()"
+                [attr.aria-expanded]="!rail()"
+                [attr.aria-label]="rail() ? 'Déplier la navigation' : 'Replier la navigation'"
+                (click)="toggleCollapsed()"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  @if (collapsed()) {
+                    <path d="M9 5l7 7-7 7" />
+                  } @else {
+                    <path d="M15 19l-7-7 7-7" />
+                  }
+                </svg>
+                @if (!rail()) {
+                  <span>Replier</span>
+                }
+              </button>
+              <button type="button" class="icon-button" (click)="appearance.cyclePalette()" [attr.aria-label]="'Palette ' + appearance.palette()">
+                {{ paletteMark() }}
+              </button>
+              <button type="button" class="icon-button" (click)="appearance.toggleTheme()" [attr.aria-label]="appearance.theme() === 'dark' ? 'Thème clair' : 'Thème sombre'">
+                {{ appearance.theme() === 'dark' ? 'C' : 'S' }}
+              </button>
+            </div>
+            @if (user(); as account) {
+              <button type="button" class="logout-button" (click)="logout()">
+                {{ rail() ? '×' : 'Se déconnecter' }}
+                @if (!rail()) {
+                  <span class="logout-user">{{ account.username }}</span>
+                }
+              </button>
+            }
+          </div>
+        </div>
+      </aside>
+    }
+
+    <div class="page-transition-region">
+      @if (showDock()) {
+        <app-primary-navigation [mobileDock]="true" />
+      }
+      @if (!authMode()) {
+        <header class="application-header" aria-label="En-tête">
+          <p class="header-title">Serveur central</p>
+          @if (showDock() && user()) {
+            <button type="button" class="header-logout" (click)="logout()">Se déconnecter</button>
+          }
+        </header>
+      }
+      <main id="main-content" class="main-content" tabindex="-1">
+        <router-outlet />
+      </main>
+    </div>
+  </div>
+</div>
