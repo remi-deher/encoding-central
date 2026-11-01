@@ -65,7 +65,13 @@ docker compose up --build
 
 L'image construite se nomme `encoding-central:dev`. Le conteneur écoute sur le port 8080. Le volume `server-data` conserve la base. Rien dans cette image n'encode : FFmpeg et les autres outils arriveront par le Store.
 
-Les tests du serveur :
+Les tests locaux passent par le démon Docker. `scripts/test-docker.sh` lance la suite dans `mcr.microsoft.com/dotnet/sdk:10.0`, construit l'image, puis vérifie la santé, la mise en service, la session et l'interface servie. Si le compte est dans le groupe `docker` mais que la session ne l'a pas encore, précéder l'appel de `newgrp docker`.
+
+```sh
+./scripts/test-docker.sh
+```
+
+La suite seule, hors image :
 
 ```sh
 dotnet test backend/Encoding.Central.slnx -c Release
