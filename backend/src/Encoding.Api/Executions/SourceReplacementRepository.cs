@@ -77,7 +77,7 @@ public sealed class SourceReplacementRepository(DbDataSource dataSource,SourceWr
 
     public async Task<SourceReplacementResponse?> GetAsync(Guid execution,CancellationToken ct)
     {
-        await using var cmd=dataSource.CreateCommand("SELECT execution_id,state,original_path,final_path,backup_path,source_sha,result_sha,replaced_at,grace_until,finished_at,detail FROM source_replacements WHERE execution_id=@id UNION ALL SELECT execution_id,CASE WHEN state='claimed' AND claim_until>clock_timestamp() THEN 'replacing' ELSE 'waiting' END,original_path,NULL,NULL,source_sha,result_sha,created_at,NULL,finished_at,detail FROM pending_source_writes p WHERE execution_id=@id AND NOT EXISTS(SELECT 1 FROM source_replacements r WHERE r.execution_id=p.execution_id)");
+        await using var cmd=dataSource.CreateCommand("SELECT execution_id,state,original_path,final_path,backup_path,source_sha,result_sha,replaced_at,grace_until,finished_at,detail FROM source_replacements WHERE execution_id=@id");
         cmd.Parameters.AddWithValue("id",execution); await using var r=await cmd.ExecuteReaderAsync(ct);
         return await r.ReadAsync(ct)?new(r.GetGuid(0),r.GetString(1),r.GetString(2),r.IsDBNull(3)?null:r.GetString(3),r.IsDBNull(4)?null:r.GetString(4),r.GetString(5),r.GetString(6),
             r.GetFieldValue<DateTimeOffset>(7),r.IsDBNull(8)?null:r.GetFieldValue<DateTimeOffset>(8),r.IsDBNull(9)?null:r.GetFieldValue<DateTimeOffset>(9),r.IsDBNull(10)?null:r.GetString(10)):null;

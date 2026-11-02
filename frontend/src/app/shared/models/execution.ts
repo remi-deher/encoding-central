@@ -6,12 +6,6 @@ export interface ExecutionResponse {
     readonly stepId: string | null;
     readonly publicationConfirmed: boolean | null;
   } | null;
-  readonly ownership?: {
-    readonly executionId: string;
-    readonly ownerPeerId: string;
-    readonly epoch: number;
-    readonly state: string;
-  } | null;
   readonly id: string;
   readonly media: string;
   readonly library: string;
@@ -102,7 +96,6 @@ export interface ExecutionEventResponse {
 export interface ExecutionOverviewResponse {
   readonly executions: readonly ExecutionResponse[];
   readonly queuedCount: number;
-  readonly quarantinedCount?: number;
   readonly activeCount: number;
   readonly failedCount: number;
   readonly cancelledCount: number;
@@ -142,22 +135,7 @@ export interface ExecutionActivityResponse {
 }
 
 export function executionStateLabel(execution: ExecutionResponse): string {
-  switch (execution.ownership?.state) {
-    case 'quarantined':
-      return 'En quarantaine';
-    case 'frozen':
-      return ['queued', 'running', 'cancelling'].includes(execution.state)
-        ? 'Transfert en préparation'
-        : EXECUTION_STATE_LABELS[execution.state];
-    case 'received':
-      return 'Réception inactive';
-    case 'transferred':
-      return ['queued', 'running', 'cancelling'].includes(execution.state)
-        ? 'Cédée à un autre serveur'
-        : EXECUTION_STATE_LABELS[execution.state];
-    default:
-      return EXECUTION_STATE_LABELS[execution.state];
-  }
+  return EXECUTION_STATE_LABELS[execution.state];
 }
 
 export function executionPhaseLabel(phase: string | null | undefined): string {

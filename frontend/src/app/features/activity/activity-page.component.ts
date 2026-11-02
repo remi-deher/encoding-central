@@ -441,7 +441,7 @@ export class ActivityPageComponent {
   protected readonly canRetry = computed(() => this.selectedExecution()?.state === 'failed');
   protected readonly canResume = computed(() => {
     const execution = this.selectedExecution();
-    return execution?.state === 'cancelled' && execution.ownership?.state !== 'quarantined';
+    return execution?.state === 'cancelled';
   });
   protected readonly eventColumns: readonly DataTableColumn[] = [
     { key: 'revision', label: 'Ordre' },

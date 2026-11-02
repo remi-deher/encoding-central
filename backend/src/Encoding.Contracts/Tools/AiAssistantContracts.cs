@@ -124,6 +124,3 @@ public sealed record AiAssistantActivity(
     string? ConversationTitle = null);
 
 // Only exchanged over the authenticated, encrypted peer transport; never accepted from a public HTTP body.
-public sealed record AiAssistantForwardRequest(AiAssistantMessageRequest Request, Guid OwnerId, bool IsAdmin);
-public sealed record AiAssistantForwardResponse(AiAssistantMessageResponse? Result, string? Error = null, bool InvalidRequest = false);
-public sealed record AiAssistantForwardCancel(Guid OwnerId, Guid RequestId);

@@ -15,11 +15,6 @@ public sealed record RuntimeReplacementTask(Guid ExecutionId, string Action, str
     string SourceSha256, string ResultSha256,bool SourceWriteGuardsSupported=false);
 public sealed record ReportReplacementTask(string Outcome, string? Detail, long? ByteLength = null, DateTimeOffset? ModifiedAt = null);
 
-/// <summary>A policy replacement deferred after the validated, non-overwriting publication.</summary>
-public sealed record PendingSourceWrite(Guid ExecutionId,Guid ClaimId,string Root,string OriginalPath,string PublishedPath,
-    string SourceSha256,string ResultSha256,string ResultExtension,int GraceHours,Guid? LibraryId=null,IReadOnlyList<RuntimePublicationGuard>? Guards=null);
-public sealed record PendingSourceWriteFence(Guid ClaimId,string Root);
-public sealed record PendingSourceWriteCompletion(Guid ClaimId,SourceReplacementReport? Report);
 
 public sealed record SourceWriteAuthorization(long Epoch,string Root);
 public sealed record SourceWriteLocation(string Root);

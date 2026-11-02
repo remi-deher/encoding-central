@@ -1,13 +1,7 @@
 namespace Encoding.Contracts.Tools;
 
-/// <summary>
-/// Réplication d'une connexion IA sur un nœud : <c>State</c> vaut <c>synced</c> (identique à la version du cluster), <c>pending</c>
-/// (écart en cours de résorption ou synchronisation en échec) ou <c>absent</c> (aucune connexion dans le cluster). Aucun secret.
-/// </summary>
-public sealed record AiCredentialStatus(string Provider, string State, long? Revision, DateTimeOffset? SyncedAt);
 public sealed record AiNodeAvailability(Guid NodeId, string Name, IReadOnlyList<string> Providers, bool Reachable = true,
-    IReadOnlyDictionary<string, string?>? Models = null, IReadOnlyList<AiModelCatalog>? Catalogs = null,
-    IReadOnlyList<AiCredentialStatus>? Credentials = null, IReadOnlyList<string>? Reconnect = null);
+    IReadOnlyDictionary<string, string?>? Models = null, IReadOnlyList<AiModelCatalog>? Catalogs = null);
 public sealed record AiClusterView(IReadOnlyList<AiNodeAvailability> Nodes);
 public sealed record AiSessionTurn(Guid RequestId, string UserPrompt, string Content, AiUsage? Usage = null, DateTimeOffset? CompletedAt = null,
     AiTurnModelSelection? Selection = null, Guid? ExecutorNodeId = null);

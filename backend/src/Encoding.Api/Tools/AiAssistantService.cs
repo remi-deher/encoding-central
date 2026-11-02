@@ -31,7 +31,7 @@ public sealed class AiAssistantService(
     public static AiAssistantService Create(
         AiClusterStore store,
         AiClusterService cluster,
-        AiClusterTransport transport,
+        Encoding.Api.Infrastructure.ClusterPeerIdentityStore identity,
         FlowRepository flows,
         ExecutionRepository executions,
         LibraryWorkflowRepository libraryWorkflows,
@@ -42,7 +42,7 @@ public sealed class AiAssistantService(
         IDataProtectionProvider protection,
         FlowTemplateRepository? flowTemplates = null)
     {
-        var support = new AiAssistantSupportService(store, cluster, transport, flows, executions, libraryWorkflows,
+        var support = new AiAssistantSupportService(store, cluster, identity, flows, executions, libraryWorkflows,
             libraries, nodes, nodePresence, mcp, protection, flowTemplates);
         var conversations = new AiAssistantConversationsService(support);
         var actions = new AiAssistantActionsService(support, conversations);

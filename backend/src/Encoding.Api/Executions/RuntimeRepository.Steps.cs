@@ -37,7 +37,7 @@ public sealed partial class RuntimeRepository
     }
     internal static async Task ReleaseAsync(Guid id,DbConnection c,DbTransaction tx,CancellationToken ct)
     {
-        await using var cmd=Sql.Command("UPDATE pending_source_writes SET state='failed',detail='Écriture annulée avec son exécution.',claim_id=NULL,claim_until=NULL,finished_at=clock_timestamp() WHERE execution_id=@id AND state IN ('waiting','claimed') AND EXISTS(SELECT 1 FROM executions e WHERE e.id=@id AND e.state IN ('cancelling','cancelled','failed')); DELETE FROM media_reservations WHERE execution_id=@id AND NOT EXISTS(SELECT 1 FROM pending_source_writes p WHERE p.execution_id=@id AND p.state IN ('waiting','claimed')); DELETE FROM runtime_source_write_waits WHERE execution_id=@id; DELETE FROM disk_locks WHERE execution_id=@id; UPDATE execution_work SET lease_until=NULL,handoff_pending=false WHERE execution_id=@id",
+        await using var cmd=Sql.Command("DELETE FROM media_reservations WHERE execution_id=@id; DELETE FROM runtime_source_write_waits WHERE execution_id=@id; DELETE FROM disk_locks WHERE execution_id=@id; UPDATE execution_work SET lease_until=NULL,handoff_pending=false WHERE execution_id=@id",
             c,tx);
         cmd.Parameters.AddWithValue("id",id); await cmd.ExecuteNonQueryAsync(ct);
     }

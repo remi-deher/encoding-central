@@ -35,22 +35,18 @@ export interface LibraryActivityFile {
   readonly node: string | null;
   readonly progress: number | null;
   readonly updatedAt: string | null;
-  readonly executionOwnershipState?: string | null;
-  readonly quarantineReason?: string | null;
-  readonly conflictingExecutionId?: string | null;
 }
 
 export function activityExecutionLabel(file: LibraryActivityFile): string | null {
   const state = file.executionState as ExecutionState | null;
   if (!state) return null;
   const label = EXECUTION_STATE_LABELS[state] ?? state;
-  return file.executionOwnershipState === 'quarantined' ? `En quarantaine · ${label}` : label;
+  return label;
 }
 
 export function activityExecutionTone(
   file: LibraryActivityFile,
 ): 'accent' | 'neutral' | 'danger' | 'success' | 'warning' {
-  if (file.executionOwnershipState === 'quarantined') return 'warning';
   switch (file.executionState) {
     case 'running':
     case 'cancelling':

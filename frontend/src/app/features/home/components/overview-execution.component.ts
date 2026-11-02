@@ -20,9 +20,7 @@ import { StatusBadgeComponent } from '../../../shared/ui/status-badge.component'
         <app-status-badge
           [label]="stateLabel(execution())"
           [tone]="
-            execution().ownership?.state === 'quarantined'
-              ? 'warning'
-              : execution().state === 'succeeded'
+            execution().state === 'succeeded'
                 ? 'success'
                 : execution().state === 'failed'
                   ? 'danger'

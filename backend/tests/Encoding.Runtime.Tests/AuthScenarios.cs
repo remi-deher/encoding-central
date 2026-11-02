@@ -420,8 +420,6 @@ internal static class AuthScenarios
         Check(await anonymous.StatusAsync(put, $"/api/v1/nodes/{first.Id}/heartbeat", heartbeat, csrf: false, nodeToken: NodeToken()) == HttpStatusCode.Unauthorized, "A heartbeat with a wrong token is refused.");
         Check(await anonymous.StatusAsync(get, $"/api/v1/runtime/nodes/{first.Id}/capacity", nodeToken: token) == HttpStatusCode.OK, "Runtime routes authenticate by node token.");
         Check(await anonymous.StatusAsync(get, $"/api/v1/runtime/nodes/{first.Id}/capacity") == HttpStatusCode.Unauthorized, "Runtime routes refuse requests without a token.");
-        Check(await anonymous.StatusAsync(post,$"/api/v1/runtime/nodes/{first.Id}/source-writes/claim",new {},csrf:false)==HttpStatusCode.Unauthorized,"Deferred source writes refuse requests without a node token.");
-        Check(await anonymous.StatusAsync(post,$"/api/v1/runtime/nodes/{first.Id}/source-writes/{Guid.NewGuid()}/authorize",new { claimId=Guid.NewGuid(),root="/media" },csrf:false,nodeToken:NodeToken())==HttpStatusCode.Unauthorized,"Source-write authorization refuses an unknown node token.");
         var execution = $"/api/v1/executions/{Guid.NewGuid()}";
         Check(await anonymous.StatusAsync(get, execution, nodeToken: token) == HttpStatusCode.NotFound, "A worker may read the state of an execution (authorized, then not found).");
         Check(await anonymous.StatusAsync(get, execution, nodeToken: NodeToken()) == HttpStatusCode.Unauthorized, "An unknown node token cannot read executions.");
@@ -539,8 +537,7 @@ internal static class AuthScenarios
         Check(runtime.Length > 10, "The runtime group is self-authenticated by node token.");
         Check(runtime.Contains("POST /api/v1/runtime/nodes/{nodeId:guid}/executions/{id:guid}/source/prepare"),
             "Deferred source preparation belongs to the group authenticated by node credentials and fenced by lease epoch.");
-        Check(runtime.Contains("POST /api/v1/runtime/nodes/{nodeId:guid}/source-writes/claim")
-            && runtime.Contains("POST /api/v1/runtime/nodes/{nodeId:guid}/executions/{id:guid}/source-write/authorize"),
+        Check(runtime.Contains("POST /api/v1/runtime/nodes/{nodeId:guid}/executions/{id:guid}/source-write/authorize"),
             "Source-write coordination uses the node-token authenticated runtime group and fenced claims.");
         Check(rest.SequenceEqual(expected.Order()), "Only these routes may skip user authentication; update the list deliberately:\n" + string.Join("\n", rest));
         Console.WriteLine("PASS: the anonymous route catalogue matches the reviewed list.");

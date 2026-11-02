@@ -16,7 +16,7 @@ Une décision structurante : nouveau principe, changement d'un invariant des fic
 
 | Numéro | Titre | Statut | Domaine |
 | --- | --- | --- | --- |
-| [0001](0001-replication-connexions-ia.md) | Réplication chiffrée des connexions IA | implemented | ai |
+| [0001](0001-replication-connexions-ia.md) | Réplication chiffrée des connexions IA | superseded | ai |
 | [0002](0002-modification-mkv-sur-place.md) | Modification MKV sur place par bloc dédié | implemented | runtime |
 | [0003](0003-publication-etape-de-flow.md) | Publication comme étape de flow, distincte de la fin du flow | implemented | flows |
 | [0004](0004-reprise-au-checkpoint.md) | Reprise au checkpoint après perte du worker, blocs rejouables | implemented | runtime |

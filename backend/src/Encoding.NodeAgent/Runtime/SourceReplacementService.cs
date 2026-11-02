@@ -21,15 +21,6 @@ public sealed class SourceReplacementService(NodeAgentOptions options,WorkerIden
                         try
                         {
                             using var client=new RuntimeClient(identity,serverUrl);
-                            try
-                            {
-                                if(await client.PostAsync<PendingSourceWrite>("source-writes/claim",new {},ct) is {} pending)
-                                {
-                                    handled|=await PendingSourceWriteHandler.HandleAsync(pending,client,guards,ct);
-                                }
-                            }
-                            catch(HttpRequestException exception) when(exception.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.MethodNotAllowed) { }
-
                             foreach(var task in await client.GetAsync<RuntimeReplacementTask[]>("replacements",ct)) {handled=true;await HandleAsync(task,client,ct);}
                         }
                         catch(OperationCanceledException) when(ct.IsCancellationRequested) { throw; }

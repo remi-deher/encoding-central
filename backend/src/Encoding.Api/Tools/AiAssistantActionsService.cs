@@ -207,15 +207,8 @@ public sealed class AiAssistantActionsService(AiAssistantSupportService support,
         var action = ReadAction(request, user, "business-operation");
         if (action.CoordinatorId is null || action.CoordinatorId == Guid.Empty)
             throw new ArgumentException("Ce jeton de confirmation ne contient pas de coordinateur valide. Préparez à nouveau l’action.");
-        if (action.CoordinatorId != support.Transport.LocalId)
-        {
-            var ownerId = Guid.Parse(AiAssistantSupportService.OwnerId(user));
-            var response = await support.Transport.CallNodeAsync<AiAssistantForwardConfirmResponse>(action.CoordinatorId.Value,
-                "assistant-business-operation", new AiAssistantForwardConfirm(ownerId, true, request), TimeSpan.FromMinutes(2), ct);
-            if (response.InvalidRequest) throw new ArgumentException(response.Error ?? "Jeton de confirmation invalide.");
-            if (!response.Applied) throw new InvalidOperationException(response.Error ?? "L’opération n’a pas pu être appliquée.");
-            return true;
-        }
+        if (action.CoordinatorId != support.LocalId)
+            throw new ArgumentException("Ce jeton de confirmation a été préparé par un autre serveur. Préparez à nouveau l’action.");
         var gate = support.actionGates.GetOrAdd(action.ActionId, _ => new SemaphoreSlim(1, 1));
         await gate.WaitAsync(ct);
         try { return await ConfirmBusinessOperationCoreAsync(request, user, action, ct); }
@@ -336,7 +329,7 @@ public sealed class AiAssistantActionsService(AiAssistantSupportService support,
         var preview = PreviewOperationArguments(arguments);
         return Task.FromResult<AiAssistantPreparedAction?>(PrepareAction(user, "business-operation", Guid.Empty, 0,
             hash, $"{descriptor.Description}\n\nParamètres proposés : {preview}",
-            operationName: action.Name, operationArguments: serialized, coordinatorId: support.Transport.LocalId));
+            operationName: action.Name, operationArguments: serialized, coordinatorId: support.LocalId));
     }
 
     public static string PreviewOperationArguments(JsonElement arguments)

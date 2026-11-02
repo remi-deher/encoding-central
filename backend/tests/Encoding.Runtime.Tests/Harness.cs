@@ -288,7 +288,6 @@ internal static partial class Harness
             builder.Services.AddApiProblemDetails();
             builder.Services.ConfigureHttpJsonOptions(options => { options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase; });
             builder.Services.AddSingleton<System.Data.Common.DbDataSource>(db); builder.Services.AddSingleton(runtime); builder.Services.AddSingleton(artifacts);
-            builder.Services.AddSingleton<PendingSourceWriteRepository>(_=>sourceWriteBarrier is {} barrier?new(db,barrier):throw new NotSupportedException("Pas de remplacement différé dans ce scénario."));
             builder.Services.AddSingleton(new ExecutionWaitRepository(db, presenceOptions)); builder.Services.AddSingleton(new RuntimeTransferRepository(db,sourceWrites:sourceWriteBarrier,ownership:ownership)); builder.Services.AddSingleton(new DiskLockRepository(db)); builder.Services.AddSingleton(configurations); builder.Services.AddSingleton<Encoding.Api.Plugins.PublicationGuardProvider>(); builder.Services.AddSingleton(new SourceReplacementRepository(db,sourceWriteBarrier)); builder.Services.AddSingleton(config);
             builder.Services.AddSingleton(new LibraryProcessingRepository(db)); builder.Services.AddSingleton(workflowRepo);
             builder.Services.AddSingleton(validator); builder.Services.AddSingleton(presenceOptions);

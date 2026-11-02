@@ -136,14 +136,14 @@ public sealed class RuntimeExecutionCoordinator(
         var requestId = DeriveBatchRequestId(id, request.InvocationId, request.FlowNodeId, request.BatchIndex);
         var sessionKey = $"runtime-ai/subtitles/{id:N}/{request.InvocationId:N}/{request.BatchIndex:D5}";
         var store = Get<AiClusterStore>();
-        var transport = Get<AiClusterTransport>();
+        var identity = Get<Encoding.Api.Infrastructure.ClusterPeerIdentityStore>();
         string? sessionId = null;
         if (store is not null)
         {
             sessionId = await store.ReadAsync<string>(sessionKey, ct);
-            if (string.IsNullOrWhiteSpace(sessionId) && transport is not null)
+            if (string.IsNullOrWhiteSpace(sessionId) && identity is not null)
             {
-                sessionId = $"{transport.LocalId:N}.{requestId:N}";
+                sessionId = $"{identity.PeerId:N}.{requestId:N}";
                 await store.SaveAsync(sessionKey, sessionId, ct);
             }
         }
@@ -252,29 +252,6 @@ public sealed class RuntimeExecutionCoordinator(
 
     public Task<bool> AuthorizeReplacementAsync(Guid executionId, Guid nodeId, string root, CancellationToken ct) =>
         sourceReplacements.AuthorizeAsync(executionId, nodeId, root, ct);
-
-    public async Task<PendingSourceWrite?> ClaimPendingSourceWriteAsync(Guid nodeId, CancellationToken ct)
-    {
-        var writes = Get<PendingSourceWriteRepository>();
-        if (writes is null) return null;
-        if (await writes.ClaimAsync(nodeId, ct) is { } task)
-            return task with { Guards = await publicationGuards.ListAsync(ct) };
-        return null;
-    }
-
-    public async Task<bool> AuthorizePendingSourceWriteAsync(
-        Guid executionId, Guid nodeId, Guid claimId, string root, CancellationToken ct)
-    {
-        var writes = Get<PendingSourceWriteRepository>();
-        return writes is not null && await writes.AuthorizeAsync(executionId, nodeId, claimId, root, ct);
-    }
-
-    public async Task<bool> CompletePendingSourceWriteAsync(
-        Guid executionId, Guid nodeId, PendingSourceWriteCompletion request, CancellationToken ct)
-    {
-        var writes = Get<PendingSourceWriteRepository>();
-        return writes is not null && await writes.CompleteAsync(executionId, nodeId, request, ct);
-    }
 
     public Task<StartedRuntimeStep?> StartStepAsync(Guid executionId, Guid nodeId, StartRuntimeStep request, CancellationToken ct) =>
         runtime.StartStepAsync(executionId, nodeId, request, ct);
