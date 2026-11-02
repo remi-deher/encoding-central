@@ -4,7 +4,7 @@ Règles transverses du projet. Le détail par domaine est dans `docs/architectur
 
 ## Objectif du projet
 
-Application auto-hébergée pour gérer et distribuer le traitement de bibliothèques multimédias. Premier cas d'usage : encoder des bibliothèques Plex avec FFmpeg, ffprobe et MKVToolNix. Les intégrations Plex, Jellyfin et *ARR sont des plugins. Le fonctionnement en cluster et la haute disponibilité sont au cœur de la conception.
+Application auto-hébergée pour gérer et distribuer le traitement de bibliothèques multimédias. Premier cas d'usage : encoder des bibliothèques Plex avec FFmpeg, ffprobe et MKVToolNix. Les intégrations Plex, Jellyfin et *ARR sont des plugins. Un central unique pilote des workers répartis sur plusieurs machines ; il n'y a ni réplication ni haute disponibilité entre serveurs : la reprise après sinistre repose sur la restauration d'une sauvegarde du central.
 
 ## Stack technique (validée)
 

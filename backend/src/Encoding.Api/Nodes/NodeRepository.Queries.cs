@@ -15,7 +15,7 @@ public sealed partial class NodeRepository
     {
         const string sql = """
             SELECT id, name, roles, max_concurrent_tasks, capabilities, last_seen_at,
-                   last_seen_at >= clock_timestamp() - @offline_after AS is_online, inventory, display_name, labels, desired_roles
+                   last_seen_at >= clock_timestamp() - @offline_after AS is_online, inventory, display_name, labels
             FROM cluster_nodes WHERE deleted_at IS NULL
             ORDER BY name, id
             """;
@@ -33,7 +33,7 @@ public sealed partial class NodeRepository
     {
         const string sql = """
             SELECT id, name, roles, max_concurrent_tasks, capabilities, last_seen_at,
-                   last_seen_at >= clock_timestamp() - @offline_after AS is_online, inventory, display_name, labels, desired_roles
+                   last_seen_at >= clock_timestamp() - @offline_after AS is_online, inventory, display_name, labels
             FROM cluster_nodes WHERE id = @id AND deleted_at IS NULL
             """;
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);

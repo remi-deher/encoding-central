@@ -36,8 +36,7 @@ Seule la version de protocole (`Current = 1`) est contrôlée. Pas de plage de s
 
 ### 10. Séparation stricte central / worker et retrait du maillage (2026-11-02)
 Décidés par l'[ADR 0036](adr/0036-separation-stricte-central-worker.md) : central autonome et unique autorité, worker sans base, aucune passation, **maillage multi-serveurs retiré** (réplication, journal, pairs, capture des changements, transferts et propriété de tâches entre serveurs). Reste :
-- **Résidus à nettoyer** : les tables et colonnes `cluster_sync_*`, `cluster_peer_admissions`, `task_*` (hors `task_ownership`), `ai_credentials`, `pending_source_writes`, `node_peer_reconciliation_urls` restent en base (migrations additives) ; des jointures SQL sur `task_ownership` (état « quarantined », doublons) subsistent dans `ExecutionRepository` et `LibraryActivityRepository` ; la route `GET /api/v1/executions/{id}/ownership` et l'état de propriété ne servent plus à l'interface.
-- **Haute disponibilité** : `AGENTS.md` la cite encore comme objectif de conception ; sans passation ni réplication, la reprise après sinistre repose sur la restauration d'une sauvegarde du central.
+- **Résidus** : `task_ownership` et `task_server_identity` subsistent (le central est l'unique propriétaire) et pourraient être retirés avec le prédicat `TaskOwnershipRepository.ActiveSql` ; la route `GET /api/v1/executions/{id}/ownership` ne sert plus à l'interface.
 - **Worker et SSE** : l'interface du worker doit consommer le SSE du central ; l'attribution des tâches reste par heartbeat et baux.
 - **Tests à reprendre** : `DockerClusterTests` (scénarios à deux serveurs), `WorkerProcessLossTests` (processus réels) ne sont pas exécutés dans ce passage.
 

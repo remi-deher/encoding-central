@@ -340,26 +340,6 @@ internal static partial class Harness
             Console.WriteLine("PASS: resuming a cancelled execution creates one new attempt from the original source.");
         }
 
-        public async Task QuarantinedCancelledExecutionCannotBeResumedAsync()
-        {
-            await ResetNodesAsync();
-            var flow=Chain(Node(registry,"entry","base-input-file"),Node(registry,"end","base-complete-flow"));
-            var(id,_,_)=await EnqueueAsync(flow);
-            Check(await executions.CancelAsync(id,CancellationToken.None),"The synthetic execution is cancelled before resume.");
-            await ExpireAsync(id);
-            await RecoverCancellationAsync(id);
-            await using(var quarantine=db.CreateCommand("INSERT INTO task_quarantines(execution_id,winner_id,reason) VALUES(@id,@winner,'synthetic duplicate')"))
-            {quarantine.Parameters.AddWithValue("id",id);quarantine.Parameters.AddWithValue("winner",Guid.NewGuid());await quarantine.ExecuteNonQueryAsync();}
-
-            Check(await executions.ResumeAsync(id,CancellationToken.None) is null,
-                "A quarantined execution cannot create a new attempt from the same media.");
-            Check(await ScalarAsync<int>("SELECT count(*) FROM executions WHERE retry_of=@id",("id",id))==0,
-                "No queued execution bypasses the quarantine decision.");
-            Check((await executions.GetAsync(id,CancellationToken.None))!.State=="cancelled",
-                "The quarantined source execution remains intact for reconciliation.");
-            Console.WriteLine("PASS: quarantined task ownership blocks resume without altering its source execution.");
-        }
-
         public async Task BoundedFlowRetryAsync()
         {
             await ResetNodesAsync();

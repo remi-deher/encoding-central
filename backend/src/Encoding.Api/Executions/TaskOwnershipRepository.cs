@@ -16,7 +16,7 @@ public sealed class TaskOwnershipRepository(DbDataSource db,ClusterPeerIdentityS
 
     // Shared fence for every local lease and source-write path. Legacy test repositories have no bound server identity.
     internal static string ActiveSql(string execution,
-        bool control=false)=>$"(NOT EXISTS(SELECT 1 FROM task_server_identity) OR EXISTS(SELECT 1 FROM task_ownership own JOIN task_server_identity srv ON srv.peer_id=own.owner_peer_id WHERE own.execution_id={execution} AND own.state IN ({(control?"'active','frozen','quarantined'":"'active'")}) AND own.cluster_id=(SELECT id FROM cluster_identity WHERE singleton=true) AND srv.ready=1 AND NOT EXISTS(SELECT 1 FROM task_neutralizations stopped WHERE stopped.peer_id=srv.peer_id AND stopped.released_at IS NULL)))";
+        bool control=false)=>$"(NOT EXISTS(SELECT 1 FROM task_server_identity) OR EXISTS(SELECT 1 FROM task_ownership own JOIN task_server_identity srv ON srv.peer_id=own.owner_peer_id WHERE own.execution_id={execution} AND own.state IN ({(control?"'active','frozen','quarantined'":"'active'")}) AND own.cluster_id=(SELECT id FROM cluster_identity WHERE singleton=true) AND srv.ready=1))";
     public async Task InitializeAsync(CancellationToken ct)
     {
         await using var c=await db.OpenConnectionAsync(ct);await using var tx=await c.BeginTransactionAsync(ct);

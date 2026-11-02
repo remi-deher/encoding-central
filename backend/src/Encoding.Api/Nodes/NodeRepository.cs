@@ -247,9 +247,8 @@ public sealed partial class NodeRepository(DbDataSource dataSource)
             WHERE id=@id AND deleted_at IS NULL AND node_token_hash=@node_token_hash
               AND name=@name AND roles=@roles AND max_concurrent_tasks=@max_concurrent_tasks
               AND capabilities=@capabilities AND inventory IS NOT DISTINCT FROM @inventory
-              AND (desired_roles IS NULL OR NOT (desired_roles <@ @roles AND @roles <@ desired_roles))
             RETURNING id, name, roles, max_concurrent_tasks, capabilities, last_seen_at, true AS is_online,
-                inventory, display_name, labels, desired_roles, protocol_version, session_nonce, incompatible_reason
+                inventory, display_name, labels, protocol_version, session_nonce, incompatible_reason
             """;
         const string changed = """
             UPDATE cluster_nodes SET
@@ -258,10 +257,9 @@ public sealed partial class NodeRepository(DbDataSource dataSource)
                 max_concurrent_tasks = @max_concurrent_tasks,
                 capabilities = @capabilities,
                 inventory = @inventory,
-                desired_roles = CASE WHEN desired_roles <@ @roles AND @roles <@ desired_roles THEN NULL ELSE desired_roles END,
                 last_seen_at = clock_timestamp()
             WHERE id = @id AND deleted_at IS NULL AND node_token_hash = @node_token_hash
-            RETURNING id, name, roles, max_concurrent_tasks, capabilities, last_seen_at, true AS is_online, inventory, display_name, labels, desired_roles,
+            RETURNING id, name, roles, max_concurrent_tasks, capabilities, last_seen_at, true AS is_online, inventory, display_name, labels,
                 protocol_version, session_nonce, incompatible_reason
             """;
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -272,9 +270,9 @@ public sealed partial class NodeRepository(DbDataSource dataSource)
             command.Parameters.AddWithValue("node_token_hash", SqlKind.Bytes, tokenHash);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             if (!await reader.ReadAsync(cancellationToken)) return (null, false);
-            int? protocol = reader.IsDBNull(11) ? null : reader.GetInt32(11);
-            var nonce = reader.IsDBNull(12) ? null : reader.GetString(12);
-            var reason = reader.IsDBNull(13) ? null : reader.GetString(13);
+            int? protocol = reader.IsDBNull(10) ? null : reader.GetInt32(10);
+            var nonce = reader.IsDBNull(11) ? null : reader.GetString(11);
+            var reason = reader.IsDBNull(12) ? null : reader.GetString(12);
             var track = protocol != request.ProtocolVersion || reason != ClusterProtocol.IncompatibilityReason(request.ProtocolVersion)
                 || request.SessionNonce is not null && nonce != request.SessionNonce;
             return (ReadResponse(reader, true), track);

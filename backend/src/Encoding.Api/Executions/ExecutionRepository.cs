@@ -251,7 +251,7 @@ public sealed class ExecutionRepository(DbDataSource dataSource, FlowComponentRe
    AND (@expectedRevision IS NULL OR revision=@expectedRevision)
    AND ({TaskOwnershipRepository.ActiveSql("@id",control:true)}
      OR (NOT EXISTS(SELECT 1 FROM task_ownership WHERE execution_id=@id) AND NOT EXISTS(SELECT 1 FROM execution_work WHERE execution_id=@id))
-     OR EXISTS(SELECT 1 FROM task_ownership own JOIN task_neutralizations stopped ON stopped.peer_id=own.owner_peer_id WHERE own.execution_id=@id AND stopped.released_at IS NULL))
+   )
    RETURNING revision,state,detail
    """, c, tx); cmd.Parameters.AddWithValue("id", id); cmd.Parameters.AddWithValue("expectedRevision", (object?)expectedRevision ?? DBNull.Value);
         int revision; string state, detail;
@@ -285,8 +285,6 @@ public sealed class ExecutionRepository(DbDataSource dataSource, FlowComponentRe
             LEFT JOIN task_ownership own_source ON own_source.execution_id=e.id
             WHERE e.id=@id AND e.state='cancelled'
               AND (source.library_id IS NOT NULL OR own_source.library_id IS NOT NULL)
-              AND NOT EXISTS(SELECT 1 FROM task_ownership own WHERE own.execution_id=e.id AND own.state='quarantined')
-              AND NOT EXISTS(SELECT 1 FROM task_quarantines quarantine WHERE quarantine.execution_id=e.id)
               AND NOT EXISTS(
                 SELECT 1 FROM execution_work sibling
                 JOIN executions active ON active.id=sibling.execution_id

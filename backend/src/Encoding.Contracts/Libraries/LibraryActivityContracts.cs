@@ -17,10 +17,7 @@ public sealed record LibraryActivityFile(
     Guid? NodeId,
     string? Node,
     decimal? Progress,
-    DateTimeOffset? UpdatedAt,
-    string? ExecutionOwnershipState = null,
-    string? QuarantineReason = null,
-    Guid? ConflictingExecutionId = null);
+    DateTimeOffset? UpdatedAt);
 
 public sealed record LibraryActivityCounts(
     int Untreated,
