@@ -103,35 +103,44 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - uses: docker/setup-buildx-action@v3
-      - name: Build the real image
+      - name: Build the central image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: backend/Dockerfile
+          target: central
           load: true
-          tags: encoding:ci
-          cache-from: type=gha,scope=docker-cluster-tests
-          cache-to: type=gha,mode=max,scope=docker-cluster-tests
-      - name: Add ffmpeg to the isolated cluster-test image
-        run: docker build --file .github/docker/Dockerfile.cluster-test --tag encoding:cluster-test .
-      - name: Pull the last published image (compatibility between versions)
-        run: docker pull mrcryllix/encoding:latest
-      - name: Add test media tools to the previous image
-        run: docker build --build-arg BASE_IMAGE=mrcryllix/encoding:latest --file .github/docker/Dockerfile.cluster-test --tag encoding:previous-cluster-test .
+          tags: encoding-central:ci
+          cache-from: type=gha,scope=docker-cluster-tests-central
+          cache-to: type=gha,mode=max,scope=docker-cluster-tests-central
+      - name: Build the worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          target: worker
+          load: true
+          tags: encoding-worker:ci
+          cache-from: type=gha,scope=docker-cluster-tests-worker
+          cache-to: type=gha,mode=max,scope=docker-cluster-tests-worker
+      - name: Add ffmpeg to the isolated cluster-test images
+        run: |
+          docker build --build-arg BASE_IMAGE=encoding-central:ci --file .github/docker/Dockerfile.cluster-test --tag encoding-central:cluster-test .
+          docker build --build-arg BASE_IMAGE=encoding-worker:ci --file .github/docker/Dockerfile.cluster-test --tag encoding-worker:cluster-test .
       - run: dotnet restore backend/Encoding.sln
       - run: dotnet build backend/Encoding.sln --configuration Release --no-restore -warnaserror
       - uses: ./.github/actions/apt-install
         with:
           packages: ffmpeg
-      - name: Real containers on a Docker network (docker kill of a worker, mixed versions)
+      - name: Real containers on a Docker network (central image, worker image, docker kill of a worker)
         run: >-
           dotnet test backend/tests/Encoding.Runtime.Tests --configuration Release --no-build
           --filter "FullyQualifiedName~DockerClusterTests"
           --logger "trx;LogFileName=docker-cluster.trx" --results-directory test-results
         env:
           ENCODING_TEST_DOCKER: '1'
-          ENCODING_TEST_IMAGE: encoding:cluster-test
-          ENCODING_TEST_PREVIOUS_IMAGE: encoding:previous-cluster-test
+          ENCODING_TEST_CENTRAL_IMAGE: encoding-central:cluster-test
+          ENCODING_TEST_WORKER_IMAGE: encoding-worker:cluster-test
       - uses: actions/upload-artifact@v4
         if: always()
         with:

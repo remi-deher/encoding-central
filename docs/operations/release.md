@@ -30,24 +30,23 @@ Calculé par `.github/scripts/next-version.sh` à partir du dernier tag `vX.Y.Z`
 - minor : libellé de PR `release:minor` ou commit `feat:` / `minor:` ;
 - major : libellé de PR `release:major`, commit `type!:` ou `major:`.
 
-## Utiliser l'image
+## Utiliser les images
 
-Sans configuration de base de données, l'image utilise SQLite dans le dossier de données (`/var/lib/encoding-node/cluster.db`). Chaque serveur garde son propre fichier ; les données se réconcilient par le [maillage de réconciliation](../architecture/domains/replication-storage.md) :
+La release publie **deux images** ([ADR 0036](../architecture/adr/0036-separation-stricte-central-worker.md)) : `<utilisateur>/encoding-central` (API, interface, base SQLite, worker intégré, lanceur) et `<utilisateur>/encoding-worker` (agent et interface du worker, sans base). Chacune porte la version `X.Y.Z` et `latest`.
 
 ```
-docker run -d --name encoding -p 8080:8080 \
-  -e Node__Roles=server,worker \
+docker run -d --name encoding-central -p 8080:8080 \
   -v encoding-node:/var/lib/encoding-node \
-  <utilisateur>/encoding:latest
+  <utilisateur>/encoding-central:latest
+
+docker run -d --name encoding-worker -p 8081:8081 \
+  -v encoding-worker:/var/lib/encoding-node \
+  <utilisateur>/encoding-worker:latest
 ```
 
-SQLite est le seul fournisseur de données. Le fichier est `/var/lib/encoding-node/cluster.db` et reste propre à chaque nœud. La clé de données du cluster est générée lors de sa création et transmise chiffrée à chaque serveur approuvé ; aucune variable de secret de réconciliation n’est à configurer. Les identités privées des serveurs et la clé locale Data Protection doivent rester dans le volume `PluginSettings:KeyDirectory` (`/var/lib/encoding/plugin-keys` dans Compose). Les pairs mDNS du même cluster sont découverts automatiquement. La découverte mDNS ne traverse pas toujours les réseaux Docker/VLAN : ajoutez alors des adresses joignables avec `Cluster__Reconciliation__Peers__0`, `__1`, etc., et ouvrez le port API entre les serveurs. `Cluster__Reconciliation__AdvertisedApiBaseUrl` sert à annoncer l'adresse de pair joignable ; il est distinct de `Cluster__AdvertisedApiBaseUrl`, qui peut être une adresse interne réservée aux workers locaux. Dans Docker Compose, renseignez au besoin `CLUSTER_RECONCILIATION_ADVERTISED_API_BASE_URL` et `CLUSTER_RECONCILIATION_PEER_0`. Pour utiliser l'exemple Compose entre plusieurs hôtes, définissez aussi `CLUSTER_API_BIND_ADDRESS` sur l'adresse réseau à laquelle le port 5080 doit être publié ; il reste lié à la boucle locale par défaut. La page Nœuds → Cluster affiche l'état de découverte et les erreurs de synchronisation ; `GET /api/v1/cluster/reconciliation/status` expose le même diagnostic aux utilisateurs authentifiés. Cette version attend une base de données SQLite fraîche : réinitialisez les bases existantes avant le redémarrage, comme prévu pour cette installation.
+Le central est autonome ; sa base est `/var/lib/encoding-node/cluster.db`. Il n'y a ni réplication ni maillage entre serveurs : la reprise après sinistre repose sur la sauvegarde du central. Le worker ne démarre jamais seul : son assistant `/setup` demande l'adresse du central et un compte administrateur de celui-ci ([ADR 0034](../architecture/adr/0034-rattachement-par-compte-administrateur.md)). Les volumes de données doivent être conservés pour garder l'identité des nœuds et les clés (`PluginSettings:KeyDirectory`).
 
-`Node__Roles` (`server`, `worker` ou `server,worker`) donne le mode initial. Ensuite le mode se change depuis la page Nœuds (« Ce nœud et son cluster » → « Mode du nœud »), sans redémarrer le conteneur ; le choix est conservé dans le dossier de données du nœud. Un worker seul doit définir `Cluster__ApiBaseUrl` (ou être découvert sur le réseau) ; le volume de données doit être conservé pour garder l'identité du nœud et son mode.
-
-## Gérer ce nœud depuis la page Nœuds
-
-Sur un nœud qui héberge le serveur, tout se gère depuis la page **Nœuds → Ce nœud et son cluster** : mode, adresse d'un cluster (`http://<serveur>:8080`, utile quand la découverte DNS-SD ne traverse pas le réseau), clé de jumelage, rejoindre, quitter. Le serveur relaie ces actions vers l'agent du même conteneur (`LocalAgent__BaseUrl`, par défaut `http://127.0.0.1:8081/`) derrière la session administrateur et avec le secret local créé par le lanceur. L'agent écoute uniquement en boucle locale, exige le secret pour toutes ses routes de gestion et n'utilise plus `Origin` ni CORS : retirer les anciens ports 8081 publiés et le réglage `WorkerUi__Origins` lors de la mise à jour. La gestion par navigateur d'un nœud nécessite la fonction serveur locale ; un nœud worker seul se pilote depuis son cluster, ou via le canal interne authentifié. Hors image unique, le serveur et l'agent du même hôte doivent partager explicitement le fichier `Node__LocalEnrollmentSecretFile`.
+Sur le central, la page **Nœuds** gère le worker intégré (adresse du central, départ) ; l'agent du même conteneur écoute en boucle locale (`LocalAgent__BaseUrl`, `http://127.0.0.1:8081/`) et exige le secret local créé par le lanceur. Le worker distant se pilote depuis le central.
 
 ## Notes de version et recherche de mises à jour
 

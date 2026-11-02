@@ -11,24 +11,25 @@ using Xunit;
 
 namespace Encoding.Runtime.Tests;
 
-/// <summary>Tests de cluster avec de vrais conteneurs de l'image `encoding` (réseau Docker, utilisateur non-root, lanceur).</summary>
+/// <summary>Tests de cluster avec de vrais conteneurs des deux images : `central` (API, interface, worker intégré, lanceur) et `worker` (agent seul, sans base).</summary>
 public sealed class DockerFactAttribute : FactAttribute
 {
     public DockerFactAttribute(bool needsPreviousImage = false)
     {
         if (Environment.GetEnvironmentVariable("ENCODING_TEST_DOCKER") != "1")
-            Skip = "Définir ENCODING_TEST_DOCKER=1 et ENCODING_TEST_IMAGE (image construite) ; Docker, Linux et ffmpeg requis.";
+            Skip = "Définir ENCODING_TEST_DOCKER=1, ENCODING_TEST_CENTRAL_IMAGE et ENCODING_TEST_WORKER_IMAGE (images construites) ; Docker, Linux et ffmpeg requis.";
         else if (!OperatingSystem.IsLinux() || Encoding.NodeAgent.Runtime.ProcessToolRunner.Find("ffmpeg") is null || Encoding.NodeAgent.Runtime.ProcessToolRunner.Find("docker") is null)
             Skip = "Linux, docker et ffmpeg sont requis.";
-        else if (needsPreviousImage && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ENCODING_TEST_PREVIOUS_IMAGE")))
-            Skip = "Définir ENCODING_TEST_PREVIOUS_IMAGE (ex. mrcryllix/encoding:latest, la dernière version publiée).";
+        else if (needsPreviousImage && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ENCODING_TEST_PREVIOUS_WORKER_IMAGE")))
+            Skip = "Définir ENCODING_TEST_PREVIOUS_WORKER_IMAGE (image worker de la dernière version publiée).";
     }
 }
 
 [Collection("peer-operations")]
 public sealed class DockerClusterTests
 {
-    private static string Image => Environment.GetEnvironmentVariable("ENCODING_TEST_IMAGE") ?? "encoding:test";
+    private static string CentralImage => Environment.GetEnvironmentVariable("ENCODING_TEST_CENTRAL_IMAGE") ?? "encoding-central:test";
+    private static string WorkerImage => Environment.GetEnvironmentVariable("ENCODING_TEST_WORKER_IMAGE") ?? "encoding-worker:test";
 
     /// <summary>Un cluster éphémère : réseau Docker dédié, un dossier média partagé, un serveur joignable depuis l'hôte.</summary>
     private sealed class Cluster : IAsyncDisposable
@@ -52,9 +53,8 @@ public sealed class DockerClusterTests
             var port = FreePort();
             await RunAsync(ServerName, "--hostname", ServerName, "-v", $"{Data}:/var/lib/encoding-node", "-p", $"127.0.0.1:{port}:8080",
                 "-e", "Node__DataDirectory=/var/lib/encoding-node",
-                "-e", "Node__Roles=server", "-e", "Node__Name=" + ServerName,
-                "-e", $"Cluster__AdvertisedApiBaseUrl=http://{ServerName}:8080/",
-                "-e", $"Cluster__Reconciliation__AdvertisedApiBaseUrl=http://{ServerName}.local:8080/", Image);
+                "-e", "Node__Name=" + ServerName,
+                "-e", $"Cluster__AdvertisedApiBaseUrl=http://{ServerName}:8080/", CentralImage);
             Client = new HttpClient(new HttpClientHandler { CookieContainer = new CookieContainer() }) { BaseAddress = new Uri($"http://127.0.0.1:{port}/"), Timeout = TimeSpan.FromSeconds(20) };
             Client.DefaultRequestHeaders.Add("X-Encoding-Csrf", "1");
             await WaitAsync(async () => (await Client.GetAsync("health/live")).IsSuccessStatusCode, 90, "le serveur");
@@ -81,7 +81,7 @@ public sealed class DockerClusterTests
             var arguments = new List<string> { "--hostname", name, "-v", $"{workerData}:/var/lib/encoding-node", "-v", $"{Media}:/media/lib",
                 "-e", "Node__DataDirectory=/var/lib/encoding-node" };
             if (preseedRuntimePackages) arguments.AddRange(["-v", $"{Path.Combine(workerData, "custom-plugins")}:/opt/encoding/custom-plugins"]);
-            arguments.AddRange(["-e", "Node__Roles=worker", "-e", "Node__Name=" + name, "-e", "Node__MaxConcurrentTasks=1", "-e", $"Cluster__ApiBaseUrl=http://{ServerName}:8080/",
+            arguments.AddRange(["-e", "Node__Name=" + name, "-e", "Node__MaxConcurrentTasks=1", "-e", $"Cluster__ApiBaseUrl=http://{ServerName}:8080/",
                 "-e", "Worker__AutoAcceptEnrollment=true", image]);
             return RunAsync(name, [.. arguments]);
         }
@@ -248,15 +248,15 @@ public sealed class DockerClusterTests
     }
 
     [DockerFact]
-    public async Task KillingTheEncodingWorkerContainerResumesOnTheOtherContainerAndKeepsTheSource()
+    public async Task KillingTheEncodingWorkerContainerResumesOnTheOtherWorkerAndKeepsTheSource()
     {
         await using var cluster = new Cluster();
         await cluster.StartServerAsync();
         var source = Path.Combine(cluster.Media, "film.mkv");
         await EncodeFixtureAsync(source, seconds: 12, size: "640x360");
         var sourceSha = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(source)));
-        await cluster.StartWorkerAsync("worker-a", Image, preseedRuntimePackages: true);
-        await cluster.StartWorkerAsync("worker-b", Image, preseedRuntimePackages: true);
+        await cluster.StartWorkerAsync("worker-a", WorkerImage, preseedRuntimePackages: true);
+        await cluster.StartWorkerAsync("worker-b", WorkerImage, preseedRuntimePackages: true);
         var nodes = await WaitForWorkersAsync(cluster, 2, requiredCapabilities: ["plugin/video", "ffmpeg"]);
         var executionId = await QueueEncodingAsync(cluster, nodes);
 
@@ -293,9 +293,9 @@ public sealed class DockerClusterTests
     }
 
     [DockerFact(needsPreviousImage: true)]
-    public async Task AWorkerFromTheLastPublishedImageJoinsTheNewServerAndCompletesAFlow()
+    public async Task AWorkerFromTheLastPublishedImageJoinsTheNewCentralAndCompletesAFlow()
     {
-        var previous = Environment.GetEnvironmentVariable("ENCODING_TEST_PREVIOUS_IMAGE")!;
+        var previous = Environment.GetEnvironmentVariable("ENCODING_TEST_PREVIOUS_WORKER_IMAGE")!;
         await using var cluster = new Cluster();
         await cluster.StartServerAsync();
         var source = Path.Combine(cluster.Media, "film.mkv");

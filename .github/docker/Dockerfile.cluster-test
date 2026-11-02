@@ -1,4 +1,5 @@
-ARG BASE_IMAGE=encoding:ci
+# Ajoute ffmpeg à une image du projet (central ou worker) pour les tests de cluster ; BASE_IMAGE est obligatoire.
+ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
 
 USER root

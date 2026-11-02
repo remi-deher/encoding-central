@@ -38,7 +38,7 @@ Seule la version de protocole (`Current = 1`) est contrôlée. Pas de plage de s
 Décidés par l'[ADR 0036](adr/0036-separation-stricte-central-worker.md) : central autonome et unique autorité, worker sans base, aucune passation, **maillage multi-serveurs retiré** (réplication, journal, pairs, capture des changements, transferts et propriété de tâches entre serveurs). Reste :
 - **Résidus** : `task_ownership` et `task_server_identity` subsistent (le central est l'unique propriétaire) et pourraient être retirés avec le prédicat `TaskOwnershipRepository.ActiveSql` ; la route `GET /api/v1/executions/{id}/ownership` ne sert plus à l'interface.
 - **Worker et SSE** : l'interface du worker doit consommer le SSE du central ; l'attribution des tâches reste par heartbeat et baux.
-- **Tests à reprendre** : `DockerClusterTests` (scénarios à deux serveurs), `WorkerProcessLossTests` (processus réels) ne sont pas exécutés dans ce passage.
+- **Tests multi-conteneurs** : `DockerClusterTests` (images `central` et `worker`, worker tué en plein ffmpeg) et `WorkerProcessLossTests` ont été exécutés le 2026-11-02 en local et passent. Le scénario de compatibilité avec la dernière image worker publiée reste ignoré tant qu'aucune image `encoding-worker` n'est publiée (`ENCODING_TEST_PREVIOUS_WORKER_IMAGE`). La CI de promotion n'a pas encore exécuté les workflows réécrits.
 
 ## Hygiène du dépôt
 

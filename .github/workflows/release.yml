@@ -83,16 +83,30 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - name: Publish the central image
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: backend/Dockerfile
+          target: central
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/encoding:${{ steps.version.outputs.version }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/encoding:latest
-          cache-from: type=gha,scope=encoding
-          cache-to: type=gha,scope=encoding,mode=max
+            ${{ secrets.DOCKERHUB_USERNAME }}/encoding-central:${{ steps.version.outputs.version }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/encoding-central:latest
+          cache-from: type=gha,scope=encoding-central
+          cache-to: type=gha,scope=encoding-central,mode=max
+      - name: Publish the worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          target: worker
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/encoding-worker:${{ steps.version.outputs.version }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/encoding-worker:latest
+          cache-from: type=gha,scope=encoding-worker
+          cache-to: type=gha,scope=encoding-worker,mode=max
       - name: Tag git
         run: |
           git tag "v${{ steps.version.outputs.version }}" "$GITHUB_SHA"
