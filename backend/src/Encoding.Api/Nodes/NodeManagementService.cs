@@ -59,14 +59,17 @@ public sealed class NodeManagementService(
     public async Task<NodeEnrollmentOutcome> EnrollAsync(
         NodeEnrollmentRequest request,
         bool isLocal,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool byAdministrator = false)
     {
         var errors = NodeHeartbeatValidator.Validate(request);
         if (errors.Count > 0) return new(true, errors, false, null);
 
         var window = Get<EnrollmentWindowRepository>();
-        var windowOpen = isLocal || (window is null || (await window.GetAsync(ct)).IsOpen);
+        var windowOpen = isLocal || byAdministrator || (window is null || (await window.GetAsync(ct)).IsOpen);
         var node = await repository.EnrollAsync(request, windowOpen, ct);
+        // Une demande de jumelage déjà publiée pour ce nœud n'a plus d'objet une fois le nœud admis.
+        if (node is not null) await repository.DeletePairingRequestAsync(request.Id, ct);
 
         if (node is not null && isLocal && Get<LocalNodeRegistry>() is { } localNode)
             await localNode.RegisterAsync(node.Id, ct);

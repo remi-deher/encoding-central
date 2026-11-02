@@ -11,13 +11,13 @@ describe('WorkerSetupPageComponent', () => {
   let login: ReturnType<typeof vi.fn>;
   let refresh: ReturnType<typeof vi.fn>;
   let verifyAddress: ReturnType<typeof vi.fn>;
-  let sendRequest: ReturnType<typeof vi.fn>;
+  let enroll: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     login = vi.fn().mockResolvedValue(undefined);
     refresh = vi.fn();
     verifyAddress = vi.fn().mockResolvedValue(undefined);
-    sendRequest = vi.fn().mockResolvedValue(undefined);
+    enroll = vi.fn().mockResolvedValue(undefined);
 
     TestBed.configureTestingModule({
       imports: [WorkerSetupPageComponent],
@@ -35,7 +35,6 @@ describe('WorkerSetupPageComponent', () => {
             provide: LocalNodeController,
             useValue: {
               error: signal(''),
-              target: signal(null),
               targetName: signal('Central de test'),
               pending: signal(false),
               status: signal(null),
@@ -45,7 +44,8 @@ describe('WorkerSetupPageComponent', () => {
               canJoin: signal(true),
               refresh,
               verifyAddress,
-              sendRequest,
+              target: signal({ id: 'c1', name: 'Central de test' }),
+              enroll,
             },
           },
         ],
@@ -73,7 +73,7 @@ describe('WorkerSetupPageComponent', () => {
     expect(el.textContent).toContain('Bienvenue');
   });
 
-  it('authenticates with the central before preparing enrollment', async () => {
+  it('authenticates with the central before enrolling', async () => {
     const fixture = TestBed.createComponent(WorkerSetupPageComponent);
     const component = fixture.componentInstance;
     component['step'].set(1);
@@ -88,16 +88,17 @@ describe('WorkerSetupPageComponent', () => {
     expect(component['step']()).toBe(2);
   });
 
-  it('uses the selected central address to prepare enrollment', async () => {
+  it('enrolls with the administrator session on the selected central', async () => {
     const fixture = TestBed.createComponent(WorkerSetupPageComponent);
     const component = fixture.componentInstance;
     component['centralAddress'] = 'https://central.example.test/';
 
-    await component['verifyEnrollment']();
+    await component['attach']();
 
     expect(verifyAddress).toHaveBeenCalledWith({
       address: 'https://central.example.test/',
     });
+    expect(enroll).toHaveBeenCalledTimes(1);
   });
 
   it('shows login failures without advancing', async () => {

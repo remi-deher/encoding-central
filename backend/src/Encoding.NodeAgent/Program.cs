@@ -95,32 +95,19 @@ CentralUiProxy.Use(
     options.LocalEnrollmentSecretFile);
 app.UseDefaultFiles();
 app.UseStaticFiles();
-app.Use(async (context, next) =>
-{
-    // Canal interne du nœud : aucune dépendance aux en-têtes d'un navigateur.
-    // Les lectures sont aussi protégées : l'état contient les clés de jumelage.
-    // Seule exception : choisir le central au premier accès. Une fois le worker relié, l'adresse ne se change plus sans le secret local.
-    var configuringCentral = options.WorkerImage
-        && HttpMethods.IsPost(context.Request.Method)
-        && context.Request.Path.Equals("/api/v1/worker/clusters", StringComparison.OrdinalIgnoreCase)
-        && string.IsNullOrWhiteSpace((await context.RequestServices.GetRequiredService<WorkerIdentityStore>()
-            .GetAsync(context.RequestAborted)).ApiBaseUrl);
-    if (!configuringCentral
-        && context.Request.Path.StartsWithSegments("/api/v1/worker")
-        && !LocalEnrollment.Matches(options.LocalEnrollmentSecretFile,
-            context.Request.Headers[LocalEnrollment.HeaderName].ToString()))
-    {
-        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-        return;
-    }
-    await next();
-});
+WorkerAgentGate.Use(app, options);
 
 app.MapGet("/health/ready", (HttpContext context) =>
 {
     context.Response.Headers.AccessControlAllowOrigin = "*";
     return Results.Ok(new { status = "ready" });
 });
+app.MapGet(WorkerAgentGate.HardwarePath, async (IToolCapabilityProbe capabilityProbe, CancellationToken cancellationToken) =>
+    Results.Ok(new WorkerHardwareResponse(
+        HardwareInventory.Current() with { FontSets = null },
+        (await capabilityProbe.DiscoverAsync(cancellationToken))
+            .Select(tool => new WorkerHardwareTool(tool.ToolId, tool.AccelerationTypes ?? []))
+            .ToArray()))).WithName("GetWorkerHardware");
 app.MapGet("/api/v1/worker/clusters", (WorkerClusterDiscovery discovery) => Results.Ok(discovery.List()));
 app.MapPost("/api/v1/worker/clusters", async (WorkerClusterAddress request, WorkerClusterDiscovery discovery, CancellationToken cancellationToken) =>
 {
@@ -187,11 +174,14 @@ app.MapGet("/api/v1/worker/logs", (
 app.MapPost("/api/v1/worker/enroll", async (
     WorkerEnrollmentRequest request,
     WorkerEnrollmentService enrollment,
+    HttpContext http,
     CancellationToken cancellationToken) =>
 {
     try
     {
-        return (IResult)Results.Ok(await enrollment.EnrollAsync(request.ClusterId, cancellationToken, request.LeaveCurrent, request.DisplayName));
+        // Session du compte administrateur du central, transmise par le relais de l'interface (ADR 0034).
+        var centralSession = http.Request.Headers[Encoding.Contracts.Auth.SessionCookie.RelayHeader].ToString();
+        return (IResult)Results.Ok(await enrollment.EnrollAsync(request.ClusterId, cancellationToken, request.LeaveCurrent, request.DisplayName, centralSession));
     }
     catch (InvalidOperationException exception)
     {

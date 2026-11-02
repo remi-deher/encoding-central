@@ -16,7 +16,7 @@ public sealed class WorkerEnrollmentService(
     /// <summary>Délai laissé au cluster d'accueil pour approuver un changement de cluster : la clé de jumelage vit 10 minutes, avec une marge.</summary>
     public static readonly TimeSpan SwitchTimeout = TimeSpan.FromMinutes(12);
 
-    public async Task<NodeResponse> EnrollAsync(Guid clusterId, CancellationToken cancellationToken, bool leaveCurrent = false, string? displayName = null)
+    public async Task<NodeResponse> EnrollAsync(Guid clusterId, CancellationToken cancellationToken, bool leaveCurrent = false, string? displayName = null, string? centralSession = null)
     {
         var cluster = discovery.List().FirstOrDefault(candidate => candidate.Id == clusterId)
             ?? throw new InvalidOperationException("Ce cluster n’est plus visible sur le réseau. Actualisez la découverte et réessayez.");
@@ -51,6 +51,12 @@ public sealed class WorkerEnrollmentService(
         // Le secret du conteneur n'est présenté qu'au serveur local : jamais à un cluster distant.
         if (IsLocalCluster(cluster) && LocalEnrollment.Read(options.LocalEnrollmentSecretFile) is { } secret)
             message.Headers.Add(LocalEnrollment.HeaderName, secret);
+        else if (IsSessionValue(centralSession))
+        {
+            // ADR 0034 : le compte administrateur du central admet le worker ; la session n'est présentée qu'à ce central.
+            message.Headers.Add("Cookie", $"{Encoding.Contracts.Auth.SessionCookie.Name}={centralSession}");
+            message.Headers.Add("X-Encoding-Csrf", "1");
+        }
         HttpResponseMessage response;
         try
         {
@@ -235,6 +241,10 @@ public sealed class WorkerEnrollmentService(
         var verificationCode = NodeVerificationCode.FromToken(pending.Id, pending.NodeToken!);
         return new WorkerPairingResponse(pending.PairingKey!, pending.PairingExpiresAt!.Value, verificationCode);
     }
+
+    /// <summary>Valeur de cookie sûre à recopier dans un en-tête : jamais de séparateur ni de retour à la ligne.</summary>
+    internal static bool IsSessionValue(string? value) =>
+        !string.IsNullOrWhiteSpace(value) && value.Length <= 256 && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.' or '~' or '+' or '/' or '=' or '%');
 
     private static NodeInventory CreateInventory() => HardwareInventory.Current();
 }

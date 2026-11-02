@@ -305,6 +305,27 @@ export class LocalNodeController {
     );
   }
 
+  /** Rattachement direct : le compte administrateur du central, dont la session est relayée à l'agent, admet ce nœud (ADR 0034). */
+  async enroll(displayName?: string): Promise<void> {
+    const target = this.target();
+    if (!target || !this.canJoin()) return;
+    await this.run(
+      this.http.post<unknown>('/api/v1/local-node/enroll', {
+        clusterId: target.id,
+        leaveCurrent: !!this.status()?.clusterId,
+        displayName: displayName?.trim() || this.status()?.displayName?.trim() || undefined,
+      }),
+      () => {
+        this.submittedTargetId.set(target.id);
+        this.observedPending = false;
+        this.joinIndex.set(3);
+        this.notifications.show(`Ce nœud est rattaché à ${target.name}.`);
+        this.refresh();
+      },
+      'Le rattachement a échoué. Vérifiez que le compte est administrateur du central, puis réessayez.',
+    );
+  }
+
   async leave(): Promise<void> {
     if (!this.isAdmin() || this.busy() || this.agentUnavailable() || !this.status()?.clusterId)
       return;

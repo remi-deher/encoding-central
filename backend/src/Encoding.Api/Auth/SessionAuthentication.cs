@@ -8,7 +8,7 @@ namespace Encoding.Api.Auth;
 public static class SessionAuthentication
 {
     public const string Scheme = "ClusterSession";
-    public const string CookieName = "encoding_session";
+    public const string CookieName = Encoding.Contracts.Auth.SessionCookie.Name;
 }
 
 /// <summary>Authentifie une requête par le cookie de session opaque, validé dans la base SQLite locale à chaque requête.</summary>
@@ -59,6 +59,7 @@ public sealed class SessionAuthenticationHandler(
                         new Claim(ClaimTypes.NameIdentifier, user.Id.ToString("D")),
                         new Claim(ClaimTypes.Name, user.Username),
                         new Claim(ClaimTypes.Role, UserRepository.RoleName(user.Role)),
+                        new Claim("auth_type", "session"),
                     ],
                     SessionAuthentication.Scheme);
                 return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SessionAuthentication.Scheme));

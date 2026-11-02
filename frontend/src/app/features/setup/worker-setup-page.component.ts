@@ -1,16 +1,32 @@
-import { ChangeDetectionStrategy, Component, computed, DOCUMENT, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  DOCUMENT,
+  inject,
+  signal,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { AuthService } from '../../core/auth/auth.service';
+import { NodeInventory } from '../../shared/models/cluster';
 import { formatMemory } from '../../shared/models/node-hardware';
 import { LocalNodeController } from '../../shared/services/local-node-controller';
 import { AccessTemplateComponent } from '../../shared/templates/access-template.component';
 import { IconComponent } from '../../shared/ui/icon.component';
 import { DetectedConfigurationComponent } from './detected-configuration.component';
 import { SETUP_SURFACE_STYLES } from './setup-surface.styles';
+
+/** Matériel détecté, lu sans secret avant le rattachement (`GET /api/v1/worker/hardware`). */
+interface WorkerHardware {
+  readonly inventory: NodeInventory;
+  readonly tools: readonly { readonly toolId: string; readonly accelerationTypes: readonly string[] }[];
+}
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -47,7 +63,7 @@ import { SETUP_SURFACE_STYLES } from './setup-surface.styles';
               <h2 id="welcome-heading">Bienvenue</h2>
               <p>
                 Ce guide en trois étapes rattache cette machine à un central : choisir le central,
-                s’y connecter, puis envoyer la demande. Vérifiez d’abord que la machine détectée
+                s’y connecter avec un compte administrateur, puis rattacher le worker. Vérifiez d’abord que la machine détectée
                 ci-dessous est la bonne.
               </p>
             </div>
@@ -135,12 +151,19 @@ import { SETUP_SURFACE_STYLES } from './setup-surface.styles';
         @if (step() === 2) {
           <section class="card" aria-labelledby="worker-enrollment-heading">
             <div class="heading">
-              <div>
-                <h2 id="worker-enrollment-heading">Rattacher le worker</h2>
-                <p>Envoyez la demande d’adhésion, puis autorisez-la depuis le central.</p>
-              </div>
+              <h2 id="worker-enrollment-heading">Rattacher le worker</h2>
+              <p>Votre compte administrateur du central autorise ce rattachement : aucune validation n’est à faire ailleurs.</p>
             </div>
-            @if (!local.target()) {
+            @if (local.status()?.isEnrolled) {
+              <div class="notice" role="status">
+                Ce worker est rattaché à <strong>{{ local.status()?.clusterName }}</strong>.
+              </div>
+              <div class="actions">
+                <button matButton="filled" type="button" (click)="openNodes()">
+                  Voir le worker
+                </button>
+              </div>
+            } @else {
               <div class="notice">
                 Le worker ne gère ni bibliothèques ni flows : il reçoit uniquement les capacités,
                 plugins, outils et traitements décidés par le central.
@@ -153,40 +176,9 @@ import { SETUP_SURFACE_STYLES } from './setup-surface.styles';
                   matButton="filled"
                   type="button"
                   [disabled]="busy() || local.busy() || local.loading() || local.agentUnavailable()"
-                  (click)="verifyEnrollment()"
+                  (click)="attach()"
                 >
-                  Préparer le rattachement
-                </button>
-              </div>
-            } @else if (local.pending()) {
-              <div class="notice" role="status">
-                Demande envoyée à <strong>{{ local.targetName() }}</strong>. Autorisez ce worker
-                depuis le central, puis cette page se mettra à jour automatiquement.
-              </div>
-            } @else if (local.status()?.isEnrolled) {
-              <div class="notice" role="status">
-                Ce worker est rattaché à <strong>{{ local.status()?.clusterName }}</strong>.
-              </div>
-              <div class="actions">
-                <button matButton="filled" type="button" (click)="openNodes()">
-                  Voir le worker
-                </button>
-              </div>
-            } @else {
-              <div class="notice">
-                Le central <strong>{{ local.targetName() }}</strong> est prêt à recevoir ce worker.
-              </div>
-              <div class="actions">
-                <button matButton="outlined" type="button" [disabled]="busy()" (click)="back()">
-                  Retour
-                </button>
-                <button
-                  matButton="filled"
-                  type="button"
-                  [disabled]="busy() || local.busy() || !local.canJoin()"
-                  (click)="sendEnrollment()"
-                >
-                  Envoyer la demande
+                  Rattacher ce worker
                 </button>
               </div>
             }
@@ -203,6 +195,7 @@ export class WorkerSetupPageComponent {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly document = inject(DOCUMENT);
+  private readonly destroyRef = inject(DestroyRef);
   protected readonly local = inject(LocalNodeController);
 
   protected centralAddress = '';
@@ -211,10 +204,15 @@ export class WorkerSetupPageComponent {
   protected readonly step = signal(0);
   /** Accueil : n'est pas une étape, il présente la machine détectée avant de commencer. */
   protected readonly welcome = signal(true);
+  private readonly hardware = signal<WorkerHardware | null>(null);
+  private readonly inventory = computed(() => this.local.status()?.inventory ?? this.hardware()?.inventory ?? null);
+  private readonly capabilities = computed(
+    () => this.local.status()?.capabilities ?? this.hardware()?.tools ?? [],
+  );
   protected readonly busy = signal(false);
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly workerSystem = computed(() => {
-    const inventory = this.local.status()?.inventory;
+    const inventory = this.inventory();
     if (!inventory) return 'Détection en cours…';
     const runtime = {
       docker: 'Docker',
@@ -225,22 +223,22 @@ export class WorkerSetupPageComponent {
     return runtime ? `${runtime} · ${platform}` : platform;
   });
   protected readonly workerCpu = computed(() => {
-    const inventory = this.local.status()?.inventory;
+    const inventory = this.inventory();
     if (!inventory) return 'Détection en cours…';
     const model = inventory.processorModel?.trim() || 'Processeur';
     return inventory.processorCount > 0 ? `${model} (${inventory.processorCount} cœurs)` : model;
   });
   protected readonly workerMemory = computed(() => {
-    const inventory = this.local.status()?.inventory;
+    const inventory = this.inventory();
     return inventory ? formatMemory(inventory.memoryMb) : 'Détection en cours…';
   });
   protected readonly workerGpu = computed(() => {
-    const gpus = this.local.status()?.inventory?.gpus;
+    const gpus = this.inventory()?.gpus;
     if (!gpus) return 'Détection en cours…';
     return gpus.length ? gpus.map((gpu) => gpu.name).join(' · ') : 'Aucun GPU dédié détecté';
   });
   protected readonly workerAcceleration = computed(() => {
-    const inventory = this.local.status()?.inventory;
+    const inventory = this.inventory();
     if (!inventory) return 'Détection en cours…';
     if (!inventory.gpus?.length) return 'Aucune (CPU)';
     const labels: Readonly<Record<string, string>> = {
@@ -251,7 +249,7 @@ export class WorkerSetupPageComponent {
       videotoolbox: 'VideoToolbox',
     };
     const accelerators = new Set<string>();
-    for (const capability of this.local.status()?.capabilities ?? []) {
+    for (const capability of this.capabilities()) {
       for (const accelerator of capability.accelerationTypes) {
         if (labels[accelerator]) accelerators.add(labels[accelerator]);
       }
@@ -259,6 +257,14 @@ export class WorkerSetupPageComponent {
     return accelerators.size ? [...accelerators].join(' · ') : 'Validation en cours';
   });
   protected readonly workerAddress = computed(() => this.document.location.hostname || 'Indisponible');
+
+  constructor() {
+    // Route ouverte tant que le worker n'est pas rattaché : le matériel est lisible avant la connexion au central.
+    this.http
+      .get<WorkerHardware>('/api/v1/worker/hardware')
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({ next: (value) => this.hardware.set(value), error: () => undefined });
+  }
 
   protected async connect(): Promise<void> {
     this.busy.set(true);
@@ -295,12 +301,16 @@ export class WorkerSetupPageComponent {
     }
   }
 
-  protected async verifyEnrollment(): Promise<void> {
-    await this.local.verifyAddress({ address: this.centralAddress.trim() });
-  }
-
-  protected async sendEnrollment(): Promise<void> {
-    await this.local.sendRequest();
+  protected async attach(): Promise<void> {
+    this.busy.set(true);
+    this.errorMessage.set(null);
+    try {
+      await this.local.verifyAddress({ address: this.centralAddress.trim() });
+      if (this.local.error() || !this.local.target()) return;
+      await this.local.enroll();
+    } finally {
+      this.busy.set(false);
+    }
   }
 
   protected start(): void {

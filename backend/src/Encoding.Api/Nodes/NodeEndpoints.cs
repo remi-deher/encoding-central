@@ -36,6 +36,13 @@ public static class NodeEndpoints
         }).RequireAuthorization(AuthExtensions.AdministratorPolicy).WithName("GetNodeDirectoryBrowse");
     }
 
+    /// <summary>Session d'un compte administrateur (pas un jeton API, pas l'identité synthétique d'une authentification désactivée), avec l'en-tête anti-CSRF.</summary>
+    internal static bool IsAdministratorSession(HttpContext http) =>
+        http.User.Identity?.IsAuthenticated == true
+        && http.User.IsInRole("admin")
+        && http.User.FindFirst("auth_type")?.Value == "session"
+        && http.Request.Headers[ManagementAccessHandler.CsrfHeader] == "1";
+
     private static void MapNodeEnrollmentEndpoints(this RouteGroupBuilder nodes)
     {
         nodes.MapPost("/enroll", async (
@@ -47,7 +54,9 @@ public static class NodeEndpoints
         {
             var isLocal = LocalEnrollment.Matches(configuration[LocalEnrollment.SecretFileSetting],
                 httpContext.Request.Headers[LocalEnrollment.HeaderName].ToString());
-            var outcome = await service.EnrollAsync(request, isLocal, cancellationToken);
+            // ADR 0034 : le compte administrateur du central admet le nœud hors fenêtre d'enrôlement (session réelle, jamais un jeton API).
+            var byAdministrator = IsAdministratorSession(httpContext);
+            var outcome = await service.EnrollAsync(request, isLocal, cancellationToken, byAdministrator);
             if (outcome.HasValidationErrors) return (IResult)Results.ValidationProblem(outcome.ValidationErrors!);
             if (outcome.Node is not null) return Results.Ok(outcome.Node);
 

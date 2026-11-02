@@ -47,6 +47,13 @@ public sealed partial class NodeRepository(DbDataSource dataSource)
         return await reader.ReadAsync(cancellationToken) ? ReadResponse(reader, true) : null;
     }
 
+    public async Task DeletePairingRequestAsync(Guid nodeId, CancellationToken cancellationToken)
+    {
+        await using var command = dataSource.CreateCommand("DELETE FROM node_enrollment_requests WHERE node_id = @id");
+        command.Parameters.AddWithValue("id", nodeId);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     /// <summary>Authentifie un worker par son seul secret ; l’empreinte SHA-256 de ce secret aléatoire à 256 bits identifie le nœud.</summary>
     public async Task<bool> AuthenticateTokenAsync(string token, CancellationToken cancellationToken)
     {

@@ -392,6 +392,12 @@ internal static class AuthScenarios
         Check(await anonymous.StatusAsync(post, "/api/v1/nodes/enroll", first, csrf: false) == HttpStatusCode.OK, "The same identity can repeat its enrollment after the window closes.");
         Check(await anonymous.StatusAsync(post, "/api/v1/nodes/enroll", stolen, csrf: false) == HttpStatusCode.Forbidden, "A different secret is refused once the window is closed.");
         Check(await anonymous.StatusAsync(post, "/api/v1/nodes/enroll", NewNode(Guid.NewGuid(), NodeToken()), csrf: false) == HttpStatusCode.Forbidden, "Another new identity is refused once the window is closed.");
+        // ADR 0034 : le compte administrateur du central admet un worker hors fenêtre ; ni un lecteur, ni une requête sans en-tête anti-CSRF.
+        var byAdministrator = NewNode(Guid.NewGuid(), NodeToken());
+        Check(await viewer.StatusAsync(post, "/api/v1/nodes/enroll", byAdministrator) == HttpStatusCode.Forbidden, "A viewer session cannot admit a node.");
+        Check(await admin.StatusAsync(post, "/api/v1/nodes/enroll", byAdministrator, csrf: false) == HttpStatusCode.Forbidden, "An administrator session needs the anti-CSRF header to admit a node.");
+        Check(await admin.StatusAsync(post, "/api/v1/nodes/enroll", byAdministrator) == HttpStatusCode.OK, "An administrator session admits a node outside the enrollment window.");
+        Check(await admin.StatusAsync(post, "/api/v1/nodes/enroll", byAdministrator with { NodeToken = NodeToken() }) == HttpStatusCode.Conflict, "Even an administrator cannot take over an enrolled identity with another secret.");
         var window = (await (await admin.SendAsync(get, "/api/v1/nodes/enrollment-window")).Content.ReadFromJsonAsync<EnrollmentWindowResponse>(Json))!;
         Check(!window.IsOpen, "The window reports closed.");
 

@@ -140,6 +140,10 @@ internal static class CentralUiProxy
         using var outgoing = new HttpRequestMessage(new HttpMethod(context.Request.Method),
             new Uri($"http://127.0.0.1:{localPort}/api/v1/worker{suffix}{context.Request.QueryString}"));
         outgoing.Headers.TryAddWithoutValidation(LocalEnrollment.HeaderName, secret);
+        // Le rattachement est autorisé par le compte administrateur du central (ADR 0034) : l'agent reçoit sa session, rien d'autre.
+        if (suffix.Equals("/enroll", StringComparison.OrdinalIgnoreCase) && string.Equals(role, "admin", StringComparison.Ordinal)
+            && context.Request.Cookies[Encoding.Contracts.Auth.SessionCookie.Name] is { Length: > 0 } session)
+            outgoing.Headers.TryAddWithoutValidation(Encoding.Contracts.Auth.SessionCookie.RelayHeader, session);
         if (context.Request.ContentLength is > 0 || context.Request.Headers.TransferEncoding.Count > 0)
         {
             outgoing.Content = new StreamContent(context.Request.Body);
