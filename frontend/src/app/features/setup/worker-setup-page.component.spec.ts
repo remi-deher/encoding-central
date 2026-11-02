@@ -1,0 +1,115 @@
+import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { Router } from '@angular/router';
+import { signal } from '@angular/core';
+import { WorkerSetupPageComponent } from './worker-setup-page.component';
+import { AuthService } from '../../core/auth/auth.service';
+import { LocalNodeController } from '../../shared/services/local-node-controller';
+
+describe('WorkerSetupPageComponent', () => {
+  let login: ReturnType<typeof vi.fn>;
+  let refresh: ReturnType<typeof vi.fn>;
+  let verifyAddress: ReturnType<typeof vi.fn>;
+  let enroll: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    login = vi.fn().mockResolvedValue(undefined);
+    refresh = vi.fn();
+    verifyAddress = vi.fn().mockResolvedValue(undefined);
+    enroll = vi.fn().mockResolvedValue(undefined);
+
+    TestBed.configureTestingModule({
+      imports: [WorkerSetupPageComponent],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: AuthService, useValue: { login } },
+        { provide: Router, useValue: { navigate: vi.fn().mockResolvedValue(true) } },
+      ],
+    });
+    TestBed.overrideComponent(WorkerSetupPageComponent, {
+      set: {
+        providers: [
+          {
+            provide: LocalNodeController,
+            useValue: {
+              error: signal(''),
+              targetName: signal('Central de test'),
+              pending: signal(false),
+              status: signal(null),
+              busy: signal(false),
+              loading: signal(false),
+              agentUnavailable: signal(false),
+              canJoin: signal(true),
+              refresh,
+              verifyAddress,
+              target: signal({ id: 'c1', name: 'Central de test' }),
+              enroll,
+            },
+          },
+        ],
+      },
+    });
+  });
+
+  it('starts on a welcome screen that is not counted as a step and can be reached again', () => {
+    const fixture = TestBed.createComponent(WorkerSetupPageComponent);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    expect(el.textContent).toContain('Bienvenue');
+    expect(el.textContent).toContain('Commencer');
+    expect(el.textContent).toContain('Configuration détectée');
+    expect(el.textContent).not.toContain('Étape');
+
+    fixture.componentInstance['start']();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Étape 1 sur 3');
+    expect(el.textContent).not.toContain('Configuration détectée');
+
+    fixture.componentInstance['back']();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Bienvenue');
+  });
+
+  it('authenticates with the central before enrolling', async () => {
+    const fixture = TestBed.createComponent(WorkerSetupPageComponent);
+    const component = fixture.componentInstance;
+    component['step'].set(1);
+    component['username'] = 'admin';
+    component['password'] = 'password';
+
+    await component['login']();
+
+    expect(login).toHaveBeenCalledWith('admin', 'password');
+    expect(refresh).toHaveBeenCalled();
+    expect(component['password']).toBe('');
+    expect(component['step']()).toBe(2);
+  });
+
+  it('enrolls with the administrator session on the selected central', async () => {
+    const fixture = TestBed.createComponent(WorkerSetupPageComponent);
+    const component = fixture.componentInstance;
+    component['centralAddress'] = 'https://central.example.test/';
+
+    await component['attach']();
+
+    expect(verifyAddress).toHaveBeenCalledWith({
+      address: 'https://central.example.test/',
+    });
+    expect(enroll).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows login failures without advancing', async () => {
+    login.mockRejectedValueOnce(new Error('invalid credentials'));
+    const fixture = TestBed.createComponent(WorkerSetupPageComponent);
+    const component = fixture.componentInstance;
+    component['step'].set(1);
+
+    await component['login']();
+
+    expect(component['step']()).toBe(1);
+    expect(component['errorMessage']()).toBe('Les identifiants sont invalides.');
+  });
+});

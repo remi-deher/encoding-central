@@ -13,7 +13,7 @@ public sealed class AiAssistantSendService(AiAssistantSupportService support, Ai
         var attachments = ValidateRequestAndAttachments(request);
 
         var conversationId = string.IsNullOrWhiteSpace(request.ConversationId)
-            ? $"{support.Transport.LocalId:N}.{request.RequestId:N}"
+            ? $"{support.LocalId:N}.{request.RequestId:N}"
             : request.ConversationId;
         if (!AiAssistantSupportService.IsSessionId(conversationId)) return null;
 
@@ -112,7 +112,7 @@ public sealed class AiAssistantSendService(AiAssistantSupportService support, Ai
                 context = await support.ResolveContextAsync(resourceType, resourceId, request.ResourceVersion, ct);
                 if (context is null) return null;
             }
-            var id = $"{support.Transport.LocalId:N}.{request.RequestId:N}";
+            var id = $"{support.LocalId:N}.{request.RequestId:N}";
             var existingOwner = await support.Store.ReadAsync<string>(AiAssistantSupportService.SessionOwnerKey(id), ct);
             if (existingOwner is not null && existingOwner != ownerId) return null;
             var saved = await support.ReadConversationAsync(ownerId, id, ct);

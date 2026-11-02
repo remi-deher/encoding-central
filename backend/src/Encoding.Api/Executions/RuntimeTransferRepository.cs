@@ -4,12 +4,11 @@ using Encoding.Contracts.Executions;
 
 namespace Encoding.Api.Executions;
 
-public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionStreamBroadcaster? broadcaster=null,ClusterSourceWriteBarrier? sourceWrites=null,TaskOwnershipRepository? ownership=null,
+public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionStreamBroadcaster? broadcaster=null,TaskOwnershipRepository? ownership=null,
     Encoding.Api.Flows.FlowComponentRegistry? components=null)
 {
     public async Task<IReadOnlyList<RuntimeTransfer>> ListAsync(Guid node,CancellationToken ct)
     {
-        var deferPolicy=sourceWrites is not null && await sourceWrites.IsClusteredAsync(ct);
         await using var cmd=dataSource.CreateCommand("""
           SELECT w.execution_id,w.lease_epoch,a.local_path,w.media_path,w.source_sha,w.result_sha,w.result_extension,w.publication_requested,e.flow_definition::text,a.can_write,w.replacement_grace_hours,w.library_id,
             (SELECT checkpoint::text FROM execution_steps WHERE execution_id=w.execution_id AND completed_at IS NOT NULL ORDER BY completed_revision DESC LIMIT 1),
@@ -37,7 +36,7 @@ public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionS
             result.Add(new(r.GetGuid(0), r.GetInt64(1), r.GetString(2), r.GetString(3),
                 r.IsDBNull(4) ? null : r.GetString(4), r.IsDBNull(5) ? null : r.GetString(5),
                 r.IsDBNull(6) ? null : r.GetString(6), r.GetBoolean(7), inputs, flow.MediaType,
-                r.GetBoolean(9), deferPolicy || r.IsDBNull(10) ? null : r.GetInt32(10), r.GetGuid(11),
+                r.GetBoolean(9), r.IsDBNull(10) ? null : r.GetInt32(10), r.GetGuid(11),
                 Observation: observation,
                 VerifyPublicationAccess: components is not null && flow.Nodes.Any(n => components.Resolve(n.Component)?.RequiresWriteAccess == true),
                 VerifyReplacementAccess: r.GetBoolean(13),
@@ -61,19 +60,13 @@ public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionS
                 graceHours=row.IsDBNull(5)?null:row.GetInt32(5); mediaPolicy=row.GetString(6); continueFlow=row.GetBoolean(7);
         }
         var replacement=graceHours is null?null:request.Replacement;
-        var deferred=false;
-        if(graceHours is not null && replacement is null && sourceWrites is not null && await sourceWrites.IsClusteredAsync(c,tx,ct))
-        {
-            await PendingSourceWriteRepository.EnqueueAsync(id,source,library,original,request.PublishedPath,sourceSha,resultSha,Path.GetExtension(request.PublishedPath),graceHours.Value,c,tx,ct);
-            deferred=true;
-        }
         if(replacement is not null && !SourceReplacementRepository.ValidReport(id,original,replacement)) return false;
-        var detail=deferred?"Résultat validé et publié sans écrasement ; remplacement de source en attente durable du cluster.":replacement?.Status=="replaced"?"Résultat validé et publié ; source remplacée, sauvegarde conservée pendant la période de grâce."
+        var detail=replacement?.Status=="replaced"?"Résultat validé et publié ; source remplacée, sauvegarde conservée pendant la période de grâce."
             :graceHours is not null?"Résultat validé et publié ; remplacement non effectué, fichier source conservé"+(replacement?.Detail is {} reason?" : "+reason:"."):mediaPolicy=="beside"?"Résultat validé et publié à côté de la source (politique du flow) ; fichier source conservé."
             :mediaPolicy=="overwrite"?"Résultat validé et publié ; écrasement demandé par le flow mais la bibliothèque n’a pas de politique de remplacement active : fichier source conservé.":"Résultat validé et publié ; fichier source conservé.";
         // Publication demandée par un bloc de flow (ADR 0003) : l'exécution reste active, le worker reprend le flow sur le fichier publié.
         if(!await ExecutionRepository.RecordInTransactionAsync(id,new(request.EventId,request.ExpectedRevision,continueFlow
-            || deferred?"running":"succeeded",worker,continueFlow || deferred?null:100,detail),c,tx,ct)) return false;
+            ?"running":"succeeded",worker,continueFlow?null:100,detail),c,tx,ct)) return false;
         if(replacement is not null) await SourceReplacementRepository.RecordInTransactionAsync(id,library,source,original,sourceSha,resultSha,graceHours!.Value,replacement,c,tx,ct);
         await using var update=Sql.Command("UPDATE execution_work SET published_path=@path WHERE execution_id=@id",c,tx);
         update.Parameters.AddWithValue("id",id); update.Parameters.AddWithValue("path",request.PublishedPath); await update.ExecuteNonQueryAsync(ct);
@@ -86,16 +79,7 @@ public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionS
             published.Parameters.AddWithValue("detail","Média publié : "+request.PublishedPath+" (SHA-256 : "+request.Sha256+").");
             await published.ExecuteNonQueryAsync(ct);
         }
-        if(deferred && !continueFlow)
-        {
-            await using var pause=Sql.Command("""
-              UPDATE execution_work SET worker_node_id=NULL,lease_until=NULL,lease_epoch=lease_epoch+1,available_at='infinity'::timestamptz WHERE execution_id=@id;
-              UPDATE media_reservations SET lease_epoch=lease_epoch+1,lease_until='infinity'::timestamptz WHERE execution_id=@id;
-              DELETE FROM disk_locks WHERE execution_id=@id;
-              """,c,tx);
-            pause.Parameters.AddWithValue("id",id);await pause.ExecuteNonQueryAsync(ct);
-        }
-        else if(!continueFlow) await RuntimeRepository.ReleaseAsync(id,c,tx,ct);
+        if(!continueFlow) await RuntimeRepository.ReleaseAsync(id,c,tx,ct);
         await tx.CommitAsync(ct); broadcaster?.Publish(id); return true;
     }
     /// <summary>Publication déjà confirmée par le nœud d'accès pour une exécution dont le flow continue (ADR 0003).</summary>

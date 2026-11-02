@@ -37,7 +37,7 @@ public sealed partial class RuntimeRepository
     }
     internal static async Task ReleaseAsync(Guid id,DbConnection c,DbTransaction tx,CancellationToken ct)
     {
-        await using var cmd=Sql.Command("UPDATE pending_source_writes SET state='failed',detail='Écriture annulée avec son exécution.',claim_id=NULL,claim_until=NULL,finished_at=clock_timestamp() WHERE execution_id=@id AND state IN ('waiting','claimed') AND EXISTS(SELECT 1 FROM executions e WHERE e.id=@id AND e.state IN ('cancelling','cancelled','failed')); DELETE FROM media_reservations WHERE execution_id=@id AND NOT EXISTS(SELECT 1 FROM pending_source_writes p WHERE p.execution_id=@id AND p.state IN ('waiting','claimed')); DELETE FROM runtime_source_write_waits WHERE execution_id=@id; DELETE FROM disk_locks WHERE execution_id=@id; UPDATE execution_work SET lease_until=NULL,handoff_pending=false WHERE execution_id=@id",
+        await using var cmd=Sql.Command("DELETE FROM media_reservations WHERE execution_id=@id; DELETE FROM runtime_source_write_waits WHERE execution_id=@id; DELETE FROM disk_locks WHERE execution_id=@id; UPDATE execution_work SET lease_until=NULL,handoff_pending=false WHERE execution_id=@id",
             c,tx);
         cmd.Parameters.AddWithValue("id",id); await cmd.ExecuteNonQueryAsync(ct);
     }
@@ -126,22 +126,6 @@ public sealed partial class RuntimeRepository
         await tx.CommitAsync(ct); return plan;
     }
 
-    private static async Task SuspendSourceWriteAsync(Guid id,Guid worker,string node,long epoch,string reason,DbConnection c,DbTransaction tx,CancellationToken ct)
-    {
-        await using var pause=Sql.Command("""
-          INSERT INTO runtime_source_write_waits(execution_id,flow_node_id,reason) VALUES(@id,@node,@reason)
-          ON CONFLICT(execution_id) DO UPDATE SET reason=@reason;
-          DELETE FROM execution_steps WHERE execution_id=@id AND node_id=@node AND completed_at IS NULL;
-          UPDATE execution_work SET worker_node_id=NULL,lease_until=NULL,lease_epoch=lease_epoch+1,available_at=clock_timestamp()+interval '15 seconds' WHERE execution_id=@id;
-          UPDATE media_reservations SET lease_epoch=@epoch+1,lease_until='infinity'::timestamptz WHERE execution_id=@id;
-          DELETE FROM disk_locks WHERE execution_id=@id;
-          """,c,tx);
-        pause.Parameters.AddWithValue("id",id);pause.Parameters.AddWithValue("node",node);pause.Parameters.AddWithValue("reason",reason);pause.Parameters.AddWithValue("epoch",epoch);
-        await pause.ExecuteNonQueryAsync(ct);
-        await using var revision=Sql.Command("SELECT revision FROM executions WHERE id=@id",c,tx);revision.Parameters.AddWithValue("id",id);
-        await ExecutionRepository.RecordInTransactionAsync(id,new(Guid.NewGuid(),(await revision.ScalarInt32Async(ct))!.Value,"running",worker,null,reason),c,tx,ct);
-    }
-
     public async Task<bool> AuthorizeSourceWriteAsync(Guid id,Guid worker,long epoch,string root,CancellationToken ct)
     {
         await using(var check=dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.execution_id=@id AND w.worker_node_id=@worker AND w.source_node_id=@worker AND w.lease_epoch=@epoch AND w.lease_until>clock_timestamp() AND e.state='running' AND EXISTS(SELECT 1 FROM library_node_accesses a WHERE a.library_id=w.library_id AND a.node_id=@worker AND a.is_enabled AND a.can_write AND a.mode='direct' AND a.local_path=@root))"))
@@ -149,21 +133,13 @@ public sealed partial class RuntimeRepository
             check.Parameters.AddWithValue("id",id);check.Parameters.AddWithValue("worker",worker);check.Parameters.AddWithValue("epoch",epoch);check.Parameters.AddWithValue("root",root);
             if(!await check.ScalarBoolAsync(ct)) return false;
         }
-        var verified=sourceWrites is null || await sourceWrites.VerifyAsync(ct);
         await using var c=await dataSource.OpenConnectionAsync(ct);await using var tx=await c.BeginTransactionAsync(ct);
         if(!await FenceAsync(id,worker,epoch,c,tx,ct)) return false;
-        if(sourceWrites is not null && !await sourceWrites.SupportsGuardAsync(worker,c,tx,ct)) return false;
+        if(sourceWrites is not null && !await sourceWrites.NodeCanWriteAsync(worker,c,tx,ct)) return false;
         await using var step=Sql.Command("SELECT s.node_id FROM execution_steps s JOIN executions e ON e.id=s.execution_id JOIN execution_work w ON w.execution_id=e.id WHERE s.execution_id=@id AND s.completed_at IS NULL AND w.source_node_id=@worker AND EXISTS(SELECT 1 FROM library_node_accesses a WHERE a.library_id=w.library_id AND a.node_id=@worker AND a.is_enabled AND a.can_write AND a.mode='direct' AND a.local_path=@root) AND EXISTS(SELECT 1 FROM json_each(e.flow_definition,'$.nodes') n WHERE json_extract(n.value,'$.id')=s.node_id AND json_extract(n.value,'$.component.componentId')='mkv-edit-in-place')",
             c,tx);
         step.Parameters.AddWithValue("id",id);step.Parameters.AddWithValue("worker",worker);step.Parameters.AddWithValue("root",root);var node=await step.ExecuteScalarAsync(ct) as string;
         if(node is null) return false;
-        var refusal=!verified?"Écriture source différée : la synchronisation préalable du cluster est indisponible.":sourceWrites is null?null:await sourceWrites.CheckAsync(c,tx,ct);
-        if(refusal is not null)
-        {
-            // Called only by the native editor immediately before its first source mutation.
-            await SuspendSourceWriteAsync(id,worker,node,epoch,refusal,c,tx,ct);
-            await tx.CommitAsync(ct);return false;
-        }
         await tx.CommitAsync(ct);return true;
     }
 
@@ -180,11 +156,6 @@ public sealed partial class RuntimeRepository
             prior.Parameters.AddWithValue("id",id); var json=await prior.ExecuteScalarAsync(ct) as string;
             var expected=json is null ? flow.Nodes.Single(n=>components.Resolve(n.Component)!.Kind=="input").Id : JsonSerializer.Deserialize<RuntimeCheckpoint>(json,Json)!.NextNodeId;
             if(expected!=node.Id) return null;
-        }
-        if(node.Component.ComponentId=="mkv-edit-in-place" && sourceWrites is not null && await sourceWrites.CheckAsync(c,tx,ct) is {} reason)
-        {
-            await SuspendSourceWriteAsync(id,worker,node.Id,request.Epoch,reason,c,tx,ct);
-            await tx.CommitAsync(ct);return null;
         }
         await using var start=Sql.Command("""
           INSERT INTO execution_steps(execution_id,node_id,invocation_id,idempotent) VALUES(@id,@node,@invocation,@idempotent) ON CONFLICT DO NOTHING;
@@ -349,7 +320,6 @@ public sealed partial class RuntimeRepository
             await yield.ExecuteNonQueryAsync(ct);
         }
         if(wait is not null) await ExecutionWaitRepository.BeginAsync(id,node.Id,wait,request.Epoch,c,tx,ct);
-        if(ownership is not null) await ownership.SaveCheckpointAsync(id,c,tx,ct);
         await tx.CommitAsync(ct); return true;
     }
 

@@ -4,19 +4,19 @@ Règles transverses du projet. Le détail par domaine est dans `docs/architectur
 
 ## Objectif du projet
 
-Application auto-hébergée pour gérer et distribuer le traitement de bibliothèques multimédias. Premier cas d'usage : encoder des bibliothèques Plex avec FFmpeg, ffprobe et MKVToolNix. Les intégrations Plex, Jellyfin et *ARR sont des plugins. Le fonctionnement en cluster et la haute disponibilité sont au cœur de la conception.
+Application auto-hébergée pour gérer et distribuer le traitement de bibliothèques multimédias. Premier cas d'usage : encoder des bibliothèques Plex avec FFmpeg, ffprobe et MKVToolNix. Les intégrations Plex, Jellyfin et *ARR sont des plugins. Un central unique pilote des workers répartis sur plusieurs machines ; il n'y a ni réplication ni haute disponibilité entre serveurs : la reprise après sinistre repose sur la restauration d'une sauvegarde du central.
 
 ## Stack technique (validée)
 
 - Backend : **C# ASP.NET Core sur .NET 10 LTS**. Interface : **Angular** (TypeScript, Angular Material/CDK). Déploiement : **Docker**.
-- Base de données : **SQLite local par serveur uniquement**, réconciliée de proche en proche entre serveurs d'un cluster. Ne jamais partager un fichier SQLite entre hôtes. Voir [replication-storage](docs/architecture/domains/replication-storage.md).
+- Base de données : **SQLite, une seule, celle du central**. Ne jamais partager un fichier SQLite entre hôtes. Voir [replication-storage](docs/architecture/domains/replication-storage.md).
 - Ne pas remplacer ces choix sans décision explicite du propriétaire du projet.
 
 ## Modèle de nœud
 
-- Le système est un cluster de nœuds configurables ; **aucun serveur central permanent**. Chaque installation héberge les fonctions serveur, worker, ou les deux (une seule image `encoding`, mode changeable à chaud).
-- « Nœud » est le terme unique ; serveur et worker sont des rôles. Un nœud seul est **autonome** ; un cluster n'existe que s'il est créé ou rejoint, avec approbation du cluster d'accueil. Détails : [cluster](docs/architecture/domains/cluster.md).
-- Les serveurs gardent chacun leur stockage et réconcilient par le maillage ; cohérence **éventuelle, sans quorum**. Les instances ne doivent pas créer d'états divergents ni attribuer simultanément une même tâche. Les baux et réservations sont locaux au serveur qui attribue.
+- Deux images distinctes. Le **central** embarque l'API, l'interface web, la base et un worker intégré ; il est autonome et reste l'**unique autorité** du cluster : il pilote les workers. Le **worker** embarque seulement l'agent et une interface web, sans base de données ; il n'est jamais autonome, alimenté par l'API et le SSE du central, enrôlé à son setup avec un compte administrateur du central. **Aucune passation** de la fonction serveur pour l'instant ([ADR 0036](docs/architecture/adr/0036-separation-stricte-central-worker.md)).
+- « Nœud » est le terme unique ; serveur et worker sont des rôles fixés par l'image. Un central seul est **autonome** ; un worker rejoint un central, avec un compte administrateur de celui-ci. Détails : [cluster](docs/architecture/domains/cluster.md).
+- Le central est l'unique détenteur de la base et l'unique serveur : **pas de maillage, pas de réplication entre serveurs** ([ADR 0036](docs/architecture/adr/0036-separation-stricte-central-worker.md)). Les baux et réservations sont locaux au central qui attribue.
 
 ## Bibliothèques et accès aux médias
 
@@ -54,7 +54,7 @@ Toute route de gestion exige une session ou un jeton API Bearer ; rôles `admin`
 - **Interface** : [UI_RULES.md](UI_RULES.md) obligatoire, composants communs Angular Material/CDK, jetons de design, aucun contournement propre à une page ; en cas de doute métier, demander. Fiche : [ui](docs/architecture/domains/ui.md).
 - **Backend** : [BACKEND_RULES.md](BACKEND_RULES.md) obligatoire ; réutiliser les capacités communes, pas d'implémentation parallèle ; toute évolution d'un contrat ou composant commun examine ses usages.
 - **Tests et CI** : [TEST_RULES.md](TEST_RULES.md) obligatoire ; lint local et GitHub Actions ; E2E légers en local, scénarios lourds en CI.
-- Toute nouvelle table est déclarée « réconciliée » ou « locale » ; les migrations sont additives, à numéro unique, jamais modifiées une fois appliquées.
+- Toute nouvelle table est locale au central ; les migrations sont additives, à numéro unique, jamais modifiées une fois appliquées.
 
 ## Consignes de travail
 

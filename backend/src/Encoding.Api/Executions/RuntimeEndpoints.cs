@@ -185,19 +185,6 @@ public static class RuntimeEndpoints
             !string.IsNullOrWhiteSpace(request.Root) && request.Root.Length <= 4096
                 && await coordinator.AuthorizeReplacementAsync(id, nodeId, request.Root, ct) ? (IResult)Results.NoContent() : Results.Conflict());
 
-        group.MapPost("/source-writes/claim", async (
-            Guid nodeId, RuntimeExecutionCoordinator coordinator, CancellationToken ct) =>
-            await coordinator.ClaimPendingSourceWriteAsync(nodeId, ct) is { } task ? (IResult)Results.Ok(task) : Results.NoContent());
-
-        group.MapPost("/source-writes/{id:guid}/authorize", async (
-            Guid nodeId, Guid id, PendingSourceWriteFence request, RuntimeExecutionCoordinator coordinator, CancellationToken ct) =>
-            !string.IsNullOrWhiteSpace(request.Root) && request.Root.Length <= 4096
-                && await coordinator.AuthorizePendingSourceWriteAsync(id, nodeId, request.ClaimId, request.Root, ct) ? (IResult)Results.NoContent() : Results.Conflict());
-
-        group.MapPost("/source-writes/{id:guid}/complete", async (
-            Guid nodeId, Guid id, PendingSourceWriteCompletion request, RuntimeExecutionCoordinator coordinator, CancellationToken ct) =>
-            await coordinator.CompletePendingSourceWriteAsync(id, nodeId, request, ct) ? (IResult)Results.NoContent() : Results.Conflict());
-
         group.MapGet("/replacements", async (
             Guid nodeId, RuntimeExecutionCoordinator coordinator, CancellationToken ct) =>
             Results.Ok(await coordinator.GetReplacementTasksAsync(nodeId, ct)));

@@ -8,21 +8,13 @@ using Encoding.Contracts.Auth;
 
 namespace Encoding.Api.Tools;
 
-public sealed record AiAssistantForwardConfirm(Guid OwnerId, bool IsAdmin, AiAssistantConfirmActionRequest Request);
-public sealed record AiAssistantForwardConfirmResponse(bool Applied, string? Error = null, bool InvalidRequest = false);
-
 /// <summary>A stable session coordinator owns writes; inference may move between connected peers without moving secrets.</summary>
-public sealed class AiClusterService(AiClusterTransport transport, AiClusterStore store, DeviceCodeAuthService auth,
+public sealed class AiClusterService(Encoding.Api.Infrastructure.ClusterPeerIdentityStore identity, AiClusterStore store, DeviceCodeAuthService auth,
     AiSettingsService settings, AiClientFactory factory, IConfiguration configuration, LocalNodeRegistry localNode, AiQuotaService? quotaService = null,
-        AiModelCatalogService? modelCatalog = null, IServiceProvider? services = null,
-    AiCredentialSyncService? credentialSync = null)
+        AiModelCatalogService? modelCatalog = null, IServiceProvider? services = null)
 {
     private readonly ConcurrentDictionary<string, SemaphoreSlim> gates = new();
     private readonly ConcurrentDictionary<Guid, Lazy<Task<AiCompletionResult>>> running = new();
-    private readonly object viewSync = new();
-    private AiClusterView? cachedView;
-    private DateTimeOffset cachedViewAt;
-    private bool viewRefreshQueued;
     public async Task<AiNodeAvailability> LocalAsync(CancellationToken ct)
     {
         using var preparation = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -74,72 +66,11 @@ public sealed class AiClusterService(AiClusterTransport transport, AiClusterStor
             catalogs = modelCatalog is null ? null : providers.Select(provider => new AiModelCatalog(provider, "unavailable", [], null,
                 DateTimeOffset.UtcNow, "Préparation du catalogue dépassée." )).ToArray();
         }
-        var credentials = credentialSync?.Statuses();
-        // Le cluster détient la connexion mais la CLI de ce nœud la déclare non connectée : il faut la reconnecter ici.
-        var reconnect = credentials is null ? null : tools.Where(tool => tool.IsInstalled && tool.AuthStatus.State == "unconfigured"
-                && credentials.Any(status => status.Provider == tool.Id && status.State == "synced"))
-            .Select(tool => tool.Id).ToArray();
-        return new(transport.LocalId, name ?? configuration["Node:Name"] ?? Environment.MachineName,
-            providers.Distinct(StringComparer.Ordinal).ToArray(), Models: models, Catalogs: catalogs,
-            Credentials: credentials, Reconnect: reconnect);
+        return new(identity.PeerId, name ?? configuration["Node:Name"] ?? Environment.MachineName,
+            providers.Distinct(StringComparer.Ordinal).ToArray(), Models: models, Catalogs: catalogs);
     }
-    public async Task<AiClusterView> ViewAsync(CancellationToken ct)
-    {
-        var nodes = new List<AiNodeAvailability> { await LocalAsync(ct) };
-        var results = await Task.WhenAll((await transport.PeersAsync(ct)).Select(async url =>
-        {
-            try { return await transport.CallAsync<AiNodeAvailability>(url, "availability", new { }, TimeSpan.FromSeconds(15), ct); }
-            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested) { return null; }
-        }));
-        nodes.AddRange(results.OfType<AiNodeAvailability>().Where(n => n.NodeId != transport.LocalId));
-        return new(nodes.DistinctBy(n => n.NodeId).ToArray());
-    }
-    public async Task<AiClusterView> CachedViewAsync(CancellationToken ct)
-    {
-        var local = await LocalAsync(ct);
-        var peerUrls = await transport.PeersAsync(ct);
-        AiClusterView? snapshot;
-        var startRefresh = false;
-        lock (viewSync)
-        {
-            snapshot = cachedView;
-            if (!viewRefreshQueued && (snapshot is null || cachedViewAt.AddMinutes(1) <= DateTimeOffset.UtcNow))
-            {
-                viewRefreshQueued = true;
-                startRefresh = true;
-            }
-        }
-        if (startRefresh) _ = RefreshViewInBackground();
-        var remoteNodes = snapshot?.Nodes.Where(node => node.NodeId != transport.LocalId).ToArray()
-            ?? CreateLoadingPeerNodes(peerUrls);
-        return new([local, .. remoteNodes]);
-    }
-
-    private async Task RefreshViewInBackground()
-    {
-        try
-        {
-            var snapshot = await ViewAsync(CancellationToken.None);
-            lock (viewSync)
-            {
-                cachedView = snapshot;
-                cachedViewAt = DateTimeOffset.UtcNow;
-            }
-        }
-        catch (Exception) { }
-        finally { lock (viewSync) viewRefreshQueued = false; }
-    }
-
-    private static AiNodeAvailability[] CreateLoadingPeerNodes(IReadOnlyList<string> peerUrls)
-    {
-        var now = DateTimeOffset.UtcNow;
-        var providers = new[] { "codex-cli", "claude-cli", "openai", "anthropic", "ollama" };
-        return peerUrls.Select((url, index) => new AiNodeAvailability(
-            new Guid(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(url)).AsSpan(0, 16)),
-            $"Nœud distant {index + 1}", [], true,
-            Catalogs: providers.Select(provider => new AiModelCatalog(provider, "loading", [], null, now,
-                "Chargement des capacités annoncées par le nœud.")).ToArray())).ToArray();
-    }
+    public async Task<AiClusterView> ViewAsync(CancellationToken ct) => new([await LocalAsync(ct)]);
+    public Task<AiClusterView> CachedViewAsync(CancellationToken ct) => ViewAsync(ct);
     public async Task<AiNodeModelCatalog> LocalModelsAsync(bool refresh, CancellationToken ct)
     {
         if (refresh && modelCatalog is not null)
@@ -147,23 +78,8 @@ public sealed class AiClusterService(AiClusterTransport transport, AiClusterStor
         var local = await LocalAsync(ct);
         return new(local.NodeId, local.Name, local.Catalogs ?? []);
     }
-    public async Task<AiClusterModelCatalog> ModelsAsync(bool refresh, CancellationToken ct)
-    {
-        if (!refresh)
-        {
-            var view = await CachedViewAsync(ct);
-            return new(view.Nodes.Where(node => node.Reachable)
-                .Select(node => new AiNodeModelCatalog(node.NodeId, node.Name, node.Catalogs ?? []))
-                .ToArray(), await ModelPolicyAsync(ct));
-        }
-        var local = LocalModelsAsync(refresh, ct);
-        var remote = await Task.WhenAll((await transport.PeersAsync(ct)).Select(async url =>
-        {
-            try { return await transport.CallAsync<AiNodeModelCatalog>(url, "models", new { Refresh = refresh }, TimeSpan.FromSeconds(20), ct); }
-            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested) { return null; }
-        }));
-        return new(new[] { await local }.Concat(remote.OfType<AiNodeModelCatalog>()).DistinctBy(n => n.NodeId).ToArray(), await ModelPolicyAsync(ct));
-    }
+    public async Task<AiClusterModelCatalog> ModelsAsync(bool refresh, CancellationToken ct) =>
+        new([await LocalModelsAsync(refresh, ct)], await ModelPolicyAsync(ct));
     public async Task<AiModelPolicy> ModelPolicyAsync(CancellationToken ct) => new(
         (await store.ReadPrefixAsync<AiModelPolicyUpdate>("model-policy/", ct))
             .Where(p => !p.Enabled).Select(p => new AiDisabledModel(p.Provider, p.Model)).ToArray());
@@ -188,89 +104,16 @@ public sealed class AiClusterService(AiClusterTransport transport, AiClusterStor
     public async Task<AiNodeQuotas> LocalQuotasAsync(CancellationToken ct)
     {
         var displayName = await localNode.ResolveDisplayNameAsync(ct) ?? configuration["Node:Name"] ?? Environment.MachineName;
-        if (quotaService is null) return new(transport.LocalId, displayName, []);
+        if (quotaService is null) return new(identity.PeerId, displayName, []);
         var quotas = await Task.WhenAll(new[] { "codex-cli", "claude-cli" }.Select(provider => quotaService.ReadAsync(provider, ct)));
-        return new(transport.LocalId, displayName, quotas);
+        return new(identity.PeerId, displayName, quotas);
     }
-    public async Task<AiClusterQuotas> QuotasAsync(CancellationToken ct)
-    {
-        var local = LocalQuotasAsync(ct);
-        var peers = (await transport.PeersAsync(ct)).Select(async url =>
-        {
-            try { return await transport.CallAsync<AiNodeQuotas>(url, "quotas", new { }, TimeSpan.FromSeconds(20), ct); }
-            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested) { return null; }
-        }).ToArray();
-        var remote = await Task.WhenAll(peers);
-        return new(new[] { await local }.Concat(remote.OfType<AiNodeQuotas>()).DistinctBy(n => n.NodeId).ToArray());
-    }
+    public async Task<AiClusterQuotas> QuotasAsync(CancellationToken ct) => new([await LocalQuotasAsync(ct)]);
     private async Task<ApiTokenReplicationNode> LocalApiTokenStateAsync(CancellationToken ct) =>
-        new(transport.LocalId, await localNode.ResolveDisplayNameAsync(ct) ?? configuration["Node:Name"] ?? Environment.MachineName, true,
+        new(identity.PeerId, await localNode.ResolveDisplayNameAsync(ct) ?? configuration["Node:Name"] ?? Environment.MachineName, true,
             services is null ? [] : await services.GetRequiredService<Encoding.Api.Auth.ApiTokenRepository>().ReplicationStateAsync(ct));
-    /// <summary>Jetons connus de chaque nœud (identifiant et révocation) ; un pair injoignable est signalé, pas supposé à jour.</summary>
-    public async Task<ApiTokenReplicationView> ApiTokenReplicationAsync(CancellationToken ct)
-    {
-        var local = LocalApiTokenStateAsync(ct);
-        var peers = (await transport.PeersAsync(ct)).Select(async url =>
-        {
-            try { return await transport.CallAsync<ApiTokenReplicationNode>(url, "api-token-state", new { }, TimeSpan.FromSeconds(15), ct); }
-            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
-            {
-                // Un pair qui ne répond pas est signalé (état inconnu) au lieu d'être supposé à jour.
-                return new ApiTokenReplicationNode(Guid.Empty, Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host : url, false, null);
-            }
-        }).ToArray();
-        var remote = await Task.WhenAll(peers);
-        var answered = remote.Where(n => n.Reachable).DistinctBy(n => n.NodeId);
-        var nodes = new[] { await local }.Concat(answered).DistinctBy(n => n.NodeId).Concat(remote.Where(n => !n.Reachable)).ToArray();
-        return new(nodes);
-    }
-    public async Task<object> DispatchAsync(string operation, JsonElement value, CancellationToken ct) => operation switch
-    {
-        "availability" => await LocalAsync(ct),
-        "quotas" => await LocalQuotasAsync(ct),
-        "api-token-state" => await LocalApiTokenStateAsync(ct),
-        "assistant-cancel" => CancelForwardedAssistant(value.Deserialize<AiAssistantForwardCancel>()!),
-        "assistant-message" => await ForwardAssistantAsync(value.Deserialize<AiAssistantForwardRequest>()!, ct),
-        "assistant-business-operation" => await ForwardBusinessOperationAsync(value.Deserialize<AiAssistantForwardConfirm>()!, ct),
-        "models" => await LocalModelsAsync(value.TryGetProperty("Refresh", out var refresh) && refresh.GetBoolean(), ct),
-        "generate" => await GenerateAsync(value.Deserialize<AiGenerateRequest>()!.Provider, value.Deserialize<AiGenerateRequest>()!.Prompt, ct,
-            allowModelChanges: value.Deserialize<AiGenerateRequest>()!.AllowModelChanges),
-        "execute" => await ExecuteAsync(value.Deserialize<AiExecuteRequest>()!, ct),
-        _ => throw new ArgumentException("Opération IA inconnue.")
-    };
-    private async Task<AiAssistantForwardResponse> ForwardAssistantAsync(AiAssistantForwardRequest request, CancellationToken ct)
-    {
-        if (request.OwnerId == Guid.Empty || services is null) throw new ArgumentException("Identité ou coordinateur indisponible.");
-        var user = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity([
-            new(System.Security.Claims.ClaimTypes.NameIdentifier, request.OwnerId.ToString()),
-            new(System.Security.Claims.ClaimTypes.Role, request.IsAdmin ? "admin" : "viewer")], "cluster-ai"));
-        try { return new(await services.GetRequiredService<AiAssistantService>().SendAsync(request.Request, user, ct)); }
-        catch (ArgumentException ex) { return new(null, ex.Message, true); }
-        catch (InvalidOperationException ex) { return new(null, ex.Message); }
-    }
-    private bool CancelForwardedAssistant(AiAssistantForwardCancel request)
-    {
-        if (request.OwnerId == Guid.Empty || services is null) return false;
-        var user = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity([
-            new(System.Security.Claims.ClaimTypes.NameIdentifier, request.OwnerId.ToString())], "cluster-ai"));
-        return services.GetRequiredService<AiAssistantService>().CancelRequest(request.RequestId, user);
-    }
-    private async Task<AiAssistantForwardConfirmResponse> ForwardBusinessOperationAsync(AiAssistantForwardConfirm request, CancellationToken ct)
-    {
-        if (request.OwnerId == Guid.Empty || !request.IsAdmin || services is null)
-            throw new ArgumentException("Identité ou autorisation indisponible.");
-        var user = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity([
-            new(System.Security.Claims.ClaimTypes.NameIdentifier, request.OwnerId.ToString()),
-            new(System.Security.Claims.ClaimTypes.Role, "admin")], "cluster-ai"));
-        try
-        {
-            var applied = await services.GetRequiredService<AiAssistantService>()
-                .ConfirmBusinessOperationAsync(request.Request, user, ct);
-            return new(applied);
-        }
-        catch (ArgumentException ex) { return new(false, ex.Message, true); }
-        catch (InvalidOperationException ex) { return new(false, ex.Message); }
-    }
+    /// <summary>Jetons connus du central (identifiant et révocation).</summary>
+    public async Task<ApiTokenReplicationView> ApiTokenReplicationAsync(CancellationToken ct) => new([await LocalApiTokenStateAsync(ct)]);
     public async Task<AiSessionState?> GetSessionAsync(string id, CancellationToken ct)
     {
         _ = Owner(id);
@@ -370,34 +213,15 @@ public sealed class AiClusterService(AiClusterTransport transport, AiClusterStor
         if (localOnly && (!Uri.TryCreate(settings.GetSettings().OllamaBaseUrl, UriKind.Absolute, out var localUri) || !localUri.IsLoopback))
             return new(false, "", "Ollama doit être configuré sur une adresse de boucle locale pour cette politique.");
         var requestId = prompt.RequestId ?? Guid.NewGuid();
-        var id = prompt.SessionId ?? $"{transport.LocalId:N}.{requestId:N}";
+        var id = prompt.SessionId ?? $"{identity.PeerId:N}.{requestId:N}";
         if (requestId == Guid.Empty || string.IsNullOrWhiteSpace(prompt.UserPrompt) || prompt.UserPrompt.Length + prompt.SystemPrompt.Length > MaximumPromptCharacters)
             throw new ArgumentException("Demande IA invalide ou trop volumineuse.");
         if (prompt.Scope is { } scope && (string.IsNullOrWhiteSpace(scope.Operation) || scope.Operation.Length > 80
             || new[] { scope.LibraryId, scope.FlowId, scope.MediaId, scope.ExecutionId }.Any(value => value == Guid.Empty)))
             throw new ArgumentException("Périmètre de session IA invalide.");
-        var owner = await OwnerAsync(id, ct);
-        if (owner != transport.LocalId)
-        {
-            if (localOnly) return new(false, "", "Ce nœud ne coordonne pas cette session.", SessionId: id, RequestId: requestId);
-            var ownerSeen = false;
-            foreach (var url in await transport.PeersAsync(ct))
-            {
-                try
-                {
-                    var node = await transport.CallAsync<AiNodeAvailability>(url, "availability", new { }, TimeSpan.FromSeconds(15), ct);
-                    if (node.NodeId != owner) continue;
-                    ownerSeen = true;
-                    return await transport.CallAsync<AiCompletionResult>(url, "generate", new AiGenerateRequest(provider, prompt with { SessionId = id,
-                        RequestId = requestId }, allowModelChanges), TimeSpan.FromMinutes(35), ct);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested) { }
-            }
-            // Reprise : seulement si le coordinateur n'a répondu à aucune sonde (jamais après une demande acceptée, dont le résultat
-            // reste ambigu) et si le dernier checkpoint validé est déjà présent sur ce nœud, pour ne jamais repartir d'un contexte vide.
-            if (ownerSeen || !await TryTakeOverAsync(id, ct))
-                return new(false, "", "Coordinateur de session indisponible. Le contexte validé est conservé ; réessayez après son retour.", SessionId: id, RequestId: requestId);
-        }
+        // Une session préparée par un autre serveur (ancienne installation) est reprise par le central si son historique est présent.
+        if (await OwnerAsync(id, ct) != identity.PeerId && !await TryTakeOverAsync(id, ct))
+            return new(false, "", "Session introuvable sur le central.", SessionId: id, RequestId: requestId);
         var gate = gates.GetOrAdd(id, _ => new(1));
         if (!await gate.WaitAsync(0, ct)) return new(false, "", "Une demande est déjà en cours dans cette session.", SessionId: id, RequestId: requestId);
         try
@@ -427,17 +251,9 @@ public sealed class AiClusterService(AiClusterTransport transport, AiClusterStor
             session = session with { Provider = provider, Model = prompt.Model, ReasoningEffort = prompt.ReasoningEffort, PendingRequest = requestId,
                 PendingPrompt = prompt with { SessionId = id, RequestId = requestId }, UpdatedAt = DateTimeOffset.UtcNow, LastError = null };
             await store.SaveAsync("session/" + id, session, ct);
-            var candidates = new List<(string? Url, AiNodeAvailability Node)> { (null, await LocalAsync(ct)) };
-            foreach (var url in await transport.PeersAsync(ct))
-            {
-                try { candidates.Add((url, await transport.CallAsync<AiNodeAvailability>(url, "availability", new { }, TimeSpan.FromSeconds(15), ct))); }
-                catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested) { }
-            }
+            var candidates = new List<AiNodeAvailability> { await LocalAsync(ct) };
             AiCompletionResult result = new(false, "", "Aucun nœud connecté à ce fournisseur. La demande reste en attente.");
-            foreach (var candidate in candidates.DistinctBy(c => c.Node.NodeId)
-                .Where(c => Supports(c.Node, provider, prompt)
-                    && (!localOnly || c.Url is null))
-                .Take(localOnly ? 1 : 3))
+            foreach (var candidate in candidates.Where(node => Supports(node, provider, prompt)).Take(localOnly ? 1 : 3))
             {
                 var seconds = Math.Clamp((await GetSettingsAsync(ct)).TimeoutSeconds, 10, 600);
                 var deadline = DateTimeOffset.UtcNow.AddSeconds(seconds);
@@ -447,8 +263,7 @@ public sealed class AiClusterService(AiClusterTransport transport, AiClusterStor
                 var ambiguous = false;
                 try
                 {
-                    result = candidate.Url is null ? await ExecuteAsync(attempt, ct)
-                        : await transport.CallAsync<AiCompletionResult>(candidate.Url, "execute", attempt, TimeSpan.FromSeconds(seconds + 5), ct);
+                    result = await ExecuteAsync(attempt, ct);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
                 { ambiguous = true; result = new(false, "", "Le nœud d’exécution n’a pas confirmé de résultat."); }
@@ -502,7 +317,7 @@ public sealed class AiClusterService(AiClusterTransport transport, AiClusterStor
                 return new(false, "", "Ce fournisseur est désactivé dans le cluster.");
             settings.UpdateSettings(new(DefaultProvider: shared.DefaultProvider, TimeoutSeconds: shared.TimeoutSeconds,
                 SubtitleBatchSize: shared.SubtitleBatchSize, CodexEnabled: shared.CodexEnabled, ClaudeEnabled: shared.ClaudeEnabled));
-            return (await factory.CreateLocalClient(request.Provider).GenerateTextAsync(request.Prompt, deadline.Token)) with { ExecutorNodeId = transport.LocalId };
+            return (await factory.CreateLocalClient(request.Provider).GenerateTextAsync(request.Prompt, deadline.Token)) with { ExecutorNodeId = identity.PeerId };
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return new(false, "", "Bail d’exécution IA expiré."); }
     }
@@ -511,7 +326,7 @@ public sealed class AiClusterService(AiClusterTransport transport, AiClusterStor
         var saved = await GetSessionAsync(id, ct) ?? throw new ArgumentException("Checkpoint encore indisponible sur ce nœud. Réessayez après réconciliation.");
         if (saved.AttemptDeadline is { } deadline && deadline.AddSeconds(5) > DateTimeOffset.UtcNow)
             throw new InvalidOperationException("Attendez la fin du bail de la tentative précédente avant de créer une nouvelle session.");
-        var fork = saved with { Id = $"{transport.LocalId:N}.{Guid.NewGuid():N}", PendingRequest = null, PendingPrompt = null, AttemptDeadline = null,
+        var fork = saved with { Id = $"{identity.PeerId:N}.{Guid.NewGuid():N}", PendingRequest = null, PendingPrompt = null, AttemptDeadline = null,
             Attempt = 0, UpdatedAt = DateTimeOffset.UtcNow, LastError = null };
         await store.SaveAsync("session/" + fork.Id, fork, ct);
         return fork;
@@ -530,16 +345,16 @@ public sealed class AiClusterService(AiClusterTransport transport, AiClusterStor
     public async Task<bool> TryTakeOverAsync(string id, CancellationToken ct)
     {
         var previous = await OwnerAsync(id, ct);
-        if (previous == transport.LocalId) return true;
+        if (previous == identity.PeerId) return true;
         if (await GetSessionAsync(id, ct) is null) return false;
-        await store.SaveAsync(CoordinatorKey(id), transport.LocalId.ToString("N"), ct);
+        await store.SaveAsync(CoordinatorKey(id), identity.PeerId.ToString("N"), ct);
         services?.GetService<ILogger<AiClusterService>>()?.LogWarning("Session IA {Session} reprise par ce nœud : son coordinateur {Coordinator} est injoignable.", id, previous);
         return true;
     }
     /// <summary>Une session auxiliaire (titre, planification) créée par le coordinateur courant le suit, même après une reprise.</summary>
     public async Task AdoptSessionAsync(string id, CancellationToken ct)
     {
-        if (await OwnerAsync(id, ct) != transport.LocalId) await store.SaveAsync(CoordinatorKey(id), transport.LocalId.ToString("N"), ct);
+        if (await OwnerAsync(id, ct) != identity.PeerId) await store.SaveAsync(CoordinatorKey(id), identity.PeerId.ToString("N"), ct);
     }
     public static string CoordinatorKey(string id) => "session-coordinator/" + id;
     /// <summary>Coordinateur de la session : celui de son identifiant, sauf reprise explicite par un autre nœud (la plus récente gagne).</summary>

@@ -11,8 +11,7 @@ namespace Encoding.Api.Nodes;
 
 public enum PairingRequestResult { Created, Conflict, TooMany }
 
-public sealed partial class NodeRepository(DbDataSource dataSource,
-    ClusterPeerAdmissionRepository? peerAdmissions = null,ClusterSourceWriteBarrier? coordination=null,TaskOwnershipRepository? ownership=null)
+public sealed partial class NodeRepository(DbDataSource dataSource)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -46,6 +45,13 @@ public sealed partial class NodeRepository(DbDataSource dataSource,
         command.Parameters.AddWithValue("allow_new", allowNewNode);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken) ? ReadResponse(reader, true) : null;
+    }
+
+    public async Task DeletePairingRequestAsync(Guid nodeId, CancellationToken cancellationToken)
+    {
+        await using var command = dataSource.CreateCommand("DELETE FROM node_enrollment_requests WHERE node_id = @id");
+        command.Parameters.AddWithValue("id", nodeId);
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     /// <summary>Authentifie un worker par son seul secret ; l’empreinte SHA-256 de ce secret aléatoire à 256 bits identifie le nœud.</summary>
@@ -91,14 +97,12 @@ public sealed partial class NodeRepository(DbDataSource dataSource,
 
         const string sql = """
             INSERT INTO node_enrollment_requests
-                (node_id, pairing_key_hash, node_token_hash, peer_id, peer_public_key, name, roles, max_concurrent_tasks, capabilities, inventory, display_name, expires_at)
+                (node_id, pairing_key_hash, node_token_hash, name, roles, max_concurrent_tasks, capabilities, inventory, display_name, expires_at)
             VALUES
-                (@id, @pairing_key_hash, @node_token_hash, @peer_id, @peer_public_key, @name, @roles, @max_concurrent_tasks, @capabilities, @inventory, @display_name, clock_timestamp() + interval '10 minutes')
+                (@id, @pairing_key_hash, @node_token_hash, @name, @roles, @max_concurrent_tasks, @capabilities, @inventory, @display_name, clock_timestamp() + interval '10 minutes')
             ON CONFLICT (node_id) DO UPDATE SET
                 pairing_key_hash = EXCLUDED.pairing_key_hash,
                 node_token_hash = EXCLUDED.node_token_hash,
-                peer_id = EXCLUDED.peer_id,
-                peer_public_key = EXCLUDED.peer_public_key,
                 name = EXCLUDED.name,
                 roles = EXCLUDED.roles,
                 max_concurrent_tasks = EXCLUDED.max_concurrent_tasks,
@@ -123,19 +127,7 @@ public sealed partial class NodeRepository(DbDataSource dataSource,
         command.Parameters.AddWithValue("display_name", (object?)request.Node.DisplayName ?? DBNull.Value);
         command.Parameters.AddWithValue("pairing_key_hash", SqlKind.Bytes, pairingKeyHash);
         command.Parameters.AddWithValue("node_token_hash", SqlKind.Bytes, nodeTokenHash);
-        command.Parameters.AddWithValue("peer_id", (object?)request.Node.ClusterPeerId ?? DBNull.Value);
-        command.Parameters.AddWithValue("peer_public_key", (object?)request.Node.ClusterPeerPublicKey ?? DBNull.Value);
         if (await command.ExecuteScalarAsync(cancellationToken) is null) return PairingRequestResult.Conflict;
-        await using (var clearUrl = Sql.Command("DELETE FROM node_peer_reconciliation_urls WHERE node_id=@id", connection, transaction))
-        {
-            clearUrl.Parameters.AddWithValue("id", request.Node.Id); await clearUrl.ExecuteNonQueryAsync(cancellationToken);
-        }
-        if (request.Node.ClusterPeerId is { } peer && ClusterReconciliationRepository.TryNormalizePeerUrl(request.Node.ClusterPeerReconciliationUrl) is { } url)
-        {
-            await using var saveUrl = Sql.Command("INSERT INTO node_peer_reconciliation_urls(node_id,peer_id,url) VALUES(@id,@peer,@url)", connection, transaction);
-            saveUrl.Parameters.AddWithValue("id", request.Node.Id); saveUrl.Parameters.AddWithValue("peer", peer); saveUrl.Parameters.AddWithValue("url", url);
-            await saveUrl.ExecuteNonQueryAsync(cancellationToken);
-        }
         await transaction.CommitAsync(cancellationToken);
         return PairingRequestResult.Created;
     }
@@ -143,7 +135,7 @@ public sealed partial class NodeRepository(DbDataSource dataSource,
     public async Task<IReadOnlyList<PendingNodeEnrollmentResponse>> ListPendingPairingRequestsAsync(CancellationToken cancellationToken)
     {
         const string sql = """
-            SELECT node_id, name, roles, max_concurrent_tasks, capabilities, created_at, expires_at, inventory, node_token_hash, peer_public_key, display_name
+            SELECT node_id, name, roles, max_concurrent_tasks, capabilities, created_at, expires_at, inventory, node_token_hash, display_name
             FROM node_enrollment_requests
             WHERE expires_at > clock_timestamp() AND NOT EXISTS(SELECT 1 FROM cluster_nodes n WHERE n.id=node_enrollment_requests.node_id AND n.deleted_at IS NOT NULL)
             ORDER BY created_at, node_id
@@ -156,13 +148,13 @@ public sealed partial class NodeRepository(DbDataSource dataSource,
         {
             var roles = reader.GetStringArray(2).Select(role => Enum.Parse<NodeRole>(role, true)).ToArray();
             var capabilities = JsonSerializer.Deserialize<IReadOnlyList<NodeToolCapability>>(reader.GetString(4), JsonOptions) ?? [];
-            var displayName = reader.IsDBNull(10) ? null : reader.GetString(10);
+            var displayName = reader.IsDBNull(9) ? null : reader.GetString(9);
             requests.Add(new PendingNodeEnrollmentResponse(
                 reader.GetGuid(0), reader.GetString(1), roles, reader.GetInt32(3), capabilities,
                 new DateTimeOffset(DateTime.SpecifyKind(reader.GetDateTime(5), DateTimeKind.Utc)),
                 new DateTimeOffset(DateTime.SpecifyKind(reader.GetDateTime(6), DateTimeKind.Utc)),
                 ReadInventory(reader.GetString(7)),
-                NodeVerificationCode.FromTokenHash(reader.GetGuid(0), reader.GetFieldValue<byte[]>(8), reader.IsDBNull(9) ? null : reader.GetString(9)),
+                NodeVerificationCode.FromTokenHash(reader.GetGuid(0), reader.GetFieldValue<byte[]>(8)),
                 displayName));
         }
         return requests;
@@ -184,15 +176,13 @@ public sealed partial class NodeRepository(DbDataSource dataSource,
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         var requestPredicate = requestedNodeId.HasValue ? "node_id = @node_id" : "pairing_key_hash = @pairing_key_hash";
         var selectSql = $"""
-            SELECT node_id, node_token_hash, name, roles, max_concurrent_tasks, capabilities, inventory, peer_id, peer_public_key, display_name
+            SELECT node_id, node_token_hash, name, roles, max_concurrent_tasks, capabilities, inventory, display_name
             FROM node_enrollment_requests
             WHERE {requestPredicate} AND expires_at > clock_timestamp()
             FOR UPDATE
             """;
         Guid nodeId;
         byte[] nodeTokenHash;
-        Guid? peerId;
-        string? peerPublicKey;
         string? displayName;
         NodeHeartbeatRequest heartbeat;
         await using (var selectCommand = Sql.Command(selectSql, connection, transaction))
@@ -213,9 +203,7 @@ public sealed partial class NodeRepository(DbDataSource dataSource,
                 reader.GetInt32(4),
                 JsonSerializer.Deserialize<IReadOnlyList<NodeToolCapability>>(reader.GetString(5), JsonOptions) ?? [],
                 ReadInventory(reader.GetString(6)));
-            peerId = reader.IsDBNull(7) ? null : reader.GetGuid(7);
-            peerPublicKey = reader.IsDBNull(8) ? null : reader.GetString(8);
-            displayName = reader.IsDBNull(9) ? null : reader.GetString(9);
+            displayName = reader.IsDBNull(7) ? null : reader.GetString(7);
         }
 
         const string enrollSql = """
@@ -247,16 +235,6 @@ public sealed partial class NodeRepository(DbDataSource dataSource,
             return null;
         }
 
-        if (peerId.HasValue && peerPublicKey is not null && peerAdmissions is not null)
-            await peerAdmissions.CreateApprovalGrantAsync(connection, transaction, nodeId, peerId.Value, peerPublicKey, cancellationToken);
-
-        if (peerId.HasValue && peerPublicKey is not null && peerAdmissions is not null)
-        {
-            await using var approveUrl = Sql.Command("UPDATE node_peer_reconciliation_urls SET approved=1 WHERE node_id=@id AND peer_id=@peer", connection, transaction);
-            approveUrl.Parameters.AddWithValue("id",nodeId); approveUrl.Parameters.AddWithValue("peer",peerId.Value);
-            await approveUrl.ExecuteNonQueryAsync(cancellationToken);
-        }
-
         await using (var deleteCommand = Sql.Command(
             "DELETE FROM node_enrollment_requests WHERE node_id = @id", connection, transaction))
         {
@@ -276,9 +254,8 @@ public sealed partial class NodeRepository(DbDataSource dataSource,
             WHERE id=@id AND deleted_at IS NULL AND node_token_hash=@node_token_hash
               AND name=@name AND roles=@roles AND max_concurrent_tasks=@max_concurrent_tasks
               AND capabilities=@capabilities AND inventory IS NOT DISTINCT FROM @inventory
-              AND (desired_roles IS NULL OR NOT (desired_roles <@ @roles AND @roles <@ desired_roles))
             RETURNING id, name, roles, max_concurrent_tasks, capabilities, last_seen_at, true AS is_online,
-                inventory, display_name, labels, desired_roles, protocol_version, session_nonce, incompatible_reason
+                inventory, display_name, labels, protocol_version, session_nonce, incompatible_reason
             """;
         const string changed = """
             UPDATE cluster_nodes SET
@@ -287,10 +264,9 @@ public sealed partial class NodeRepository(DbDataSource dataSource,
                 max_concurrent_tasks = @max_concurrent_tasks,
                 capabilities = @capabilities,
                 inventory = @inventory,
-                desired_roles = CASE WHEN desired_roles <@ @roles AND @roles <@ desired_roles THEN NULL ELSE desired_roles END,
                 last_seen_at = clock_timestamp()
             WHERE id = @id AND deleted_at IS NULL AND node_token_hash = @node_token_hash
-            RETURNING id, name, roles, max_concurrent_tasks, capabilities, last_seen_at, true AS is_online, inventory, display_name, labels, desired_roles,
+            RETURNING id, name, roles, max_concurrent_tasks, capabilities, last_seen_at, true AS is_online, inventory, display_name, labels,
                 protocol_version, session_nonce, incompatible_reason
             """;
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -301,9 +277,9 @@ public sealed partial class NodeRepository(DbDataSource dataSource,
             command.Parameters.AddWithValue("node_token_hash", SqlKind.Bytes, tokenHash);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             if (!await reader.ReadAsync(cancellationToken)) return (null, false);
-            int? protocol = reader.IsDBNull(11) ? null : reader.GetInt32(11);
-            var nonce = reader.IsDBNull(12) ? null : reader.GetString(12);
-            var reason = reader.IsDBNull(13) ? null : reader.GetString(13);
+            int? protocol = reader.IsDBNull(10) ? null : reader.GetInt32(10);
+            var nonce = reader.IsDBNull(11) ? null : reader.GetString(11);
+            var reason = reader.IsDBNull(12) ? null : reader.GetString(12);
             var track = protocol != request.ProtocolVersion || reason != ClusterProtocol.IncompatibilityReason(request.ProtocolVersion)
                 || request.SessionNonce is not null && nonce != request.SessionNonce;
             return (ReadResponse(reader, true), track);

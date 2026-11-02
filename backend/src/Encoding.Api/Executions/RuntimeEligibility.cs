@@ -176,32 +176,7 @@ public sealed class RuntimeEligibility(
                 && !capabilities.Any(c=>c.ToolId=="script-tools")) return false;
             if(node.Component.ComponentId=="base-condition" && !capabilities.Any(c=>c.ToolId=="javascript")) return false;
             var encoders=capabilities.FirstOrDefault(c=>c.ToolId=="ffmpeg")?.Encoders??[];
-            if(node.Component.ComponentId is "base-transcode-video" or "video-transcode")
-            {
-                var codec=node.Configuration.TryGetValue("videoCodec",out var codecValue)?codecValue.GetString()!:"hevc";
-                if(node.Configuration.TryGetValue("encodingProfile",out var profileValue)
-                    && profileValue.ValueKind==System.Text.Json.JsonValueKind.Object)
-                {
-                    var profile=profileValue.Deserialize<EncodingProfileSnapshot>(new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
-                    var mode=node.Configuration.TryGetValue("encoderMode",out var modeValue)?modeValue.GetString()!:"automatic";
-                    var selected=node.Configuration.TryGetValue("encoderId",out var encoderValue)?encoderValue.GetString():null;
-                    var ffmpeg=capabilities.FirstOrDefault(capability=>capability.ToolId=="ffmpeg");
-                    if(profile is null || ffmpeg is null) return false;
-                    var hardware=MediaCodecPolicy.ResolveVideoEncoder(codec,mode,selected,profile,ffmpeg.Encoders??[],ffmpeg.AccelerationTypes,ffmpeg.EncoderChecks) is not null;
-                    var cpuFallback=retryWithCpu && MediaCodecPolicy.ResolveCpuFallbackVideoEncoder(codec,profile,ffmpeg.Encoders??[],ffmpeg.AccelerationTypes,ffmpeg.EncoderChecks) is not null;
-                    if(!hardware && !cpuFallback) return false;
-                }
-                else
-                {
-                    var hardware=node.Configuration.TryGetValue("hardwareAcceleration",out var hw)?hw.GetString()!:"cpu";
-                    if(retryWithCpu&&hardware!="cpu")
-                    {
-                        if(MediaCodecPolicy.VideoEncoder(codec,hardware,encoders) is null
-                            && MediaCodecPolicy.VideoEncoder(codec,"cpu",encoders) is null) return false;
-                    }
-                    else if(MediaCodecPolicy.VideoEncoder(codec,hardware,encoders) is null) return false;
-                }
-            }
+            if((node.Component.ComponentId is "base-transcode-video" or "video-transcode") && !VideoTranscodeSupported(node,capabilities,retryWithCpu,encoders)) return false;
             if (node.Component.ComponentId == "audio-convert-by-rules" && node.Configuration.TryGetValue("rules", out var audioRules) && audioRules.ValueKind == JsonValueKind.Array
                 && audioRules.EnumerateArray().Any(rule => MediaTrackSelection.Text(rule, "action") != "copy"
                     && MediaCodecPolicy.AudioEncoder(MediaTrackSelection.Text(rule, "codec"), encoders) is null)) return false;
@@ -212,6 +187,35 @@ public sealed class RuntimeEligibility(
         }
         // Every media execution records a source scan before completion, even if no transformation is selected.
         return capabilities.Any(c=>c.ToolId=="ffprobe");
+    }
+
+    /// <summary>Le worker sait-il encoder la vidéo demandée : profil d'encodage (cible matérielle ou repli CPU) ou accélération déclarée ?</summary>
+    private static bool VideoTranscodeSupported(FlowNodeDefinition node,IReadOnlyList<NodeToolCapability> capabilities,bool retryWithCpu,IReadOnlyList<string> encoders)
+    {
+        var codec=node.Configuration.TryGetValue("videoCodec",out var codecValue)?codecValue.GetString()!:"hevc";
+        if(node.Configuration.TryGetValue("encodingProfile",out var profileValue)
+            && profileValue.ValueKind==System.Text.Json.JsonValueKind.Object)
+        {
+            var profile=profileValue.Deserialize<EncodingProfileSnapshot>(new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+            var mode=node.Configuration.TryGetValue("encoderMode",out var modeValue)?modeValue.GetString()!:"automatic";
+            var selected=node.Configuration.TryGetValue("encoderId",out var encoderValue)?encoderValue.GetString():null;
+            var ffmpeg=capabilities.FirstOrDefault(capability=>capability.ToolId=="ffmpeg");
+            if(profile is null || ffmpeg is null) return false;
+            var hardware=MediaCodecPolicy.ResolveVideoEncoder(codec,mode,selected,profile,ffmpeg.Encoders??[],ffmpeg.AccelerationTypes,ffmpeg.EncoderChecks) is not null;
+            var cpuFallback=retryWithCpu && MediaCodecPolicy.ResolveCpuFallbackVideoEncoder(codec,profile,ffmpeg.Encoders??[],ffmpeg.AccelerationTypes,ffmpeg.EncoderChecks) is not null;
+            if(!hardware && !cpuFallback) return false;
+        }
+        else
+        {
+            var hardware=node.Configuration.TryGetValue("hardwareAcceleration",out var hw)?hw.GetString()!:"cpu";
+            if(retryWithCpu&&hardware!="cpu")
+            {
+                if(MediaCodecPolicy.VideoEncoder(codec,hardware,encoders) is null
+                    && MediaCodecPolicy.VideoEncoder(codec,"cpu",encoders) is null) return false;
+            }
+            else if(MediaCodecPolicy.VideoEncoder(codec,hardware,encoders) is null) return false;
+        }
+        return true;
     }
 
     private static bool IsBaseVersionSatisfied(string actualVersion, string componentId)

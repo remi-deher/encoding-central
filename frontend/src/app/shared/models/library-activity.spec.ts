@@ -31,12 +31,6 @@ describe('library activity execution diagnostics', () => {
     expect(activityExecutionTone(file())).toBe('warning');
   });
 
-  it('shows quarantine separately from the execution state', () => {
-    const quarantined = file({ executionOwnershipState: 'quarantined' });
-    expect(activityExecutionLabel(quarantined)).toBe('En quarantaine · Annulée');
-    expect(activityExecutionTone(quarantined)).toBe('warning');
-  });
-
   it('shows queued attempts as waiting rather than hiding their state', () => {
     expect(activityExecutionLabel(file({ status: 'untreated', executionState: 'queued' }))).toBe(
       'En attente',

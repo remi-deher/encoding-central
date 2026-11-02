@@ -36,6 +36,13 @@ public static class NodeEndpoints
         }).RequireAuthorization(AuthExtensions.AdministratorPolicy).WithName("GetNodeDirectoryBrowse");
     }
 
+    /// <summary>Session d'un compte administrateur (pas un jeton API, pas l'identité synthétique d'une authentification désactivée), avec l'en-tête anti-CSRF.</summary>
+    internal static bool IsAdministratorSession(HttpContext http) =>
+        http.User.Identity?.IsAuthenticated == true
+        && http.User.IsInRole("admin")
+        && http.User.FindFirst("auth_type")?.Value == "session"
+        && http.Request.Headers[ManagementAccessHandler.CsrfHeader] == "1";
+
     private static void MapNodeEnrollmentEndpoints(this RouteGroupBuilder nodes)
     {
         nodes.MapPost("/enroll", async (
@@ -47,7 +54,9 @@ public static class NodeEndpoints
         {
             var isLocal = LocalEnrollment.Matches(configuration[LocalEnrollment.SecretFileSetting],
                 httpContext.Request.Headers[LocalEnrollment.HeaderName].ToString());
-            var outcome = await service.EnrollAsync(request, isLocal, cancellationToken);
+            // ADR 0034 : le compte administrateur du central admet le nœud hors fenêtre d'enrôlement (session réelle, jamais un jeton API).
+            var byAdministrator = IsAdministratorSession(httpContext);
+            var outcome = await service.EnrollAsync(request, isLocal, cancellationToken, byAdministrator);
             if (outcome.HasValidationErrors) return (IResult)Results.ValidationProblem(outcome.ValidationErrors!);
             if (outcome.Node is not null) return Results.Ok(outcome.Node);
 
@@ -84,21 +93,6 @@ public static class NodeEndpoints
             CancellationToken cancellationToken) =>
             Results.Ok(await service.ListPendingPairingRequestsAsync(cancellationToken)))
             .WithName("ListPendingNodeEnrollmentRequests");
-
-        nodes.MapGet("/{nodeId:guid}/cluster-bootstrap", async (
-            Guid nodeId,
-            NodeManagementService service,
-            HttpContext httpContext,
-            CancellationToken cancellationToken) =>
-        {
-            var token = httpContext.Request.Headers["X-Node-Token"].ToString();
-            if (!await service.AuthenticateTokenAsync(nodeId, token, cancellationToken))
-                return (IResult)Results.Unauthorized();
-            var bootstrap = await service.GetClusterBootstrapAsync(nodeId, cancellationToken);
-            return bootstrap is null
-                ? Results.NotFound(new { title = "Aucune admission de serveur n’est disponible pour ce nœud." })
-                : Results.Ok(bootstrap);
-        }).AllowAnonymous().RequireRateLimiting(AuthExtensions.AnonymousPolicy).WithName("GetClusterBootstrapForNode");
 
         nodes.MapPost("/enrollment-requests/{nodeId:guid}/approve", async (
             Guid nodeId,
@@ -164,7 +158,7 @@ public static class NodeEndpoints
                 "deleted" => Results.NoContent(),
                 "coordination" => Results.Conflict(new
                 {
-                    title = "Départ du serveur différé : réconcilier les pairs et déplacer ou terminer ses tâches."
+                    title = "Le central ne peut pas quitter le cluster : il en est l'unique serveur."
                 }),
                 "busy" => Results.Conflict(new
                 {
@@ -188,26 +182,6 @@ public static class NodeEndpoints
             return node is null ? (IResult)Results.NotFound() : Results.Ok(node);
         }).WithName("GetNode");
 
-        nodes.MapPut("/{nodeId:guid}/mode", async (
-            Guid nodeId, ChangeNodeModeRequest request, NodeManagementService service, NodePresenceOptions options, CancellationToken ct) =>
-        {
-            if (!request.Server && !request.Worker)
-                return (IResult)Results.BadRequest(new { title = "Le nœud doit garder au moins une fonction : serveur ou worker." });
-            return await service.RequestModeAsync(nodeId, request.Server, request.Worker, options.OfflineAfter, ct) switch
-            {
-                NodeRepository.ModeRequestResult.NotFound => Results.NotFound(),
-                NodeRepository.ModeRequestResult.CoordinationUnavailable => Results.Conflict(new
-                {
-                    title = "Modification de topologie différée : réconcilier les serveurs et vider les files possédées."
-                }),
-                NodeRepository.ModeRequestResult.LastServer => Results.Conflict(new
-                {
-                    title = "Ce nœud est le dernier serveur en ligne : sa fonction serveur ne peut pas être retirée."
-                }),
-                _ => Results.Accepted()
-            };
-        }).WithName("RequestNodeMode");
-
         nodes.MapPut("/{nodeId:guid}/draining", async (
             Guid nodeId, DrainNodeRequest request, NodeManagementService service, CancellationToken ct) =>
             await service.SetDrainingAsync(nodeId, request.Draining, ct) ? Results.Accepted() : Results.NotFound())
@@ -224,7 +198,7 @@ public static class NodeEndpoints
             return await service.DeleteAsync(nodeId, ct) switch
             {
                 "deleted" => (IResult)Results.NoContent(),
-                "coordination" => Results.Conflict(new { title = "Retrait différé : réconcilier les serveurs du cluster." }),
+                "coordination" => Results.Conflict(new { title = "Le central ne peut pas être retiré : il est l'unique serveur du cluster." }),
                 "busy" => Results.Conflict(new
                 {
                     title = "Ce nœud participe à un traitement ou une découverte. Attendez sa fin ou annulez les tâches avant de le supprimer."

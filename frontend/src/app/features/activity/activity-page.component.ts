@@ -1,9 +1,7 @@
 import { ActivityExecutionSummaryComponent } from './components/activity-execution-summary.component';
 import { ActivityFlowTraceComponent } from './components/activity-flow-trace.component';
 import { ActivityMetadataViewerComponent } from './components/activity-metadata-viewer.component';
-import { ForceSourceRetryDialogComponent } from './components/force-source-retry-dialog.component';
 import { ExecutionPipelineStep } from '../../shared/models/execution';
-import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -15,7 +13,6 @@ import {
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
-import { AuthService } from '../../core/auth/auth.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -130,14 +127,6 @@ function baseName(path: string): string {
   return path.split(/[\\/]/).pop() || path;
 }
 
-function activityApiError(error: unknown, fallback: string): string {
-  if (error instanceof HttpErrorResponse) {
-    const detail = (error.error as { detail?: unknown } | null)?.detail;
-    if (typeof detail === 'string' && detail.trim()) return detail;
-  }
-  return AuthService.errorMessage(error, fallback);
-}
-
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-activity-page',
@@ -176,7 +165,6 @@ export class ActivityPageComponent {
   private readonly downloads = inject(FileDownload);
   private readonly dialog = inject(MatDialog);
   private readonly notifications = inject(NotificationService);
-  private readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly statuses = ACTIVITY_STATUSES;
@@ -453,27 +441,8 @@ export class ActivityPageComponent {
   protected readonly canRetry = computed(() => this.selectedExecution()?.state === 'failed');
   protected readonly canResume = computed(() => {
     const execution = this.selectedExecution();
-    return execution?.state === 'cancelled' && execution.ownership?.state !== 'quarantined';
+    return execution?.state === 'cancelled';
   });
-  protected readonly canForceSourceRetry = computed(() => {
-    const file = this.selectedFile();
-    const execution = this.selectedExecution();
-    const forceableState =
-      execution?.state === 'queued' ||
-      (execution?.state === 'cancelled' && execution.startedAt === null);
-    return (
-      this.auth.isAdmin() &&
-      file !== null &&
-      execution !== null &&
-      forceableState &&
-      file.libraryActive &&
-      !!file.quarantineReason &&
-      !!file.conflictingExecutionId &&
-      execution.id === file.executionId &&
-      execution.ownership?.state === 'quarantined'
-    );
-  });
-
   protected readonly eventColumns: readonly DataTableColumn[] = [
     { key: 'revision', label: 'Ordre' },
     { key: 'createdAt', label: 'Date' },
@@ -809,43 +778,6 @@ export class ActivityPageComponent {
       },
       () => this.perform('resume', execution.id),
     );
-  }
-
-  protected forceSourceRetrySelected(): void {
-    const file = this.selectedFile();
-    const execution = this.selectedExecution();
-    if (!file || !execution || !this.canForceSourceRetry() || this.actionBusy()) return;
-    this.dialog
-      .open(ForceSourceRetryDialogComponent, {
-        data: { media: this.fileName(file.relativePath) },
-      })
-      .afterClosed()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((attestation) => {
-        if (!attestation) return;
-        this.actionBusy.set(true);
-        this.clusterApi
-          .forceSourceRetry(execution.id, attestation.confirmedStopped, attestation.reason)
-          .pipe(takeUntilDestroyed(this.destroyRef))
-          .subscribe({
-            next: (result) => {
-              this.actionBusy.set(false);
-              this.feedback.set(result.detail);
-              this.refreshRevision.update((value) => value + 1);
-              this.tracking.refresh();
-              this.notifications.show(result.detail);
-            },
-            error: (error: unknown) => {
-              this.actionBusy.set(false);
-              const message = activityApiError(
-                error,
-                'La reprise forcée a échoué ou la tentative a changé d’état.',
-              );
-              this.feedback.set(message);
-              this.notifications.show(message);
-            },
-          });
-      });
   }
 
   protected downloadArtifact(row: DataTableRow): void {

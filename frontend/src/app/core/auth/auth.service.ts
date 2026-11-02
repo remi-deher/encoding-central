@@ -39,7 +39,6 @@ export class AuthService {
     optionsOrUsername?:
       | {
           nodeDisplayName?: string;
-          mode?: 'standalone' | 'createCluster' | 'joinCluster';
           clusterName?: string;
           username?: string;
           password?: string;
@@ -53,7 +52,6 @@ export class AuthService {
       typeof optionsOrUsername === 'object' && optionsOrUsername !== null
         ? {
             nodeDisplayName: optionsOrUsername.nodeDisplayName?.trim() || null,
-            mode: optionsOrUsername.mode ?? null,
             clusterName: optionsOrUsername.clusterName?.trim() || null,
             username: optionsOrUsername.username?.trim() || null,
             password: optionsOrUsername.password || null,

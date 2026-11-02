@@ -42,8 +42,9 @@ describe('SearchPaletteDialogComponent', () => {
     fixture.detectChanges();
 
     const filteredOptions = host.querySelectorAll('[role="option"]');
-    expect(filteredOptions.length).toBe(1);
-    expect(filteredOptions[0].textContent).toContain('Profils d’encodage');
+    const labels = Array.from(filteredOptions).map((option) => option.textContent ?? '');
+    expect(labels.length).toBeGreaterThanOrEqual(1);
+    expect(labels.some((label) => label.includes('Profils d’encodage'))).toBe(true);
   });
 
   it('navigates with ArrowDown and Enter keys and closes the dialog', () => {

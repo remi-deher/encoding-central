@@ -13,7 +13,6 @@ using Encoding.Api.Nodes;
 using Encoding.Api.Mcp;
 using Encoding.Api.Libraries;
 using Encoding.Api.Infrastructure;
-using Encoding.Api.Cluster;
 using Encoding.Contracts.Executions;
 using Encoding.Contracts.Flows;
 using Encoding.Contracts.Libraries;
@@ -32,7 +31,7 @@ public sealed class AiAssistantService(
     public static AiAssistantService Create(
         AiClusterStore store,
         AiClusterService cluster,
-        AiClusterTransport transport,
+        Encoding.Api.Infrastructure.ClusterPeerIdentityStore identity,
         FlowRepository flows,
         ExecutionRepository executions,
         LibraryWorkflowRepository libraryWorkflows,
@@ -43,7 +42,7 @@ public sealed class AiAssistantService(
         IDataProtectionProvider protection,
         FlowTemplateRepository? flowTemplates = null)
     {
-        var support = new AiAssistantSupportService(store, cluster, transport, flows, executions, libraryWorkflows,
+        var support = new AiAssistantSupportService(store, cluster, identity, flows, executions, libraryWorkflows,
             libraries, nodes, nodePresence, mcp, protection, flowTemplates);
         var conversations = new AiAssistantConversationsService(support);
         var actions = new AiAssistantActionsService(support, conversations);
@@ -107,8 +106,6 @@ public sealed class AiAssistantService(
 
 public sealed class AiAssistantRetentionService(
     AiAssistantService assistant,
-    ClusterReconciliationRepository journal,
-    IConfiguration configuration,
     ILogger<AiAssistantRetentionService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -119,17 +116,8 @@ public sealed class AiAssistantRetentionService(
             try
             {
                 var removed = await assistant.PurgeExpiredAsync(stoppingToken);
-                var ownUrl = ClusterReconciliationRepository.TryNormalizePeerUrl(configuration["Cluster:Reconciliation:AdvertisedApiBaseUrl"]);
-                var configuredPeers = configuration.GetSection("Cluster:Reconciliation:Peers").Get<string[]>() ?? [];
-                var peers = configuredPeers.Concat(await journal.GetPeerEndpointsAsync(stoppingToken))
-                    .Select(ClusterReconciliationRepository.TryNormalizePeerUrl)
-                    .OfType<string>()
-                    .Where(url => !string.Equals(url, ownUrl, StringComparison.OrdinalIgnoreCase))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
-                var purgedEvents = await journal.PruneAssistantHistoryAsync(peers, DateTimeOffset.UtcNow.AddHours(-24), stoppingToken);
-                if (removed > 0 || purgedEvents > 0)
-                    logger.LogInformation("La rétention IA a expiré {Count} enregistrements et purgé {Events} anciens événements confirmés par les pairs.", removed, purgedEvents);
+                if (removed > 0)
+                    logger.LogInformation("La rétention IA a expiré {Count} enregistrements.", removed);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
             catch (Exception exception)

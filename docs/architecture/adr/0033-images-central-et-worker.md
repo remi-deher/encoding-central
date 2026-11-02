@@ -1,12 +1,12 @@
 ---
 id: 0033
 title: Image centrale autonome et image worker sans base
-status: implemented
+status: superseded
 domain: cluster
-date: 2026-11-01
-decided_by: Rémi (2026-11-01)
+date: 2026-11-02
+decided_by: Rémi (2026-11-02)
 supersedes: []
-superseded_by: []
+superseded_by: [0036]
 tags: [serveur, worker, image, plugins]
 ---
 
@@ -16,10 +16,12 @@ tags: [serveur, worker, image, plugins]
 ADR [0032](0032-serveur-central-fixe.md) fige les fonctions avec une seule image. Rémi choisit deux images. Le central doit pouvoir tourner seul. Le worker ne doit pas porter la base ni devenir central. Le central installe les plugins et les outils ; les workers les reçoivent.
 
 ## Décision
-`backend/Dockerfile` publie la cible `central` et la cible `worker`. La cible `central` contient l'API, l'interface et un worker local, démarrés par le lanceur : un seul conteneur est autonome. La cible `worker` contient l'agent et une page statique, sans API, sans lanceur et sans base d'autorité. `Cluster:FixedAuthority` est posé dans l'image `central` et refuse tout changement de fonction. `Node:FixedWorker`, l'acceptation automatique et l'absence de lanceur empêchent l'image worker de prendre la fonction serveur. `backend/docker-compose.central.yml` ne contient que les ports et le volume de chaque conteneur. L'adresse du central est saisie sur le worker. La confirmation par code décrite ici est remplacée par le compte administrateur ([0034](0034-rattachement-par-compte-administrateur.md)). Les plugins et les outils du worker sont ceux publiés par le central : le worker les télécharge, vérifie l'empreinte, retire seulement ce que le central ne liste plus, et ne retire rien si le central ne répond pas. L'image worker sert le même shell avec six routes : vue d'ensemble, activité, bibliothèques, nœuds, plugins et outils, paramètres. Le navigateur parle au worker, qui relaie `/api` vers le central. Les autres routes restent sur le central. La connexion et l'initialisation restent joignables pour ouvrir une session, sans entrer dans le menu.
+`backend/Dockerfile` publie les cibles `central` et `worker`. La cible `central` contient l'API, l'interface et un worker local, démarrés par le lanceur : un seul conteneur est autonome. La cible `worker` contient seulement l'agent et le shell Angular, sans API, lanceur, CLI IA ni base SQLite d'autorité. `Cluster:FixedAuthority` est posé dans l'image `central`. `Node:FixedWorker` force le rôle worker, supprime les routes et réceptions de promotion, et l'absence de lanceur empêche l'image worker de devenir central. `backend/docker-compose.central.yml` construit explicitement les deux cibles et chaque conteneur garde son volume.
+
+Au premier accès, le worker demande l'adresse du central ; il la mémorise, puis présente la connexion avec un compte administrateur de ce central. Après authentification, le navigateur reste sur l'origine du worker et son API est relayée vers le central. Le shell et ses composants restent identiques, mais la navigation worker se limite à la vue d'ensemble, l'activité, les nœuds, plugins et outils, et les paramètres. Les plugins et les outils installés sur le worker viennent du central : les paquets sont vérifiés, ne sont retirés que si le central le demande et ne sont jamais retirés quand il est indisponible.
 
 ## Alternatives écartées
 Garder une seule image pour les deux rôles : l'image worker contiendrait encore l'API et la base. Transférer la base vers un worker depuis l'application : c'est une bascule d'autorité, hors de ce choix.
 
 ## Conséquences et risques
-`docker-compose.yml` construit toujours la cible finale `central`. Le volume du worker ne garde que son identité de rattachement ; les paquets se reconstruisent depuis le central. Les six pages lisent et écrivent par l'API du central. Les deux images ont été construites et démarrées en local le 2026-11-01. Le menu worker n'a pas été ouvert dans un navigateur. Le maillage et la passation restent dans le code tant que `Cluster:FixedAuthority` est absent.
+`docker-compose.central.yml` est le seul Compose livré. Le volume du worker ne garde que son identité de rattachement et les paquets reçus. Les cinq pages lisent et écrivent par l'API du central, sans rendre les routes de flows, bibliothèques, IA ou mise à jour accessibles depuis le worker. La validation des deux images et du parcours dans un navigateur reste à exécuter.

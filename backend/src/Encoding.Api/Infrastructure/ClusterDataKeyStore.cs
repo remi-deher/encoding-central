@@ -2,13 +2,12 @@ using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Encoding.Contracts.Cluster;
 using Encoding.Api.Infrastructure.Data;
 using Microsoft.AspNetCore.DataProtection;
 
 namespace Encoding.Api.Infrastructure;
 
-/// <summary>Stores the cluster-wide data key encrypted with this server's local Data Protection key ring.</summary>
+/// <summary>Clé de données du central (chiffrement des sessions IA), protégée par le trousseau Data Protection local.</summary>
 public sealed class ClusterDataKeyStore : IDisposable
 {
     private sealed record ProtectedKey(Guid ClusterId, string Key);
@@ -34,16 +33,6 @@ public sealed class ClusterDataKeyStore : IDisposable
         Directory.CreateDirectory(directory);
         filePath = Path.Combine(directory, "cluster-data-key.json");
         protector = protection.CreateProtector("Encoding.ClusterDataKey.v1");
-    }
-
-    public bool HasKey(Guid clusterId)
-    {
-        if (memoryKey is not null) return memoryClusterId == clusterId;
-        lock (gate)
-        {
-            var record = Read();
-            return record?.ClusterId == clusterId;
-        }
     }
 
     public byte[] GetOrCreate(Guid clusterId)
@@ -81,35 +70,6 @@ public sealed class ClusterDataKeyStore : IDisposable
                 throw new InvalidOperationException("La clé de données du cluster n’a pas encore été installée sur ce serveur.");
             return Convert.FromBase64String(record.Key);
         }
-    }
-
-    public void Install(Guid clusterId, ReadOnlySpan<byte> key)
-    {
-        if (clusterId == Guid.Empty || key.Length != 32) throw new ArgumentException("La clé de données du cluster est invalide.");
-        if (memoryKey is not null)
-        {
-            if (memoryClusterId != clusterId || !CryptographicOperations.FixedTimeEquals(memoryKey, key))
-                throw new InvalidOperationException("La clé mémoire diffère de la clé du cluster.");
-            return;
-        }
-        lock (gate)
-        {
-            var current = Read();
-            if (current?.ClusterId == clusterId && !CryptographicOperations.FixedTimeEquals(Convert.FromBase64String(current.Key), key))
-                throw new InvalidOperationException("Une clé différente est déjà installée pour ce cluster.");
-            Write(new ProtectedKey(clusterId, Convert.ToBase64String(key)));
-        }
-    }
-
-    internal void InstallVerified(Guid clusterId, ReadOnlySpan<byte> key)
-    {
-        if (memoryKey is not null)
-        {
-            Install(clusterId, key);
-            return;
-        }
-        if (clusterId == Guid.Empty || key.Length != 32) throw new ArgumentException("La clé de données du cluster est invalide.");
-        lock (gate) Write(new ProtectedKey(clusterId, Convert.ToBase64String(key)));
     }
 
     private ProtectedKey? Read()

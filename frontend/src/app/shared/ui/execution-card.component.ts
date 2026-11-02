@@ -19,9 +19,7 @@ import { StatusBadgeComponent, StatusTone } from './status-badge.component';
         <app-status-badge
           [label]="stateLabel(execution())"
           [tone]="
-            execution().ownership?.state === 'quarantined'
-              ? 'warning'
-              : stateTone(execution().state)
+            stateTone(execution().state)
           "
         />
       </header>

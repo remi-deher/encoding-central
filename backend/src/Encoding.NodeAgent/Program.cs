@@ -21,6 +21,8 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     WebRootPath = Path.GetFullPath("../api/wwwroot", AppContext.BaseDirectory)
 });
 var options = NodeAgentOptions.FromConfiguration(builder.Configuration);
+if (options.WorkerImage && options.LocalEnrollmentSecretFile is { } localSecretFile)
+    LocalEnrollment.Create(localSecretFile);
 Environment.SetEnvironmentVariable(ManagedToolCatalog.DirectoryEnvironmentVariable,
     builder.Configuration["Runtime:ManagedToolDirectory"] is { Length: > 0 } managedToolDirectory ? managedToolDirectory : ManagedToolCatalog.DefaultDirectory);
 builder.WebHost.ConfigureKestrel(server =>
@@ -31,6 +33,8 @@ builder.WebHost.ConfigureKestrel(server =>
         server.ListenLocalhost(options.LocalApiPort);
 });
 builder.Services.AddSingleton(options);
+builder.Services.AddHttpClient(CentralUiProxy.ClientName, client => client.Timeout = Timeout.InfiniteTimeSpan)
+    .ConfigurePrimaryHttpMessageHandler(CentralUiProxy.CreateHandler);
 builder.Services.AddSingleton<WorkerIdentityStore>();
 builder.Services.AddSingleton<ISystemLogNodeContext>(sp =>
 {
@@ -63,13 +67,11 @@ builder.Services.AddSingleton<ToolCapabilityProbe>();
 builder.Services.AddSingleton<IToolCapabilityProbe>(provider => provider.GetRequiredService<ToolCapabilityProbe>());
 builder.Services.AddSingleton<WorkerClusterDiscovery>();
 builder.Services.AddSingleton<WorkerEnrollmentService>();
-builder.Services.AddSingleton<LeadershipReceiverService>();
 builder.Services.AddHostedService<WorkerClusterDiscovery>(provider => provider.GetRequiredService<WorkerClusterDiscovery>());
 builder.Services.AddHostedService<WorkerAutoEnrollmentService>();
 builder.Services.AddHostedService<NodeHeartbeatService>();
 builder.Services.AddHostedService<PluginSyncService>();
 builder.Services.AddHostedService<ToolPackageSyncService>();
-builder.Services.AddNodeModeControl(builder.Configuration[NodeModeEndpoints.ControlUrlSetting]);
 builder.Services.ConfigureHttpJsonOptions(json =>
     json.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
 
@@ -80,32 +82,32 @@ CentralUiProxy.Use(
     {
         var identity = await context.RequestServices.GetRequiredService<WorkerIdentityStore>()
             .GetAsync(context.RequestAborted);
-        return identity.ApiBaseUrl ?? options.ClusterApiBaseUrl;
+        if (!string.IsNullOrWhiteSpace(identity.ApiBaseUrl))
+            return identity.ApiBaseUrl;
+        if (!string.IsNullOrWhiteSpace(options.ClusterApiBaseUrl))
+            return options.ClusterApiBaseUrl;
+        return context.RequestServices.GetRequiredService<WorkerClusterDiscovery>()
+            .List()
+            .FirstOrDefault(cluster => cluster.Source == "manual" && cluster.Reachable)
+            ?.ApiBaseUrl;
     },
     options.LocalApiPort,
     options.LocalEnrollmentSecretFile);
 app.UseDefaultFiles();
 app.UseStaticFiles();
-app.Use(async (context, next) =>
-{
-    // Canal interne du nœud : aucune dépendance aux en-têtes d'un navigateur.
-    // Les lectures sont aussi protégées : l'état contient les clés de jumelage.
-    if (context.Request.Path.StartsWithSegments("/api/v1/worker")
-        && !LocalEnrollment.Matches(options.LocalEnrollmentSecretFile,
-            context.Request.Headers[LocalEnrollment.HeaderName].ToString()))
-    {
-        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-        return;
-    }
-    await next();
-});
+WorkerAgentGate.Use(app, options);
 
 app.MapGet("/health/ready", (HttpContext context) =>
 {
     context.Response.Headers.AccessControlAllowOrigin = "*";
     return Results.Ok(new { status = "ready" });
 });
-app.MapNodeMode("/api/v1/worker/mode");
+app.MapGet(WorkerAgentGate.HardwarePath, async (IToolCapabilityProbe capabilityProbe, CancellationToken cancellationToken) =>
+    Results.Ok(new WorkerHardwareResponse(
+        HardwareInventory.Current() with { FontSets = null },
+        (await capabilityProbe.DiscoverAsync(cancellationToken))
+            .Select(tool => new WorkerHardwareTool(tool.ToolId, tool.AccelerationTypes ?? []))
+            .ToArray()))).WithName("GetWorkerHardware");
 app.MapGet("/api/v1/worker/clusters", (WorkerClusterDiscovery discovery) => Results.Ok(discovery.List()));
 app.MapPost("/api/v1/worker/clusters", async (WorkerClusterAddress request, WorkerClusterDiscovery discovery, CancellationToken cancellationToken) =>
 {
@@ -131,9 +133,6 @@ app.MapGet("/api/v1/worker/status", async (NodeAgentOptions agentOptions, Worker
 {
     var identity = await identityStore.GetAsync(cancellationToken);
     var capabilities = await capabilityProbe.DiscoverAsync(cancellationToken);
-    Encoding.Contracts.Cluster.ClusterPeerPublicIdentity? peerIdentity = null;
-    try { peerIdentity = await enrollment.GetLocalPeerIdentityAsync(cancellationToken); }
-    catch (HttpRequestException) { }
     return Results.Ok(new
     {
         nodeId = identity.Id,
@@ -149,7 +148,7 @@ app.MapGet("/api/v1/worker/status", async (NodeAgentOptions agentOptions, Worker
         clusterId = identity.ClusterId,
         clusterName = identity.ClusterName,
         displayName = identity.DisplayName ?? agentOptions.DisplayName,
-        verificationCode = identity.HasCredentials ? NodeVerificationCode.FromToken(identity.Id, identity.NodeToken!, peerIdentity?.PublicKey) : null,
+        verificationCode = identity.HasCredentials ? NodeVerificationCode.FromToken(identity.Id, identity.NodeToken!) : null,
         switching = identity.IsSwitching
             ? new { previousClusterName = identity.Previous!.ClusterName, deadline = identity.SwitchDeadline }
             : null,
@@ -175,11 +174,14 @@ app.MapGet("/api/v1/worker/logs", (
 app.MapPost("/api/v1/worker/enroll", async (
     WorkerEnrollmentRequest request,
     WorkerEnrollmentService enrollment,
+    HttpContext http,
     CancellationToken cancellationToken) =>
 {
     try
     {
-        return (IResult)Results.Ok(await enrollment.EnrollAsync(request.ClusterId, cancellationToken, request.LeaveCurrent, request.DisplayName));
+        // Session du compte administrateur du central, transmise par le relais de l'interface (ADR 0034).
+        var centralSession = http.Request.Headers[Encoding.Contracts.Auth.SessionCookie.RelayHeader].ToString();
+        return (IResult)Results.Ok(await enrollment.EnrollAsync(request.ClusterId, cancellationToken, request.LeaveCurrent, request.DisplayName, centralSession));
     }
     catch (InvalidOperationException exception)
     {
@@ -226,21 +228,6 @@ app.MapPost("/api/v1/worker/leave", async (WorkerEnrollmentService enrollment, C
         return Results.Problem(statusCode: StatusCodes.Status502BadGateway, title: exception.Message);
     }
 }).WithName("LeaveWorkerCluster");
-
-app.MapGet("/api/v1/worker/backup-status", async (LeadershipReceiverService leadershipReceiver, CancellationToken cancellationToken) =>
-{
-    var info = await leadershipReceiver.GetLocalBackupInfoAsync(cancellationToken);
-    return info is null ? Results.NotFound(new { title = "Aucune sauvegarde miroir locale disponible." }) : Results.Ok(info);
-}).WithName("GetWorkerBackupStatus");
-
-app.MapPost("/api/v1/worker/emergency-promote", async (
-    [FromBody] Encoding.Contracts.Cluster.EmergencyPromotionRequest? request,
-    LeadershipReceiverService leadershipReceiver,
-    CancellationToken cancellationToken) =>
-{
-    var response = await leadershipReceiver.EmergencyPromoteAsync(request?.Force ?? false, cancellationToken);
-    return response.Success ? Results.Ok(response) : Results.Conflict(response);
-}).WithName("EmergencyPromoteWorker");
 
 app.MapFallbackToFile("index.html");
 

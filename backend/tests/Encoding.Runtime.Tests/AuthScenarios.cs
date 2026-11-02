@@ -238,7 +238,7 @@ internal static class AuthScenarios
         }
         Check(await anonymous.StatusAsync(get, "/health/live") == HttpStatusCode.OK, "Liveness stays public.");
         Check(await anonymous.StatusAsync(get, "/api/v1/cluster") == HttpStatusCode.OK, "Cluster identity stays public for worker discovery.");
-        foreach (var url in new[] { "/api/v1/system/version", "/api/v1/system/updates", "/api/v1/tools/ai/quotas", "/api/v1/tools/ai/sessions", "/api/v1/libraries", "/api/v1/flows", "/api/v1/nodes", "/api/v1/executions", "/api/v1/plugins/base/configuration", "/api/v1/users", "/api/v1/nodes/enrollment-requests", "/api/v1/node/mode", "/api/v1/local-node/status" })
+        foreach (var url in new[] { "/api/v1/system/version", "/api/v1/system/updates", "/api/v1/tools/ai/quotas", "/api/v1/tools/ai/sessions", "/api/v1/libraries", "/api/v1/flows", "/api/v1/nodes", "/api/v1/executions", "/api/v1/plugins/base/configuration", "/api/v1/users", "/api/v1/nodes/enrollment-requests", "/api/v1/local-node/status" })
             Check(await anonymous.StatusAsync(get, url) == HttpStatusCode.Unauthorized, "Anonymous reads of " + url + " are refused.");
         Check(await anonymous.StatusAsync(post, "/api/v1/libraries", new { name = "x" }) == HttpStatusCode.Unauthorized, "Anonymous writes are refused.");
         // Fiche du nœud pour l'assistant : lisible sans compte tant qu'aucun admin n'existe, sans aucun secret.
@@ -280,7 +280,6 @@ internal static class AuthScenarios
         Check(await admin.StatusAsync(get, "/api/v1/tools/ai/sessions") == HttpStatusCode.OK, "An administrator reads AI session summaries.");
         // Administrateur : lecture, écriture avec protection CSRF.
         Check(await admin.StatusAsync(get, "/api/v1/libraries") == HttpStatusCode.OK, "An administrator reads.");
-        Check(await admin.StatusAsync(put, "/api/v1/node/mode", new { server = true, worker = true }) == HttpStatusCode.Conflict, "Without a launcher, an administrator gets a clear refusal to change the node mode.");
         Check(await admin.StatusAsync(post, "/api/v1/libraries", new { name = "sans-csrf" }, csrf: false) == HttpStatusCode.Forbidden, "Cookie-authenticated writes need the anti-CSRF header.");
         Check(await admin.StatusAsync(post, "/api/v1/libraries", new { name = "films" }) == HttpStatusCode.Created, "An administrator writes.");
         Check(await admin.StatusAsync(get, "/api/v1/users") == HttpStatusCode.OK, "Administrators list users.");
@@ -302,8 +301,6 @@ internal static class AuthScenarios
         Check(await viewer.StatusAsync(get, "/api/v1/tools/ai/quotas") == HttpStatusCode.Forbidden, "A viewer cannot read account subscription quotas.");
         Check(await viewer.StatusAsync(get, "/api/v1/tools/ai/sessions") == HttpStatusCode.Forbidden, "A viewer cannot list private AI sessions.");
         Check(await viewer.StatusAsync(get, "/api/v1/users") == HttpStatusCode.Forbidden, "A viewer cannot list users.");
-        Check(await viewer.StatusAsync(get, "/api/v1/node/mode") == HttpStatusCode.OK, "A viewer reads the node mode.");
-        Check(await viewer.StatusAsync(put, "/api/v1/node/mode", new { server = false, worker = true }) == HttpStatusCode.Forbidden, "A viewer cannot change the node mode.");
         // Nœud autonome (0045) : seul et sans cluster créé, il n'est pas dans un cluster ; le nommer en crée un.
         using (var identity = await anonymous.SendAsync(get, "/api/v1/cluster"))
             Check((await identity.Content.ReadFromJsonAsync<JsonElement>(Json)).GetProperty("standalone").GetBoolean(), "A node alone and without a created cluster is standalone.");
@@ -317,18 +314,9 @@ internal static class AuthScenarios
         }
         Check(await admin.StatusAsync(post, "/api/v1/cluster", new { name = "Autre" }) == HttpStatusCode.Conflict, "A cluster cannot be created twice.");
         Check(await admin.StatusAsync(put, "/api/v1/cluster", new { name = "Atelier" }) == HttpStatusCode.OK, "A cluster can be renamed.");
-        var joinedClusterId = Guid.NewGuid();
-        var joinedNodeId = Guid.NewGuid();
-        var joinedClusterName = "Cluster d'accueil";
-        var bootstrap = await CreateClusterBootstrapAsync(factory, joinedClusterId, joinedClusterName, joinedNodeId);
-        var localClusterJoin = new { clusterId = joinedClusterId, clusterName = joinedClusterName, nodeId = joinedNodeId, bootstrap };
-        Check(await anonymous.StatusAsync(post, "/api/v1/cluster/join", localClusterJoin, csrf: false) == HttpStatusCode.Unauthorized,
-            "The local server cannot adopt a cluster identity without its container secret.");
-        Check(await anonymous.StatusAsync(post, "/api/v1/cluster/join", localClusterJoin, csrf: false, localSecret: LocalSecret) == HttpStatusCode.OK,
-            "The local agent aligns the server identity after an approved join.");
-        using (var joined = await anonymous.SendAsync(get, "/api/v1/cluster"))
-            Check((await joined.Content.ReadFromJsonAsync<JsonElement>(Json)).GetProperty("id").GetGuid() == joinedClusterId,
-                "The local API publishes the adopted cluster identity.");
+        // Le central ne rejoint jamais un autre cluster : plus de route d'adoption d'identité.
+        var adoption = await admin.StatusAsync(post, "/api/v1/cluster/join", new { clusterId = Guid.NewGuid() });
+        Check(adoption is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed, "The cluster-join route no longer exists: " + adoption);
         Check(await viewer.StatusAsync(post, "/api/v1/local-node/leave") == HttpStatusCode.Forbidden, "A viewer cannot make this node leave its cluster.");
         Check(await viewer.StatusAsync(post, "/api/v1/local-node/enroll", new { clusterId = Guid.NewGuid() }) == HttpStatusCode.Forbidden, "A viewer cannot enroll this node elsewhere.");
         Check(await admin.StatusAsync(post, "/api/v1/local-node/leave") == HttpStatusCode.ServiceUnavailable, "Without a local worker function, the relay answers with a clear refusal.");
@@ -386,37 +374,6 @@ internal static class AuthScenarios
         await PairingAsync(factory, anonymous, admin, viewer);
     }
 
-    private static async Task<Encoding.Contracts.Cluster.ClusterJoinBootstrap> CreateClusterBootstrapAsync(
-        WebApplicationFactory<ApiAssembly> factory, Guid clusterId, string clusterName, Guid nodeId)
-    {
-        var keyDirectory = Path.Combine(Path.GetTempPath(), "auth-bootstrap-keys-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(keyDirectory);
-        try
-        {
-            await using var source = await TestDatabase.CreateSqliteAsync("auth-cluster-bootstrap");
-            await DatabaseMigrator.ApplyAsync(source.Db, Harness.RepositoryRoot(), CancellationToken.None);
-            var identityRepository = new Encoding.Api.Infrastructure.ClusterIdentityRepository(source.Db);
-            await identityRepository.AdoptAsync(clusterId, clusterName, CancellationToken.None);
-
-            var configuration = new ConfigurationBuilder()
-                .AddInMemoryCollection(new Dictionary<string, string?> { ["PluginSettings:KeyDirectory"] = keyDirectory })
-                .Build();
-            using var rootIdentity = new Encoding.Api.Infrastructure.ClusterPeerIdentityStore(configuration, new EphemeralDataProtectionProvider());
-            using var clusterDataKey = new Encoding.Api.Infrastructure.ClusterDataKeyStore(clusterId, RandomNumberGenerator.GetBytes(32));
-            var admissions = new Encoding.Api.Infrastructure.ClusterPeerAdmissionRepository(source.Db, identityRepository, rootIdentity, clusterDataKey);
-            await admissions.EnsureRootAdmissionAsync(clusterId, CancellationToken.None);
-
-            var joiningIdentity = factory.Services.GetRequiredService<Encoding.Api.Infrastructure.ClusterPeerIdentityStore>();
-            await admissions.CreateDirectApprovalGrantAsync(nodeId, joiningIdentity.PeerId, joiningIdentity.PublicKey, CancellationToken.None);
-            return await admissions.GetBootstrapForNodeAsync(nodeId, CancellationToken.None)
-                ?? throw new InvalidOperationException("A signed cluster bootstrap should be available for an approved peer.");
-        }
-        finally
-        {
-            if (Directory.Exists(keyDirectory)) Directory.Delete(keyDirectory, recursive: true);
-        }
-    }
-
     private static async Task PairingAsync(WebApplicationFactory<ApiAssembly> factory, Client anonymous, Client admin, Client viewer)
     {
         var get = HttpMethod.Get; var post = HttpMethod.Post; var put = HttpMethod.Put; var delete = HttpMethod.Delete;
@@ -435,6 +392,12 @@ internal static class AuthScenarios
         Check(await anonymous.StatusAsync(post, "/api/v1/nodes/enroll", first, csrf: false) == HttpStatusCode.OK, "The same identity can repeat its enrollment after the window closes.");
         Check(await anonymous.StatusAsync(post, "/api/v1/nodes/enroll", stolen, csrf: false) == HttpStatusCode.Forbidden, "A different secret is refused once the window is closed.");
         Check(await anonymous.StatusAsync(post, "/api/v1/nodes/enroll", NewNode(Guid.NewGuid(), NodeToken()), csrf: false) == HttpStatusCode.Forbidden, "Another new identity is refused once the window is closed.");
+        // ADR 0034 : le compte administrateur du central admet un worker hors fenêtre ; ni un lecteur, ni une requête sans en-tête anti-CSRF.
+        var byAdministrator = NewNode(Guid.NewGuid(), NodeToken());
+        Check(await viewer.StatusAsync(post, "/api/v1/nodes/enroll", byAdministrator) == HttpStatusCode.Forbidden, "A viewer session cannot admit a node.");
+        Check(await admin.StatusAsync(post, "/api/v1/nodes/enroll", byAdministrator, csrf: false) == HttpStatusCode.Forbidden, "An administrator session needs the anti-CSRF header to admit a node.");
+        Check(await admin.StatusAsync(post, "/api/v1/nodes/enroll", byAdministrator) == HttpStatusCode.OK, "An administrator session admits a node outside the enrollment window.");
+        Check(await admin.StatusAsync(post, "/api/v1/nodes/enroll", byAdministrator with { NodeToken = NodeToken() }) == HttpStatusCode.Conflict, "Even an administrator cannot take over an enrolled identity with another secret.");
         var window = (await (await admin.SendAsync(get, "/api/v1/nodes/enrollment-window")).Content.ReadFromJsonAsync<EnrollmentWindowResponse>(Json))!;
         Check(!window.IsOpen, "The window reports closed.");
 
@@ -456,14 +419,6 @@ internal static class AuthScenarios
         Check(await anonymous.StatusAsync(post, "/api/v1/nodes/enroll", reborn, csrf: false, localSecret: LocalSecret) == HttpStatusCode.OK, "The same node re-enrolls under a fresh identity.");
         Check(await anonymous.StatusAsync(put, $"/api/v1/nodes/{Guid.NewGuid()}/heartbeat", localBeat, csrf: false, nodeToken: NodeToken()) == HttpStatusCode.Unauthorized, "An unknown identity is still a plain 401.");
 
-        Check(await anonymous.StatusAsync(post,"/api/v1/cluster/tasks/coordinate",new {},csrf:false)==HttpStatusCode.Unauthorized,"Task coordination requires an admitted identity and signed request.");
-        foreach(var action in new[]{"/api/v1/cluster/tasks/"+Guid.NewGuid()+"/move","/api/v1/cluster/tasks/"+Guid.NewGuid()+"/recover","/api/v1/cluster/tasks/peers/"+Guid.NewGuid()+"/neutralize","/api/v1/cluster/tasks/peers/"+Guid.NewGuid()+"/readmit"})
-        {
-            Check(await anonymous.StatusAsync(post,action,new {},csrf:false)==HttpStatusCode.Unauthorized,"Task ownership writes require authentication.");
-            Check(await viewer.StatusAsync(post,action,new {})==HttpStatusCode.Forbidden,"Viewers cannot change task ownership or neutralize a server.");
-        }
-        Check(await viewer.StatusAsync(get,"/api/v1/cluster/tasks/status")==HttpStatusCode.OK,"Viewers can inspect task coordination status.");
-        Check(await anonymous.StatusAsync(post,"/api/v1/cluster/tasks/status",new {},csrf:false)==HttpStatusCode.Unauthorized,"Task-peer status requires an admitted identity and a signed request.");
         // Les workers gardent leur propre authentification, sans session.
         var token = first.NodeToken;
         var heartbeat = new NodeHeartbeatRequest(first.Name, first.Roles, 1, first.Capabilities);
@@ -471,8 +426,6 @@ internal static class AuthScenarios
         Check(await anonymous.StatusAsync(put, $"/api/v1/nodes/{first.Id}/heartbeat", heartbeat, csrf: false, nodeToken: NodeToken()) == HttpStatusCode.Unauthorized, "A heartbeat with a wrong token is refused.");
         Check(await anonymous.StatusAsync(get, $"/api/v1/runtime/nodes/{first.Id}/capacity", nodeToken: token) == HttpStatusCode.OK, "Runtime routes authenticate by node token.");
         Check(await anonymous.StatusAsync(get, $"/api/v1/runtime/nodes/{first.Id}/capacity") == HttpStatusCode.Unauthorized, "Runtime routes refuse requests without a token.");
-        Check(await anonymous.StatusAsync(post,$"/api/v1/runtime/nodes/{first.Id}/source-writes/claim",new {},csrf:false)==HttpStatusCode.Unauthorized,"Deferred source writes refuse requests without a node token.");
-        Check(await anonymous.StatusAsync(post,$"/api/v1/runtime/nodes/{first.Id}/source-writes/{Guid.NewGuid()}/authorize",new { claimId=Guid.NewGuid(),root="/media" },csrf:false,nodeToken:NodeToken())==HttpStatusCode.Unauthorized,"Source-write authorization refuses an unknown node token.");
         var execution = $"/api/v1/executions/{Guid.NewGuid()}";
         Check(await anonymous.StatusAsync(get, execution, nodeToken: token) == HttpStatusCode.NotFound, "A worker may read the state of an execution (authorized, then not found).");
         Check(await anonymous.StatusAsync(get, execution, nodeToken: NodeToken()) == HttpStatusCode.Unauthorized, "An unknown node token cannot read executions.");
@@ -496,18 +449,11 @@ internal static class AuthScenarios
         Check(await anonymous.StatusAsync(put, $"/api/v1/nodes/{requests[0].Node.Id}/heartbeat", new NodeHeartbeatRequest(requests[0].Node.Name, requests[0].Node.Roles, 1, requests[0].Node.Capabilities), csrf: false, nodeToken: requests[0].Node.NodeToken) == HttpStatusCode.OK,
             "A paired worker heartbeats with the secret it generated.");
 
-        // Changement de mode à distance : route fermée par défaut, demande enregistrée puis livrée par le heartbeat.
-        var mode = $"/api/v1/nodes/{first.Id}/mode";
-        Check(await anonymous.StatusAsync(put, mode, new ChangeNodeModeRequest(true, true), csrf: false) == HttpStatusCode.Unauthorized, "Anonymous callers cannot change a node mode.");
-        Check(await anonymous.StatusAsync(put, mode, new ChangeNodeModeRequest(true, true), csrf: false, nodeToken: token) == HttpStatusCode.Unauthorized, "A node token cannot change a node mode.");
-        Check(await viewer.StatusAsync(put, mode, new ChangeNodeModeRequest(true, true)) == HttpStatusCode.Forbidden, "A viewer cannot change a node mode.");
-        Check(await admin.StatusAsync(put, mode, new ChangeNodeModeRequest(false, false)) == HttpStatusCode.BadRequest, "A node keeps at least one function.");
-        Check(await admin.StatusAsync(put, $"/api/v1/nodes/{Guid.NewGuid()}/mode", new ChangeNodeModeRequest(true, true)) == HttpStatusCode.NotFound, "An unknown node is reported.");
-        async Task<NodeResponse?> Beat() => await (await anonymous.SendAsync(put, $"/api/v1/nodes/{first.Id}/heartbeat", heartbeat, csrf: false, nodeToken: token)).Content.ReadFromJsonAsync<NodeResponse>(Json);
-        Check((await Beat())?.DesiredRoles is null, "Without a request, the heartbeat carries no desired mode.");
-        Check(await admin.StatusAsync(put,mode,new ChangeNodeModeRequest(true,true))==HttpStatusCode.Conflict,"The bootstrapped peer is unreachable: topology changes are refused during isolation.");
-        Check((await Beat())?.DesiredRoles is null,"A refused topology change is never delivered by a heartbeat.");
-        await StandaloneModeAsync();
+        // Le mode d'un nœud ne se change plus à distance : le central est fixe, un worker reste worker.
+        var removed = new[] { await admin.StatusAsync(put, $"/api/v1/nodes/{first.Id}/mode", new { server = true, worker = true }), await admin.StatusAsync(post, "/api/v1/cluster/leadership/transfer", new { targetNodeId = first.Id }) };
+        Check(removed.All(status => status is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed), "The remote node-mode route no longer exists: " + string.Join(",", removed));
+        Check(await anonymous.StatusAsync(get, "/api/v1/cluster/leadership/backup/latest", csrf: false, nodeToken: token) == HttpStatusCode.NotFound, "A node token can no longer download the database backup.");
+        Check(await anonymous.StatusAsync(get, "/api/v1/cluster/leadership/keys", csrf: false, nodeToken: token) == HttpStatusCode.NotFound, "A node token can no longer download data protection keys.");
 
         // Départ volontaire d'un cluster (0039) : authentifié par le jeton du nœud lui-même, jamais par celui d'un autre.
         var leaving = requests[1].Node;
@@ -570,31 +516,6 @@ internal static class AuthScenarios
         Console.WriteLine("PASS: enrollment window, capped pairing requests, admin-only approval and node-token isolation.");
     }
 
-    private static async Task StandaloneModeAsync()
-    {
-        await using var database=await TestDatabase.CreateSqliteAsync("auth-standalone-mode");
-        var directory=Path.Combine(Path.GetTempPath(),"standalone-mode-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(directory);
-        try
-        {
-            await using var factory=CreateFactory(database,directory,new(){["Auth:AnonymousRequestsPerMinute"]="1000"});
-            var admin=new Client(factory.CreateClient());var anonymous=new Client(factory.CreateClient());
-            using(var setup=await admin.SendAsync(HttpMethod.Post,"/api/v1/auth/setup",new SetupRequest("root",AdminPassword),csrf:false)) {Check(setup.StatusCode==HttpStatusCode.Created,"Standalone mode fixture setup succeeds.");admin.Cookie=ReadCookie(setup);}
-            var node=NewNode(Guid.NewGuid(),NodeToken());
-            Check(await admin.StatusAsync(HttpMethod.Put,"/api/v1/nodes/enrollment-window",new OpenEnrollmentWindowRequest(5))==HttpStatusCode.OK,"Standalone enrollment opens.");
-            Check(await anonymous.StatusAsync(HttpMethod.Post,"/api/v1/nodes/enroll",node,csrf:false)==HttpStatusCode.OK,"Standalone worker enrolls.");
-            var mode=$"/api/v1/nodes/{node.Id}/mode";
-            async Task<NodeResponse?> Beat(NodeRole[]? roles=null)=>(await (await anonymous.SendAsync(HttpMethod.Put,$"/api/v1/nodes/{node.Id}/heartbeat",new NodeHeartbeatRequest(node.Name,roles??node.Roles,1,node.Capabilities),csrf:false,nodeToken:node.NodeToken)).Content.ReadFromJsonAsync<NodeResponse>(Json));
-            Check(await admin.StatusAsync(HttpMethod.Put,mode,new ChangeNodeModeRequest(true,true))==HttpStatusCode.Accepted,"A standalone administrator requests both functions.");
-            Check((await Beat())?.DesiredRoles?.Contains(NodeRole.Server)==true,"Heartbeat delivers the desired roles.");
-            Check(await admin.StatusAsync(HttpMethod.Put,mode,new ChangeNodeModeRequest(false,true))==HttpStatusCode.Accepted,"Requesting current roles cancels a pending change.");
-            Check((await Beat())?.DesiredRoles is null,"Cancelled roles are not delivered.");
-            Check(await admin.StatusAsync(HttpMethod.Put,mode,new ChangeNodeModeRequest(true,true))==HttpStatusCode.Accepted,"Both functions can be requested again.");
-            Check((await Beat([NodeRole.Worker,NodeRole.Server]))?.DesiredRoles is null,"Applied roles acknowledge the request.");
-            Check(await admin.StatusAsync(HttpMethod.Put,mode,new ChangeNodeModeRequest(false,true))==HttpStatusCode.Conflict,"The last server cannot lose its server role.");
-        }
-        finally {if(Directory.Exists(directory)) Directory.Delete(directory,true);}
-    }
-
     private static Task EndpointCatalogueAsync(WebApplicationFactory<ApiAssembly> factory)
     {
         var endpoints = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>().ToArray();
@@ -607,36 +528,22 @@ internal static class AuthScenarios
             "GET /api/v1/auth/status",
             "GET /api/v1/auth/setup/node",
             "GET /api/v1/cluster",
-            "GET /api/v1/cluster/reconciliation/local-identity",
-            "GET /api/v1/cluster/resources/blobs/{digest}",
             "GET /health/live",
             "* /health/ready",
             "POST /api/v1/auth/login",
             "POST /api/v1/auth/setup",
-            "POST /api/v1/cluster/join",
-            "POST /api/v1/cluster/reconciliation/exchange",
-            "POST /api/v1/cluster/tasks/status",
-            "POST /api/v1/cluster/tasks/coordinate",
-            "POST /api/v1/cluster/ai/exchange",
             "POST /api/v1/integrations/{pluginId}/webhook",
             "POST /api/v1/nodes/enroll",
             "POST /api/v1/nodes/enrollment-requests",
             "POST /api/v1/nodes/{nodeId:guid}/leave",
-            "GET /api/v1/nodes/{nodeId:guid}/cluster-bootstrap",
             "PUT /api/v1/nodes/{nodeId:guid}/heartbeat",
-            "GET /api/v1/cluster/leadership/status",
-            "GET /api/v1/cluster/leadership/snapshot/{transferId:guid}",
-            "POST /api/v1/cluster/leadership/transfer/{transferId:guid}/ack",
-            "GET /api/v1/cluster/leadership/backup/latest",
-            "GET /api/v1/cluster/leadership/keys",
         };
         var runtime = anonymous.Where(item => item.Contains("/api/v1/runtime/nodes/{nodeId:guid}")).ToArray();
         var rest = anonymous.Except(runtime).ToArray();
         Check(runtime.Length > 10, "The runtime group is self-authenticated by node token.");
         Check(runtime.Contains("POST /api/v1/runtime/nodes/{nodeId:guid}/executions/{id:guid}/source/prepare"),
             "Deferred source preparation belongs to the group authenticated by node credentials and fenced by lease epoch.");
-        Check(runtime.Contains("POST /api/v1/runtime/nodes/{nodeId:guid}/source-writes/claim")
-            && runtime.Contains("POST /api/v1/runtime/nodes/{nodeId:guid}/executions/{id:guid}/source-write/authorize"),
+        Check(runtime.Contains("POST /api/v1/runtime/nodes/{nodeId:guid}/executions/{id:guid}/source-write/authorize"),
             "Source-write coordination uses the node-token authenticated runtime group and fenced claims.");
         Check(rest.SequenceEqual(expected.Order()), "Only these routes may skip user authentication; update the list deliberately:\n" + string.Join("\n", rest));
         Console.WriteLine("PASS: the anonymous route catalogue matches the reviewed list.");

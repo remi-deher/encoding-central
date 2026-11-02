@@ -127,24 +127,6 @@
     </div>
   }
   <ng-container catalogue-summary>
-    @if (
-      pageTab() === 'cluster' &&
-      !local.standalone() &&
-      clusterIdentity() &&
-      loadState() === 'ready' &&
-      reconciliationBanner().isAlert
-    ) {
-      <div
-        class="node-alert-banner node-alert-banner_warning node-alert-banner_unframed"
-        role="status"
-      >
-        <span class="node-alert-icon" aria-hidden="true">!</span>
-        <p>
-          <strong>{{ reconciliationBanner().title }}</strong>
-          {{ reconciliationBanner().description }}
-        </p>
-      </div>
-    }
     @if (pageTab() === 'cluster' && local.pending()) {
       <div class="node-alert-banner node-alert-banner_warning" role="status">
         <span class="node-alert-icon" aria-hidden="true">!</span>
@@ -158,13 +140,7 @@
       <div class="node-alert-banner node-alert-banner_warning" role="status">
         <span class="node-alert-icon" aria-hidden="true">!</span>
         <p>
-          <strong>
-            {{
-              local.mode()?.worker === false
-                ? 'La fonction worker est désactivée'
-                : 'La fonction worker ne répond pas'
-            }}.
-          </strong>
+          <strong>L’agent de ce nœud ne répond pas.</strong>
           Le suivi du rattachement est indisponible tant que l’agent ne répond pas.
         </p>
       </div>
@@ -286,11 +262,11 @@
       <app-node-overview-card
         ariaLabel="Fiche du nœud local"
         layout="local"
-        [isMaster]="localNode()?.id === masterNodeId()"
+        [isMaster]="(localNode()?.roles ?? []).includes('server')"
         [title]="localSheet().title"
         [subtitle]="
-          localNode()?.id === masterNodeId()
-            ? 'Coordinateur actif de ' + clusterName()
+          (localNode()?.roles ?? []).includes('server')
+            ? 'Central de ' + clusterName()
             : localSheet().subtitle
         "
         [hardware]="localOverviewHardware()"
@@ -298,8 +274,6 @@
         [statusTone]="localOverviewStatus().tone"
         [nodeId]="localNode()?.id ?? 'local-node'"
         [roles]="localOverviewRoles()"
-        [roleSwitches]="localRoleSwitches()"
-        [roleControlNote]="localRoleControlNote()"
         [admissionEnabled]="localAdmissionEnabled()"
         [admissionDisabled]="localAdmissionDisabled()"
         [taskCapacity]="localTaskCapacity()"
@@ -309,7 +283,6 @@
         [libraries]="localOverviewLibraries()"
         [libraryAccessState]="libraryAccessState()"
         (actionSelected)="onLocalSheetAction($event)"
-        (roleToggle)="local.setRole($event.role, $event.enabled)"
         (admissionChange)="setLocalAdmission($event)"
       />
     } @else if (local.standalone()) {
@@ -381,7 +354,6 @@
               [statusTone]="card.statusTone"
               [nodeId]="card.id"
               [roles]="card.roles"
-              [roleSwitches]="card.roleSwitches"
               [admissionEnabled]="card.admissionEnabled"
               [admissionDisabled]="card.admissionDisabled"
               [taskCapacity]="card.taskCapacity"
@@ -396,7 +368,6 @@
               [openable]="true"
               (selectedChange)="toggleMember(card.id, $event)"
               (actionSelected)="onMemberCardAction(card.id, $event)"
-              (roleToggle)="setMemberRole(card.id, $event.role, $event.enabled)"
               (admissionChange)="setMemberAdmission(card.id, $event)"
               (open)="openNodeCard(card.id)"
             />
@@ -423,25 +394,6 @@
           >
             Nouvelles tâches
           </mat-slide-toggle>
-        }
-        @for (control of memberRoleSwitches(node); track control.role) {
-          <mat-slide-toggle
-            [checked]="control.checked"
-            [disabled]="control.disabled ?? false"
-            [aria-label]="
-              (control.checked ? 'Désactiver' : 'Activer') +
-              ' la fonction ' +
-              control.label +
-              ' de ' +
-              node.name
-            "
-            (change)="setMemberRole(node.id, control.role, $event.checked)"
-          >
-            {{ control.label }}
-          </mat-slide-toggle>
-          @if (control.pending) {
-            <span class="node-mode-pending">En attente</span>
-          }
         }
         <app-drawer-action-button
           label="Nom et étiquettes"

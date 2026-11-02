@@ -22,10 +22,8 @@ import {
   LocalNodeStatus,
   SetupNodeSheet,
 } from '../models/local-node';
-import { NodeMode, NodeModeStatus } from '../models/node-mode';
 import { ConfirmationDialogComponent } from '../ui/confirmation-dialog.component';
 import { ClusterApi } from './cluster-api';
-import { NodeModeController } from './node-mode-controller';
 import { NotificationService } from './notification.service';
 
 /** État et opérations du nœud local. Le navigateur n'appelle que l'API serveur authentifiée. */
@@ -33,7 +31,6 @@ import { NotificationService } from './notification.service';
 export class LocalNodeController {
   private readonly http = inject(HttpClient);
   private readonly api = inject(ClusterApi);
-  private readonly nodeMode = inject(NodeModeController);
   private readonly dialog = inject(MatDialog);
   private readonly notifications = inject(NotificationService);
   private readonly destroyRef = inject(DestroyRef);
@@ -43,14 +40,11 @@ export class LocalNodeController {
   readonly identity = signal<ClusterIdentity | null>(null);
   readonly status = signal<LocalNodeStatus | null>(null);
   readonly setupNode = signal<SetupNodeSheet | null>(null);
-  readonly mode = signal<NodeModeStatus | null>(null);
   readonly clusters = signal<readonly DiscoveredCluster[]>([]);
   readonly loading = signal(true);
   readonly identityUnavailable = signal(false);
   readonly agentUnavailable = signal(false);
-  readonly modeUnavailable = signal(false);
   readonly busy = signal(false);
-  readonly modeBusy = signal(false);
   readonly flow = signal<'create' | 'join' | null>(null);
   readonly joinIndex = signal(0);
   readonly address = signal('');
@@ -121,7 +115,6 @@ export class LocalNodeController {
                   timeout(8_000),
                   catchError(() => of(null)),
                 ),
-                mode: of(null),
                 agent: of(null),
               })
             : forkJoin({
@@ -130,10 +123,6 @@ export class LocalNodeController {
                   catchError(() => of(null)),
                 ),
                 setupNode: of(null),
-                mode: this.http.get<NodeModeStatus>('/api/v1/node/mode').pipe(
-                  timeout(8_000),
-                  catchError(() => of(null)),
-                ),
                 agent: forkJoin({
                   status: this.http.get<LocalNodeStatus>('/api/v1/local-node/status'),
                   clusters: this.http.get<readonly DiscoveredCluster[]>('/api/v1/local-node/clusters'),
@@ -145,9 +134,8 @@ export class LocalNodeController {
         ),
         takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe(({ identity, setupNode, mode, agent }) => {
+      .subscribe(({ identity, setupNode, agent }) => {
         this.identityUnavailable.set(identity === null);
-        this.modeUnavailable.set(!this.auth.setupRequired() && mode === null);
         this.agentUnavailable.set(
           this.auth.setupRequired() ? !setupNode?.agentAvailable : agent === null,
         );
@@ -179,7 +167,6 @@ export class LocalNodeController {
             switchFailure: null,
           });
         }
-        if (mode) this.mode.set(mode);
         if (agent) {
           this.clusters.set(agent.clusters);
           this.observeStatus(agent.status);
@@ -226,36 +213,6 @@ export class LocalNodeController {
     if (!this.busy()) this.flow.set(null);
   }
 
-  async setRole(role: 'server' | 'worker', enabled: boolean): Promise<void> {
-    if (!this.isAdmin() || this.busy() || this.modeBusy()) return;
-    this.modeBusy.set(true);
-    try {
-      const status = await firstValueFrom(this.http.get<NodeModeStatus>('/api/v1/node/mode'));
-      if (!status.managed) {
-        this.notifications.show(
-          'Les fonctions de ce nœud sont définies par la configuration du déploiement.',
-        );
-        return;
-      }
-      const target: NodeMode = {
-        server: role === 'server' ? enabled : status.server,
-        worker: role === 'worker' ? enabled : status.worker,
-      };
-      if (!target.server && !target.worker) {
-        this.notifications.show(
-          'Gardez au moins une fonction : sans serveur ni worker, le nœud ne ferait plus partie du cluster.',
-        );
-        return;
-      }
-      if (!target[role] && !(await this.nodeMode.confirmRoleDeactivation(role))) return;
-      if (await this.nodeMode.apply('/api/v1/node/mode', target)) this.refresh();
-    } catch {
-      this.notifications.show('Impossible de lire le mode de ce nœud.');
-    } finally {
-      this.modeBusy.set(false);
-    }
-  }
-
   async create(values: Record<string, string>): Promise<void> {
     const name = values['name']?.trim();
     if (!name || name.length > 128) {
@@ -292,11 +249,10 @@ export class LocalNodeController {
     await this.run(
       this.http.post<DiscoveredCluster>('/api/v1/local-node/clusters', { apiBaseUrl: address }),
       (cluster) => {
+        // Seul le rattachement déjà établi de l'agent compte : l'identité relayée par l'interface est celle du central lui-même.
         const localClusterId = this.status()?.clusterId?.toLowerCase();
-        const localIdentityId = this.identity()?.id?.toLowerCase();
         if (
           (localClusterId && cluster.id.toLowerCase() === localClusterId) ||
-          (localIdentityId && cluster.id.toLowerCase() === localIdentityId) ||
           cluster.source === 'configured'
         ) {
           this.error.set(
@@ -346,6 +302,27 @@ export class LocalNodeController {
         this.refresh();
       },
       'L’envoi de la demande a échoué. Vous pouvez réessayer sans ressaisir l’adresse.',
+    );
+  }
+
+  /** Rattachement direct : le compte administrateur du central, dont la session est relayée à l'agent, admet ce nœud (ADR 0034). */
+  async enroll(displayName?: string): Promise<void> {
+    const target = this.target();
+    if (!target || !this.canJoin()) return;
+    await this.run(
+      this.http.post<unknown>('/api/v1/local-node/enroll', {
+        clusterId: target.id,
+        leaveCurrent: !!this.status()?.clusterId,
+        displayName: displayName?.trim() || this.status()?.displayName?.trim() || undefined,
+      }),
+      () => {
+        this.submittedTargetId.set(target.id);
+        this.observedPending = false;
+        this.joinIndex.set(3);
+        this.notifications.show(`Ce nœud est rattaché à ${target.name}.`);
+        this.refresh();
+      },
+      'Le rattachement a échoué. Vérifiez que le compte est administrateur du central, puis réessayez.',
     );
   }
 

@@ -20,14 +20,6 @@ export interface NodeOverviewLibrary {
   readonly accessLabel: string;
 }
 
-export interface NodeOverviewRoleSwitch {
-  readonly role: 'server' | 'worker';
-  readonly label: string;
-  readonly checked: boolean;
-  readonly pending?: boolean;
-  readonly disabled?: boolean;
-}
-
 export interface NodeOverviewTaskCapacity {
   readonly accepted: number | null;
   readonly remaining: number | null;
@@ -201,37 +193,12 @@ export interface NodeOverviewHardware {
               <app-status-badge [label]="statusLabel()" [tone]="statusTone()" />
             </div>
 
-            @if (roleSwitches().length || roles().length) {
+            @if (roles().length) {
               <div class="node-overview-roles-line" role="group" aria-label="Rôles du nœud">
-                @if (roleSwitches().length) {
-                  @for (control of roleSwitches(); track control.role) {
-                    <button
-                      type="button"
-                      class="node-overview-role-btn"
-                      [class.is-active]="control.checked && !control.pending"
-                      [class.is-pending]="control.pending"
-                      [disabled]="control.disabled ?? false"
-                      [attr.aria-label]="
-                        (control.checked ? 'Désactiver' : 'Activer') + ' le rôle ' + control.label
-                      "
-                      (click)="roleToggle.emit({ role: control.role, enabled: !control.checked })"
-                    >
-                      <span class="node-overview-role-dot"></span>
-                      <span class="node-overview-role-name">{{ control.label }}</span>
-                      <span class="node-overview-role-status">{{
-                        control.pending ? '…' : control.checked ? 'Actif' : 'Inactif'
-                      }}</span>
-                    </button>
-                  }
-                } @else {
-                  @for (role of roles(); track role) {
-                    <span class="node-overview-role-pill">{{ role }}</span>
-                  }
+                @for (role of roles(); track role) {
+                  <span class="node-overview-role-pill">{{ role }}</span>
                 }
               </div>
-            }
-            @if (roleControlNote()) {
-              <p class="node-overview-role-note">{{ roleControlNote() }}</p>
             }
           </div>
         </div>
@@ -509,8 +476,6 @@ export class NodeOverviewCardComponent {
   readonly layout = input<'standard' | 'local'>('standard');
   readonly nodeId = input('node-overview');
   readonly roles = input<readonly string[]>([]);
-  readonly roleSwitches = input<readonly NodeOverviewRoleSwitch[]>([]);
-  readonly roleControlNote = input('');
   readonly admissionEnabled = input<boolean | null>(null);
   readonly admissionDisabled = input(false);
   readonly hardware = input<NodeOverviewHardware | null>(null);
@@ -529,6 +494,5 @@ export class NodeOverviewCardComponent {
   readonly open = output<void>();
   readonly selectedChange = output<boolean>();
   readonly actionSelected = output<string>();
-  readonly roleToggle = output<{ readonly role: 'server' | 'worker'; readonly enabled: boolean }>();
   readonly admissionChange = output<boolean>();
 }

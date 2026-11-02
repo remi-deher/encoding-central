@@ -1,12 +1,12 @@
 ---
 id: 0001
 title: Réplication chiffrée des connexions IA
-status: implemented
+status: superseded
 domain: ai
 date: 2026-10-21
 decided_by: Rémi (2026-10-21)
 supersedes: []
-superseded_by: []
+superseded_by: [0036]
 tags: [ai, secrets, cluster]
 ---
 

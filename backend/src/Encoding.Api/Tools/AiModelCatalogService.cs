@@ -96,7 +96,7 @@ public sealed class AiModelCatalogService(AiCliRuntime runtime, AiSettingsServic
                         using var anthropicResponse = await clients.CreateClient("AiClient").SendAsync(anthropicRequest, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
                         anthropicResponse.EnsureSuccessStatusCode();
                         await using var anthropicStream = await anthropicResponse.Content.ReadAsStreamAsync(timeout.Token);
-                        using var anthropicDoc = JsonDocument.Parse(await AiClusterTransport.ReadAsync(anthropicStream, timeout.Token));
+                        using var anthropicDoc = JsonDocument.Parse(await BoundedStream.ReadAsync(anthropicStream, timeout.Token));
                         models = AiModelProtocol.ParseAnthropic(anthropicDoc.RootElement).Select(m => m with { IsDefault = m.Id == local.AnthropicModel }).ToArray();
                         var checkedAt = clock.GetUtcNow();
                         return Publish(provider, entry, fingerprint, new(provider, models.Count > 0 ? "available" : "unavailable", models, checkedAt, checkedAt,
@@ -112,7 +112,7 @@ public sealed class AiModelCatalogService(AiCliRuntime runtime, AiSettingsServic
                     response.EnsureSuccessStatusCode();
                     await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
                     // Reuse the bounded peer reader so a provider cannot allocate an unbounded response.
-                    using var doc = JsonDocument.Parse(await AiClusterTransport.ReadAsync(stream, timeout.Token));
+                    using var doc = JsonDocument.Parse(await BoundedStream.ReadAsync(stream, timeout.Token));
                     var defaultModel = provider == "ollama" ? local.OllamaModel : local.OpenAiModel;
                     models = AiModelProtocol.ParseHttp(doc.RootElement).Select(m => m with { IsDefault = m.Id == defaultModel }).ToArray();
                 }

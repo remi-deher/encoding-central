@@ -19,7 +19,6 @@ public static class StandardFlowTemplateSeeder
         Guid.Parse("94a10000-0000-4000-8000-000000000011"), Guid.Parse("94a10000-0000-4000-8000-000000000012"),
         Guid.Parse("94a10000-0000-4000-8000-000000000013"), Guid.Parse("94a10000-0000-4000-8000-000000000014"),
         Guid.Parse("94a10000-0000-4000-8000-000000000015"), Guid.Parse("94a10000-0000-4000-8000-000000000016"),
-        Guid.Parse("94a10000-0000-4000-8000-000000000017"),
     ];
 
     private sealed record Template(string Name, string Description, FlowDefinition Definition);

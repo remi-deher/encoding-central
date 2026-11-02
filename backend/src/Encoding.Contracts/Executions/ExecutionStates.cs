@@ -67,14 +67,3 @@ public static class ExecutionOutcomes
     public static bool IsFailure(string? terminal, string? lastOutput) =>
         terminal == Failed || terminal is null && lastOutput == ErrorOutput;
 }
-
-/// <summary>Version numbers for cluster task ownership messages (<c>ClusterTaskEvent</c> / peer envelopes).</summary>
-public static class ClusterTaskMessageVersions
-{
-    /// <summary>Current <see cref="ClusterTaskEvent.Version"/> and peer request/reply envelope version (<c>tasks/v2</c>).</summary>
-    public const int Current = 2;
-
-    public static bool IsSupported(int version) => version == Current;
-
-    public static bool IsUnsupportedSuccessor(int version) => version == Current + 1;
-}

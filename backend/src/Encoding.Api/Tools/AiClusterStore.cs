@@ -6,16 +6,14 @@ using Encoding.Api.Infrastructure.Data;
 
 namespace Encoding.Api.Tools;
 
-/// <summary>Encrypted application checkpoints in the existing replicated register journal. Never stores CLI credentials.</summary>
-public sealed class AiClusterStore(DbDataSource database, ClusterReconciliationRepository journal,
-    ClusterIdentityRepository cluster, ClusterDataKeyStore keys, ClusterPeerAdmissionRepository? admissions = null)
+/// <summary>Encrypted application checkpoints in the local registers. Never stores CLI credentials.</summary>
+public sealed class AiClusterStore(DbDataSource database, ClusterRegisterRepository registers,
+    ClusterIdentityRepository cluster, ClusterDataKeyStore keys)
 {
     public async Task<string> ProtectAsync<T>(T value, string purpose, CancellationToken ct)
     {
         var identity = await cluster.GetAsync(ct);
-        if (!keys.HasKey(identity.Id) && identity.Standalone && admissions is not null)
-            await admissions.EnsureRootAdmissionAsync(identity.Id, ct);
-        var key = keys.GetRequired(identity.Id);
+        var key = keys.GetOrCreate(identity.Id);
         try
         {
             var plain = JsonSerializer.SerializeToUtf8Bytes(value);
@@ -46,11 +44,11 @@ public sealed class AiClusterStore(DbDataSource database, ClusterReconciliationR
         finally { CryptographicOperations.ZeroMemory(key); }
     }
     public async Task SaveAsync<T>(string key, T value, CancellationToken ct) =>
-        await journal.SetRegisterAsync("ai/" + key, JsonSerializer.Serialize(await ProtectAsync(value, key, ct)), ct);
+        await registers.SetAsync("ai/" + key, JsonSerializer.Serialize(await ProtectAsync(value, key, ct)), ct);
 
-    /// <summary>Réplique un tombstone. Les anciennes versions restent dans le journal append-only jusqu'à leur purge coordonnée.</summary>
+    /// <summary>Supprime la valeur du registre (tombstone « null »).</summary>
     public Task DeleteAsync(string key, CancellationToken ct) =>
-        journal.SetRegisterAsync("ai/" + key, "null", ct);
+        registers.SetAsync("ai/" + key, "null", ct);
     public async Task<IReadOnlyList<T>> ListSessionsAsync<T>(int offset, int limit, CancellationToken ct, bool includeAssistant = false)
     {
         if (offset < 0 || limit is < 1 or > 1000) throw new ArgumentOutOfRangeException(nameof(limit));

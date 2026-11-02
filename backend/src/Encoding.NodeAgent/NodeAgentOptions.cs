@@ -10,7 +10,8 @@ public sealed record NodeAgentOptions(
     TimeSpan HeartbeatInterval,
     int LocalApiPort,
     string? LocalEnrollmentSecretFile = null,
-    string? DisplayName = null)
+    string? DisplayName = null,
+    bool WorkerImage = false)
 {
     public static NodeAgentOptions FromConfiguration(IConfiguration configuration)
     {
@@ -18,13 +19,18 @@ public sealed record NodeAgentOptions(
         if (string.IsNullOrWhiteSpace(name)) name = Environment.MachineName;
         if (name.Length > 128) throw new InvalidOperationException("Node:Name ne peut pas dépasser 128 caractères.");
 
-        var roles = (configuration["Node:Roles"] ?? "worker")
+        // Image `worker` : l'agent n'a qu'un rôle, il n'est jamais serveur et choisit son central depuis son interface.
+        var workerImage = configuration.GetValue("Node:WorkerImage", false);
+        var configuredRoles = (configuration["Node:Roles"] ?? "worker")
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(value => Enum.TryParse<Encoding.Contracts.Nodes.NodeRole>(value, true, out var role)
                 ? role
                 : throw new InvalidOperationException($"Rôle de nœud inconnu : {value}."))
             .Distinct()
             .ToArray();
+        var roles = workerImage
+            ? [Encoding.Contracts.Nodes.NodeRole.Worker]
+            : configuredRoles;
         if (roles.Length == 0) throw new InvalidOperationException("Node:Roles doit déclarer au moins un rôle.");
 
         var maxConcurrentTasks = configuration.GetValue("Node:MaxConcurrentTasks", 1);
@@ -34,17 +40,24 @@ public sealed record NodeAgentOptions(
         var localApiPort = configuration.GetValue("WorkerUi:Port", 8081);
         if (localApiPort is < 1 or > 65535) throw new InvalidOperationException("WorkerUi:Port est invalide.");
 
+        var dataDirectory = Path.GetFullPath(configuration["Node:DataDirectory"] ?? ".encoding-node");
+        var configuredSecretFile = configuration[Encoding.Core.Nodes.LocalEnrollment.SecretFileSetting];
+        // Dans l'image worker, aucun lanceur ne crée le secret local : l'agent le garde dans son dossier de données.
+        var secretFile = !string.IsNullOrWhiteSpace(configuredSecretFile) ? configuredSecretFile
+            : workerImage ? Path.Combine(dataDirectory, Encoding.Core.Nodes.LocalEnrollment.FileName) : null;
+
         return new NodeAgentOptions(
             name,
             roles,
             maxConcurrentTasks,
-            Path.GetFullPath(configuration["Node:DataDirectory"] ?? ".encoding-node"),
+            dataDirectory,
             NormalizeOptionalUrl(configuration["Cluster:ApiBaseUrl"]),
             configuration.GetValue("Worker:AutoAcceptEnrollment", false),
             TimeSpan.FromSeconds(intervalSeconds),
             localApiPort,
-            string.IsNullOrWhiteSpace(configuration[Encoding.Core.Nodes.LocalEnrollment.SecretFileSetting]) ? null : configuration[Encoding.Core.Nodes.LocalEnrollment.SecretFileSetting],
-            string.IsNullOrWhiteSpace(configuration["Node:DisplayName"]) ? null : configuration["Node:DisplayName"]!.Trim());
+            secretFile,
+            string.IsNullOrWhiteSpace(configuration["Node:DisplayName"]) ? null : configuration["Node:DisplayName"]!.Trim(),
+            workerImage);
     }
 
     private static string? NormalizeOptionalUrl(string? value)

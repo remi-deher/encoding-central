@@ -15,14 +15,18 @@ internal static class CentralUiProxy
     {
         "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade", "te", "trailer", "host"
     };
+    /// <summary>Client nommé du relais : pas de redirection suivie (le navigateur les voit), pas de délai (flux SSE).</summary>
+    public const string ClientName = "CentralProxy";
+
+    /// <summary>
+    /// Pas de conteneur de cookies : le client est partagé par tous les visiteurs, donc la session du central d'une personne
+    /// serait réappliquée à toutes les suivantes. Les en-têtes <c>Cookie</c> et <c>Set-Cookie</c> sont relayés tels quels.
+    /// </summary>
+    public static SocketsHttpHandler CreateHandler() => new() { AllowAutoRedirect = false, UseCookies = false };
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     public static void Use(WebApplication app, Func<HttpContext, Task<string?>> resolveCentral, int localPort, string? secretFile)
     {
-        var client = new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false })
-        {
-            Timeout = Timeout.InfiniteTimeSpan
-        };
         app.Use(async (context, next) =>
         {
             if (!context.Request.Path.StartsWithSegments("/api")
@@ -31,6 +35,7 @@ internal static class CentralUiProxy
                 await next();
                 return;
             }
+            var client = context.RequestServices.GetRequiredService<IHttpClientFactory>().CreateClient(ClientName);
 
             var resolved = await resolveCentral(context);
             if (string.IsNullOrWhiteSpace(resolved))
@@ -135,6 +140,10 @@ internal static class CentralUiProxy
         using var outgoing = new HttpRequestMessage(new HttpMethod(context.Request.Method),
             new Uri($"http://127.0.0.1:{localPort}/api/v1/worker{suffix}{context.Request.QueryString}"));
         outgoing.Headers.TryAddWithoutValidation(LocalEnrollment.HeaderName, secret);
+        // Le rattachement est autorisé par le compte administrateur du central (ADR 0034) : l'agent reçoit sa session, rien d'autre.
+        if (suffix.Equals("/enroll", StringComparison.OrdinalIgnoreCase) && string.Equals(role, "admin", StringComparison.Ordinal)
+            && context.Request.Cookies[Encoding.Contracts.Auth.SessionCookie.Name] is { Length: > 0 } session)
+            outgoing.Headers.TryAddWithoutValidation(Encoding.Contracts.Auth.SessionCookie.RelayHeader, session);
         if (context.Request.ContentLength is > 0 || context.Request.Headers.TransferEncoding.Count > 0)
         {
             outgoing.Content = new StreamContent(context.Request.Body);

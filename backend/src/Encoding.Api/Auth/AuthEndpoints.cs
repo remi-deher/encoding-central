@@ -31,7 +31,7 @@ public static class AuthEndpoints
             }
             if (!Encoding.Api.Nodes.LocalNodeRegistry.IsValidName(request.NodeDisplayName))
                 errors["nodeDisplayName"] = [$"Le nom du nœud ne peut pas dépasser {Encoding.Api.Nodes.LocalNodeRegistry.MaximumNameLength} caractères."];
-            if (request.Mode == "createCluster" && !string.IsNullOrWhiteSpace(request.ClusterName) && !Encoding.Api.Infrastructure.ClusterIdentityRepository.IsValidName(request.ClusterName))
+            if (!string.IsNullOrWhiteSpace(request.ClusterName) && !Encoding.Api.Infrastructure.ClusterIdentityRepository.IsValidName(request.ClusterName))
                 errors["clusterName"] = [$"Le nom du cluster ne peut pas dépasser {Encoding.Api.Infrastructure.ClusterIdentityRepository.MaximumNameLength} caractères."];
             if (errors.Count > 0) return (IResult)Results.ValidationProblem(errors);
 
@@ -39,12 +39,9 @@ public static class AuthEndpoints
             if (outcome == SetupOutcome.AlreadyConfigured)
                 return Results.Conflict(new { title = "Le cluster possède déjà un administrateur." });
             await localNode.RequestNameAsync(request.NodeDisplayName, ct);
-            if (request.Mode == "createCluster" && !string.IsNullOrWhiteSpace(request.ClusterName))
+            if (!string.IsNullOrWhiteSpace(request.ClusterName))
             {
                 var clusterRepo = http.RequestServices.GetRequiredService<Encoding.Api.Infrastructure.ClusterIdentityRepository>();
-                var admissions = http.RequestServices.GetRequiredService<Encoding.Api.Infrastructure.ClusterPeerAdmissionRepository>();
-                var current = await clusterRepo.GetAsync(ct);
-                await admissions.EnsureRootAdmissionAsync(current.Id, ct);
                 await clusterRepo.CreateAsync(request.ClusterName, ct);
             }
             var effectiveUsername = string.IsNullOrWhiteSpace(request.Username) ? "admin" : request.Username.Trim();

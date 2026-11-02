@@ -10,9 +10,7 @@ public sealed class NodeHeartbeatService(
     WorkerIdentityStore identityStore,
     IToolCapabilityProbe capabilityProbe,
     WorkerEnrollmentService enrollment,
-    ILogger<NodeHeartbeatService> logger,
-    LeadershipReceiverService? leadershipReceiver = null,
-    LauncherControlClient? launcher = null) : BackgroundService
+    ILogger<NodeHeartbeatService> logger) : BackgroundService
 {
     private readonly HttpClient httpClient = new() { Timeout = TimeSpan.FromSeconds(10) };
     // Propre à ce processus : deux processus qui partagent la même identité sont reconnus par leurs nonces qui se relaient (0041).
@@ -68,25 +66,15 @@ public sealed class NodeHeartbeatService(
                                 var node = await response.Content.ReadFromJsonAsync<NodeResponse>(AgentJson.Options, stoppingToken);
                                 if (!identity.IsEnrolled)
                                 {
-                                    await enrollment.AdoptApprovedClusterAsync(identity, identity.Id, stoppingToken);
                                     await identityStore.MarkEnrolledAsync(stoppingToken);
                                     logger.LogInformation("L’enrôlement en attente du worker {NodeId} a été confirmé par le cluster.", identity.Id);
                                     await enrollment.CompleteSwitchAsync(stoppingToken);
                                 }
-                                if (node?.ClusterServerUrls is { Count: > 0 })
-                                    await identityStore.UpdateKnownServersAsync(node.ClusterServerUrls, stoppingToken);
                                 if (!string.IsNullOrWhiteSpace(node?.MasterUrl))
                                     await identityStore.UpdateMasterUrlAsync(node.MasterUrl, stoppingToken);
 
-                                if (node?.LeadershipHandoff is not null && leadershipReceiver is not null && !string.IsNullOrWhiteSpace(identity.NodeToken))
-                                    _ = Task.Run(async () => await leadershipReceiver.HandleHandoffAsync(node.LeadershipHandoff, serverUrl, identity.NodeToken, stoppingToken));
-                                else if (node?.LatestBackup is not null && leadershipReceiver is not null && !string.IsNullOrWhiteSpace(identity.NodeToken))
-                                    _ = Task.Run(async () => await leadershipReceiver.HandleBackupNotificationAsync(node.LatestBackup, serverUrl, identity.NodeToken, stoppingToken));
-
                                 logger.LogDebug("Heartbeat envoyé pour le nœud {NodeId} vers {ServerUrl}.", identity.Id, serverUrl);
                                 ReportLifecycle(node);
-                                if (node?.LeadershipHandoff is null)
-                                    await ApplyDesiredModeAsync(node?.DesiredRoles, stoppingToken);
                             }
                         }
                         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException && !stoppingToken.IsCancellationRequested)
@@ -140,28 +128,6 @@ public sealed class NodeHeartbeatService(
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
             logger.LogDebug(exception, "L'ancien cluster ne répond pas pendant le changement de cluster.");
-        }
-    }
-
-    // Mode demandé par un administrateur du cluster (0036) : appliqué par le lanceur local, qui relance l'agent avec ses nouveaux rôles.
-    private async Task ApplyDesiredModeAsync(IReadOnlyList<NodeRole>? desiredRoles, CancellationToken cancellationToken)
-    {
-        if (desiredRoles is not { Count: > 0 }) return;
-        var desired = new NodeMode(desiredRoles.Contains(NodeRole.Server), desiredRoles.Contains(NodeRole.Worker));
-        if (desired == new NodeMode(options.Roles.Contains(NodeRole.Server), options.Roles.Contains(NodeRole.Worker))) return;
-        if (launcher is null)
-        {
-            logger.LogWarning("Le cluster demande le mode {Mode}, mais ce nœud n'est pas géré par un lanceur (image unique) ; demande ignorée.", desired.ToRoles());
-            return;
-        }
-        try
-        {
-            await launcher.SetAsync(desired, cancellationToken);
-            logger.LogInformation("Mode du nœud changé à la demande du cluster : {Mode}.", desired.ToRoles());
-        }
-        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
-        {
-            logger.LogWarning(exception, "Le lanceur a refusé le changement de mode demandé par le cluster.");
         }
     }
 

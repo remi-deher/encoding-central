@@ -92,6 +92,42 @@ public sealed class WorkerClusterAddressTests
     public async Task UnreachableAddressIsReportedAsAnError() =>
         await Assert.ThrowsAsync<HttpRequestException>(() => Discovery().AddByAddressAsync($"http://127.0.0.1:{FreePort()}/", CancellationToken.None));
 
+    [Fact]
+    public void WorkerImageForcesTheWorkerRole()
+    {
+        var options = NodeAgentOptions.FromConfiguration(new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?>
+            {
+                ["Node:WorkerImage"] = "true",
+                ["Node:Roles"] = "server,worker"
+            }).Build());
+
+        Assert.True(options.WorkerImage);
+        Assert.Equal([Encoding.Contracts.Nodes.NodeRole.Worker], options.Roles);
+    }
+
+    [Fact]
+    public void WorkerImageKeepsItsLocalSecretInItsDataDirectory()
+    {
+        var options = NodeAgentOptions.FromConfiguration(new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?>
+            {
+                ["Node:WorkerImage"] = "true",
+                ["Node:DataDirectory"] = "/var/lib/encoding-node"
+            }).Build());
+
+        Assert.Equal("/var/lib/encoding-node/local-enrollment.secret", options.LocalEnrollmentSecretFile);
+    }
+
+    [Fact]
+    public void ANodeWithoutWorkerImageHasNoLocalSecretUnlessConfigured()
+    {
+        var options = NodeAgentOptions.FromConfiguration(new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?> { ["Node:DataDirectory"] = "/var/lib/encoding-node" }).Build());
+
+        Assert.Null(options.LocalEnrollmentSecretFile);
+    }
+
     private static int FreePort()
     {
         var socket = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);

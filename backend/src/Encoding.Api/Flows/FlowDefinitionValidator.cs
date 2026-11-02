@@ -52,9 +52,9 @@ public sealed class FlowDefinitionValidator(
     /// <summary>Valide une suite déjà lancée sans appliquer les préférences d'activation aux plugins.</summary>
     public FlowValidationResult ValidateContinuation(FlowDefinition flow)=>Validate(flow,false,false);
 
-    private FlowValidationResult Validate(FlowDefinition flow,bool allowIncompleteConditions,bool checkPluginActivation)
+    /// <summary>Contrôles d'en-tête : format, identité, nom, média et taille du graphe. Faux si le graphe est absent ou trop grand (la suite n'a plus de sens).</summary>
+    private static bool ValidateHeader(FlowDefinition flow, List<FlowValidationIssue> issues)
     {
-        var issues = new List<FlowValidationIssue>();
         void Issue(string code, string path, string message) => issues.Add(new(code, path, message));
         if (flow.FormatVersion != 1) Issue("format.unsupported", "/formatVersion", "Format de flow non pris en charge.");
         if (flow.Id == Guid.Empty) Issue("flow.id.required", "/id", "L’identifiant est obligatoire.");
@@ -64,13 +64,21 @@ public sealed class FlowDefinitionValidator(
         if (flow.Nodes is null || flow.Connections is null)
         {
             Issue("graph.required", "/", "Les listes nodes et connections sont obligatoires.");
-            return new(issues);
+            return false;
         }
         if (flow.Nodes.Count > 1000 || flow.Connections.Count > 4000)
         {
             Issue("graph.tooLarge", "/", "Maximum : 1000 blocs et 4000 connexions.");
-            return new(issues);
+            return false;
         }
+        return true;
+    }
+
+    private FlowValidationResult Validate(FlowDefinition flow,bool allowIncompleteConditions,bool checkPluginActivation)
+    {
+        var issues = new List<FlowValidationIssue>();
+        void Issue(string code, string path, string message) => issues.Add(new(code, path, message));
+        if (!ValidateHeader(flow, issues)) return new(issues);
         var nodes = new Dictionary<string, FlowComponentDescriptor>(StringComparer.Ordinal);
         var ids = new HashSet<string>(StringComparer.Ordinal);
         for (var i = 0; i < flow.Nodes.Count; i++)

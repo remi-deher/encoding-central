@@ -34,6 +34,12 @@ Résolue par l'ADR [0003](adr/0003-publication-etape-de-flow.md) : le bloc `base
 ### 9. Compatibilité entre versions de nœuds
 Seule la version de protocole (`Current = 1`) est contrôlée. Pas de plage de schéma, pas de règle « serveurs avant workers ». Les migrations doivent rester additives en attendant.
 
+### 10. Séparation stricte central / worker et retrait du maillage (2026-11-02)
+Décidés par l'[ADR 0036](adr/0036-separation-stricte-central-worker.md) : central autonome et unique autorité, worker sans base, aucune passation, **maillage multi-serveurs retiré** (réplication, journal, pairs, capture des changements, transferts et propriété de tâches entre serveurs). Reste :
+- **Résidus** : `task_ownership` et `task_server_identity` subsistent (le central est l'unique propriétaire) et pourraient être retirés avec le prédicat `TaskOwnershipRepository.ActiveSql` ; la route `GET /api/v1/executions/{id}/ownership` ne sert plus à l'interface.
+- **Worker et SSE** : l'interface du worker doit consommer le SSE du central ; l'attribution des tâches reste par heartbeat et baux.
+- **Tests multi-conteneurs** : `DockerClusterTests` (images `central` et `worker`, worker tué en plein ffmpeg) et `WorkerProcessLossTests` ont été exécutés le 2026-11-02 en local et passent. Le scénario de compatibilité avec la dernière image worker publiée reste ignoré tant qu'aucune image `encoding-worker` n'est publiée (`ENCODING_TEST_PREVIOUS_WORKER_IMAGE`). La CI de promotion n'a pas encore exécuté les workflows réécrits.
+
 ## Hygiène du dépôt
 
 - `backend/migrations/0036_library_cluster_tombstones.sql` (racine) n'est pas chargé par le migrateur (seul `migrations/sqlite/` l'est) : reliquat à supprimer.
@@ -46,15 +52,3 @@ Landlock en conteneur de production ; GPU réel (QSV, VAAPI, NVENC) ; Plex/Jelly
 
 ## Reprise après perte du worker (ADR 0004)
 Livrée : reprise au dernier checkpoint, bornée à 2, blocs rejouables. Reste à décider : attendre le retour du nœud d'accès (au lieu d'échouer) quand le traitement continue ailleurs ; reprendre le verrou de disque libéré ; checkpoint intermédiaire à l'intérieur d'un encodage long (aujourd'hui, le bloc est refait depuis son début).
-
-
-## Cluster sans quorum : cadrage du 2026-10-25
-- Proposition D1–D6 et audit : [revue](../design/cluster-without-quorum-review.md). Le retrait est implémenté par l’ADR 0013 ; l’attribution, les transferts et la reprise manuelle sont livrés par les ADR 0015 et 0016.
-- Décision de Rémi : à deux nœuds, reprendre la file d'un serveur exige sa **neutralisation explicite**, y compris son autorité de publication ; sinon il conserve sa file. Une expiration estimée côté pair et une époque inconnue du serveur isolé ne constituent pas un fencing. La reprise manuelle livrée respecte cette précondition ; elle n’apporte pas de neutralisation technique à distance.
-- Priorité D6 : la [sonde de coordination](../testing/coordination-measurements.md) couvre aussi 7 000 tâches et deux workers sur un serveur. La mesure complémentaire à [deux serveurs logiques](../testing/cluster-two-server-measurements.md) couvre capture concurrente et latences HTTP état/historique. Deux hôtes physiques, NAS et activité disque restent non vérifiés ; ne pas présenter ces sondes locales comme leur validation.
-
-### Suivi de la proposition « cluster sans quorum » (2026-10-25)
-- Livré : retrait du mode de consensus, maillage inchangé ; mesures initiales à 7 000 travaux et jitter ; protection des sources et attentes durables en partition (ADR 0014).
-- Fondation D3 : attribution initiale signée atomique et rattrapage initial avant claims (ADR 0015). Ce volet est complété par les transferts et la reprise manuelle de l’ADR 0016.
-- Livré par ADR 0016 : cession explicite depuis le propriétaire initial, transfert en deux phases, acheminement SHA-256, chaînes `nodes-handoff` entre serveurs, gossip signé avec TTL, quarantaine des doublons, indicateurs UI et reprise manuelle à deux serveurs après neutralisation/grâce. La majorité ou le témoin de reprise à trois serveurs reste une extension future, sans modification du maillage.
-- Toujours non vérifié : charge à 7 000 travaux sur deux serveurs réels, partition entre hôtes et exclusion au chemin d'un média sur NAS. Une mesure complémentaire sur deux serveurs logiques, avec capture concurrente et les nouveaux checkpoints, est décrite dans `docs/testing/cluster-two-server-measurements.md` ; elle ne valide pas deux hôtes physiques ou un NAS.

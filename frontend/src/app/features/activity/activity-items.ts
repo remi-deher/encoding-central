@@ -143,7 +143,7 @@ export function executionItem(execution: ExecutionResponse): ActivityItem {
     title: execution.media.split(/[\\/]/).pop() || execution.media,
     subtitle,
     stateLabel: executionStateLabel(execution),
-    tone: execution.ownership?.state === 'quarantined' ? 'warning' : executionTone(execution.state),
+    tone: executionTone(execution.state),
     progress: execution.state === 'running' ? execution.progress : null,
     time: formatRelativeTime(instant),
     sortTime: time(instant),

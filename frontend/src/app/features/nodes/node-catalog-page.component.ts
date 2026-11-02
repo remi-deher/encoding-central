@@ -15,8 +15,6 @@ import {
 import { firstValueFrom } from 'rxjs';
 import {
   ClusterApi,
-  ClusterReconciliationHealthStatus,
-  ClusterTaskStatus,
 } from '../../shared/services/cluster-api';
 import { EnrollmentWindow, FirstLinkAcceptance } from '../../shared/models/auth';
 import {
@@ -35,7 +33,6 @@ import { NodeSchedule } from '../../shared/models/node-schedule';
 import { WeeklyScheduleFormComponent } from '../../shared/ui/weekly-schedule-form.component';
 import { MatDialog } from '@angular/material/dialog';
 import { ConfirmationDialogComponent } from '../../shared/ui/confirmation-dialog.component';
-import { LeadershipTransitionDialogComponent } from './components/leadership-transition-dialog.component';
 import { DrawerActionButtonComponent } from '../../shared/ui/drawer-action-button/drawer-action-button.component';
 import { DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
@@ -68,7 +65,6 @@ import {
   formatLastSignal,
   localNodeSheet,
   memberNodeOverviewSections,
-  reconciliationBannerPresentation,
   runtimeEnvironmentLabel,
 } from '../../shared/models/node-management';
 import { NodeOverviewCardComponent } from './node-overview-card.component';
@@ -76,7 +72,6 @@ import type {
   NodeOverviewHardware,
   NodeOverviewPlatform,
   NodeOverviewLibrary,
-  NodeOverviewRoleSwitch,
   NodeOverviewTaskCapacity,
 } from './node-overview-card.component';
 import { MatTabsModule } from '@angular/material/tabs';
@@ -115,7 +110,6 @@ import { DetailFieldListComponent } from '../../shared/ui/detail-field-list.comp
 import { nodeCapabilityCards, nodeCapabilityFields } from '../../shared/models/node-capabilities';
 import { RecordFormActionsComponent } from '../../shared/ui/record-form-actions.component';
 import { RecordFormComponent, RecordFormData } from '../../shared/ui/record-form.component';
-import { NodeModeController } from '../../shared/services/node-mode-controller';
 import { NotificationService } from '../../shared/services/notification.service';
 import { DetailCard, DetailCardGridComponent } from '../../shared/ui/detail-card-grid.component';
 import {
@@ -177,7 +171,6 @@ interface MemberCard {
   readonly statusTone: StatusTone;
   readonly isMaster: boolean;
   readonly roles: readonly string[];
-  readonly roleSwitches: readonly NodeOverviewRoleSwitch[];
   readonly admissionEnabled: boolean | null;
   readonly admissionDisabled: boolean;
   readonly hardware: NodeOverviewHardware;
@@ -254,14 +247,10 @@ export class NodeCatalogPageComponent {
   private readonly clusterApi = inject(ClusterApi);
   private readonly dialog = inject(MatDialog);
   private readonly notifications = inject(NotificationService);
-  private readonly nodeMode = inject(NodeModeController);
   private readonly routeData = toSignal(this.route.data, {
     initialValue: this.route.snapshot.data,
   });
   private readonly nodes = signal<readonly NodeResponse[]>([]);
-  protected readonly reconciliationStatus = signal<ClusterReconciliationHealthStatus | null>(null);
-  protected readonly taskStatus = signal<ClusterTaskStatus | null>(null);
-  protected readonly masterNodeId = signal<string | null>(null);
   private readonly pendingEnrollments = signal<readonly PendingNodeEnrollmentResponse[]>([]);
   private readonly allLibraries = signal<readonly LibraryResponse[]>([]);
   private readonly nodeAccessByLibrary = signal<
@@ -283,7 +272,6 @@ export class NodeCatalogPageComponent {
   );
   protected readonly filtersOpen = signal(false);
   protected readonly admissionBusy = signal<ReadonlySet<string>>(new Set());
-  protected readonly modeBusy = signal<ReadonlySet<string>>(new Set());
   protected readonly pageSearchQuery = computed(() =>
     this.pageTab() === 'groups' ? this.groupSearchQuery() : this.nodeSearchQuery(),
   );
@@ -332,7 +320,7 @@ export class NodeCatalogPageComponent {
   protected readonly localTaskCapacity = computed(() => {
     const node = this.localNode();
     const status = this.local.status();
-    const roles = node?.desiredRoles ?? node?.roles ?? status?.roles ?? null;
+    const roles = node?.roles ?? status?.roles ?? null;
     const workerEnabled = roles?.includes('worker') ?? null;
     const accepted = this.localActivity()?.active ?? null;
     const maximum = node?.maxConcurrentTasks ?? status?.maxConcurrentTasks ?? null;
@@ -359,7 +347,6 @@ export class NodeCatalogPageComponent {
     localNodeSheet({
       status: this.local.status(),
       node: this.localNode(),
-      mode: this.local.modeUnavailable() ? null : this.local.mode(),
       standalone: this.local.standalone(),
       clusterName: this.local.standalone() ? null : this.clusterName(),
       agentUnavailable: this.local.agentUnavailable(),
@@ -388,45 +375,10 @@ export class NodeCatalogPageComponent {
       (role) => NODE_ROLE_LABELS[role],
     ),
   );
-  protected readonly localRoleSwitches = computed<readonly NodeOverviewRoleSwitch[]>(() => {
-    const mode = this.local.mode();
-    const status =
-      mode ??
-      (this.local.status()
-        ? {
-            server: this.local.status()!.roles.includes('server'),
-            worker: this.local.status()!.roles.includes('worker'),
-            managed: false,
-          }
-        : null);
-    if (!this.isAdmin() || !status || this.local.modeUnavailable()) return [];
-    const requested = this.localNode()?.desiredRoles ?? null;
-    const applied = this.local.status()?.roles ?? [];
-    const current = (role: NodeRole) => requested?.includes(role) ?? status[role];
-    return NODE_ROLE_OPTIONS.map(({ value: role, label }) => ({
-      role,
-      label,
-      checked: current(role),
-      pending: !!requested && requested.includes(role) !== applied.includes(role),
-      disabled:
-        !status.managed ||
-        this.local.busy() ||
-        this.local.modeBusy() ||
-        this.local.agentUnavailable() ||
-        (current(role) && !current(role === 'server' ? 'worker' : 'server')),
-    }));
-  });
-  protected readonly localRoleControlNote = computed(() => {
-    if (!this.isAdmin()) return '';
-    if (this.local.modeUnavailable()) return 'État des fonctions indisponible.';
-    return this.local.mode()?.managed === false
-      ? 'Fonctions gérées par la configuration du déploiement.'
-      : '';
-  });
   protected readonly localAdmissionEnabled = computed(() => {
     const node = this.localNode();
     if (!this.isAdmin() || !node) return null;
-    if (!(node.desiredRoles ?? node.roles).includes('worker')) return null;
+    if (!node.roles.includes('worker')) return null;
     const lifecycle = nodeLifecycle(node);
     return lifecycle === 'quarantined' || lifecycle === 'incompatible'
       ? null
@@ -468,8 +420,7 @@ export class NodeCatalogPageComponent {
       status: this.local.status(),
       pairing: this.local.pairing(),
       clusters: this.local.joinableClusters(),
-      localServerActive:
-        this.local.mode()?.server ?? this.local.status()?.roles.includes('server') ?? false,
+      localServerActive: this.local.status()?.roles.includes('server') ?? false,
       canChoose: this.local.canJoin(),
     }),
   );
@@ -622,15 +573,6 @@ export class NodeCatalogPageComponent {
       ? 'Impossible de joindre l’API du cluster. Vérifiez que le serveur et sa base de données sont disponibles.'
       : 'Chargement des nœuds du cluster…';
   });
-  protected readonly reconciliationBanner = computed(() => {
-    const serversCount = this.nodes().filter((node) => node.roles.includes('server')).length;
-    return reconciliationBannerPresentation(
-      this.reconciliationStatus(),
-      serversCount,
-      this.loadState() === 'ready',
-      this.taskStatus(),
-    );
-  });
   protected readonly detailTitle = computed(() => {
     const raw = this.rawNode();
     return raw ? formatNodeLabel(raw.name, raw.displayName) : 'Détails du nœud';
@@ -712,9 +654,6 @@ export class NodeCatalogPageComponent {
         items: [
           {
             label: node.displayName?.trim() || node.name,
-            detail: node.desiredRoles?.length
-              ? `Mode demandé : ${node.desiredRoles.map((role) => NODE_ROLE_LABELS[role]).join(' · ')} (en attente du prochain signal du nœud)`
-              : undefined,
             badges: [
               {
                 label: NODE_LIFECYCLE_LABELS[lifecycle],
@@ -1380,18 +1319,17 @@ export class NodeCatalogPageComponent {
     this.filteredRawNodes().map((node) => {
       const lifecycle = nodeLifecycle(node);
       const record = this.toRecord(node);
-      const isMaster = node.id === this.masterNodeId();
+      const isMaster = node.roles.includes('server');
       return {
         id: node.id,
         title: formatNodeLabel(node.name, node.displayName),
         subtitle: isMaster
-          ? `Coordinateur actif de ${this.clusterName()}`
-          : `Membre de ${this.clusterName()}`,
+          ? `Central de ${this.clusterName()}`
+          : `Worker de ${this.clusterName()}`,
         statusLabel: NODE_LIFECYCLE_LABELS[lifecycle],
         statusTone: NODE_LIFECYCLE_TONES[lifecycle],
         isMaster,
         roles: node.roles.map((role) => NODE_ROLE_LABELS[role]),
-        roleSwitches: this.memberRoleSwitches(node),
         admissionEnabled: this.admissionEnabledFor(node),
         admissionDisabled: this.admissionBusy().has(node.id),
         hardware: this.nodeOverviewHardware(node.inventory ?? null),
@@ -1496,67 +1434,15 @@ export class NodeCatalogPageComponent {
 
     return { accepted, remaining, maximum, note };
   }
-  protected memberRoleSwitches(node: NodeResponse): readonly NodeOverviewRoleSwitch[] {
-    if (!this.isAdmin()) return [];
-    const requested = node.desiredRoles ?? node.roles;
-    const roleEnabled = (role: NodeRole) => requested.includes(role);
-    return NODE_ROLE_OPTIONS.map(({ value: role, label }) => ({
-      role,
-      label,
-      checked: roleEnabled(role),
-      pending:
-        !!node.desiredRoles && node.desiredRoles.includes(role) !== node.roles.includes(role),
-      disabled:
-        this.modeBusy().has(node.id) ||
-        (roleEnabled(role) && !roleEnabled(role === 'server' ? 'worker' : 'server')),
-    }));
-  }
   protected admissionEnabledFor(node: NodeResponse): boolean | null {
     if (!this.isAdmin()) return null;
-    if (!(node.desiredRoles ?? node.roles).includes('worker')) return null;
+    if (!node.roles.includes('worker')) return null;
     const lifecycle = nodeLifecycle(node);
     if (lifecycle === 'quarantined' || lifecycle === 'incompatible') return null;
     return lifecycle !== 'draining';
   }
   protected admissionDisabledFor(node: NodeResponse): boolean {
     return this.admissionBusy().has(node.id);
-  }
-  protected setMemberRole(nodeId: string, role: NodeRole, enabled: boolean): void {
-    const node = this.nodes().find((item) => item.id === nodeId);
-    if (node) void this.updateMemberRole(node, role, enabled);
-  }
-  private async updateMemberRole(
-    node: NodeResponse,
-    role: NodeRole,
-    enabled: boolean,
-  ): Promise<void> {
-    const roles = node.desiredRoles ?? node.roles;
-    const current = { server: roles.includes('server'), worker: roles.includes('worker') };
-    if (current[role] === enabled || this.modeBusy().has(node.id)) return;
-    this.modeBusy.update((busy) => new Set(busy).add(node.id));
-    try {
-      if (
-        await this.nodeMode.requestRole(
-          node.id,
-          node.displayName?.trim() || node.name,
-          current,
-          role,
-          enabled,
-          node.status === 'online',
-        )
-      ) {
-        const nodes = await firstValueFrom(this.clusterApi.listNodes());
-        this.nodes.set(nodes);
-      }
-    } catch {
-      this.notifications.show('Impossible d’actualiser les fonctions du nœud.');
-    } finally {
-      this.modeBusy.update((busy) => {
-        const next = new Set(busy);
-        next.delete(node.id);
-        return next;
-      });
-    }
   }
   protected setMemberAdmission(nodeId: string, enabled: boolean): void {
     const node = this.nodes().find((item) => item.id === nodeId);
@@ -1620,7 +1506,6 @@ export class NodeCatalogPageComponent {
     this.isAdmin()
       ? [
           { id: 'identity', label: 'Nom et étiquettes' },
-          { id: 'promote', label: 'Promouvoir en Maître' },
           ...(this.removalBusy()
             ? []
             : [{ id: 'delete', label: 'Supprimer', tone: 'danger' as const }]),
@@ -1640,10 +1525,6 @@ export class NodeCatalogPageComponent {
   protected onMemberCardAction(id: string, actionId: string): void {
     const row = this.filteredNodes().find((item) => item.id === id);
     if (!row) return;
-    if (actionId === 'promote') {
-      this.promoteNodeToMaster(row);
-      return;
-    }
     if (actionId !== 'delete') {
       this.onNodeAction({ actionId, row });
       return;
@@ -1658,20 +1539,6 @@ export class NodeCatalogPageComponent {
       });
   }
 
-  protected promoteNodeToMaster(row: NodeRecord): void {
-    const fullNode = this.nodes().find((n) => n.id === row.id);
-    const localNode = this.localNode();
-    this.dialog.open(LeadershipTransitionDialogComponent, {
-      data: {
-        targetNodeId: row.id,
-        targetNodeName: row.name,
-        currentNodeName: localNode?.name || 'Ce nœud',
-        targetNodeHost: fullNode?.name || row.name,
-      },
-      disableClose: true,
-      width: '540px',
-    });
-  }
   protected runMemberBulk(actionId: 'drain' | 'resume' | 'delete'): void {
     const rows = this.filteredNodes().filter((row) => this.selectedMemberIds().has(row.id));
     if (!rows.length) return;
@@ -1918,9 +1785,6 @@ export class NodeCatalogPageComponent {
         switchMap(() =>
           forkJoin({
             nodes: this.clusterApi.listNodes(),
-            reconciliation: this.clusterApi.reconciliationStatus().pipe(catchError(() => of(null))),
-            tasks: this.clusterApi.taskStatus().pipe(catchError(() => of(null))),
-            leadership: this.clusterApi.leadershipStatus().pipe(catchError(() => of(null))),
             pending: this.http.get<readonly PendingNodeEnrollmentResponse[]>(
               '/api/v1/nodes/enrollment-requests',
             ),
@@ -1936,17 +1800,12 @@ export class NodeCatalogPageComponent {
         ),
         takeUntilDestroyed(),
       )
-      .subscribe(({ nodes, reconciliation, tasks, leadership, pending, activity }) => {
+      .subscribe(({ nodes, pending, activity }) => {
         if (activity) {
           this.activeTasks.set(activity);
           this.activityLoaded.set(true);
         }
-        if (leadership?.masterNodeId) {
-          this.masterNodeId.set(leadership.masterNodeId);
-        }
         this.nodes.set(nodes);
-        this.reconciliationStatus.set(reconciliation);
-        this.taskStatus.set(tasks);
         this.pendingEnrollments.set(pending);
         this.loadState.set('ready');
       });

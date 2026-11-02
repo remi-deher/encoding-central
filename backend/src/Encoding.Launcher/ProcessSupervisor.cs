@@ -1,5 +1,3 @@
-using Encoding.Core.Nodes;
-
 namespace Encoding.Launcher;
 
 internal interface IManagedProcess
@@ -11,47 +9,20 @@ internal interface IManagedProcess
 }
 
 /// <summary>
-/// Maintient les processus du nœud conformes à son mode : le serveur (API et interface) ne tourne que dans les modes
-/// qui l’incluent ; l’agent tourne toujours (présence dans le cluster, découverte) et redémarre quand sa fonction worker change.
-/// Un processus qui s’arrête de lui-même est relancé avec un délai croissant.
+/// Maintient les deux processus du central : le serveur (API et interface) et l’agent (worker intégré, identité, présence).
+/// Les deux tournent toujours. Un processus qui s’arrête de lui-même est relancé avec un délai croissant.
 /// </summary>
 internal sealed class ProcessSupervisor(
     IManagedProcess server,
     IManagedProcess agent,
-    Func<NodeMode, IReadOnlyDictionary<string, string>> serverEnvironment,
-    Func<NodeMode, IReadOnlyDictionary<string, string>> agentEnvironment,
+    Func<IReadOnlyDictionary<string, string>> serverEnvironment,
+    Func<IReadOnlyDictionary<string, string>> agentEnvironment,
     TimeSpan grace,
     Func<DateTimeOffset> clock)
 {
     private static readonly TimeSpan[] Backoff = [TimeSpan.Zero, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(30)];
     private readonly SemaphoreSlim gate = new(1, 1);
     private readonly Dictionary<IManagedProcess, (int Failures, DateTimeOffset NextStart, DateTimeOffset StartedAt)> history = [];
-    private NodeMode mode = NodeMode.Both;
-    private NodeMode? agentRunsAs;
-
-    public NodeMode Mode => mode;
-
-    /// <summary>Adopte un nouveau mode : arrête ce qui ne doit plus tourner, relance l’agent si ses rôles changent, démarre le reste.</summary>
-    public async Task ApplyAsync(NodeMode desired, CancellationToken cancellationToken)
-    {
-        await gate.WaitAsync(cancellationToken);
-        try
-        {
-            mode = NodeMode.Validate(desired);
-            if (!mode.Server && server.IsRunning) await StopOnPurposeAsync(server);
-            if (agent.IsRunning && agentRunsAs is { } running && running != mode)
-                await StopOnPurposeAsync(agent);
-            Reconcile();
-        }
-        finally { gate.Release(); }
-    }
-
-    // Un arrêt voulu n'est pas une panne : il ne compte pas dans le délai de relance.
-    private async Task StopOnPurposeAsync(IManagedProcess process)
-    {
-        await process.StopAsync(grace);
-        history.Remove(process);
-    }
 
     /// <summary>Relance un processus attendu mais arrêté, en respectant le délai de relance ; appelé périodiquement.</summary>
     public async Task ReconcileAsync(CancellationToken cancellationToken)
@@ -74,9 +45,8 @@ internal sealed class ProcessSupervisor(
 
     private void Reconcile()
     {
-        if (mode.Server) EnsureRunning(server, serverEnvironment(mode));
-        if (!agent.IsRunning) agentRunsAs = null;
-        if (EnsureRunning(agent, agentEnvironment(mode))) agentRunsAs = mode;
+        EnsureRunning(server, serverEnvironment());
+        EnsureRunning(agent, agentEnvironment());
     }
 
     private bool EnsureRunning(IManagedProcess process, IReadOnlyDictionary<string, string> environment)

@@ -79,11 +79,6 @@ public static class AiToolEndpoints
                 return Results.Ok(await service.GenerateAsync(request.Provider, request.Prompt, ct, allowModelChanges: request.AllowModelChanges));
             }))
             .RequireAuthorization(AuthExtensions.AdministratorPolicy).RequireRateLimiting(AuthExtensions.HeavyOperationsPolicy);
-        // Signed peer admission + AES-GCM payload are checked inside ReceiveAsync, independently of user sessions.
-        app.MapPost(AiClusterTransport.Path, async (HttpContext http, AiClusterTransport transport, AiClusterService service, CancellationToken ct) =>
-            await GuardAsync(() => transport.ReceiveAsync(http, service, ct)))
-            .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(20 * 1024 * 1024))
-            .AllowAnonymous().RequireRateLimiting(AuthExtensions.ClusterMeshPolicy);
     }
     private static IResult PublicSettings(AiSettingsDto settings) => Results.Ok(new
     {

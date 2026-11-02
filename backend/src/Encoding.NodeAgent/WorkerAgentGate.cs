@@ -1,0 +1,47 @@
+using Encoding.Core.Nodes;
+using Encoding.NodeAgent.Services;
+
+namespace Encoding.NodeAgent;
+
+/// <summary>
+/// Barrière des routes de l'agent (<c>/api/v1/worker/*</c>) : le secret local est exigé, sauf deux exceptions du premier démarrage
+/// de l'image worker, avant tout rattachement :
+/// choisir le central (<c>POST clusters</c>, tant qu'aucun central n'est connu) et lire le matériel détecté (<c>GET hardware</c>,
+/// tant que le worker n'est pas rattaché). Les lectures sont aussi protégées : l'état contient les clés de jumelage.
+/// </summary>
+internal static class WorkerAgentGate
+{
+    public const string RoutePrefix = "/api/v1/worker";
+    public const string ClustersPath = "/api/v1/worker/clusters";
+    public const string HardwarePath = "/api/v1/worker/hardware";
+
+    public static void Use(WebApplication app, NodeAgentOptions options) =>
+        app.Use(async (context, next) =>
+        {
+            if (context.Request.Path.StartsWithSegments(RoutePrefix)
+                && !LocalEnrollment.Matches(options.LocalEnrollmentSecretFile, context.Request.Headers[LocalEnrollment.HeaderName].ToString())
+                && !await IsOpenBeforeEnrollmentAsync(context, options))
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return;
+            }
+            await next();
+        });
+
+    private static async Task<bool> IsOpenBeforeEnrollmentAsync(HttpContext context, NodeAgentOptions options)
+    {
+        if (!options.WorkerImage) return false;
+        var path = context.Request.Path;
+        var identity = await context.RequestServices.GetRequiredService<WorkerIdentityStore>().GetAsync(context.RequestAborted);
+        if (HttpMethods.IsPost(context.Request.Method) && path.Equals(ClustersPath, StringComparison.OrdinalIgnoreCase))
+            return string.IsNullOrWhiteSpace(identity.ApiBaseUrl);
+        if (HttpMethods.IsGet(context.Request.Method) && path.Equals(HardwarePath, StringComparison.OrdinalIgnoreCase))
+            return !identity.IsEnrolled;
+        return false;
+    }
+}
+
+/// <summary>Matériel détecté, sans identifiant, secret ni état de rattachement.</summary>
+public sealed record WorkerHardwareResponse(Encoding.Contracts.Nodes.NodeInventory Inventory, IReadOnlyList<WorkerHardwareTool> Tools);
+
+public sealed record WorkerHardwareTool(string ToolId, IReadOnlyList<string> AccelerationTypes);

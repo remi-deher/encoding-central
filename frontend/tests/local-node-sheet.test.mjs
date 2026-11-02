@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadModel } from './model-loader.mjs';
-const { localNodeSheet, formatLastSignal, clusterJoinSteps, reconciliationBannerPresentation } =
-  await loadModel('node-management');
+const { localNodeSheet, formatLastSignal, clusterJoinSteps } = await loadModel('node-management');
 const { formatNodeLabel } = await loadModel('cluster');
 
 const NOW = Date.parse('2026-10-15T12:00:00Z');
@@ -30,7 +29,6 @@ const node = {
   id: 'n1',
   displayName: 'NAS principal',
   lastSeenAt: '2026-10-15T11:59:56Z',
-  desiredRoles: null,
   inventory: {
     operatingSystem: 'Linux',
     architecture: 'X64',
@@ -43,7 +41,6 @@ const node = {
 const base = {
   status,
   node,
-  mode: { server: true, worker: true },
   standalone: false,
   clusterName: 'Maison',
   agentUnavailable: false,
@@ -76,7 +73,7 @@ test('a healthy member shows load, hardware, CPU model, GPU and tools', () => {
 test('a disabled worker has no processing metric and no tools', () => {
   const sheet = localNodeSheet({
     ...base,
-    mode: { server: true, worker: false },
+    status: { ...status, roles: ['server'] },
     activeTasks: null,
   });
   assert.equal(section(sheet, 'state').metrics[0].value, 'Non applicable');
@@ -95,13 +92,6 @@ test('an unreachable agent keeps last known values and never shows zero', () => 
   assert.equal(section(sheet, 'state').metrics[0].value, 'Indisponible');
   const stale = localNodeSheet({ ...base, agentUnavailable: true });
   assert.equal(section(stale, 'state').metrics[0].meter.stale, true);
-});
-
-test('a pending role change is shown apart from the applied roles', () => {
-  const sheet = localNodeSheet({ ...base, node: { ...node, desiredRoles: ['server'] } });
-  assert.equal(sheet.notices[0].title, 'Changement de fonctions en attente');
-  const worker = section(sheet, 'state').items[1].badges.map((b) => b.label);
-  assert.deepEqual(worker, ['Actif', 'Demandé : inactif']);
 });
 
 test('an old agent without GPU data says so instead of claiming none', () => {
@@ -149,62 +139,6 @@ test('cluster join step waiting highlights the verification code as heroCode', (
   assert.equal(waiting.heroCode?.badge, 'En attente d’approbation');
 });
 
-test('reconciliationBannerPresentation returns Serveur unique when single server and 0 peers', () => {
-  const banner = reconciliationBannerPresentation(
-    {
-      enabled: true,
-      disabledReason: null,
-      discoveryAvailable: true,
-      discoveryError: null,
-      peers: [],
-    },
-    1,
-    true,
-  );
-  assert.equal(banner.title, 'Serveur unique');
-  assert.match(banner.description, /Ce cluster ne comporte qu’un seul serveur/);
-});
-
-test('reconciliationBannerPresentation warns about mDNS when multiple servers and 0 peers discovered', () => {
-  const banner = reconciliationBannerPresentation(
-    {
-      enabled: true,
-      disabledReason: null,
-      discoveryAvailable: true,
-      discoveryError: null,
-      peers: [],
-    },
-    2,
-    true,
-  );
-  assert.equal(banner.title, 'Aucun serveur pair détecté');
-  assert.match(banner.description, /Aucun pair n’a été découvert/);
-});
-
-test('reconciliationBannerPresentation displays active status when peers are connected', () => {
-  const banner = reconciliationBannerPresentation(
-    {
-      enabled: true,
-      disabledReason: null,
-      discoveryAvailable: true,
-      discoveryError: null,
-      peers: [
-        {
-          url: 'http://node2:5080/',
-          configured: false,
-          discovered: true,
-          lastAttemptAt: '2026-10-17T16:00:00Z',
-          lastSuccessAt: '2026-10-17T16:00:00Z',
-          lastError: null,
-        },
-      ],
-    },
-    2,
-    true,
-  );
-  assert.match(banner.title, /Synchronisation active avec 1 serveur/);
-});
-
 test('formatNodeLabel formats displayName (hostname) when distinct', () => {
   assert.equal(formatNodeLabel('ENCODING-50', 'TRUENAS'), 'TRUENAS (ENCODING-50)');
 });
@@ -218,41 +152,4 @@ test('formatNodeLabel falls back gracefully when either name is missing', () => 
   assert.equal(formatNodeLabel('ENCODING-50', null), 'ENCODING-50');
   assert.equal(formatNodeLabel('', 'TRUENAS'), 'TRUENAS');
   assert.equal(formatNodeLabel('', ''), 'Nœud inconnu');
-});
-
-test('isolated task owner preserves computation and shows deferred source writes', () => {
-  const banner = reconciliationBannerPresentation(null, 2, true, {
-    isolated: true,
-    waitingSourceWrites: 3,
-    pendingTransfers: 0,
-    observations: [],
-  });
-  assert.match(banner.title, /isolé/);
-  assert.match(banner.description, /3 opération/);
-  assert.match(banner.description, /ne peut pas être repris automatiquement/);
-  assert.equal(banner.isAlert, true);
-});
-
-test('a received transfer is shown as inactive until activation', () => {
-  const banner = reconciliationBannerPresentation(null, 2, true, {
-    isolated: false,
-    waitingSourceWrites: 0,
-    pendingTransfers: 1,
-    observations: [],
-  });
-  assert.match(banner.description, /réception inactive/);
-  assert.match(banner.description, /avant son activation/);
-});
-
-test('a neutralized local server does not appear ready to resume', () => {
-  const banner = reconciliationBannerPresentation(null, 2, true, {
-    isolated: false,
-    neutralized: true,
-    waitingSourceWrites: 0,
-    pendingTransfers: 0,
-    observations: [],
-  });
-  assert.match(banner.title, /neutralisé/);
-  assert.match(banner.description, /réadmis/);
-  assert.equal(banner.isAlert, true);
 });

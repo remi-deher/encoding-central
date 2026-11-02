@@ -112,34 +112,6 @@ public sealed class ResourceCatalogTests
     }
 
     [Fact]
-    public async Task ResourceMetadataReplicatesButTheFilesStayInTheLocalStore()
-    {
-        await using var source = await Scope.CreateAsync();
-        await using var target = await Scope.CreateAsync();
-        var clusterId = Guid.NewGuid();
-        await new ClusterIdentityRepository(source.Source).AdoptAsync(clusterId, "Media", CancellationToken.None);
-        await new ClusterIdentityRepository(target.Source).AdoptAsync(clusterId, "Media", CancellationToken.None);
-        var file = await source.Blobs.PutAsync(new MemoryStream(Font), "Arial.ttf", "font", CancellationToken.None);
-        var id = Guid.NewGuid();
-        await source.Repository.CreateAsync(id, "font", "Crunchyroll", "", [new(file.Name, file.Sha256)], CancellationToken.None);
-
-        var key = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
-        using var sourceKey = new ClusterDataKeyStore(clusterId, key);
-        using var targetKey = new ClusterDataKeyStore(clusterId, key);
-        var sourceMesh = new ClusterEntityReconciliation(source.Source, sourceKey, new EphemeralDataProtectionProvider(), NullLogger<ClusterEntityReconciliation>.Instance);
-        var targetMesh = new ClusterEntityReconciliation(target.Source, targetKey, new EphemeralDataProtectionProvider(), NullLogger<ClusterEntityReconciliation>.Instance);
-        await sourceMesh.CaptureLocalChangesAsync(CancellationToken.None);
-        var changes = await new ClusterReconciliationRepository(source.Source).GetEventsAfterAsync(clusterId, new Dictionary<Guid, long>(), ClusterReconciliationRepository.MaximumBatchSize, CancellationToken.None);
-        await new ClusterReconciliationRepository(target.Source).ApplyIncomingAsync(changes, CancellationToken.None);
-        await targetMesh.ApplyPendingAsync(CancellationToken.None);
-
-        var replicated = await target.Repository.GetAsync(id, CancellationToken.None);
-        Assert.Equal("Crunchyroll", replicated!.Summary.Name);
-        Assert.Equal(file.Sha256, Assert.Single(Assert.Single(replicated.Versions).Files).Sha256);
-        Assert.False(target.Blobs.Exists(file.Sha256));
-    }
-
-    [Fact]
     public async Task PublishingChecksThatTheReferencedResourceVersionExists()
     {
         await using var scope = await Scope.CreateAsync();

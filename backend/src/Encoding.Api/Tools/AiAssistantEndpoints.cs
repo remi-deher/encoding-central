@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using Encoding.Api.Auth;
+using Encoding.Api.Infrastructure;
 using Encoding.Contracts.Tools;
 using Encoding.Api.Mcp;
 
@@ -57,22 +58,14 @@ public static class AiAssistantEndpoints
             }))
         .AllowAssistantConversation();
 
-        group.MapPost("/messages", async (AiAssistantMessageRequest request, HttpContext http, AiAssistantService service, AiClusterTransport transport,
+        group.MapPost("/messages", async (AiAssistantMessageRequest request, HttpContext http, AiAssistantService service, ClusterPeerIdentityStore identity,
             AiClusterService cluster, CancellationToken ct) =>
             await GuardAsync(async () =>
             {
-                if (await cluster.CoordinatorAsync(request.ConversationId, ct) is { } coordinatorId && coordinatorId != transport.LocalId
-                    && !await TakeOverLostCoordinatorAsync(request.ConversationId!, coordinatorId, transport, cluster, ct))
-                {
-                    if (!Guid.TryParse(http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var ownerId)
-                        || ownerId == Guid.Empty)
-                        return Results.BadRequest(new { title = "Identité utilisateur indisponible." });
-                    var forwarded = await transport.CallNodeAsync<AiAssistantForwardResponse>(coordinatorId, "assistant-message",
-                        new AiAssistantForwardRequest(request, ownerId, http.User.IsInRole("admin")), TimeSpan.FromMinutes(35), ct);
-                    if (forwarded.InvalidRequest) return Results.BadRequest(new { title = forwarded.Error });
-                    if (forwarded.Error is not null) return Results.Conflict(new { title = forwarded.Error });
-                    return forwarded.Result is null ? Results.NotFound() : Results.Ok(forwarded.Result);
-                }
+                // Une discussion préparée par un autre serveur (ancienne installation) est reprise par le central.
+                if (await cluster.CoordinatorAsync(request.ConversationId, ct) is { } coordinatorId && coordinatorId != identity.PeerId
+                    && !await cluster.TryTakeOverAsync(request.ConversationId!, ct))
+                    return Results.Conflict(new { title = "Cette discussion n’est plus disponible sur le central." });
                 var result = await service.SendAsync(request, http.User, ct);
                 return result is null ? Results.NotFound() : Results.Ok(result);
             }))
@@ -80,7 +73,7 @@ public static class AiAssistantEndpoints
         .AllowAssistantConversation()
         .RequireRateLimiting(AuthExtensions.HeavyOperationsPolicy);
 
-        group.MapPost("/requests/{requestId:guid}/cancel", async (Guid requestId, HttpContext http, AiAssistantService service, AiClusterTransport transport,
+        group.MapPost("/requests/{requestId:guid}/cancel", async (Guid requestId, HttpContext http, AiAssistantService service,
             AiClusterService cluster, CancellationToken ct) =>
             await GuardAsync(async () =>
             {
@@ -89,17 +82,7 @@ public static class AiAssistantEndpoints
                 if (coordinatorId is null)
                     return Results.Conflict(new { title = "Aucune demande active ne correspond à cet identifiant." });
 
-                bool cancelled;
-                if (coordinatorId == transport.LocalId)
-                    cancelled = await service.CancelRequestAsync(requestId, http.User, ct);
-                else
-                {
-                    if (!Guid.TryParse(http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var ownerId)
-                        || ownerId == Guid.Empty)
-                        return Results.BadRequest(new { title = "Identité utilisateur indisponible." });
-                    cancelled = await transport.CallNodeAsync<bool>(coordinatorId.Value, "assistant-cancel",
-                        new AiAssistantForwardCancel(ownerId, requestId), TimeSpan.FromSeconds(15), ct);
-                }
+                var cancelled = await service.CancelRequestAsync(requestId, http.User, ct);
                 return cancelled
                     ? Results.Accepted(value: new { requestId, state = "cancellation-requested" })
                     : Results.Conflict(new { title = "Aucune demande active ne correspond à cet identifiant." });
@@ -205,14 +188,6 @@ public static class AiAssistantEndpoints
                 : Results.Conflict(new { title = "Cette proposition n’est plus en attente de décision." })))
         .AllowAssistantConversation();
     }
-
-    /// <summary>
-    /// Reprise d'une discussion dont le coordinateur ne répond à aucune sonde ; faux (donc transmission au coordinateur, qui échoue
-    /// proprement) s'il répond encore ou si l'historique validé n'est pas présent sur ce nœud.
-    /// </summary>
-    private static async Task<bool> TakeOverLostCoordinatorAsync(string conversationId, Guid coordinatorId, AiClusterTransport transport,
-        AiClusterService cluster, CancellationToken ct) =>
-        await transport.FindNodeUrlAsync(coordinatorId, ct) is null && await cluster.TryTakeOverAsync(conversationId, ct);
 
     private static async Task<IResult> GuardAsync(Func<Task<IResult>> action)
     {

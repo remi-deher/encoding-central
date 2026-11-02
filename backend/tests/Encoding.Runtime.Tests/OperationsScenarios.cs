@@ -177,8 +177,7 @@ internal static class OperationsScenarios
 
             using var details = JsonDocument.Parse(await client.GetStringAsync("/health/details"));
             var checks = details.RootElement.GetProperty("checks").EnumerateArray().ToDictionary(item => item.GetProperty("name").GetString()!, item => item.GetProperty("status").GetString());
-            Check(new[] { "database", "migrations", "cluster", "cluster-reconciliation", "flow-backups", "artifact-storage", "backup-storage" }.All(checks.ContainsKey), "/health/details liste chaque contrôle.");
-            Check(checks["cluster-reconciliation"] == "degraded", "Une réconciliation non démarrée est visible dans la santé détaillée sans bloquer la disponibilité locale.");
+            Check(new[] { "database", "migrations", "cluster", "flow-backups", "artifact-storage", "backup-storage" }.All(checks.ContainsKey), "/health/details liste chaque contrôle.");
             Check(checks["database"] == "healthy" && checks["migrations"] == "healthy" && checks["artifact-storage"] == "healthy", "Base, schéma et volumes sont sains.");
             Check(checks["cluster"] == "degraded", "Un cluster sans worker en ligne est dégradé, pas en panne.");
             Check(!(await client.GetStringAsync("/health/details")).Contains(directory, StringComparison.Ordinal), "Les chemins du serveur ne sont pas exposés.");

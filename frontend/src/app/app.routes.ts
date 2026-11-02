@@ -144,7 +144,8 @@ const applicationRoutes: Routes = [
         visible: false,
         keywords: ['polices', 'fonts', 'fichiers', 'profils', 'sous-titres'],
       },
-      description: 'Partagez des polices, des profils et des fichiers de sous-titres avec tous les nœuds du cluster.',
+      description:
+        'Partagez des polices, des profils et des fichiers de sous-titres avec tous les nœuds du cluster.',
     },
   },
   {

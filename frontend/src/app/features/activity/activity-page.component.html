@@ -171,12 +171,6 @@
                 @if (file.detail) {
                   <span class="item-detail">{{ file.detail }}</span>
                 }
-                @if (file.quarantineReason) {
-                  <span class="item-detail item-detail_warning">
-                    En quarantaine en attendant une décision sûre du cluster. Un administrateur peut
-                    attester l’arrêt complet du propriétaire et forcer une reprise depuis la source.
-                  </span>
-                }
                 @if (file.status === 'active' && file.progress !== null) {
                   <mat-progress-bar
                     mode="determinate"
@@ -271,19 +265,6 @@
         <span>Remettre en file</span>
       </button>
     }
-    @if (canForceSourceRetry()) {
-      <button
-        matButton="text"
-        type="button"
-        class="header-action-btn"
-        [disabled]="actionBusy()"
-        (click)="forceSourceRetrySelected()"
-        title="Neutraliser le propriétaire arrêté et relancer depuis la source"
-      >
-        <app-icon name="refresh" />
-        <span>Forcer depuis la source</span>
-      </button>
-    }
   }
 </ng-template>
 
@@ -297,18 +278,6 @@
     >
       <mat-tab label="Information">
         <div class="detail-tab-pane">
-          @if (file.quarantineReason) {
-            <p class="activity-feedback" role="alert">
-              Le cluster vérifie qu’aucun autre nœud ne traite ce média. Un administrateur peut
-              attester l’arrêt complet du propriétaire et de ses workers pour libérer cette
-              tentative source après 135 secondes. Une publication confirmée ou incertaine bloque
-              cette action.
-              @if (file.conflictingExecutionId) {
-                Référence de l’exécution en conflit : {{ file.conflictingExecutionId }}.
-              }
-              Détail : {{ file.quarantineReason }}
-            </p>
-          }
           <app-activity-execution-summary
             [execution]="selectedExecution()"
             [file]="file"
@@ -408,16 +377,6 @@
   @if (canResume()) {
     <button matButton="filled" type="button" [disabled]="actionBusy()" (click)="resumeSelected()">
       Remettre en file depuis la source
-    </button>
-  }
-  @if (canForceSourceRetry()) {
-    <button
-      matButton="filled"
-      type="button"
-      [disabled]="actionBusy()"
-      (click)="forceSourceRetrySelected()"
-    >
-      Neutraliser et remettre en file depuis la source
     </button>
   }
   @if (canCancel()) {

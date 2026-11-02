@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
-# Image unique : serveur (API et interface web), worker et lanceur. Contexte de construction : racine du dépôt.
-# Le lanceur démarre et arrête le serveur et l'agent selon le mode du nœud (architecture 0036).
+# Deux images : `central` (API, interface web et worker intégré, autonome, seule autorité du cluster) et `worker`
+# (agent et interface seulement, sans base de données, toujours relié à un central). Contexte de construction : racine du dépôt.
+# Dans `central`, le lanceur démarre et surveille l'API et l'agent ; aucun mode ne se change à chaud.
 ARG DOTNET_VERSION=10.0
 
 FROM node:24-bookworm-slim AS ai-cli-build
@@ -22,7 +23,8 @@ RUN --mount=type=cache,target=/root/.npm \
       npm ci --strict-ssl=true; \
     fi
 COPY frontend/ ./
-RUN npm run build
+RUN npm run build \
+ && npm run build -- --configuration production,worker --output-path dist/worker
 
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
 WORKDIR /source/backend
@@ -49,9 +51,7 @@ RUN dotnet publish ./src/Encoding.Api/Encoding.Api.csproj --configuration Releas
  && dotnet publish ./src/Encoding.NodeAgent/Encoding.NodeAgent.csproj --configuration Release --output /app/agent --no-restore \
  && dotnet publish ./src/Encoding.Launcher/Encoding.Launcher.csproj --configuration Release --output /app/launcher --no-restore
 
-FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime
-COPY --from=ai-cli-build /opt/encoding/ai-cli /opt/encoding/ai-cli
-ENV PATH="/opt/encoding/ai-cli/node_modules/.bin:${PATH}"
+FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime-common
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     --mount=type=secret,id=proxy_ca,required=false \
@@ -88,33 +88,44 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 RUN mkdir -p /opt/encoding/custom-plugins /opt/encoding/managed-tools /var/lib/encoding-node /var/lib/encoding/flow-backups /var/lib/encoding/runtime-artifacts /var/lib/encoding/plugin-keys \
  && chown -R $APP_UID:$APP_UID /opt/encoding/custom-plugins /opt/encoding/managed-tools /var/lib/encoding-node /var/lib/encoding
 WORKDIR /app
-COPY --from=build /app/api ./api
-COPY --from=build /app/agent ./agent
-COPY --from=build /app/launcher ./launcher
-COPY --from=frontend-build /frontend/dist/frontend/browser ./api/wwwroot
-# Mode initial du nœud : serveur et worker. Un mode enregistré dans le dossier de données le remplace.
-# Base unique : SQLite local par nœud (architectures 0043/0049).
 # Encodage matériel : NVIDIA_* est lu par le NVIDIA Container Toolkit (ignoré sans GPU NVIDIA) ; ENCODING_GPU_DEVICE
 # (ex. /dev/dri/renderD129) et LIBVA_DRIVER_NAME (iHD, i965, radeonsi) restent libres pour forcer le choix sur l'hôte.
 ENV NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
+ENV Node__DataDirectory=/var/lib/encoding-node \
+    Runtime__ArtifactDirectory=/var/lib/encoding-node/runtime-artifacts \
+    Runtime__CustomPluginDirectory=/opt/encoding/custom-plugins \
+    Runtime__ManagedToolDirectory=/opt/encoding/managed-tools \
+    Logging__Console__FormatterName=json \
+    Logging__Console__FormatterOptions__UseUtcTimestamp=true \
+    Logging__Console__FormatterOptions__IncludeScopes=true
+
+FROM runtime-common AS central
+COPY --from=ai-cli-build /opt/encoding/ai-cli /opt/encoding/ai-cli
+ENV PATH="/opt/encoding/ai-cli/node_modules/.bin:${PATH}"
+COPY --from=build /app/api ./api
+COPY --from=build /app/agent ./agent
+COPY --from=build /app/launcher ./launcher
+COPY --from=frontend-build /frontend/dist/frontend/browser ./api/wwwroot
 ENV Node__Roles=server,worker \
     ConnectionStrings__Cluster="Data Source=/var/lib/encoding-node/cluster.db" \
     Node__DataDirectory=/var/lib/encoding-node \
     PluginSettings__KeyDirectory=/var/lib/encoding-node/plugin-keys \
     FlowBackups__Directory=/var/lib/encoding-node/flow-backups \
-    Runtime__ArtifactDirectory=/var/lib/encoding-node/runtime-artifacts \
-    Runtime__CustomPluginDirectory=/opt/encoding/custom-plugins \
     PluginStore__Directory=/var/lib/encoding-node/plugin-store \
-    PluginStore__OfficialRepositoryUrl=https://raw.githubusercontent.com/remi-deher/encoding-store/main/repository.json \
-    Logging__Console__FormatterName=json \
-    Logging__Console__FormatterOptions__UseUtcTimestamp=true \
-    Logging__Console__FormatterOptions__IncludeScopes=true
-# 8080 : API, interface et échanges signés du maillage.
-# L'agent (8081) et le lanceur (8082) restent locaux au conteneur.
+    PluginStore__OfficialRepositoryUrl=https://raw.githubusercontent.com/remi-deher/encoding-store/main/repository.json
 EXPOSE 8080
-# Exécution sans root ($APP_UID, 1654 dans l'image de base). GPU : ajouter le GID du groupe de renderD128 au conteneur
-# (group_add, voir docker-compose.gpu.yml). Les volumes déjà créés par une ancienne image (root) doivent être rendus
-# à cet utilisateur : voir docs/operations/reverse-proxy.md.
 USER $APP_UID
 ENTRYPOINT ["dotnet", "/app/launcher/Encoding.Launcher.dll"]
+
+FROM runtime-common AS worker
+COPY --from=build /app/agent ./agent
+COPY --from=frontend-build /frontend/dist/worker/browser ./api/wwwroot
+ENV Node__Roles=worker \
+    Node__WorkerImage=true \
+    WorkerUi__Expose=true \
+    PluginSettings__KeyDirectory=/var/lib/encoding-node/plugin-keys \
+    PluginStore__Directory=/var/lib/encoding-node/plugin-store
+EXPOSE 8081
+USER $APP_UID
+ENTRYPOINT ["dotnet", "/app/agent/Encoding.NodeAgent.dll"]

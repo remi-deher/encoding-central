@@ -1,12 +1,4 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  DestroyRef,
-  inject,
-  signal,
-} from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
@@ -15,7 +7,6 @@ import { MatDialogActions, MatDialogClose, MatDialogContent } from '@angular/mat
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { DialogFrameComponent } from '../../../shared/ui/dialog-frame.component';
-import { ClusterApi } from '../../../shared/services/cluster-api';
 import { ClipboardService } from '../../../shared/services/clipboard.service';
 import { FileDownload } from '../../../shared/services/file-download';
 import { NotificationService } from '../../../shared/services/notification.service';
@@ -172,7 +163,6 @@ export class ReverseProxyDialogComponent {
   private readonly downloads = inject(FileDownload);
   private readonly notifications = inject(NotificationService);
   private readonly publicUrl = inject(PublicUrlService);
-  private readonly destroyRef = inject(DestroyRef);
 
   protected readonly kinds: readonly ProxyKind[] = ['nginx', 'caddy', 'traefik', 'npm'];
   protected readonly labels = PROXY_LABELS;
@@ -197,32 +187,6 @@ export class ReverseProxyDialogComponent {
       https: this.https() && this.proxy() !== 'npm',
     }),
   );
-
-  constructor() {
-    // Les autres serveurs du cluster, tels que ce nœud les joint : une adresse par ligne.
-    inject(ClusterApi)
-      .reconciliationStatus()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (status) => {
-          const hosts = status.peers
-            .map((peer) => peer.url)
-            .filter((url) => !!url)
-            .map((url) => {
-              try {
-                return new URL(url).host;
-              } catch {
-                return '';
-              }
-            })
-            .filter((host) => host && host !== window.location.host);
-          if (hosts.length) {
-            this.backendsText.update((text) => [text, ...hosts].join('\n'));
-          }
-        },
-        error: () => undefined,
-      });
-  }
 
   protected async copy(): Promise<void> {
     const ok = await this.clipboard.copy(this.output().text);

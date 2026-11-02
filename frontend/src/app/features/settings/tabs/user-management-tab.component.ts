@@ -1,4 +1,3 @@
-import { JoinUserCollisionsComponent } from './join-user-collisions.component';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -45,7 +44,6 @@ interface UserRow {
   selector: 'app-user-management-tab',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    JoinUserCollisionsComponent,
     ConfigurationSectionComponent,
     SettingGroupComponent,
     SettingRowComponent,
@@ -54,7 +52,6 @@ interface UserRow {
     RecordFormComponent,
   ],
   template: `
-    <app-join-user-collisions />
     <app-configuration-section
       title="Utilisateurs"
       description="Les personnes qui peuvent accéder au cluster."

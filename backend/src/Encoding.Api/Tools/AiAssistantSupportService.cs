@@ -13,7 +13,6 @@ using Encoding.Api.Nodes;
 using Encoding.Api.Mcp;
 using Encoding.Api.Libraries;
 using Encoding.Api.Infrastructure;
-using Encoding.Api.Cluster;
 using Encoding.Contracts.Executions;
 using Encoding.Contracts.Flows;
 using Encoding.Contracts.Libraries;
@@ -26,7 +25,7 @@ namespace Encoding.Api.Tools;
 public sealed class AiAssistantSupportService(
     AiClusterStore store,
     AiClusterService cluster,
-    AiClusterTransport transport,
+    Encoding.Api.Infrastructure.ClusterPeerIdentityStore identity,
     FlowRepository flows,
     ExecutionRepository executions,
     LibraryWorkflowRepository libraryWorkflows,
@@ -39,7 +38,7 @@ public sealed class AiAssistantSupportService(
 {
     public AiClusterStore Store => store;
     public AiClusterService Cluster => cluster;
-    public AiClusterTransport Transport => transport;
+    public Guid LocalId => identity.PeerId;
     public FlowRepository Flows => flows;
     public ExecutionRepository Executions => executions;
     public LibraryWorkflowRepository LibraryWorkflows => libraryWorkflows;

@@ -48,7 +48,7 @@ public sealed class WorkerProcessLossTests
             PrepareStorePackages(Path.Combine(root, "api"));
             var secret = Path.Combine(root, "local-enrollment.secret");
             File.WriteAllText(secret, Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
-            var api = Start("api", typeof(ClusterReconciliationRepository).Assembly.Location, processes, env =>
+            var api = Start("api", typeof(ClusterRegisterRepository).Assembly.Location, processes, env =>
             {
                 env["ASPNETCORE_ENVIRONMENT"] = "Production";
                 env["ASPNETCORE_URLS"] = $"http://127.0.0.1:{apiPort}";
