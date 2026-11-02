@@ -26,7 +26,7 @@ import { ConfirmationDialogComponent } from '../ui/confirmation-dialog.component
 import { ClusterApi } from './cluster-api';
 import { NotificationService } from './notification.service';
 
-/** État et opérations du nœud local. Le navigateur n'appelle que l'API serveur authentifiée. */
+/** État et opérations du worker local. Le navigateur n'appelle que l'API serveur authentifiée. */
 @Injectable()
 export class LocalNodeController {
   private readonly http = inject(HttpClient);
@@ -98,7 +98,7 @@ export class LocalNodeController {
     });
   });
   readonly targetName = computed(
-    () => this.target()?.name ?? this.status()?.clusterName ?? 'le cluster d’accueil',
+    () => this.target()?.name ?? this.status()?.clusterName ?? 'le central d’accueil',
   );
 
   constructor() {
@@ -111,7 +111,7 @@ export class LocalNodeController {
                   timeout(8_000),
                   catchError(() => of(null)),
                 ),
-                setupNode: this.http.get<SetupNodeSheet>('/api/v1/auth/setup/node').pipe(
+                setupNode: this.http.get<SetupNodeSheet>('/api/v1/auth/setup/worker').pipe(
                   timeout(8_000),
                   catchError(() => of(null)),
                 ),
@@ -124,8 +124,8 @@ export class LocalNodeController {
                 ),
                 setupNode: of(null),
                 agent: forkJoin({
-                  status: this.http.get<LocalNodeStatus>('/api/v1/local-node/status'),
-                  clusters: this.http.get<readonly DiscoveredCluster[]>('/api/v1/local-node/clusters'),
+                  status: this.http.get<LocalNodeStatus>('/api/v1/local-worker/status'),
+                  clusters: this.http.get<readonly DiscoveredCluster[]>('/api/v1/local-worker/centrals'),
                 }).pipe(
                   timeout(8_000),
                   catchError(() => of(null)),
@@ -216,21 +216,21 @@ export class LocalNodeController {
   async create(values: Record<string, string>): Promise<void> {
     const name = values['name']?.trim();
     if (!name || name.length > 128) {
-      this.error.set('Le nom du cluster est obligatoire et limité à 128 caractères.');
+      this.error.set('Le nom du central est obligatoire et limité à 128 caractères.');
       return;
     }
     if (!this.standalone() || this.identityUnavailable()) return;
     await this.run(
-      this.http.post<ClusterIdentity>('/api/v1/cluster', { name }),
+      this.http.post<ClusterIdentity>('/api/v1/central', { name }),
       (identity) => {
         this.identity.set(identity);
         this.flow.set(null);
         this.notifications.show(
-          `Le cluster ${identity.name} est créé. Ce nœud en est le premier membre.`,
+          `Le central ${identity.name} est créé. Ce worker en est le premier membre.`,
         );
         this.refresh();
       },
-      'La création du cluster a échoué. Votre saisie est conservée.',
+      'La création du central a échoué. Votre saisie est conservée.',
     );
   }
 
@@ -247,7 +247,7 @@ export class LocalNodeController {
       return;
     }
     await this.run(
-      this.http.post<DiscoveredCluster>('/api/v1/local-node/clusters', { apiBaseUrl: address }),
+      this.http.post<DiscoveredCluster>('/api/v1/local-worker/centrals', { apiBaseUrl: address }),
       (cluster) => {
         // Seul le rattachement déjà établi de l'agent compte : l'identité relayée par l'interface est celle du central lui-même.
         const localClusterId = this.status()?.clusterId?.toLowerCase();
@@ -256,7 +256,7 @@ export class LocalNodeController {
           cluster.source === 'configured'
         ) {
           this.error.set(
-            'Cette adresse correspond au cluster actuel de ce nœud. Choisissez un autre cluster.',
+            'Cette adresse correspond au central actuel de ce worker. Choisissez un autre central.',
           );
           return;
         }
@@ -264,7 +264,7 @@ export class LocalNodeController {
           const host = new URL(cluster.apiBaseUrl).hostname.toLowerCase();
           if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
             this.error.set(
-              'Cette adresse correspond au cluster local de cette machine. Choisissez un autre cluster distant.',
+              'Cette adresse correspond au central local de cette machine. Choisissez un autre central distant.',
             );
             return;
           }
@@ -273,7 +273,7 @@ export class LocalNodeController {
         this.joinIndex.set(1);
         this.refresh();
       },
-      'La vérification du cluster a échoué. Vérifiez son adresse et son port, puis réessayez. Aucune demande n’a été envoyée.',
+      'La vérification du central a échoué. Vérifiez son adresse et son port, puis réessayez. Aucune demande n’a été envoyée.',
     );
   }
 
@@ -288,7 +288,7 @@ export class LocalNodeController {
     const effectiveDisplayName =
       displayName?.trim() || this.status()?.displayName?.trim() || undefined;
     await this.run(
-      this.http.post<LocalNodePairing>('/api/v1/local-node/pairing-key', {
+      this.http.post<LocalNodePairing>('/api/v1/local-worker/pairing-key', {
         clusterId: target.id,
         leaveCurrent: !!this.status()?.clusterId,
         displayName: effectiveDisplayName,
@@ -305,12 +305,12 @@ export class LocalNodeController {
     );
   }
 
-  /** Rattachement direct : le compte administrateur du central, dont la session est relayée à l'agent, admet ce nœud (ADR 0034). */
+  /** Rattachement direct : le compte administrateur du central, dont la session est relayée à l'agent, admet ce worker (ADR 0034). */
   async enroll(displayName?: string): Promise<void> {
     const target = this.target();
     if (!target || !this.canJoin()) return;
     await this.run(
-      this.http.post<unknown>('/api/v1/local-node/enroll', {
+      this.http.post<unknown>('/api/v1/local-worker/enroll', {
         clusterId: target.id,
         leaveCurrent: !!this.status()?.clusterId,
         displayName: displayName?.trim() || this.status()?.displayName?.trim() || undefined,
@@ -319,7 +319,7 @@ export class LocalNodeController {
         this.submittedTargetId.set(target.id);
         this.observedPending = false;
         this.joinIndex.set(3);
-        this.notifications.show(`Ce nœud est rattaché à ${target.name}.`);
+        this.notifications.show(`Ce worker est rattaché à ${target.name}.`);
         this.refresh();
       },
       'Le rattachement a échoué. Vérifiez que le compte est administrateur du central, puis réessayez.',
@@ -334,11 +334,11 @@ export class LocalNodeController {
       this.dialog
         .open(ConfirmationDialogComponent, {
           data: {
-            title: pending ? 'Annuler cette demande ?' : 'Quitter ce cluster ?',
+            title: pending ? 'Annuler cette demande ?' : 'Quitter ce central ?',
             message: pending
               ? 'La demande sera abandonnée. Le rattachement précédent est conservé s’il existe.'
-              : 'Ce nœud redevient autonome. Ses bibliothèques locales et son historique restent intacts. Un traitement actif peut empêcher le départ.',
-            confirmLabel: pending ? 'Annuler la demande' : 'Quitter le cluster',
+              : 'Ce worker redevient autonome. Ses bibliothèques locales et son historique restent intacts. Un traitement actif peut empêcher le départ.',
+            confirmLabel: pending ? 'Annuler la demande' : 'Quitter le central',
           },
         })
         .afterClosed()
@@ -352,7 +352,7 @@ export class LocalNodeController {
       return;
     }
     await this.run(
-      this.http.post<void>('/api/v1/local-node/leave', {}),
+      this.http.post<void>('/api/v1/local-worker/leave', {}),
       () => {
         this.submittedTargetId.set(null);
         this.pairing.set(null);
@@ -361,11 +361,11 @@ export class LocalNodeController {
         this.target.set(null);
         this.joinIndex.set(0);
         this.notifications.show(
-          pending ? 'Demande annulée.' : 'Départ demandé. L’état sera confirmé par le nœud.',
+          pending ? 'Demande annulée.' : 'Départ demandé. L’état sera confirmé par le worker.',
         );
         this.refresh();
       },
-      pending ? 'Impossible d’annuler la demande.' : 'Le nœud n’a pas pu quitter ce cluster.',
+      pending ? 'Impossible d’annuler la demande.' : 'Le worker n’a pas pu quitter ce central.',
     );
   }
 
@@ -375,7 +375,7 @@ export class LocalNodeController {
     );
     if (!cluster) return;
     await this.run(
-      this.http.delete<void>(`/api/v1/local-node/clusters/${cluster.id}`),
+      this.http.delete<void>(`/api/v1/local-worker/centrals/${cluster.id}`),
       () => {
         this.clusters.update((clusters) => clusters.filter((item) => item.id !== id));
         this.notifications.show(`L’adresse de ${cluster.name} est oubliée.`);
@@ -403,7 +403,7 @@ export class LocalNodeController {
             (next.clusterId
               ? {
                   id: next.clusterId,
-                  name: next.clusterName ?? 'le cluster d’accueil',
+                  name: next.clusterName ?? 'le central d’accueil',
                   apiBaseUrl: '',
                   discoveredAt: '',
                 }
@@ -417,7 +417,7 @@ export class LocalNodeController {
       this.pairing.set(null);
       this.observedPending = false;
       this.joinIndex.set(3);
-      this.notifications.show(`Ce nœud a rejoint ${next.clusterName ?? this.targetName()}.`);
+      this.notifications.show(`Ce worker a rejoint ${next.clusterName ?? this.targetName()}.`);
     } else if (sameTarget && (!next.isEnrolled || next.switching)) {
       this.observedPending = true;
     } else if (this.observedPending) {
@@ -428,7 +428,7 @@ export class LocalNodeController {
       this.error.set(
         next.switchFailure
           ? `Rattachement annulé : ${next.switchFailure}`
-          : 'La demande a expiré ou a été annulée. Le nœud a conservé son état précédent.',
+          : 'La demande a expiré ou a été annulée. Le worker a conservé son état précédent.',
       );
       this.notifications.show(this.error());
     }

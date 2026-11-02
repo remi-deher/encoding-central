@@ -12,10 +12,10 @@ namespace Encoding.NodeAgent;
 internal static class WorkerAgentGate
 {
     public const string RoutePrefix = "/api/v1/worker";
-    public const string ClustersPath = "/api/v1/worker/clusters";
+    public const string ClustersPath = "/api/v1/worker/centrals";
     public const string HardwarePath = "/api/v1/worker/hardware";
 
-    public static void Use(WebApplication app, NodeAgentOptions options) =>
+    public static void Use(WebApplication app, WorkerAgentOptions options) =>
         app.Use(async (context, next) =>
         {
             if (context.Request.Path.StartsWithSegments(RoutePrefix)
@@ -28,7 +28,7 @@ internal static class WorkerAgentGate
             await next();
         });
 
-    private static async Task<bool> IsOpenBeforeEnrollmentAsync(HttpContext context, NodeAgentOptions options)
+    private static async Task<bool> IsOpenBeforeEnrollmentAsync(HttpContext context, WorkerAgentOptions options)
     {
         if (!options.WorkerImage) return false;
         var path = context.Request.Path;
@@ -42,6 +42,6 @@ internal static class WorkerAgentGate
 }
 
 /// <summary>Matériel détecté, sans identifiant, secret ni état de rattachement.</summary>
-public sealed record WorkerHardwareResponse(Encoding.Contracts.Nodes.NodeInventory Inventory, IReadOnlyList<WorkerHardwareTool> Tools);
+public sealed record WorkerHardwareResponse(Encoding.Contracts.Nodes.WorkerInventory Inventory, IReadOnlyList<WorkerHardwareTool> Tools);
 
 public sealed record WorkerHardwareTool(string ToolId, IReadOnlyList<string> AccelerationTypes);

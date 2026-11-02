@@ -40,7 +40,7 @@ public sealed class FlowConfigurationCompatibilityTests
         var flow = new FlowDefinition(1, Guid.NewGuid(), 1, "Compatibilité", "video",
             [new("input", null, input, new Dictionary<string, JsonElement>()), new("audio", null, audio, values)], [new("next", "input", "success", "audio")]);
         Assert.True(validator.Validate(flow).IsValid);
-        NodeToolCapability[] capabilities = [new("plugin/base", "1.7.0", ["general"], []), new("plugin/audio", "1.0.0", ["general"], []),
+        WorkerToolCapability[] capabilities = [new("plugin/base", "1.7.0", ["general"], []), new("plugin/audio", "1.0.0", ["general"], []),
             new("ffprobe", "8.0", ["video"], []), new("ffmpeg", "8.0", ["video"], ["cpu"], ["aac", "ac3"])];
         Assert.False(eligibility.CanRun(flow, capabilities, Guid.NewGuid()));
         capabilities[1] = capabilities[1] with { Version = "1.1.0" };

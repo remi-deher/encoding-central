@@ -28,7 +28,6 @@ public sealed partial class RuntimeRepository
           SELECT w.execution_id FROM execution_work w JOIN executions e ON e.id=w.execution_id
           JOIN media_reservations m ON m.execution_id=w.execution_id AND m.lease_epoch=w.lease_epoch
           WHERE w.execution_id=@id AND w.lease_epoch=@epoch AND w.lease_until>clock_timestamp() AND m.lease_until>clock_timestamp()
-          AND {TaskOwnershipRepository.ActiveSql("e.id")}
           AND (CASE WHEN @source THEN w.source_node_id ELSE w.worker_node_id END)=@actor AND e.state IN ('running','cancelling')
           FOR UPDATE OF e,w,m
           """,c,tx);
@@ -241,11 +240,8 @@ public sealed partial class RuntimeRepository
             var snapshot=await settings.ExecuteScalarAsync(ct) as byte[];
             try { handoff=RuntimeHandoffPolicy.Resolve(node,snapshot is null?null:pluginConfigurations.ReadSnapshot(snapshot).GetValueOrDefault("nodes")); }
             catch(ArgumentException) { return false; }
-            if(handoff.Mode=="server" && ownership is null) return false;
+            if(handoff.Mode=="server") return false;
             if(cp.Handoff!=handoff || cp.PlacementHandoff || cp.NextNodeId is null || handoff.Mode=="node" && handoff.TargetNodeId==worker) return false;
-            // Le serveur visé est déjà le propriétaire : il n'y a rien à céder entre serveurs, seul le worker change.
-            // Le relais devient un relais vers un autre worker éligible de ce serveur (qui porte l'accès direct, par exemple).
-            if(handoff.Mode=="server" && ownership!.IsLocalPeer(handoff.TargetNodeId!.Value)) handoff=new("eligible");
         }
         else if(cp.Handoff is not null)
         {
@@ -302,7 +298,7 @@ public sealed partial class RuntimeRepository
             await metadata.ExecuteNonQueryAsync(ct);
         }
         var detail=handoff is null?$"Étape terminée : {Encoding.Contracts.Text.Mojibake.Repair(node.Name??component.Name)}.":handoff.Mode=="node"
-            ?$"Relais en attente vers le nœud {handoff.TargetNodeId:D}.":"Relais en attente d'un autre worker éligible.";
+            ?$"Relais en attente vers le worker {handoff.TargetNodeId:D}.":"Relais en attente d'un autre worker éligible.";
         if (node.Component.ComponentId == MediaIntegrityPolicy.Component && ExecutionRepository.ReadIntegrityDiagnostic(cp) is { } diagnostic)
             detail += " " + diagnostic.Code + " : " + diagnostic.Message;
         if(wait is not null) detail=ExecutionWaitRepository.Describe(wait);
@@ -392,12 +388,12 @@ public sealed partial class RuntimeRepository
             FlowPlacementPlan? PlacementPlan,JsonElement? BeforeMetadata) item,
         Guid claimant,DbConnection c,DbTransaction tx,CancellationToken ct)
     {
-        var direct=new List<(Guid Id,IReadOnlyList<NodeToolCapability> Capabilities,NodeInventory? Inventory)>();
+        var direct=new List<(Guid Id,IReadOnlyList<WorkerToolCapability> Capabilities,WorkerInventory? Inventory)>();
         await using(var read=Sql.Command("""
           SELECT dn.id,dn.capabilities::text,dn.inventory::text FROM library_node_accesses da JOIN cluster_nodes dn ON dn.id=da.node_id
           WHERE da.library_id=@library AND da.mode='direct' AND da.is_enabled AND da.can_read AND da.local_path IS NOT NULL AND (NOT @write OR da.can_write)
             AND dn.id<>@claimant AND dn.id IS DISTINCT FROM @previous AND dn.deleted_at IS NULL AND dn.last_seen_at>clock_timestamp()-@offline AND dn.accepts_work AND 'worker'=ANY(dn.roles)
-            -- Un worker direct saturé ne retient pas le travail : sa file ne doit pas laisser les autres nœuds inactifs.
+            -- Un worker direct saturé ne retient pas le travail : sa file ne doit pas laisser les autres workers inactifs.
             AND (SELECT count(*) FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.worker_node_id=dn.id AND w.lease_until>clock_timestamp() AND e.state IN ('running','cancelling'))
                 <COALESCE((SELECT p.max_concurrent_tasks FROM node_processing_settings p WHERE p.node_id=dn.id),dn.max_concurrent_tasks)
           """,c,tx))
@@ -407,7 +403,7 @@ public sealed partial class RuntimeRepository
                 item.PreviousWorker is {} previous?previous:DBNull.Value); read.Parameters.AddWithValue("offline",presence.OfflineAfter);
             await using var r=await read.ExecuteReaderAsync(ct);
             while(await r.ReadAsync(ct))
-                direct.Add((r.GetGuid(0),JsonSerializer.Deserialize<NodeToolCapability[]>(r.GetString(1),Json)??[],r.IsDBNull(2)?null:JsonSerializer.Deserialize<NodeInventory>(r.GetString(2),Json)));
+                direct.Add((r.GetGuid(0),JsonSerializer.Deserialize<WorkerToolCapability[]>(r.GetString(1),Json)??[],r.IsDBNull(2)?null:JsonSerializer.Deserialize<WorkerInventory>(r.GetString(2),Json)));
         }
         foreach(var node in direct)
         {

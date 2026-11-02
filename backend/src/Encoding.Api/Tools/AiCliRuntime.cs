@@ -17,7 +17,7 @@ public class AiCliRuntime(IConfiguration configuration, IDataProtectionProvider 
     private readonly IDataProtector protector = protection.CreateProtector("Encoding.Ai.ClaudeToken.v1");
     private readonly ConcurrentDictionary<string, (string Version, DateTimeOffset ExpiresAt)> diagnosticVersions = new();
     public static string ResolveRoot(IConfiguration configuration) => configuration["AiTools:CredentialsDirectory"]
-        ?? Path.Combine(configuration["Node:DataDirectory"] ?? Path.Combine(AppContext.BaseDirectory, "Data"), "credentials", "ai-tools");
+        ?? Path.Combine(configuration["Worker:DataDirectory"] ?? Path.Combine(AppContext.BaseDirectory, "Data"), "credentials", "ai-tools");
     public string Root => ResolveRoot(configuration);
     public static string Executable(string id) => id switch
     {
@@ -126,7 +126,7 @@ public class AiCliRuntime(IConfiguration configuration, IDataProtectionProvider 
 
     private ProcessStartInfo CreateStart(string id, IReadOnlyList<string> args)
     {
-        var path = Find(id) ?? throw new InvalidOperationException("Outil CLI non installé sur ce nœud.");
+        var path = Find(id) ?? throw new InvalidOperationException("Outil CLI non installé sur ce worker.");
         var profile = Profile(id);
         var work = Path.Combine(profile, "work");
         Directory.CreateDirectory(work);

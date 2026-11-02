@@ -150,7 +150,7 @@ public sealed partial class MediaActions
         return false;
     }
 
-    /// <summary>Polices (0057) : ajoute en pièces jointes les polices d'un jeu du dossier déclaré par le nœud (<c>ENCODING_FONT_DIR</c>) qui ne sont pas déjà dans le MKV. Jamais de chemin libre.</summary>
+    /// <summary>Polices (0057) : ajoute en pièces jointes les polices d'un jeu du dossier déclaré par le worker (<c>ENCODING_FONT_DIR</c>) qui ne sont pas déjà dans le MKV. Jamais de chemin libre.</summary>
     public async Task<MediaActionOutcome> AddFontsAsync(IReadOnlyDictionary<string,JsonElement> c,string current,string directory,string node,
         CancellationToken ct,string? resourceFolder=null,bool editWorkingCopy=false)
     {
@@ -173,7 +173,7 @@ public sealed partial class MediaActions
             StringComparison.Ordinal)) throw new SubtitleException("Nom de jeu de polices invalide.");
         folder=Path.GetFullPath(Path.Combine(root,set));
         if(!folder.StartsWith(root.TrimEnd(Path.DirectorySeparatorChar)+Path.DirectorySeparatorChar,
-            StringComparison.Ordinal)||!Directory.Exists(folder)) throw new SubtitleException($"Jeu de polices « {set} » introuvable sur ce nœud.");
+            StringComparison.Ordinal)||!Directory.Exists(folder)) throw new SubtitleException($"Jeu de polices « {set} » introuvable sur ce worker.");
         names=Text(c,"fonts").Split([',','\n',';'],StringSplitOptions.TrimEntries|StringSplitOptions.RemoveEmptyEntries).ToList();
         if(names.Count==0) names=Directory.EnumerateFiles(folder).Select(Path.GetFileName).Where(name=>extensions.Contains(Path.GetExtension(name)!.ToLowerInvariant())).Order(StringComparer.Ordinal).ToList()!;
         if(names.Count==0) throw new SubtitleException($"Le jeu de polices « {set} » ne contient aucune police.");

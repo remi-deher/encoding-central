@@ -40,7 +40,7 @@ public sealed class FlowPlacementPlannerTests
         return MakeFlow("ChainFlow", nodes, connections);
     }
 
-    private static NodeToolCapability Tool(string id, string version = "1.0.0", string[]? encoders = null, string[]? accelerations = null, NodeEncoderCapability[]? checks = null) =>
+    private static WorkerToolCapability Tool(string id, string version = "1.0.0", string[]? encoders = null, string[]? accelerations = null, WorkerEncoderCapability[]? checks = null) =>
         new(id, version, ["video"], accelerations ?? ["cpu"], encoders ?? [], checks);
 
     [Fact]
@@ -70,7 +70,7 @@ public sealed class FlowPlacementPlannerTests
             }
         });
 
-        var nodeA = new NodePlacementCandidate(
+        var nodeA = new WorkerPlacementCandidate(
             nodeAId,
             "Node-50-CPU",
             IsWorker: true,
@@ -85,7 +85,7 @@ public sealed class FlowPlacementPlannerTests
             ],
             Inventory: null,
             Identity: null,
-            Access: new LibraryNodeAccessInfo(Guid.NewGuid(), "direct", true, true, true, "/media/lib", null));
+            Access: new LibraryWorkerAccessInfo(Guid.NewGuid(), "direct", true, true, true, "/media/lib", null));
 
         var plan = planner.Plan(flow, metadata, [nodeA], DateTimeOffset.UtcNow);
 
@@ -128,7 +128,7 @@ public sealed class FlowPlacementPlannerTests
             }
         });
 
-        var nodeA = new NodePlacementCandidate(
+        var nodeA = new WorkerPlacementCandidate(
             nodeAId,
             "Node-50-CPU",
             IsWorker: true,
@@ -144,9 +144,9 @@ public sealed class FlowPlacementPlannerTests
             ],
             Inventory: null,
             Identity: null,
-            Access: new LibraryNodeAccessInfo(libId, "direct", true, true, true, "/media/lib", null));
+            Access: new LibraryWorkerAccessInfo(libId, "direct", true, true, true, "/media/lib", null));
 
-        var nodeB = new NodePlacementCandidate(
+        var nodeB = new WorkerPlacementCandidate(
             nodeBId,
             "Node-51-GPU",
             IsWorker: true,
@@ -162,7 +162,7 @@ public sealed class FlowPlacementPlannerTests
             ],
             Inventory: null,
             Identity: null,
-            Access: new LibraryNodeAccessInfo(libId, "transfer", true, true, true, null, nodeAId));
+            Access: new LibraryWorkerAccessInfo(libId, "transfer", true, true, true, null, nodeAId));
 
         var plan = planner.Plan(flow, metadata, [nodeA, nodeB], DateTimeOffset.UtcNow);
 
@@ -188,10 +188,10 @@ public sealed class FlowPlacementPlannerTests
             Node(registry, "complete", "base-complete-flow"));
         var candidates = new[]
         {
-            new NodePlacementCandidate(direct,"direct",true,true,
+            new WorkerPlacementCandidate(direct,"direct",true,true,
                 [Tool("ffprobe"),Tool("ffmpeg",encoders:["libx264"],accelerations:["cpu"]),Tool("mkvtoolnix"),Tool("plugin/base","1.9.0"),Tool("plugin/video","1.2.0"),Tool("plugin/mkv","1.0.0")],
                 null,null,new(library,"direct",true,true,true,"/media",null)),
-            new NodePlacementCandidate(gpu,"gpu",true,true,
+            new WorkerPlacementCandidate(gpu,"gpu",true,true,
                 [Tool("ffprobe"),Tool("ffmpeg",encoders:["hevc_qsv"],accelerations:["qsv"]),Tool("plugin/video","1.2.0")],
                 null,null,new(library,"transfer",true,true,false,null,direct))
         };
@@ -217,10 +217,10 @@ public sealed class FlowPlacementPlannerTests
             Node(registry,"complete","base-complete-flow"));
         var candidates=new[]
         {
-            new NodePlacementCandidate(source,"source",true,true,
+            new WorkerPlacementCandidate(source,"source",true,true,
                 [Tool("ffprobe"),Tool("plugin/base","1.9.0"),Tool("plugin/nodes","1.8.0"),Tool("python")],
                 null,null,new(library,"direct",true,true,true,"/media",null)),
-            new NodePlacementCandidate(target,"target",true,true,
+            new WorkerPlacementCandidate(target,"target",true,true,
                 [Tool("ffprobe"),Tool("plugin/base","1.9.0"),Tool("python")],
                 null,null,new(library,"transfer",true,true,false,null,source))
         };
@@ -242,7 +242,7 @@ public sealed class FlowPlacementPlannerTests
         var script = Node(registry, "script", "base-script", new() { ["language"] = J("python") });
         var flow = Chain(input, script);
 
-        var nodeA = new NodePlacementCandidate(
+        var nodeA = new WorkerPlacementCandidate(
             nodeAId,
             "Node-50",
             IsWorker: true,
@@ -254,7 +254,7 @@ public sealed class FlowPlacementPlannerTests
             ],
             Inventory: null,
             Identity: null,
-            Access: new LibraryNodeAccessInfo(Guid.NewGuid(), "direct", true, true, true, "/media", null));
+            Access: new LibraryWorkerAccessInfo(Guid.NewGuid(), "direct", true, true, true, "/media", null));
 
         var plan = planner.Plan(flow, null, [nodeA], DateTimeOffset.UtcNow);
 
@@ -294,7 +294,7 @@ public sealed class FlowPlacementPlannerTests
             }
         });
 
-        var nodeACpuOnly = new NodePlacementCandidate(
+        var nodeACpuOnly = new WorkerPlacementCandidate(
             nodeAId,
             "Node-50-CPU",
             IsWorker: true,
@@ -308,7 +308,7 @@ public sealed class FlowPlacementPlannerTests
             ],
             Inventory: null,
             Identity: null,
-            Access: new LibraryNodeAccessInfo(Guid.NewGuid(), "direct", true, true, true, "/media", null));
+            Access: new LibraryWorkerAccessInfo(Guid.NewGuid(), "direct", true, true, true, "/media", null));
 
         var plan = planner.Plan(flow, metadataHevc, [nodeACpuOnly], DateTimeOffset.UtcNow);
 
@@ -329,13 +329,13 @@ public sealed class FlowPlacementPlannerTests
         var end = Node(registry, "end", "base-complete-flow");
         var flow = Chain(input, constraint, end);
 
-        var nodeA = new NodePlacementCandidate(
+        var nodeA = new WorkerPlacementCandidate(
             nodeAId, "Node-A", true, true, [Tool("ffprobe"), Tool("plugin/base", "1.9.0"), Tool("plugin/nodes", "1.8.0")],
-            null, null, new LibraryNodeAccessInfo(Guid.NewGuid(), "direct", true, true, true, "/media", null));
+            null, null, new LibraryWorkerAccessInfo(Guid.NewGuid(), "direct", true, true, true, "/media", null));
 
-        var nodeB = new NodePlacementCandidate(
+        var nodeB = new WorkerPlacementCandidate(
             nodeBId, "Node-B", true, true, [Tool("ffprobe"), Tool("plugin/base", "1.9.0"), Tool("plugin/nodes", "1.8.0")],
-            null, null, new LibraryNodeAccessInfo(Guid.NewGuid(), "direct", true, true, true, "/media", null));
+            null, null, new LibraryWorkerAccessInfo(Guid.NewGuid(), "direct", true, true, true, "/media", null));
 
         var plan = planner.Plan(flow, null, [nodeA, nodeB], DateTimeOffset.UtcNow);
 
@@ -354,17 +354,17 @@ public sealed class FlowPlacementPlannerTests
         var end = Node(registry, "end", "base-complete-flow");
         var flow = Chain(input, fonts, end);
 
-        // Nœud A n'a pas les polices
-        var nodeA = new NodePlacementCandidate(
+        // Worker A n'a pas les polices
+        var nodeA = new WorkerPlacementCandidate(
             nodeAId, "Node-A", true, true, [Tool("ffprobe"), Tool("mkvtoolnix"), Tool("plugin/base", "1.9.0")],
-            new NodeInventory("linux", "x64", 4, 8000, FontSets: ["Standard"]),
-            null, new LibraryNodeAccessInfo(Guid.NewGuid(), "direct", true, true, true, "/media", null));
+            new WorkerInventory("linux", "x64", 4, 8000, FontSets: ["Standard"]),
+            null, new LibraryWorkerAccessInfo(Guid.NewGuid(), "direct", true, true, true, "/media", null));
 
-        // Nœud B a les polices Crunchyroll
-        var nodeB = new NodePlacementCandidate(
+        // Worker B a les polices Crunchyroll
+        var nodeB = new WorkerPlacementCandidate(
             nodeBId, "Node-B", true, true, [Tool("ffprobe"), Tool("mkvtoolnix"), Tool("plugin/base", "1.9.0")],
-            new NodeInventory("linux", "x64", 4, 8000, FontSets: ["Crunchyroll", "Standard"]),
-            null, new LibraryNodeAccessInfo(Guid.NewGuid(), "direct", true, true, true, "/media", null));
+            new WorkerInventory("linux", "x64", 4, 8000, FontSets: ["Crunchyroll", "Standard"]),
+            null, new LibraryWorkerAccessInfo(Guid.NewGuid(), "direct", true, true, true, "/media", null));
 
         var plan = planner.Plan(flow, null, [nodeA, nodeB], DateTimeOffset.UtcNow);
 
@@ -445,7 +445,7 @@ public sealed class FlowPlacementPlannerTests
 
         var candidates = new[]
         {
-            new NodePlacementCandidate(
+            new WorkerPlacementCandidate(
                 node50, "encoding-50", true, true,
                 [
                     Tool("ffprobe"),
@@ -457,7 +457,7 @@ public sealed class FlowPlacementPlannerTests
                     Tool("plugin/video", "1.3.0")
                 ],
                 null, null, new(libId, "direct", true, true, true, "/media", null)),
-            new NodePlacementCandidate(
+            new WorkerPlacementCandidate(
                 node51, "encoding-51", true, true,
                 [
                     Tool("ffprobe"),

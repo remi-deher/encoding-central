@@ -11,7 +11,7 @@ public sealed record InstalledPlugin(string Id, string Version, string Name, str
 /// <summary>
 /// Paquets de plugins installés sur CE serveur (0063) : archive vérifiée, enregistrée dans le catalogue sans redémarrage et
 /// proposée aux workers, qui la téléchargent et la contrôlent par son empreinte. L'état est un dossier local du serveur
-/// (<c>PluginStore:Directory</c>) : il n'est pas répliqué entre serveurs d'un même cluster, chaque serveur reçoit les paquets
+/// (<c>PluginStore:Directory</c>) : il n'est pas répliqué entre serveurs d'un même central, chaque serveur reçoit les paquets
 /// qui lui sont importés ou installés (résidu connu, voir 0063).
 /// </summary>
 public sealed class PluginStoreService(IConfiguration configuration, FlowComponentRegistry registry, ToolStoreService tools, ILogger<PluginStoreService> logger)
@@ -19,7 +19,7 @@ public sealed class PluginStoreService(IConfiguration configuration, FlowCompone
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
     private readonly SemaphoreSlim gate = new(1, 1);
     public string Directory { get; } = configuration["PluginStore:Directory"]
-        ?? Path.Combine(configuration["Node:DataDirectory"] is { Length: > 0 } dataDirectory ? dataDirectory : Path.Combine(AppContext.BaseDirectory, "Data"), "plugin-store");
+        ?? Path.Combine(configuration["Worker:DataDirectory"] is { Length: > 0 } dataDirectory ? dataDirectory : Path.Combine(AppContext.BaseDirectory, "Data"), "plugin-store");
 
     private string IndexPath => Path.Combine(Directory, "installed.json");
     private string PackageDirectory(string id, string version) => Path.Combine(Directory, "packages", id, version);

@@ -167,7 +167,7 @@ public sealed class AiAssistantSendService(AiAssistantSupportService support, Ai
                 && option.NodeId == (request.NodeId ?? savedConv.NodeId)
                 && (request.ReasoningEffort is null || option.ReasoningEfforts.Contains(request.ReasoningEffort, StringComparer.Ordinal)));
             if (!availableSelection)
-                throw new ArgumentException("Le fournisseur, le modèle, le nœud ou l’effort choisi n’est pas disponible.");
+                throw new ArgumentException("Le fournisseur, le modèle, le worker ou l’effort choisi n’est pas disponible.");
         }
         var updated = savedConv with
         {
@@ -183,7 +183,7 @@ public sealed class AiAssistantSendService(AiAssistantSupportService support, Ai
                 && option.NodeId == updated.NodeId
                 && (request.ReasoningEffort is null || option.ReasoningEfforts.Contains(request.ReasoningEffort, StringComparer.Ordinal)));
             if (!availableSelection)
-                throw new ArgumentException("Le fournisseur, le modèle, le nœud ou l’effort choisi n’est pas disponible.");
+                throw new ArgumentException("Le fournisseur, le modèle, le worker ou l’effort choisi n’est pas disponible.");
         }
         return updated;
     }

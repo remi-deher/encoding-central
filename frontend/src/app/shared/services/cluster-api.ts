@@ -10,12 +10,12 @@ import { ClusterIdentity } from '../models/local-node';
 @Injectable({ providedIn: 'root' })
 export class ClusterApi {
   private readonly http = inject(HttpClient);
-  /** Identité du cluster : `standalone` vrai tant qu'aucun cluster n'a été créé et qu'un seul nœud est actif (architecture 0045). */
+  /** Identité du central : `standalone` vrai tant qu'aucun central n'a été créé et qu'un seul worker est actif (architecture 0045). */
   identity() {
-    return this.http.get<ClusterIdentity>('/api/v1/cluster');
+    return this.http.get<ClusterIdentity>('/api/v1/central');
   }
   listNodes() {
-    return this.http.get<readonly NodeResponse[]>('/api/v1/nodes');
+    return this.http.get<readonly NodeResponse[]>('/api/v1/workers');
   }
   libraryProcessing(id: string) {
     return this.http.get<LibraryProcessingSettings>('/api/v1/libraries/' + id + '/processing');
@@ -31,7 +31,7 @@ export class ClusterApi {
     });
   }
   nodeProcessing(id: string) {
-    return this.http.get<NodeProcessingSettings>('/api/v1/nodes/' + id + '/processing');
+    return this.http.get<NodeProcessingSettings>('/api/v1/workers/' + id + '/processing');
   }
   saveNodeProcessing(
     id: string,
@@ -39,7 +39,7 @@ export class ClusterApi {
     expectedRevision: number,
     schedule: NodeSchedule,
   ) {
-    return this.http.put<void>('/api/v1/nodes/' + id + '/processing', {
+    return this.http.put<void>('/api/v1/workers/' + id + '/processing', {
       maxConcurrentTasks,
       expectedRevision,
       schedule,
@@ -81,25 +81,25 @@ export class ClusterApi {
   }
   libraryNodeAccess(id: string) {
     return this.http.get<readonly LibraryNodeAccessResponse[]>(
-      '/api/v1/libraries/' + id + '/node-access',
+      '/api/v1/libraries/' + id + '/worker-access',
     );
   }
   enrollmentWindow() {
-    return this.http.get<EnrollmentWindow>('/api/v1/nodes/enrollment-window');
+    return this.http.get<EnrollmentWindow>('/api/v1/workers/enrollment-window');
   }
   openEnrollmentWindow(minutes: number) {
-    return this.http.put<EnrollmentWindow>('/api/v1/nodes/enrollment-window', { minutes });
+    return this.http.put<EnrollmentWindow>('/api/v1/workers/enrollment-window', { minutes });
   }
   closeEnrollmentWindow() {
-    return this.http.delete<void>('/api/v1/nodes/enrollment-window');
+    return this.http.delete<void>('/api/v1/workers/enrollment-window');
   }
   firstLinkAcceptance() {
-    return this.http.get<FirstLinkAcceptance>('/api/v1/nodes/first-link');
+    return this.http.get<FirstLinkAcceptance>('/api/v1/workers/first-link');
   }
   enableFirstLinkAcceptance(minutes: number) {
-    return this.http.put<FirstLinkAcceptance>('/api/v1/nodes/first-link', { minutes });
+    return this.http.put<FirstLinkAcceptance>('/api/v1/workers/first-link', { minutes });
   }
   disableFirstLinkAcceptance() {
-    return this.http.delete<void>('/api/v1/nodes/first-link');
+    return this.http.delete<void>('/api/v1/workers/first-link');
   }
 }

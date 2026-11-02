@@ -24,17 +24,17 @@ internal static partial class Harness
                 await using var save=db.CreateCommand("INSERT INTO node_processing_settings(node_id,schedule_enabled,schedule_timezone,schedule_slots) VALUES(@a,@enabled,'UTC',@slots) ON CONFLICT(node_id) DO UPDATE SET schedule_enabled=@enabled,schedule_timezone='UTC',schedule_slots=@slots");
                 save.Parameters.AddWithValue("a",a); save.Parameters.AddWithValue("enabled",enabled); save.Parameters.AddWithValue("slots",slots); await save.ExecuteNonQueryAsync();
             }
-            await Schedule(true,new string('0',NodeSchedule.SlotCount));
+            await Schedule(true,new string('0',WorkerSchedule.SlotCount));
             Check(await runtime.ClaimAsync(a,CancellationToken.None) is null,"A closed node calendar blocks new claims.");
-            var now=DateTimeOffset.UtcNow; var open=new char[NodeSchedule.SlotCount]; Array.Fill(open,'0');
-            open[(int)now.DayOfWeek*NodeSchedule.SlotsPerDay+now.Hour*NodeSchedule.SlotsPerHour+now.Minute/15]='1';
+            var now=DateTimeOffset.UtcNow; var open=new char[WorkerSchedule.SlotCount]; Array.Fill(open,'0');
+            open[(int)now.DayOfWeek*WorkerSchedule.SlotsPerDay+now.Hour*WorkerSchedule.SlotsPerHour+now.Minute/15]='1';
             await Schedule(true,new string(open));
             var lease=await runtime.ClaimAsync(a,CancellationToken.None);
             Check(lease is not null,"A calendar slot covering the current time allows the claim.");
             Check(await runtime.RenewAsync(lease!.ExecutionId,a,lease.Epoch,CancellationToken.None) is not null,"A calendar never revokes an active lease.");
-            await Schedule(true,new string('0',NodeSchedule.SlotCount));
+            await Schedule(true,new string('0',WorkerSchedule.SlotCount));
             Check(await runtime.RenewAsync(lease.ExecutionId,a,lease.Epoch,CancellationToken.None) is not null,"Closing the calendar does not interrupt running work.");
-            await Schedule(false,new string('0',NodeSchedule.SlotCount));
+            await Schedule(false,new string('0',WorkerSchedule.SlotCount));
             await using(var clean=db.CreateCommand("UPDATE executions SET state='cancelled' WHERE id=@id; UPDATE execution_work SET lease_until=NULL WHERE execution_id=@id; DELETE FROM node_processing_settings WHERE node_id=@a;"))
             {
                 clean.Parameters.AddWithValue("id", lease.ExecutionId);

@@ -5,7 +5,7 @@ namespace Encoding.NodeAgent.Services;
 
 /// <summary>
 /// Options JSON des échanges de l'agent avec l'API : celles du web (camelCase) et les énumérations en chaînes,
-/// comme les écrit et les lit l'API (« roles »: ["server", "worker"]). Sans le convertisseur, la lecture d'un NodeResponse échoue.
+/// comme les écrit et les lit l'API (« roles »: ["server", "worker"]). Sans le convertisseur, la lecture d'un WorkerResponse échoue.
 /// </summary>
 public static class AgentJson
 {

@@ -21,18 +21,8 @@ public sealed class LibraryActivityRepository(DbDataSource dataSource, Execution
             LEFT JOIN library_flow_assignments a ON a.library_id=l.id
             LEFT JOIN flow_versions v ON v.flow_id=a.flow_id AND v.version=a.flow_version
             LEFT JOIN executions e ON e.id=COALESCE(
-                (SELECT e2.id FROM task_ownership o2
-                 JOIN executions e2 ON e2.id=o2.execution_id
-                 WHERE o2.library_id=m.library_id AND o2.media_key=upper(m.relative_path)
-                   AND e2.state='queued' AND e2.flow_name=v.definition->>'name'
-                   AND e2.flow_version=a.flow_version
-                 ORDER BY e2.updated_at DESC,e2.id DESC LIMIT 1),
                 (SELECT e2.id FROM execution_work w2 JOIN executions e2 ON e2.id=w2.execution_id
                  WHERE w2.library_id=m.library_id AND w2.media_key=upper(m.relative_path)
-                   AND e2.flow_name=v.definition->>'name' AND e2.flow_version=a.flow_version
-                 ORDER BY e2.updated_at DESC,e2.id DESC LIMIT 1),
-                (SELECT e2.id FROM task_ownership o2 JOIN executions e2 ON e2.id=o2.execution_id
-                 WHERE o2.library_id=m.library_id AND o2.media_key=upper(m.relative_path)
                    AND e2.flow_name=v.definition->>'name' AND e2.flow_version=a.flow_version
                  ORDER BY e2.updated_at DESC,e2.id DESC LIMIT 1),
                 (SELECT r.execution_id FROM library_processing_receipts r

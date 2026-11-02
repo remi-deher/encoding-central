@@ -10,7 +10,7 @@ namespace Encoding.Api.Executions;
 public sealed class RuntimeEligibility(
     FlowComponentRegistry registry,
     FlowDefinitionValidator validator,
-    ClusterExtensionActivationState? activation = null)
+    CentralExtensionActivationState? activation = null)
 {
     public bool RequiresWriteAccess(FlowDefinition flow,string? nextNodeId=null,bool resumed=false)
     {
@@ -35,7 +35,7 @@ public sealed class RuntimeEligibility(
                 && node.Configuration.TryGetValue("mode",out var m) && m.ValueKind==System.Text.Json.JsonValueKind.String && m.GetString()=="prefer");
     }
 
-    /// <summary>Le segment contient-il un bloc qui décide lui-même du nœud (désignation ou accès bibliothèque) ? Sinon, le placement par défaut s'applique (ADR 0024).</summary>
+    /// <summary>Le segment contient-il un bloc qui décide lui-même du worker (désignation ou accès bibliothèque) ? Sinon, le placement par défaut s'applique (ADR 0024).</summary>
     public bool ChoosesPlacementExplicitly(FlowDefinition flow,string? nextNodeId=null,bool resumed=false)
     {
         var entry=nextNodeId??(resumed?null:flow.Nodes.Single(node=>registry.Resolve(node.Component)?.Kind=="input").Id);
@@ -44,7 +44,7 @@ public sealed class RuntimeEligibility(
     }
 
     /// <summary>Une sonde n'exécute qu'une condition de plugin : seule la capacité de ce plugin est requise.</summary>
-    public bool CanProbe(FlowDefinition flow,IReadOnlyList<NodeToolCapability> capabilities,string blockNodeId,bool resumed=false)
+    public bool CanProbe(FlowDefinition flow,IReadOnlyList<WorkerToolCapability> capabilities,string blockNodeId,bool resumed=false)
     {
         var node=flow.Nodes.SingleOrDefault(item=>item.Id==blockNodeId);
         var activationPluginId = node is not null && FlowComponentRegistry.TryGetLegacyAlias(node.Component.ComponentId, out var target)
@@ -56,8 +56,8 @@ public sealed class RuntimeEligibility(
             && (c.Version==node.Component.PluginVersion || c.Version==registry.RuntimePluginVersion(node.Component)));
     }
 
-    public bool CanRun(FlowDefinition flow,IReadOnlyList<NodeToolCapability> capabilities,Guid workerId,string? nextNodeId=null,bool resumed=false,
-        RuntimeContext? context=null,NodeIdentityResponse? identity=null,NodeInventory? inventory=null,IReadOnlyDictionary<string,Guid>? placements=null)
+    public bool CanRun(FlowDefinition flow,IReadOnlyList<WorkerToolCapability> capabilities,Guid workerId,string? nextNodeId=null,bool resumed=false,
+        RuntimeContext? context=null,WorkerIdentityResponse? identity=null,WorkerInventory? inventory=null,IReadOnlyDictionary<string,Guid>? placements=null)
     {
         if (MediaIntegrityPolicy.IsExplicit(flow) && !capabilities.Any(c => c.ToolId == MediaIntegrityPolicy.Capability)) return false;
         if(context?.DirectSource is not null && !capabilities.Any(capability=>capability.ToolId==RuntimeSourceObservation.Capability)) return false;
@@ -66,9 +66,9 @@ public sealed class RuntimeEligibility(
             capabilities=activation.EnabledCapabilities(capabilities,capability=>capability.ToolId);
         var entry=nextNodeId??(resumed?null:flow.Nodes.Single(node=>registry.Resolve(node.Component)?.Kind=="input").Id);
         if(entry is not null && placements?.TryGetValue(entry,out var assignedWorker)==true && assignedWorker!=workerId) return false;
-        // « Bibliothèque sur ce nœud » avec « et encodeur du profil » : un worker sans encodeur utilisable répond « non » (voir le runner),
+        // « Bibliothèque sur ce worker » avec « et encodeur du profil » : un worker sans encodeur utilisable répond « non » (voir le runner),
         // donc la branche « oui » ne lui est pas demandée.
-        // La branche « oui » exige une cible déclarée du profil. Le repli CPU reste disponible sur le bloc vidéo, sans faire encoder ici un nœud qui n'a pas cette cible.
+        // La branche « oui » exige une cible déclarée du profil. Le repli CPU reste disponible sur le bloc vidéo, sans faire encoder ici un worker qui n'a pas cette cible.
         var canEncode=MediaCodecPolicy.ProfileTargetAvailable(flow,capabilities.FirstOrDefault(capability=>capability.ToolId=="ffmpeg"));
         var nodesById=flow.Nodes.ToDictionary(node=>node.Id,StringComparer.Ordinal);
         bool Follow(FlowConnectionDefinition edge)=>canEncode || edge.SourceOutputId!="yes"
@@ -123,7 +123,7 @@ public sealed class RuntimeEligibility(
                 if(node.Configuration.TryGetValue("targetGroupId",out var group) && group.ValueKind==System.Text.Json.JsonValueKind.String
                     && (!Guid.TryParse(group.GetString(),out var groupId) || identity is null || !identity.GroupIds.Contains(groupId))) return false;
                 if(node.Configuration.TryGetValue("requiredLabels",out var labels) && labels.ValueKind==System.Text.Json.JsonValueKind.String
-                    && !Encoding.Contracts.Nodes.NodeLabelSelector.Matches(labels.GetString(),identity?.EffectiveLabels)) return false;
+                    && !Encoding.Contracts.Nodes.WorkerLabelSelector.Matches(labels.GetString(),identity?.EffectiveLabels)) return false;
             }
             if(node.Component.PluginId=="nodes" && node.Component.ComponentId=="nodes-require-capability")
             {
@@ -190,7 +190,7 @@ public sealed class RuntimeEligibility(
     }
 
     /// <summary>Le worker sait-il encoder la vidéo demandée : profil d'encodage (cible matérielle ou repli CPU) ou accélération déclarée ?</summary>
-    private static bool VideoTranscodeSupported(FlowNodeDefinition node,IReadOnlyList<NodeToolCapability> capabilities,bool retryWithCpu,IReadOnlyList<string> encoders)
+    private static bool VideoTranscodeSupported(FlowNodeDefinition node,IReadOnlyList<WorkerToolCapability> capabilities,bool retryWithCpu,IReadOnlyList<string> encoders)
     {
         var codec=node.Configuration.TryGetValue("videoCodec",out var codecValue)?codecValue.GetString()!:"hevc";
         if(node.Configuration.TryGetValue("encodingProfile",out var profileValue)

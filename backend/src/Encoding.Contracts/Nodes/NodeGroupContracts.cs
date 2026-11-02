@@ -1,8 +1,8 @@
 namespace Encoding.Contracts.Nodes;
 
-public enum NodeGroupMode { Manual, Automatic }
+public enum WorkerGroupMode { Manual, Automatic }
 
-public sealed record NodeGroupCriteria(
+public sealed record WorkerGroupCriteria(
     IReadOnlyList<NodeRole>? Roles = null,
     string? OperatingSystem = null,
     string? Architecture = null,
@@ -12,32 +12,32 @@ public sealed record NodeGroupCriteria(
     int? MinimumProcessorCount = null,
     IReadOnlyList<string>? RequiredEncoders = null);
 
-public sealed record NodeGroupResponse(
+public sealed record WorkerGroupResponse(
     Guid Id,
     string Name,
     string Description,
-    NodeGroupMode Mode,
-    NodeGroupCriteria Criteria,
+    WorkerGroupMode Mode,
+    WorkerGroupCriteria Criteria,
     IReadOnlyDictionary<string, string?> Labels,
     IReadOnlyList<Guid> NodeIds,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
-public sealed record SaveNodeGroupRequest(
+public sealed record SaveWorkerGroupRequest(
     string Name,
     string Description,
-    NodeGroupMode Mode,
-    NodeGroupCriteria Criteria,
+    WorkerGroupMode Mode,
+    WorkerGroupCriteria Criteria,
     IReadOnlyDictionary<string, string?> Labels,
     IReadOnlyList<Guid> NodeIds);
 
-public sealed record NodeIdentityResponse(
+public sealed record WorkerIdentityResponse(
     Guid NodeId,
     string? DisplayName,
     IReadOnlyDictionary<string, string?> Labels,
     IReadOnlyDictionary<string, string?> EffectiveLabels,
     IReadOnlyList<Guid> GroupIds);
 
-public sealed record SaveNodeIdentityRequest(
+public sealed record SaveWorkerIdentityRequest(
     string? DisplayName,
     IReadOnlyDictionary<string, string?> Labels);

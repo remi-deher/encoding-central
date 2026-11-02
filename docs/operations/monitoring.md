@@ -99,14 +99,14 @@ Rechercher dans les journaux « à supprimer (simulation) » et contrôler `enco
 
 ## Dossiers de travail des nœuds
 
-Chaque nœud supprime lui-même `executions/<id>` et `transfers/<id>` de son dossier de données (`Node:DataDirectory`) quand l'exécution est terminée, après un délai d'inactivité :
+Chaque nœud supprime lui-même `executions/<id>` et `transfers/<id>` de son dossier de données (`Worker:DataDirectory`) quand l'exécution est terminée, après un délai d'inactivité :
 
 ```yaml
-Node__Workspace__CleanupEnabled: "true"           # "false" pour désactiver
-Node__Workspace__CompletedRetentionHours: "0"     # réussies et annulées
-Node__Workspace__FailedRetentionHours: "0"        # échouées
-Node__Workspace__UnknownRetentionHours: "72"      # identifiant inconnu du serveur
-Node__Workspace__CleanupIntervalMinutes: "10"
+Worker__Workspace__CleanupEnabled: "true"           # "false" pour désactiver
+Worker__Workspace__CompletedRetentionHours: "0"     # réussies et annulées
+Worker__Workspace__FailedRetentionHours: "0"        # échouées
+Worker__Workspace__UnknownRetentionHours: "72"      # identifiant inconnu du serveur
+Worker__Workspace__CleanupIntervalMinutes: "10"
 ```
 
 Une exécution en file, en cours ou en annulation n'est jamais touchée. Les médias des bibliothèques ne sont pas concernés.

@@ -29,7 +29,7 @@ internal static partial class Harness
             var status=await runtime.RenewAsync(id,a,first.Epoch,CancellationToken.None)??throw new InvalidOperationException("Renew before publishing.");
             Check(await transfers.FinishAsync(id,a,new(first.Epoch,Guid.NewGuid(),status.Revision,"succeeded","Publication demandée",resultSha,".mkv",J(new{v="b"}),J(new{v="a"}),ContinueFlow:true),CancellationToken.None),"The publication is requested.");
 
-            // Le worker disparaît avant que le nœud d'accès ait confirmé : la reprise hérite de la demande.
+            // Le worker disparaît avant que le worker d'accès ait confirmé : la reprise hérite de la demande.
             await ExpireAsync(id);
             await FullRecovery().ProcessOnceAsync(CancellationToken.None);
             Check((await executions.GetAsync(id,CancellationToken.None))!.State=="running","The execution survives the loss of its worker.");
@@ -60,7 +60,7 @@ internal static partial class Harness
             Console.WriteLine("PASS: a publication requested before a worker loss is adopted by the resumed worker, exactly once.");
         }
 
-        /// <summary>Stockage partagé : chaque worker a un accès direct. Si le worker qui détenait le média est perdu, un autre worker en accès direct reprend (plus de « nœud source » épinglé sur le worker mort).</summary>
+        /// <summary>Stockage partagé : chaque worker a un accès direct. Si le worker qui détenait le média est perdu, un autre worker en accès direct reprend (plus de « worker source » épinglé sur le worker mort).</summary>
         public async Task ResumeOnAnotherDirectWorkerWhenTheDeadWorkerWasTheAccessNodeAsync()
         {
             var flow=Chain(Node(registry,"entry","base-input-file"),Node(registry,"variable","base-variable",new(){["name"]=J("kept"),["value"]=J("7")}),Node(registry,"end","base-complete-flow"));
@@ -70,7 +70,7 @@ internal static partial class Harness
             { shared.Parameters.AddWithValue("root",directory); shared.Parameters.AddWithValue("b",b); shared.Parameters.AddWithValue("c",c); shared.Parameters.AddWithValue("id",id); await shared.ExecuteNonQueryAsync(); }
             await ExpireAsync(id);
             await using(var gone=db.CreateCommand("UPDATE cluster_nodes SET last_seen_at=clock_timestamp()-interval '2 hours' WHERE id=@a")){ gone.Parameters.AddWithValue("a",a); await gone.ExecuteNonQueryAsync(); }
-            var recovery=new RuntimeRecoveryService(db,NullLogger<RuntimeRecoveryService>.Instance,new NodeGroupRepository(db),eligibility,new NodePresenceOptions(TimeSpan.FromMinutes(5)));
+            var recovery=new RuntimeRecoveryService(db,NullLogger<RuntimeRecoveryService>.Instance,new WorkerGroupRepository(db),eligibility,new WorkerPresenceOptions(TimeSpan.FromMinutes(5)));
             await recovery.ProcessOnceAsync(CancellationToken.None);
             var state=await executions.GetAsync(id,CancellationToken.None);
             Check(state!.State=="running","Another worker with direct access to the library keeps the execution alive: "+state.Detail);

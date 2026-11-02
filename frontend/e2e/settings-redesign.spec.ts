@@ -32,7 +32,7 @@ test.beforeEach(async ({ page }) => {
       json: { setupRequired: false, user: { id: 'admin-id', username: 'admin', role: 'admin' } },
     }),
   );
-  await page.route('**/api/v1/cluster', (route) =>
+  await page.route('**/api/v1/central', (route) =>
     route.fulfill({ json: { id: 'cluster-one', name: 'Maison', standalone: false } }),
   );
   await page.route('**/health/details', (route) =>
@@ -87,7 +87,7 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/v1/tools/ai/sessions?offset=*', (route) =>
     route.fulfill({ json: { items: [], offset: 0, hasMore: false } }),
   );
-  await page.route('**/api/v1/tools/ai/cluster', (route) => route.fulfill({ json: { nodes: [] } }));
+  await page.route('**/api/v1/tools/ai/central', (route) => route.fulfill({ json: { nodes: [] } }));
   await page.route('**/api/v1/network/settings', (route) =>
     route.fulfill({ json: { trustProxy: false, proxies: [] } }),
   );

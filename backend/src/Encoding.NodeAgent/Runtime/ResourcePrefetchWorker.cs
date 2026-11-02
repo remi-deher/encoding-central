@@ -7,7 +7,7 @@ namespace Encoding.NodeAgent.Runtime;
 /// Remplit le cache du worker avec la dernière version de chaque ressource dès qu'elle est publiée sur son serveur :
 /// le lancement d'un flow n'a alors plus rien à télécharger. Une version plus ancienne est récupérée à la demande.
 /// </summary>
-public sealed class ResourcePrefetchWorker(NodeAgentOptions options, WorkerIdentityStore identities, ILogger<ResourcePrefetchWorker> logger) : BackgroundService
+public sealed class ResourcePrefetchWorker(WorkerAgentOptions options, WorkerIdentityStore identities, ILogger<ResourcePrefetchWorker> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken ct)
     {

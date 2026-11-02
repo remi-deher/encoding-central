@@ -29,7 +29,7 @@ public record FlowExportData(byte[] Bytes, string ContentType, string FileName);
 
 public sealed class FlowCoordinatorService(
     FlowRepository flows,
-    NodeRepository nodes,
+    WorkerRepository nodes,
     ResourceRepository resources,
     FlowTemplateRepository templates,
     FlowDefinitionValidator validator,
@@ -38,7 +38,7 @@ public sealed class FlowCoordinatorService(
 {
     public FlowCoordinatorService(IServiceProvider services) : this(
         services.GetService(typeof(FlowRepository)) as FlowRepository ?? null!,
-        services.GetService(typeof(NodeRepository)) as NodeRepository ?? null!,
+        services.GetService(typeof(WorkerRepository)) as WorkerRepository ?? null!,
         services.GetService(typeof(ResourceRepository)) as ResourceRepository ?? null!,
         services.GetService(typeof(FlowTemplateRepository)) as FlowTemplateRepository ?? null!,
         services.GetService(typeof(FlowDefinitionValidator)) as FlowDefinitionValidator ?? null!,
@@ -61,14 +61,14 @@ public sealed class FlowCoordinatorService(
 
         var validation = validator.Validate(flow);
         var availableWorkers = (await nodes.ListAsync(offlineAfter, ct))
-            .Where(node => node.Status == NodePresenceStatus.Online
-                && node.Lifecycle == NodeLifecycle.Online
+            .Where(node => node.Status == WorkerPresenceStatus.Online
+                && node.Lifecycle == WorkerLifecycle.Online
                 && node.Roles.Contains(NodeRole.Worker))
             .ToArray();
 
         var compatible = validation.IsValid
             ? availableWorkers.Where(node => eligibility.CanRun(flow, node.Capabilities, node.Id,
-                identity: new NodeIdentityResponse(node.Id, node.DisplayName,
+                identity: new WorkerIdentityResponse(node.Id, node.DisplayName,
                     node.Labels ?? new Dictionary<string, string?>(),
                     node.Labels ?? new Dictionary<string, string?>(), []),
                 inventory: node.Inventory)).ToArray()

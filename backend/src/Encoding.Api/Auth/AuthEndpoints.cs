@@ -21,7 +21,7 @@ public static class AuthEndpoints
             return Results.Ok(new AuthStatusResponse(setupRequired, setupRequired ? null : Current(http.User)));
         }).AllowAnonymous().WithName("GetAuthStatus");
 
-        auth.MapPost("/setup", async (SetupRequest request, HttpContext http, AuthService service, AuthOptions options, Encoding.Api.Nodes.LocalNodeRegistry localNode, CancellationToken ct) =>
+        auth.MapPost("/setup", async (SetupRequest request, HttpContext http, AuthService service, AuthOptions options, Encoding.Api.Nodes.LocalWorkerRegistry localNode, CancellationToken ct) =>
         {
             var errors = new Dictionary<string, string[]>();
             if (!string.IsNullOrWhiteSpace(request.Username) || !string.IsNullOrWhiteSpace(request.Password))
@@ -29,19 +29,19 @@ public static class AuthEndpoints
                 foreach (var (k, v) in AuthService.ValidateNewUser(request.Username, request.Password))
                     errors[k] = v;
             }
-            if (!Encoding.Api.Nodes.LocalNodeRegistry.IsValidName(request.NodeDisplayName))
-                errors["nodeDisplayName"] = [$"Le nom du nœud ne peut pas dépasser {Encoding.Api.Nodes.LocalNodeRegistry.MaximumNameLength} caractères."];
-            if (!string.IsNullOrWhiteSpace(request.ClusterName) && !Encoding.Api.Infrastructure.ClusterIdentityRepository.IsValidName(request.ClusterName))
-                errors["clusterName"] = [$"Le nom du cluster ne peut pas dépasser {Encoding.Api.Infrastructure.ClusterIdentityRepository.MaximumNameLength} caractères."];
+            if (!Encoding.Api.Nodes.LocalWorkerRegistry.IsValidName(request.NodeDisplayName))
+                errors["nodeDisplayName"] = [$"Le nom du worker ne peut pas dépasser {Encoding.Api.Nodes.LocalWorkerRegistry.MaximumNameLength} caractères."];
+            if (!string.IsNullOrWhiteSpace(request.ClusterName) && !Encoding.Api.Infrastructure.CentralIdentityRepository.IsValidName(request.ClusterName))
+                errors["clusterName"] = [$"Le nom du central ne peut pas dépasser {Encoding.Api.Infrastructure.CentralIdentityRepository.MaximumNameLength} caractères."];
             if (errors.Count > 0) return (IResult)Results.ValidationProblem(errors);
 
             var (outcome, _) = await service.SetupAsync(request, ct);
             if (outcome == SetupOutcome.AlreadyConfigured)
-                return Results.Conflict(new { title = "Le cluster possède déjà un administrateur." });
+                return Results.Conflict(new { title = "Le central possède déjà un administrateur." });
             await localNode.RequestNameAsync(request.NodeDisplayName, ct);
             if (!string.IsNullOrWhiteSpace(request.ClusterName))
             {
-                var clusterRepo = http.RequestServices.GetRequiredService<Encoding.Api.Infrastructure.ClusterIdentityRepository>();
+                var clusterRepo = http.RequestServices.GetRequiredService<Encoding.Api.Infrastructure.CentralIdentityRepository>();
                 await clusterRepo.CreateAsync(request.ClusterName, ct);
             }
             var effectiveUsername = string.IsNullOrWhiteSpace(request.Username) ? "admin" : request.Username.Trim();
@@ -52,13 +52,13 @@ public static class AuthEndpoints
             return Results.Created("/api/v1/auth/me", login.User);
         }).AllowAnonymous().RequireRateLimiting(AuthExtensions.AnonymousPolicy).WithName("SetupFirstAdministrator");
 
-        // Fiche du nœud local pour l'assistant (décision du propriétaire du 2026-10-23) : ouverte sans compte seulement
-        // tant qu'aucun administrateur n'existe, puis 404. Liste blanche de champs, sans secret ni identifiant de cluster.
-        auth.MapGet("/setup/node", async (AuthService service, IHttpClientFactory clients, IConfiguration configuration,
+        // Fiche du worker local pour l'assistant (décision du propriétaire du 2026-10-23) : ouverte sans compte seulement
+        // tant qu'aucun administrateur n'existe, puis 404. Liste blanche de champs, sans secret ni identifiant de central.
+        auth.MapGet("/setup/worker", async (AuthService service, IHttpClientFactory clients, IConfiguration configuration,
             Encoding.Api.Infrastructure.NetworkSettingsService network, CancellationToken ct) =>
         {
             if (!await service.SetupRequiredAsync(ct)) return Results.NotFound();
-            return Results.Ok(await Encoding.Api.Nodes.SetupNodeProbe.ReadAsync(clients, configuration, network, ct));
+            return Results.Ok(await Encoding.Api.Nodes.SetupWorkerProbe.ReadAsync(clients, configuration, network, ct));
         }).AllowAnonymous().RequireRateLimiting(AuthExtensions.SetupProbePolicy).WithName("GetSetupNode");
 
         auth.MapPost("/login", async (LoginRequest request, HttpContext http, AuthService service, AuthOptions options, CancellationToken ct) =>
@@ -130,7 +130,7 @@ public static class AuthEndpoints
             return await service.UpdateUserAsync(id, request.Role, request.IsActive, ct) switch
             {
                 UserChangeResult.Updated => Results.NoContent(),
-                UserChangeResult.LastAdministrator => Results.Conflict(new { title = "Le cluster doit conserver au moins un administrateur actif." }),
+                UserChangeResult.LastAdministrator => Results.Conflict(new { title = "Le central doit conserver au moins un administrateur actif." }),
                 _ => Results.NotFound(),
             };
         }).WithName("UpdateUser");
@@ -148,7 +148,7 @@ public static class AuthEndpoints
             return await service.DeleteUserAsync(id, ct) switch
             {
                 UserChangeResult.Updated => Results.NoContent(),
-                UserChangeResult.LastAdministrator => Results.Conflict(new { title = "Le cluster doit conserver au moins un administrateur actif." }),
+                UserChangeResult.LastAdministrator => Results.Conflict(new { title = "Le central doit conserver au moins un administrateur actif." }),
                 _ => Results.NotFound(),
             };
         }).WithName("DeleteUser");

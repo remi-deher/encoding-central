@@ -15,7 +15,6 @@ public sealed partial class RuntimeRepository
 {
     public async Task<RuntimeLease?> ClaimAsync(Guid worker,CancellationToken ct)
     {
-        if(ownership is not null && !await ownership.PrepareClaimsAsync(ct)) return null;
         // Persist failures independently, so an inaccessible task cannot delay another eligible task.
         if (await HasUnavailableSourcesAsync(dataSource, presence.OfflineAfter, ct))
         {
@@ -40,7 +39,7 @@ public sealed partial class RuntimeRepository
     private sealed record ClaimCursor(DateTimeOffset QueuedAt, Guid Id);
     private sealed record ClaimPage(RuntimeLease? Lease, ClaimCursor? Next = null);
 
-    internal async Task<IReadOnlyList<NodePlacementCandidate>> LoadPlacementCandidatesAsync(
+    internal async Task<IReadOnlyList<WorkerPlacementCandidate>> LoadPlacementCandidatesAsync(
         Guid libraryId,
         DbConnection c,
         DbTransaction tx,
@@ -75,7 +74,7 @@ public sealed partial class RuntimeRepository
         cmd.Parameters.AddWithValue("library", libraryId);
         cmd.Parameters.AddWithValue("exclude_execution", excludeExecutionId?.ToString("D") ?? string.Empty);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
-        var list = new List<NodePlacementCandidate>();
+        var list = new List<WorkerPlacementCandidate>();
         while (await reader.ReadAsync(ct))
         {
             var id = reader.GetGuid(0);
@@ -84,8 +83,8 @@ public sealed partial class RuntimeRepository
             var isWorker = roles.Contains("worker", StringComparer.OrdinalIgnoreCase);
             var maxTasks = Convert.ToInt32(reader.GetValue(3));
             var activeTasks = Convert.ToInt32(reader.GetValue(4));
-            var caps = JsonSerializer.Deserialize<NodeToolCapability[]>(reader.GetString(5), Json) ?? [];
-            var inv = reader.IsDBNull(6) ? null : JsonSerializer.Deserialize<NodeInventory>(reader.GetString(6), Json);
+            var caps = JsonSerializer.Deserialize<WorkerToolCapability[]>(reader.GetString(5), Json) ?? [];
+            var inv = reader.IsDBNull(6) ? null : JsonSerializer.Deserialize<WorkerInventory>(reader.GetString(6), Json);
             var isOnline = reader.GetBoolean(7);
             var acceptsWork = reader.GetBoolean(8);
             var mode = reader.IsDBNull(9) ? null : reader.GetString(9);
@@ -97,10 +96,10 @@ public sealed partial class RuntimeRepository
             var labelsJson = reader.IsDBNull(15) ? null : reader.GetString(15);
             var hasValidTransferSource = reader.GetBoolean(16);
 
-            LibraryNodeAccessInfo? access = null;
+            LibraryWorkerAccessInfo? access = null;
             if (mode is not null)
             {
-                access = new LibraryNodeAccessInfo(
+                access = new LibraryWorkerAccessInfo(
                     libraryId,
                     mode,
                     true,
@@ -112,7 +111,7 @@ public sealed partial class RuntimeRepository
 
             var identity = await nodeGroups.GetNodeIdentityAsync(id, ct);
 
-            list.Add(new NodePlacementCandidate(
+            list.Add(new WorkerPlacementCandidate(
                 NodeId: id,
                 Name: name,
                 IsWorker: isWorker,
@@ -129,16 +128,16 @@ public sealed partial class RuntimeRepository
     private async Task<ClaimPage> ClaimAvailableAsync(Guid worker, ClaimCursor? after, CancellationToken ct)
     {
         await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
-        IReadOnlyList<NodeToolCapability> capabilities; int capacity; NodeInventory? inventory;
+        IReadOnlyList<WorkerToolCapability> capabilities; int capacity; WorkerInventory? inventory;
         await using(var node=Sql.Command("SELECT capabilities::text,COALESCE((SELECT p.max_concurrent_tasks FROM node_processing_settings p WHERE p.node_id=cluster_nodes.id),max_concurrent_tasks),(SELECT p.schedule_timezone FROM node_processing_settings p WHERE p.node_id=cluster_nodes.id AND p.schedule_enabled),(SELECT p.schedule_slots FROM node_processing_settings p WHERE p.node_id=cluster_nodes.id AND p.schedule_enabled),inventory::text FROM cluster_nodes WHERE id=@node AND deleted_at IS NULL AND accepts_work AND 'worker'=ANY(roles) AND last_seen_at>clock_timestamp()-@offline FOR UPDATE",
             c,tx))
         {
             node.Parameters.AddWithValue("offline",presence.OfflineAfter); node.Parameters.AddWithValue("node",worker); await using var r=await node.ExecuteReaderAsync(ct);
             if(!await r.ReadAsync(ct)) return new(null);
-            capabilities=JsonSerializer.Deserialize<NodeToolCapability[]>(r.GetString(0),Json)??[]; capacity=r.GetInt32(1);
-                inventory=r.IsDBNull(4)?null:JsonSerializer.Deserialize<NodeInventory>(r.GetString(4),Json);
+            capabilities=JsonSerializer.Deserialize<WorkerToolCapability[]>(r.GetString(0),Json)??[]; capacity=r.GetInt32(1);
+                inventory=r.IsDBNull(4)?null:JsonSerializer.Deserialize<WorkerInventory>(r.GetString(4),Json);
             // Le calendrier ne bloque que les nouveaux démarrages : les baux actifs ne sont ni révoqués ni interrompus.
-            if(!r.IsDBNull(2) && !r.IsDBNull(3) && !new NodeSchedule(true,r.GetString(2),r.GetString(3)).IsOpen(DateTimeOffset.UtcNow)) return new(null);
+            if(!r.IsDBNull(2) && !r.IsDBNull(3) && !new WorkerSchedule(true,r.GetString(2),r.GetString(3)).IsOpen(DateTimeOffset.UtcNow)) return new(null);
         }
         await using(var active=Sql.Command("SELECT count(*) FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.worker_node_id=@worker AND w.lease_until>clock_timestamp() AND e.state IN ('running','cancelling')",
             c,tx))
@@ -156,7 +155,6 @@ public sealed partial class RuntimeRepository
             CASE WHEN w.wait_probe_due THEN (SELECT x.spec::text FROM execution_waits x WHERE x.execution_id=e.id AND x.state='waiting') END,e.queued_at,w.placement_plan::text,w.before_metadata::text
           FROM execution_work w JOIN executions e ON e.id=w.execution_id JOIN libraries l ON l.id=w.library_id
           WHERE (e.state='queued' OR e.state='running' AND w.worker_node_id IS NULL)
-          AND {TaskOwnershipRepository.ActiveSql("e.id")}
           AND COALESCE(w.handoff_selector->>'mode','')<>'server'
           AND l.is_active AND w.available_at<=clock_timestamp()
           AND w.lease_until IS NULL
@@ -186,7 +184,7 @@ public sealed partial class RuntimeRepository
                     r.GetFieldValue<DateTimeOffset>(14),r.IsDBNull(15)?null:JsonSerializer.Deserialize<FlowPlacementPlan>(r.GetString(15),Json),
                     r.IsDBNull(16)?null:JsonSerializer.Deserialize<JsonElement>(r.GetString(16),Json)));
         }
-        var placementCandidatesByLibrary=new Dictionary<Guid,IReadOnlyList<NodePlacementCandidate>>();
+        var placementCandidatesByLibrary=new Dictionary<Guid,IReadOnlyList<WorkerPlacementCandidate>>();
         var placementPlans=new Dictionary<(Guid Library,Guid Flow,int Version,string Metadata),FlowPlacementPlan>();
         foreach(var item in candidates)
         {
@@ -295,7 +293,7 @@ public sealed partial class RuntimeRepository
             }
             var needsDirect=sourceEditResume || eligibility.RequiresDirectAccess(item.Flow,item.Checkpoint?.NextNodeId,item.Checkpoint is not null);
             // ADR 0024 : par défaut le worker à accès direct fait le travail. Un worker par transfert ne le prend que si aucun worker
-            // direct en ligne n'en est capable (capacités évaluées comme pour une réclamation) ; une passation ou un choix de nœud
+            // direct en ligne n'en est capable (capacités évaluées comme pour une réclamation) ; une passation ou un choix de worker
             // explicite garde la décision du flow.
             var prefersDirect=eligibility.PrefersDirectAccess(item.Flow,item.Checkpoint?.NextNodeId,item.Checkpoint is not null)
                 || item.Selector is null && !eligibility.ChoosesPlacementExplicitly(item.Flow,item.Checkpoint?.NextNodeId,item.Checkpoint is not null);

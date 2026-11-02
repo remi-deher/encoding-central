@@ -4,7 +4,7 @@ using Encoding.NodeAgent.Runtime;
 
 namespace Encoding.Runtime.Tests;
 
-/// <summary>Garanties de fichiers du remplacement de source : sauvegarde vérifiée avant tout changement, restauration, reprise après perte du nœud d'accès.</summary>
+/// <summary>Garanties de fichiers du remplacement de source : sauvegarde vérifiée avant tout changement, restauration, reprise après perte du worker d'accès.</summary>
 internal static class SourceReplacementScenarios
 {
     private static void Check(bool condition,string message){ if(!condition) throw new InvalidOperationException(message); }

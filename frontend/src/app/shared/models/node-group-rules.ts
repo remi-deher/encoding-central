@@ -3,7 +3,7 @@ import { NodeGroupCriteria, NodeResponse } from './cluster';
 export const LABEL_KEY_REGEX = /^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$/;
 
 /**
- * Valide si une clé d'étiquette est conforme aux règles de nommage du cluster.
+ * Valide si une clé d'étiquette est conforme aux règles de nommage du central.
  */
 export function validateLabelKey(key: string): boolean {
   return LABEL_KEY_REGEX.test(key.trim());
@@ -30,7 +30,7 @@ export function parseLabels(source: string): Record<string, string | null> {
 }
 
 /**
- * Évalue si un nœud correspond aux critères d'un groupe automatique.
+ * Évalue si un worker correspond aux critères d'un groupe automatique.
  * Miroir exact de l'algorithme backend `NodeGroupRepository.Matches`.
  */
 export function matchesGroupCriteria(criteria: NodeGroupCriteria, node: NodeResponse): boolean {
@@ -102,7 +102,7 @@ const KNOWN_CODECS_MAP: Record<string, string[]> = {
 };
 
 /**
- * Détermine si un nœud dispose des capacités requises pour un encodeur ou un codec.
+ * Détermine si un worker dispose des capacités requises pour un encodeur ou un codec.
  */
 export function nodeSupportsEncoder(node: NodeResponse, requiredEncoderOrCodec: string): boolean {
   const ffmpeg = node.capabilities.find((c) => c.toolId.toLowerCase() === 'ffmpeg');
@@ -124,7 +124,7 @@ export function nodeSupportsEncoder(node: NodeResponse, requiredEncoderOrCodec: 
 }
 
 /**
- * Filtre les nœuds qui correspondent aux critères donnés.
+ * Filtre les workers qui correspondent aux critères donnés.
  */
 export function filterNodesByCriteria(
   criteria: NodeGroupCriteria,
@@ -181,7 +181,7 @@ export function formatGroupCriteriaBadges(criteria: NodeGroupCriteria | null | u
 }
 
 /**
- * Extrait les systèmes d'exploitation distincts observés dans le cluster.
+ * Extrait les systèmes d'exploitation distincts observés dans le central.
  */
 export function extractAvailableOperatingSystems(nodes: readonly NodeResponse[]): string[] {
   const set = new Set<string>();
@@ -194,7 +194,7 @@ export function extractAvailableOperatingSystems(nodes: readonly NodeResponse[])
 }
 
 /**
- * Extrait les architectures distinctes observées dans le cluster.
+ * Extrait les architectures distinctes observées dans le central.
  */
 export function extractAvailableArchitectures(nodes: readonly NodeResponse[]): string[] {
   const set = new Set<string>();
@@ -207,7 +207,7 @@ export function extractAvailableArchitectures(nodes: readonly NodeResponse[]): s
 }
 
 /**
- * Extrait les identifiants d'outils distincts déclarés dans le cluster.
+ * Extrait les identifiants d'outils distincts déclarés dans le central.
  */
 export function extractAvailableTools(nodes: readonly NodeResponse[]): string[] {
   const set = new Set<string>();

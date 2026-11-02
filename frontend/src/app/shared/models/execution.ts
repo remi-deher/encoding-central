@@ -144,7 +144,7 @@ export function executionPhaseLabel(phase: string | null | undefined): string {
       {
         publication: 'Publication en cours',
         source_transfer: 'Préparation et transfert de la source',
-        waiting_handoff: 'Attente du nœud de relais',
+        waiting_handoff: 'Attente du worker de relais',
       } as Record<string, string>
     )[phase ?? ''] ?? ''
   );

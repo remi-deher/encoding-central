@@ -4,7 +4,7 @@ using Encoding.Contracts.Executions;
 
 namespace Encoding.Api.Executions;
 
-public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionStreamBroadcaster? broadcaster=null,TaskOwnershipRepository? ownership=null,
+public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionStreamBroadcaster? broadcaster=null,
     Encoding.Api.Flows.FlowComponentRegistry? components=null)
 {
     public async Task<IReadOnlyList<RuntimeTransfer>> ListAsync(Guid node,CancellationToken ct)
@@ -82,7 +82,7 @@ public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionS
         if(!continueFlow) await RuntimeRepository.ReleaseAsync(id,c,tx,ct);
         await tx.CommitAsync(ct); broadcaster?.Publish(id); return true;
     }
-    /// <summary>Publication déjà confirmée par le nœud d'accès pour une exécution dont le flow continue (ADR 0003).</summary>
+    /// <summary>Publication déjà confirmée par le worker d'accès pour une exécution dont le flow continue (ADR 0003).</summary>
     public async Task<RuntimePublicationState?> PublicationStateAsync(Guid id,CancellationToken ct)
     {
         await using var cmd=dataSource.CreateCommand("SELECT published_path,result_sha,publication_requested FROM execution_work WHERE execution_id=@id");
@@ -170,7 +170,7 @@ public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionS
                 set.Parameters.AddWithValue("continue",request.ContinueFlow);
             if(await set.ExecuteNonQueryAsync(ct)!=1) return false;
             if(!await ExecutionRepository.RecordInTransactionAsync(id,new(request.EventId,request.ExpectedRevision,"running",worker,null,
-                "Résultat validé ; publication demandée au nœud d’accès."),c,tx,ct)) return false;
+                "Résultat validé ; publication demandée au worker d’accès."),c,tx,ct)) return false;
         }
         else
         {
@@ -189,7 +189,6 @@ public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionS
                   """,c,tx);
                 schedule.Parameters.AddWithValue("id",id); schedule.Parameters.AddWithValue("next",next); schedule.Parameters.AddWithValue("event",Guid.NewGuid());
                 schedule.Parameters.AddWithValue("delay",TimeSpan.FromMinutes(request.DeferMinutes!.Value)); await schedule.ExecuteNonQueryAsync(ct);
-                if(ownership is not null) await ownership.CreateAsync([next],c,tx,ct);
             }
         }
         await tx.CommitAsync(ct); return true;

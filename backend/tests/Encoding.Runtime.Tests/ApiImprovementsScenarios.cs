@@ -51,7 +51,7 @@ internal static class ApiImprovementsScenarios
                 ["Auth:AnonymousRequestsPerMinute"] = "1000",
                 ["Auth:HeavyOperationsPerMinute"] = "3",
                 [Encoding.Core.Nodes.LocalEnrollment.SecretFileSetting] = secretFile,
-                [Encoding.Api.Nodes.LocalNodeEndpoints.BaseUrlSetting] = "http://example.invalid/",
+                [Encoding.Api.Nodes.LocalWorkerEndpoints.BaseUrlSetting] = "http://example.invalid/",
             });
 
             var anonymous = new TestClient(factory.CreateClient(new() { HandleCookies = false, AllowAutoRedirect = false }));
@@ -185,10 +185,6 @@ internal static class ApiImprovementsScenarios
                 var resumedId = (await resumeResp.Content.ReadFromJsonAsync<JsonElement>(Json)).GetProperty("id").GetGuid();
                 Check(resumedId != exec2 && await execRepo.GetAsync(resumedId, CancellationToken.None) is { State: "queued", Attempt: 2 },
                     "Resume responds with a linked queued attempt.");
-                using var ownerResponse=await admin.SendAsync(HttpMethod.Get,$"/api/v1/executions/{resumedId}/ownership");
-                Check(ownerResponse.StatusCode==HttpStatusCode.OK,"Resumed work has an observable owner immediately after creation.");
-                var owner=(await ownerResponse.Content.ReadFromJsonAsync<TaskOwnershipStatus>(Json))!;
-                Check(owner.ExecutionId==resumedId && owner.OwnerPeerId!=Guid.Empty && owner.Epoch==1 && owner.State=="active","A resumed execution has one initial active ownership epoch.");
             }
             Console.WriteLine("PASS: executions and events pagination and filtering.");
 
@@ -226,9 +222,9 @@ internal static class ApiImprovementsScenarios
             Console.WriteLine("PASS: HeavyOperationsPolicy rate limiting.");
 
             // 6. Cluster API Tokens, suppression/clonage de flow, et vue d'ensemble bibliothèques
-            // A. Création du cluster et génération du token cluster
+            // A. Création du central et génération du token cluster
             string clusterToken;
-            using (var createClusterResp = await admin.SendAsync(HttpMethod.Post, "/api/v1/cluster", new { name = "Cluster Test IA" }))
+            using (var createClusterResp = await admin.SendAsync(HttpMethod.Post, "/api/v1/central", new { name = "Cluster Test IA" }))
             {
                 Check(createClusterResp.StatusCode == HttpStatusCode.OK, "Cluster creation succeeds.");
                 var clusterDoc = await createClusterResp.Content.ReadFromJsonAsync<JsonElement>(Json);
@@ -243,8 +239,8 @@ internal static class ApiImprovementsScenarios
                 BearerToken = clusterToken
             };
 
-            // Vérification de GET /api/v1/cluster
-            using (var clusterGetResp = await aiClient.SendAsync(HttpMethod.Get, "/api/v1/cluster"))
+            // Vérification de GET /api/v1/central
+            using (var clusterGetResp = await aiClient.SendAsync(HttpMethod.Get, "/api/v1/central"))
             {
                 Check(clusterGetResp.StatusCode == HttpStatusCode.OK, "AI client can query cluster status with Bearer token.");
                 var clusterGetDoc = await clusterGetResp.Content.ReadFromJsonAsync<JsonElement>(Json);

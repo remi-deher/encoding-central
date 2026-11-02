@@ -12,8 +12,8 @@ using Encoding.Contracts.Libraries;
 
 namespace Encoding.Api.Libraries;
 
-public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefinitionValidator validator,NodePresenceOptions presence,
-    ExecutionStreamBroadcaster? broadcaster = null,TaskOwnershipRepository? ownership=null,LocalNodeRegistry? localNode=null)
+public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefinitionValidator validator,WorkerPresenceOptions presence,
+    ExecutionStreamBroadcaster? broadcaster = null,LocalWorkerRegistry? localNode=null)
 {
     private static readonly JsonSerializerOptions Json=new(JsonSerializerDefaults.Web);
     public Task<LibraryWorkflowResponse> GetAsync(Guid library,CancellationToken ct)=>GetAsync(library,null,null,null,ct);
@@ -92,7 +92,7 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
     private async Task<bool> RetargetPendingAsync(Guid library,FlowDefinition flow,string document,DbConnection c,DbTransaction tx,CancellationToken ct)
     {
         var moved=new List<(Guid Id,int Revision)>();
-        await using(var update=Sql.Command($"UPDATE executions SET flow_name=@name,flow_version=@version,flow_definition=@definition,detail=@detail,updated_at=clock_timestamp(),revision=revision+1 WHERE state='queued' AND (flow_name<>@name OR flow_version<>@version) AND flow_definition->>'mediaType'=@mediaType AND id IN(SELECT execution_id FROM execution_work WHERE library_id=@library) AND NOT EXISTS(SELECT 1 FROM execution_steps s WHERE s.execution_id=executions.id) AND {TaskOwnershipRepository.ActiveSql("executions.id")} RETURNING id,revision",
+        await using(var update=Sql.Command($"UPDATE executions SET flow_name=@name,flow_version=@version,flow_definition=@definition,detail=@detail,updated_at=clock_timestamp(),revision=revision+1 WHERE state='queued' AND (flow_name<>@name OR flow_version<>@version) AND flow_definition->>'mediaType'=@mediaType AND id IN(SELECT execution_id FROM execution_work WHERE library_id=@library) AND NOT EXISTS(SELECT 1 FROM execution_steps s WHERE s.execution_id=executions.id) RETURNING id,revision",
             c,tx))
         {
             update.Parameters.AddWithValue("name",flow.Name); update.Parameters.AddWithValue("version",flow.Version); update.Parameters.AddWithValue("definition",SqlKind.Json,document);
@@ -261,15 +261,14 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
             receipt.Parameters.AddWithValue("bytes",file.Bytes);receipt.Parameters.AddWithValue("modified",file.Modified.ToUniversalTime());
                 receipt.Parameters.AddWithValue("execution",execution);await receipt.ExecuteNonQueryAsync(ct);
         }
-        if(ownership is not null) await ownership.CreateAsync(assignments,c,tx,ct);
         await tx.CommitAsync(ct);
         if(queued>0) broadcaster?.Publish();
         return(queued,files.Count-queued);
     }
 
     /// <summary>
-    /// Le central ne met en file automatiquement que ce qu'il peut servir : si au moins un nœud serveur monte la bibliothèque en direct,
-    /// le nœud du central doit en faire partie. Sans accès direct nulle part, le central peut le faire.
+    /// Le central ne met en file automatiquement que ce qu'il peut servir : si au moins un worker serveur monte la bibliothèque en direct,
+    /// le worker du central doit en faire partie. Sans accès direct nulle part, le central peut le faire.
     /// </summary>
     private async Task<bool> ServesLibraryAutomaticallyAsync(Guid library,DbConnection c,DbTransaction tx,CancellationToken ct)
     {

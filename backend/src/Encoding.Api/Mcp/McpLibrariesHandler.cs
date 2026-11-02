@@ -22,10 +22,10 @@ namespace Encoding.Api.Mcp;
 public sealed class McpLibrariesHandler(
     LibraryRepository libraries,
     LibraryWorkflowRepository libraryWorkflows,
-    LibraryNodeAccessRepository libraryNodeAccess,
+    LibraryWorkerAccessRepository libraryNodeAccess,
     LibraryProcessingRepository libraryProcessing,
-    NodeRepository nodes,
-    NodeGroupRepository nodeGroups)
+    WorkerRepository nodes,
+    WorkerGroupRepository nodeGroups)
     : IMcpDomainHandler
 {
     private static JsonSerializerOptions JsonOptions => McpToolHelpers.JsonOptions;
@@ -177,14 +177,14 @@ public sealed class McpLibrariesHandler(
     public async Task<McpCallToolResult> ToolConfigureLibraryNodeAccessAsync(JsonElement args, bool isAdmin, CancellationToken ct)
     {
         if (!isAdmin) return Denied("La configuration des accès exige le rôle administrateur.");
-        if (!TryGuid(args, "libraryId", out var id) || !TryDeserialize<Encoding.Contracts.Libraries.ConfigureLibraryNodeAccessRequest>(args, out var request))
+        if (!TryGuid(args, "libraryId", out var id) || !TryDeserialize<Encoding.Contracts.Libraries.ConfigureLibraryWorkerAccessRequest>(args, out var request))
             return Invalid("Paramètres 'libraryId' et 'nodes' invalides.");
         try
         {
             var result = await libraryNodeAccess.ConfigureAsync(id, request, ct);
             return result is null ? Invalid("Bibliothèque introuvable.") : McpCallToolResult.Text(JsonSerializer.Serialize(result, JsonOptions));
         }
-        catch (LibraryNodeAccessValidationException exception)
+        catch (LibraryWorkerAccessValidationException exception)
         {
             return Invalid(JsonSerializer.Serialize(exception.Errors, JsonOptions));
         }
@@ -238,18 +238,18 @@ public sealed class McpLibrariesHandler(
     {
         if (!TryGuid(args, "id", out var id)) return Invalid("Paramètre 'id' (UUID) requis.");
         var group = await nodeGroups.GetAsync(id, ct);
-        return group is null ? Invalid("Groupe de nœuds introuvable.") : McpCallToolResult.Text(JsonSerializer.Serialize(group, JsonOptions));
+        return group is null ? Invalid("Groupe de workers introuvable.") : McpCallToolResult.Text(JsonSerializer.Serialize(group, JsonOptions));
     }
 
     public async Task<McpCallToolResult> ToolSaveNodeGroupAsync(JsonElement args, bool isAdmin, CancellationToken ct)
     {
         if (!isAdmin) return Denied("La modification des groupes exige le rôle administrateur.");
-        if (!TryDeserialize<Encoding.Contracts.Nodes.SaveNodeGroupRequest>(args, out var request)) return Invalid("Définition de groupe invalide.");
+        if (!TryDeserialize<Encoding.Contracts.Nodes.SaveWorkerGroupRequest>(args, out var request)) return Invalid("Définition de groupe invalide.");
         if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Trim().Length > 128
             || request.Description is null || request.Description.Length > 2000
             || request.Criteria is null || request.Labels is null || request.NodeIds is null || request.NodeIds.Count > 2048
             || request.Labels.Count > 128 || !Enum.IsDefined(request.Mode)
-            || request.Mode == Encoding.Contracts.Nodes.NodeGroupMode.Automatic && request.NodeIds.Count > 0)
+            || request.Mode == Encoding.Contracts.Nodes.WorkerGroupMode.Automatic && request.NodeIds.Count > 0)
             return Invalid("Les champs du groupe ou ses limites sont invalides.");
         Guid? id = null;
         if (args.TryGetProperty("id", out var idValue))
@@ -281,7 +281,7 @@ public sealed class McpLibrariesHandler(
         {
             "deleted" => McpCallToolResult.Text("Groupe supprimé."),
             "in-use" => Invalid("Le groupe est référencé par un flow et ne peut pas être supprimé."),
-            _ => Invalid("Groupe de nœuds introuvable.")
+            _ => Invalid("Groupe de workers introuvable.")
         };
     }
 
@@ -296,45 +296,45 @@ public sealed class McpLibrariesHandler(
     {
         if (!TryGuid(args, "nodeId", out var id)) return Invalid("Paramètre 'nodeId' (UUID) requis.");
         var identity = await nodeGroups.GetNodeIdentityAsync(id, ct);
-        return identity is null ? Invalid("Nœud introuvable.") : McpCallToolResult.Text(JsonSerializer.Serialize(identity, JsonOptions));
+        return identity is null ? Invalid("Worker introuvable.") : McpCallToolResult.Text(JsonSerializer.Serialize(identity, JsonOptions));
     }
 
     public async Task<McpCallToolResult> ToolSaveNodeIdentityAsync(JsonElement args, bool isAdmin, CancellationToken ct)
     {
-        if (!isAdmin) return Denied("La modification de l’identité d’un nœud exige le rôle administrateur.");
-        if (!TryGuid(args, "nodeId", out var id) || !TryDeserialize<Encoding.Contracts.Nodes.SaveNodeIdentityRequest>(args, out var request))
-            return Invalid("Paramètres d’identité de nœud invalides.");
+        if (!isAdmin) return Denied("La modification de l’identité d’un worker exige le rôle administrateur.");
+        if (!TryGuid(args, "nodeId", out var id) || !TryDeserialize<Encoding.Contracts.Nodes.SaveWorkerIdentityRequest>(args, out var request))
+            return Invalid("Paramètres d’identité de worker invalides.");
         if (request.Labels is null || request.Labels.Count > 128 || request.DisplayName?.Length > 128
             || request.Labels.Any(pair => !System.Text.RegularExpressions.Regex.IsMatch(pair.Key, "^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$") || pair.Value?.Length > 256))
-            return Invalid("Le nom ou les étiquettes du nœud sont invalides.");
+            return Invalid("Le nom ou les étiquettes du worker sont invalides.");
         var saved = await nodeGroups.SaveNodeIdentityAsync(id, request, ct);
-        return saved ? McpCallToolResult.Text(JsonSerializer.Serialize(await nodeGroups.GetNodeIdentityAsync(id, ct), JsonOptions)) : Invalid("Nœud introuvable.");
+        return saved ? McpCallToolResult.Text(JsonSerializer.Serialize(await nodeGroups.GetNodeIdentityAsync(id, ct), JsonOptions)) : Invalid("Worker introuvable.");
     }
 
     public async Task<McpCallToolResult> ToolSetNodeDrainingAsync(JsonElement args, bool isAdmin, CancellationToken ct)
     {
-        if (!isAdmin) return Denied("La vidange d’un nœud exige le rôle administrateur.");
+        if (!isAdmin) return Denied("La vidange d’un worker exige le rôle administrateur.");
         if (!TryGuid(args, "nodeId", out var id) || !args.TryGetProperty("draining", out var value)
             || value.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return Invalid("Paramètres 'nodeId' et 'draining' invalides.");
-        return await nodes.SetDrainingAsync(id, value.GetBoolean(), ct) ? McpCallToolResult.Text("État de vidange mis à jour.") : Invalid("Nœud introuvable.");
+        return await nodes.SetDrainingAsync(id, value.GetBoolean(), ct) ? McpCallToolResult.Text("État de vidange mis à jour.") : Invalid("Worker introuvable.");
     }
 
     public async Task<McpCallToolResult> ToolGetNodeProcessingAsync(JsonElement args, CancellationToken ct)
     {
         if (!TryGuid(args, "nodeId", out var id)) return Invalid("Paramètre 'nodeId' (UUID) requis.");
         var settings = await libraryProcessing.NodeAsync(id, ct);
-        return settings is null ? Invalid("Nœud introuvable.") : McpCallToolResult.Text(JsonSerializer.Serialize(settings, JsonOptions));
+        return settings is null ? Invalid("Worker introuvable.") : McpCallToolResult.Text(JsonSerializer.Serialize(settings, JsonOptions));
     }
 
     public async Task<McpCallToolResult> ToolSaveNodeProcessingAsync(JsonElement args, bool isAdmin, CancellationToken ct)
     {
-        if (!isAdmin) return Denied("La configuration de capacité d’un nœud exige le rôle administrateur.");
-        if (!TryGuid(args, "nodeId", out var id) || !TryDeserialize<Encoding.Contracts.Nodes.SaveNodeProcessingSettings>(args, out var request))
-            return Invalid("Paramètres de capacité du nœud invalides.");
+        if (!isAdmin) return Denied("La configuration de capacité d’un worker exige le rôle administrateur.");
+        if (!TryGuid(args, "nodeId", out var id) || !TryDeserialize<Encoding.Contracts.Nodes.SaveWorkerProcessingSettings>(args, out var request))
+            return Invalid("Paramètres de capacité du worker invalides.");
         try
         {
             var saved = await libraryProcessing.SaveNodeAsync(id, request, ct);
-            return saved ? McpCallToolResult.Text(JsonSerializer.Serialize(await libraryProcessing.NodeAsync(id, ct), JsonOptions)) : Invalid("Le nœud ou sa révision de configuration a changé.");
+            return saved ? McpCallToolResult.Text(JsonSerializer.Serialize(await libraryProcessing.NodeAsync(id, ct), JsonOptions)) : Invalid("Le worker ou sa révision de configuration a changé.");
         }
         catch (ArgumentException exception) { return Invalid(exception.Message); }
     }

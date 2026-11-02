@@ -10,7 +10,7 @@ internal static partial class Harness
 {
     internal sealed partial class Fixture
     {
-        private ExecutionWaitRepository Waits => new(db,new Encoding.Api.Nodes.NodePresenceOptions(TimeSpan.FromHours(1)));
+        private ExecutionWaitRepository Waits => new(db,new Encoding.Api.Nodes.WorkerPresenceOptions(TimeSpan.FromHours(1)));
 
         /// <summary>entrée → [lecture Plex] → attente → fin ; l'attente a une sortie « timeout » si <paramref name="timeoutRoute"/>.</summary>
         private FlowDefinition WaitFlow(Dictionary<string,JsonElement> wait,bool timeoutRoute=false,bool watched=false)

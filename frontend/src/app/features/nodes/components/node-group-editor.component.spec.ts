@@ -92,7 +92,7 @@ describe('NodeGroupEditorComponent', () => {
     fixture.detectChanges();
 
     expect(element.textContent).toContain('Critères d’attribution automatique');
-    expect(element.textContent).toContain('Aperçu des nœuds correspondants');
+    expect(element.textContent).toContain('Aperçu des workers correspondants');
 
     // Tool chip selection
     const toolChip = element.querySelector('.tool-chip') as HTMLButtonElement;
@@ -102,7 +102,7 @@ describe('NodeGroupEditorComponent', () => {
     fixture.detectChanges();
 
     // Live preview should show 1 matching node (worker-linux has ffmpeg)
-    expect(element.textContent).toContain('1 nœud éligible');
+    expect(element.textContent).toContain('1 worker éligible');
     expect(element.textContent).toContain('Fast Worker Linux');
   });
 

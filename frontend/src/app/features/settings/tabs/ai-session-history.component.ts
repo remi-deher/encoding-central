@@ -27,7 +27,7 @@ import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-
     >
       @if (page(); as result) {
         <p>
-          Mise à jour automatique toutes les 30 secondes. Les changements des autres nœuds peuvent
+          Mise à jour automatique toutes les 30 secondes. Les changements des autres workers peuvent
           apparaître avec un délai.
         </p>
         @if (error()) {
@@ -99,7 +99,7 @@ import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-
             }
           </article>
         } @empty {
-          <p>Aucune session enregistrée sur ce nœud.</p>
+          <p>Aucune session enregistrée sur ce worker.</p>
         }
         <nav aria-label="Pages de sessions IA">
           <button

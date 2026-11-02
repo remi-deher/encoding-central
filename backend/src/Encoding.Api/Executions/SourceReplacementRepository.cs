@@ -124,7 +124,7 @@ public sealed class SourceReplacementRepository(DbDataSource dataSource,SourceWr
           SELECT r.execution_id,CASE WHEN r.state='rollback_requested' THEN 'rollback' ELSE 'finalize' END,a.local_path,r.original_path,r.final_path,r.backup_path,r.source_sha,r.result_sha
           FROM source_replacements r JOIN library_node_accesses a ON a.library_id=r.library_id AND a.node_id=r.source_node_id
           JOIN cluster_nodes n ON n.id=r.source_node_id AND n.accepts_work AND n.deleted_at IS NULL
-          WHERE {TaskOwnershipRepository.ActiveSql("r.execution_id")} AND r.source_node_id=@node AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.can_write AND a.local_path IS NOT NULL
+          WHERE r.source_node_id=@node AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.can_write AND a.local_path IS NOT NULL
           AND (r.state='rollback_requested' OR (r.state='replaced' AND r.grace_until<=clock_timestamp()))
           ORDER BY r.replaced_at LIMIT 20
           """);
@@ -134,10 +134,10 @@ public sealed class SourceReplacementRepository(DbDataSource dataSource,SourceWr
         return tasks;
     }
 
-    /// <summary>Enregistre le résultat d'une restauration ou d'une purge ; seul le nœud d'accès à l'origine du remplacement peut le faire.</summary>
+    /// <summary>Enregistre le résultat d'une restauration ou d'une purge ; seul le worker d'accès à l'origine du remplacement peut le faire.</summary>
     public async Task<bool> AuthorizeAsync(Guid execution,Guid node,string root,CancellationToken ct)
     {
-        await using var cmd=dataSource.CreateCommand($"SELECT EXISTS(SELECT 1 FROM source_replacements r JOIN library_node_accesses a ON a.library_id=r.library_id AND a.node_id=r.source_node_id WHERE {TaskOwnershipRepository.ActiveSql("r.execution_id")} AND r.execution_id=@id AND r.source_node_id=@node AND a.is_enabled AND a.can_write AND a.mode='direct' AND a.local_path=@root AND (r.state='rollback_requested' OR r.state='replaced' AND r.grace_until<=clock_timestamp()))");
+        await using var cmd=dataSource.CreateCommand($"SELECT EXISTS(SELECT 1 FROM source_replacements r JOIN library_node_accesses a ON a.library_id=r.library_id AND a.node_id=r.source_node_id WHERE r.execution_id=@id AND r.source_node_id=@node AND a.is_enabled AND a.can_write AND a.mode='direct' AND a.local_path=@root AND (r.state='rollback_requested' OR r.state='replaced' AND r.grace_until<=clock_timestamp()))");
         cmd.Parameters.AddWithValue("id",execution);cmd.Parameters.AddWithValue("node",node);cmd.Parameters.AddWithValue("root",root);if(!await cmd.ScalarBoolAsync(ct)) return false;
         if(sourceWrites is not null)
         {

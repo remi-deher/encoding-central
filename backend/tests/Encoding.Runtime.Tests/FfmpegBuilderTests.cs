@@ -96,7 +96,7 @@ public sealed class FfmpegBuilderTests
         var flow=Chain(Node(registry,"entry","base-input-file"),Node(registry,"start",FfmpegBuilderPolicy.Start),
             Node(registry,"execute",FfmpegBuilderPolicy.Execute),Node(registry,"end","base-complete-flow"));
         Assert.True(validator.Validate(flow).IsValid);
-        NodeToolCapability[] worker=[new("plugin/base","1.8.0",["video"],[]),new("ffmpeg","7.0",["video"],[]),new("ffprobe","7.0",["video"],[])];
+        WorkerToolCapability[] worker=[new("plugin/base","1.8.0",["video"],[]),new("ffmpeg","7.0",["video"],[]),new("ffprobe","7.0",["video"],[])];
         Assert.False(eligibility.CanRun(flow,worker,Guid.NewGuid()));
         Assert.True(eligibility.CanRun(flow,worker.Select(cap=>cap.ToolId=="plugin/base"?cap with { Version="1.9.0" }:cap).ToArray(),Guid.NewGuid()));
         var legacy=Chain(Node(registry,"entry","base-input-file"),Node(registry,"prepare","base-prepare-processing"),

@@ -29,15 +29,15 @@ public sealed class AiAssistantService(
     AiAssistantActionsService actions)
 {
     public static AiAssistantService Create(
-        AiClusterStore store,
-        AiClusterService cluster,
-        Encoding.Api.Infrastructure.ClusterPeerIdentityStore identity,
+        AiCentralStore store,
+        AiCentralService cluster,
+        Encoding.Api.Infrastructure.CentralPeerIdentityStore identity,
         FlowRepository flows,
         ExecutionRepository executions,
         LibraryWorkflowRepository libraryWorkflows,
         LibraryRepository libraries,
-        NodeRepository nodes,
-        NodePresenceOptions nodePresence,
+        WorkerRepository nodes,
+        WorkerPresenceOptions nodePresence,
         McpService mcp,
         IDataProtectionProvider protection,
         FlowTemplateRepository? flowTemplates = null)

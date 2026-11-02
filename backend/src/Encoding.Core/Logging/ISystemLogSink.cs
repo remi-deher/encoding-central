@@ -11,25 +11,25 @@ public interface ISystemLogSink
 }
 
 /// <summary>
-/// Contexte d'identification du nœud pour les logs système.
+/// Contexte d'identification du worker pour les logs système.
 /// </summary>
-public interface ISystemLogNodeContext
+public interface ISystemLogWorkerContext
 {
     Guid? NodeId { get; }
     string? NodeName { get; }
 }
 
-public sealed class DefaultSystemLogNodeContext : ISystemLogNodeContext
+public sealed class DefaultSystemLogWorkerContext : ISystemLogWorkerContext
 {
     private readonly Func<(Guid? NodeId, string? NodeName)>? _resolver;
 
-    public DefaultSystemLogNodeContext(Guid? nodeId = null, string? nodeName = null)
+    public DefaultSystemLogWorkerContext(Guid? nodeId = null, string? nodeName = null)
     {
         NodeId = nodeId;
         NodeName = nodeName;
     }
 
-    public DefaultSystemLogNodeContext(Func<(Guid? NodeId, string? NodeName)> resolver)
+    public DefaultSystemLogWorkerContext(Func<(Guid? NodeId, string? NodeName)> resolver)
     {
         _resolver = resolver;
     }

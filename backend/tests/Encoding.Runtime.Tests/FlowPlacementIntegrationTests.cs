@@ -36,7 +36,7 @@ public sealed class FlowPlacementIntegrationTests
         return new FlowDefinition(1, Guid.NewGuid(), 1, name, "video", nodes, connections);
     }
 
-    private static NodeToolCapability[] StandardCapabilities(params string[] encoders) =>
+    private static WorkerToolCapability[] StandardCapabilities(params string[] encoders) =>
     [
         new("plugin/base", "1.9.0", ["general"], []),
         new("plugin/conditions", "1.1.0", ["general"], []),
@@ -52,9 +52,9 @@ public sealed class FlowPlacementIntegrationTests
         await DatabaseMigrator.ApplyAsync(database.Db, Harness.RepositoryRoot(), CancellationToken.None);
 
         var (registry, validator, eligibility) = Harness.Services();
-        var presence = new NodePresenceOptions(TimeSpan.FromHours(1));
+        var presence = new WorkerPresenceOptions(TimeSpan.FromHours(1));
         var configs = new PluginConfigurationRepository(database.Db, new EphemeralDataProtectionProvider());
-        var groups = new NodeGroupRepository(database.Db);
+        var groups = new WorkerGroupRepository(database.Db);
         var planner = new FlowPlacementPlanner(registry);
         var runtime = new RuntimeRepository(database.Db, eligibility, registry, presence, configs, groups, placementPlanner: planner);
 
@@ -134,9 +134,9 @@ public sealed class FlowPlacementIntegrationTests
         await DatabaseMigrator.ApplyAsync(database.Db, Harness.RepositoryRoot(), CancellationToken.None);
 
         var (registry, validator, eligibility) = Harness.Services();
-        var presence = new NodePresenceOptions(TimeSpan.FromHours(1));
+        var presence = new WorkerPresenceOptions(TimeSpan.FromHours(1));
         var configs = new PluginConfigurationRepository(database.Db, new EphemeralDataProtectionProvider());
-        var groups = new NodeGroupRepository(database.Db);
+        var groups = new WorkerGroupRepository(database.Db);
         var planner = new FlowPlacementPlanner(registry);
         var runtime = new RuntimeRepository(database.Db, eligibility, registry, presence, configs, groups, placementPlanner: planner);
 
@@ -208,9 +208,9 @@ public sealed class FlowPlacementIntegrationTests
         await DatabaseMigrator.ApplyAsync(database.Db, Harness.RepositoryRoot(), CancellationToken.None);
 
         var (registry, validator, eligibility) = Harness.Services();
-        var presence = new NodePresenceOptions(TimeSpan.FromHours(1));
+        var presence = new WorkerPresenceOptions(TimeSpan.FromHours(1));
         var configs = new PluginConfigurationRepository(database.Db, new EphemeralDataProtectionProvider());
-        var groups = new NodeGroupRepository(database.Db);
+        var groups = new WorkerGroupRepository(database.Db);
         var planner = new FlowPlacementPlanner(registry);
         var runtime = new RuntimeRepository(database.Db, eligibility, registry, presence, configs, groups, placementPlanner: planner);
 
@@ -321,17 +321,17 @@ public sealed class FlowPlacementIntegrationTests
         await using var database=await TestDatabase.CreateSqliteAsync("placement-segmented-runtime");
         await DatabaseMigrator.ApplyAsync(database.Db,Harness.RepositoryRoot(),CancellationToken.None);
         var (registry,_,eligibility)=Harness.Services();
-        var presence=new NodePresenceOptions(TimeSpan.FromHours(1));
+        var presence=new WorkerPresenceOptions(TimeSpan.FromHours(1));
         var configurations=new PluginConfigurationRepository(database.Db,new EphemeralDataProtectionProvider());
-        var groups=new NodeGroupRepository(database.Db);
+        var groups=new WorkerGroupRepository(database.Db);
         var runtime=new RuntimeRepository(database.Db,eligibility,registry,presence,configurations,groups);
         var library=Guid.NewGuid();var direct=Guid.NewGuid();var gpu=Guid.NewGuid();
-        NodeToolCapability[] directCapabilities=
+        WorkerToolCapability[] directCapabilities=
         [
             new("plugin/base","1.9.0",["general"],[]),new("plugin/video","1.2.0",["general"],[]),new("plugin/mkv","1.0.0",["general"],[]),
             new("ffprobe","7.0.0",["probe"],[]),new("ffmpeg","7.0.0",["video"],["cpu"],["libx264"]),new("mkvtoolnix","90.0",["mkv"],[])
         ];
-        NodeToolCapability[] gpuCapabilities=
+        WorkerToolCapability[] gpuCapabilities=
         [
             new("plugin/video","1.2.0",["general"],[]),new("ffprobe","7.0.0",["probe"],[]),
             new("ffmpeg","7.0.0",["video"],["qsv"],["hevc_qsv"])

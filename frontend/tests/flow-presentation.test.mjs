@@ -34,7 +34,7 @@ test('known continuation, skipped, waiting and media labels have small explicit 
 test('unknown and misleading labels retain a neutral numbered port', () => {
   for (const label of [
     'Sans erreur',
-    'Non disponible sur ce nœud',
+    'Non disponible sur ce worker',
     'Audio déjà conforme',
     'constructor',
     '__proto__',

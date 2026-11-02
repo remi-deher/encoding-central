@@ -2,7 +2,7 @@ using System.Globalization;
 
 namespace Encoding.Contracts.Flows;
 
-/// <summary>Référence à une version de ressource du catalogue du cluster, écrite « identifiant:version » dans la configuration d'un bloc.</summary>
+/// <summary>Référence à une version de ressource du catalogue du central, écrite « identifiant:version » dans la configuration d'un bloc.</summary>
 public readonly record struct ResourceReference(Guid Id, int Version)
 {
     public override string ToString() => $"{Id:D}:{Version.ToString(CultureInfo.InvariantCulture)}";

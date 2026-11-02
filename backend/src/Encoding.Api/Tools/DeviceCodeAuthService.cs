@@ -41,7 +41,7 @@ public sealed partial class DeviceCodeAuthService(AiCliRuntime runtime, ILogger<
     public async Task<IReadOnlyList<AiToolInfo>> ListToolsAsync(CancellationToken ct = default)
     {
         return await Task.WhenAll(new[] { "codex-cli", "claude-cli" }.Select(async id =>
-            new AiToolInfo(id, id == "codex-cli" ? "Codex CLI" : "Claude Code", "Compte CLI sur ce nœud", "CLI",
+            new AiToolInfo(id, id == "codex-cli" ? "Codex CLI" : "Claude Code", "Compte CLI sur ce worker", "CLI",
                 runtime.Find(id) is not null, await GetCachedStatusAsync(id, ct), ["ai-text-generation", "subtitles-translation"])));
     }
 
@@ -188,7 +188,7 @@ public sealed partial class DeviceCodeAuthService(AiCliRuntime runtime, ILogger<
         if (!runtime.CanRun)
         {
             await LogStatusDiagnosticAsync(id, "sandbox_unavailable", timer.ElapsedMilliseconds);
-            return new(id, "failed", ErrorMessage: "Landlock est requis pour exécuter les outils IA sur ce nœud Linux.");
+            return new(id, "failed", ErrorMessage: "Landlock est requis pour exécuter les outils IA sur ce worker Linux.");
         }
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(10));
@@ -202,7 +202,7 @@ public sealed partial class DeviceCodeAuthService(AiCliRuntime runtime, ILogger<
                 // Exit 1 is the documented unauthenticated status. Other exits indicate a runtime failure.
                 await LogStatusDiagnosticAsync(id, status.ExitCode == 1 ? "auth_missing" : "status_exit", timer.ElapsedMilliseconds);
                 return status.ExitCode == 1 ? new(id, "unconfigured") : new(id, "failed",
-                    ErrorMessage: $"La CLI a quitté avec le code {status.ExitCode}. Consultez les journaux système de ce nœud.");
+                    ErrorMessage: $"La CLI a quitté avec le code {status.ExitCode}. Consultez les journaux système de ce worker.");
             }
             if (id == "claude-cli")
             {
@@ -220,7 +220,7 @@ public sealed partial class DeviceCodeAuthService(AiCliRuntime runtime, ILogger<
             await LogStatusDiagnosticAsync(id, ex is OperationCanceledException ? "status_timeout" : "status_failure", timer.ElapsedMilliseconds);
             return new(id, "failed", ErrorMessage: ex is OperationCanceledException
                 ? "La CLI n’a pas répondu au contrôle de connexion sous 10 secondes."
-                : "Le contrôle de connexion CLI a échoué. Consultez les journaux système de ce nœud.");
+                : "Le contrôle de connexion CLI a échoué. Consultez les journaux système de ce worker.");
         }
     }
 
@@ -231,8 +231,8 @@ public sealed partial class DeviceCodeAuthService(AiCliRuntime runtime, ILogger<
     public async Task<DeviceAuthStartResponse> StartDeviceAuthAsync(string id, CancellationToken ct)
     {
         _ = AiCliRuntime.Executable(id);
-        if (runtime.Find(id) is null) throw new InvalidOperationException("La CLI n’est pas installée sur ce nœud.");
-        if (!runtime.CanRun) throw new InvalidOperationException("Landlock est requis pour exécuter les outils IA sur ce nœud Linux.");
+        if (runtime.Find(id) is null) throw new InvalidOperationException("La CLI n’est pas installée sur ce worker.");
+        if (!runtime.CanRun) throw new InvalidOperationException("Landlock est requis pour exécuter les outils IA sur ce worker Linux.");
         Session session;
         await gate.WaitAsync(ct);
         try
@@ -253,8 +253,8 @@ public sealed partial class DeviceCodeAuthService(AiCliRuntime runtime, ILogger<
             session.State = "failed";
             session.FinishedAt = clock.GetUtcNow();
             session.Error = session.HasOutput
-                ? "La CLI a produit une sortie, mais aucune URL de connexion reconnue n’a été détectée sous 30 secondes. Consultez les journaux système de ce nœud."
-                : "La CLI n’a produit aucune sortie sous 30 secondes. Vérifiez son accès au service d’authentification depuis ce nœud.";
+                ? "La CLI a produit une sortie, mais aucune URL de connexion reconnue n’a été détectée sous 30 secondes. Consultez les journaux système de ce worker."
+                : "La CLI n’a produit aucune sortie sous 30 secondes. Vérifiez son accès au service d’authentification depuis ce worker.";
             log.LogWarning("AI CLI auth {Attempt}: timeout after {ElapsedMs} ms, outputReceived={HasOutput}, urlRecognized={HasUrl}, codeRecognized={HasCode}",
                 session.Id, session.Timer.ElapsedMilliseconds, session.HasOutput, session.HasUrl, session.HasCode);
             session.Cancellation.Cancel();
@@ -319,10 +319,10 @@ public sealed partial class DeviceCodeAuthService(AiCliRuntime runtime, ILogger<
                 ? "authorized"
                 : "failed";
             if (session.State == "failed") session.Error = result.ExitCode != 0
-                ? $"La CLI a terminé avec le code {result.ExitCode}. Consultez les journaux système de ce nœud."
+                ? $"La CLI a terminé avec le code {result.ExitCode}. Consultez les journaux système de ce worker."
                 : promptRecognized
                     ? verified?.ErrorMessage ?? "La CLI n’a pas confirmé la connexion. Relancez l’association."
-                    : $"La CLI a terminé avec le code {result.ExitCode} sans fournir d’invitation de connexion reconnue. Consultez les journaux système de ce nœud.";
+                    : $"La CLI a terminé avec le code {result.ExitCode} sans fournir d’invitation de connexion reconnue. Consultez les journaux système de ce worker.";
             log.Log(session.State == "authorized" ? LogLevel.Information : LogLevel.Warning,
                 "AI CLI auth {Attempt}: provider={Provider}, exit={ExitCode}, elapsedMs={ElapsedMs}, stdoutChars={OutputChars}, stderrChars={ErrorChars}, urlRecognized={HasUrl}, codeRecognized={HasCode}, inputSubmitted={InputSubmitted}",
                 session.Id, session.ToolId, result.ExitCode, session.Timer.ElapsedMilliseconds, result.Output.Length, result.Error.Length, session.HasUrl, session.HasCode, session.InputSubmitted);
@@ -335,7 +335,7 @@ public sealed partial class DeviceCodeAuthService(AiCliRuntime runtime, ILogger<
         catch (Exception ex)
         {
             session.State = "failed";
-            session.Error = $"Le processus {session.ToolId} a échoué. Consultez les journaux système de ce nœud.";
+            session.Error = $"Le processus {session.ToolId} a échoué. Consultez les journaux système de ce worker.";
             // No exception message or raw CLI output: either can contain credentials.
             log.LogWarning("AI CLI auth {Attempt}: failure={Failure}, elapsedMs={ElapsedMs}", session.Id, ex.GetType().Name, session.Timer.ElapsedMilliseconds);
         }

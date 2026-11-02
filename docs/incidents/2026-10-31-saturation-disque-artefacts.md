@@ -124,8 +124,8 @@ Pour que le cluster nettoie automatiquement et immédiatement ces fichiers sans 
 * Réduire la rétention dans `appsettings.json` ou variable d'environnement :
   * `Operations:ArtifactRetention:Days` : passer de **3 jours** à **0 jour** (purge immédiate ou dans les 2 heures) pour les succès.
   * `Operations:ArtifactRetention:FailedDays` : passer de **7 jours** à **24 heures** pour les échecs.
-  * `Node:Workspace:FailedRetentionHours` : passer de **24 heures** à **4 heures**.
-  * `Node:Workspace:Roots` : inclure `runtime-artifacts` dans les racines surveillées par [WorkspaceCleanupService.cs](file:///home/remi/encoding/backend/src/Encoding.NodeAgent/Runtime/WorkspaceCleanupService.cs#L43).
+  * `Worker:Workspace:FailedRetentionHours` : passer de **24 heures** à **4 heures**.
+  * `Worker:Workspace:Roots` : inclure `runtime-artifacts` dans les racines surveillées par [WorkspaceCleanupService.cs](file:///home/remi/encoding/backend/src/Encoding.NodeAgent/Runtime/WorkspaceCleanupService.cs#L43).
 
 ### Recommandation C : Nettoyage de `cluster_change_log` et compactage SQLite
 * Maintenant que le cluster fonctionne en architecture **Single Master (Node 51) + Workers**, la table de réconciliation multi-master `cluster_change_log` (403 Mo) est superflue.

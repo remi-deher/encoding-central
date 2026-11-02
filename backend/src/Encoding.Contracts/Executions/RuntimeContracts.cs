@@ -29,7 +29,7 @@ public sealed record RuntimeTransfer(Guid ExecutionId, long Epoch, string Root, 
     Guid? LibraryId = null, IReadOnlyList<RuntimePublicationGuard>? Guards = null, RuntimeSourceObservation? Observation = null,
         bool VerifyPublicationAccess = false, bool VerifyReplacementAccess = false,
     string? PublicationStepNodeId = null, Guid? PublicationStepInvocationId = null);
-/// <summary>Garde de publication à consulter avant un remplacement de source (architecture 0059) : composant de plugin à invoquer sur le nœud d'accès.</summary>
+/// <summary>Garde de publication à consulter avant un remplacement de source (architecture 0059) : composant de plugin à invoquer sur le worker d'accès.</summary>
 public sealed record RuntimePublicationGuard(string PluginId, string PluginVersion, string ComponentId, string ComponentVersion, int ConfigurationSchemaVersion,
     IReadOnlyDictionary<string,JsonElement> Configuration, IReadOnlyDictionary<string,JsonElement> PluginConfiguration, int MaxWaitMinutes,
     IReadOnlyList<string> WaitOutputs, IReadOnlyList<string> AllowOutputs);
@@ -69,7 +69,7 @@ public sealed record RuntimePublicationState(bool Published, string? Path, strin
 public sealed record ReportRuntimeCommand(long Epoch, string NodeId, Guid InvocationId, RuntimeCommandLog Command);
 public sealed record ConfirmRuntimePublication(long Epoch, Guid EventId, int ExpectedRevision, string PublishedPath, string Sha256, SourceReplacementReport? Replacement = null);
 
-/// <summary>Demande l'état courant d'exécutions connues du nœud, pour décider de la suppression de leurs dossiers de travail.</summary>
+/// <summary>Demande l'état courant d'exécutions connues du worker, pour décider de la suppression de leurs dossiers de travail.</summary>
 public sealed record RuntimeExecutionStatesRequest(IReadOnlyList<Guid> Ids);
 public sealed record RuntimeExecutionState(Guid Id, string State);
 

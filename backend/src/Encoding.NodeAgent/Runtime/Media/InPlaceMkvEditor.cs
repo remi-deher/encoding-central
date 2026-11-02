@@ -11,7 +11,7 @@ public sealed record InPlaceEditResult(string Status,string Detail,string? NewSh
 /// Modification d'un MKV de la bibliothèque sur place avec mkvpropedit (architecture 0002). La source n'est jamais modifiée sans
 /// copie intégrale vérifiée dans <c>.encoding-replaced/&lt;exécution&gt;/</c> ; un écart de pistes, de pièces jointes, de chapitres
 /// ou de durée, ou une propriété non appliquée, restaure le fichier d'origine. Une intention écrite avant la modification permet
-/// de trancher une reprise après perte du nœud.
+/// de trancher une reprise après perte du worker.
 /// </summary>
 public sealed class InPlaceMkvEditor(IProcessToolRunner tools)
 {
@@ -70,7 +70,7 @@ public sealed class InPlaceMkvEditor(IProcessToolRunner tools)
     {
         var original=SafeMediaPaths.Resolve(root,mediaPath);
         if(!string.Equals(Path.GetExtension(original),".mkv",StringComparison.OrdinalIgnoreCase)) throw new InPlaceEditException("Seuls les fichiers MKV peuvent être modifiés sur place.");
-        if(!File.Exists(original)) throw new InPlaceEditException("La source est introuvable sur ce nœud.");
+        if(!File.Exists(original)) throw new InPlaceEditException("La source est introuvable sur ce worker.");
         IDisposable mediaLock;
         try { mediaLock=SafeMediaPaths.Lock(original,lockDirectory); }
         catch(SafeMediaPaths.MediaLockBusyException) { throw new InPlaceEditException("Le média est utilisé par un autre traitement ; la source n'a pas été modifiée."); }

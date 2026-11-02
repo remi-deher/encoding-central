@@ -95,7 +95,7 @@ import { NodeGroupResponse } from '../../models/cluster';
     }
     @if (field().editor === 'resource') {
       <p>
-        Chaque puce est un fichier du catalogue, épinglé sur une version. Les nœuds le récupèrent
+        Chaque puce est un fichier du catalogue, épinglé sur une version. Les workers le récupèrent
         automatiquement.
       </p>
     }
@@ -225,7 +225,7 @@ export class ConfigurationReferenceFieldComponent implements OnInit {
               }))
           : (
               await firstValueFrom(
-                this.http.get<readonly NodeGroupResponse[]>('/api/v1/node-groups'),
+                this.http.get<readonly NodeGroupResponse[]>('/api/v1/worker-groups'),
               )
             ).map((group) => ({ value: group.id, label: group.name }));
       this.observed.set(options);

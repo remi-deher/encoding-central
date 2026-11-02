@@ -65,7 +65,7 @@ public static class ConditionTree
         new("subtitles.count", "Nombre de pistes de sous-titres", "number", NumberOperators, ["video", "subtitles"], true, true),
         new("subtitles.languages", "Langues des sous-titres", "text-list", ListOperators, ["video", "subtitles"], true, true),
         new("library.id", "Identifiant de la bibliothèque d'origine", "text", TextOperators, AllMedia),
-        new("source.nodeId", "Identifiant du nœud d'accès d'origine", "text", TextOperators, AllMedia),
+        new("source.nodeId", "Identifiant du worker d'accès d'origine", "text", TextOperators, AllMedia),
         new("worker.nodeId", "Identifiant du worker courant", "text", TextOperators, AllMedia),
         new("worker.codecs", "Codecs vidéo supportés par le worker", "text-list", ListOperators, ["video", "image"]),
         new("processing.modified", "Le fichier a été transformé", "boolean", BoolOperators, AllMedia),

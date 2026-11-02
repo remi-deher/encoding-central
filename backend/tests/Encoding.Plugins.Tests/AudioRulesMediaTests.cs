@@ -12,7 +12,7 @@ internal static class AudioRulesMediaTests
 {
     private sealed class NoProbe : IToolCapabilityProbe
     {
-        public Task<IReadOnlyList<Encoding.Contracts.Nodes.NodeToolCapability>> DiscoverAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<Encoding.Contracts.Nodes.NodeToolCapability>>([]);
+        public Task<IReadOnlyList<Encoding.Contracts.Nodes.WorkerToolCapability>> DiscoverAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<Encoding.Contracts.Nodes.WorkerToolCapability>>([]);
     }
 
     public static async Task RunAsync()

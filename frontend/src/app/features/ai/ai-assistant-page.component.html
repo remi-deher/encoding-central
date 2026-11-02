@@ -43,7 +43,7 @@
             <div>
               <h3>Joindre une ressource</h3>
               <p class="muted">
-                Ajoutez un flow, une exécution, un nœud ou une bibliothèque au contexte.
+                Ajoutez un flow, une exécution, un worker ou une bibliothèque au contexte.
               </p>
             </div>
           </div>
@@ -55,7 +55,7 @@
             >
               <mat-option value="flow">Flows</mat-option>
               <mat-option value="execution">Exécutions</mat-option>
-              <mat-option value="node">Nœuds</mat-option>
+              <mat-option value="node">Workers</mat-option>
               <mat-option value="library">Bibliothèques</mat-option>
             </mat-select>
           </mat-form-field>
@@ -242,8 +242,8 @@
                 class="node-badge"
                 [title]="
                   coordinatorLost(current.conversation)
-                    ? 'Ce nœud ne répond plus : le nœud courant reprendra la discussion à votre prochain message.'
-                    : 'Nœud qui coordonne cette discussion.'
+                    ? 'Ce worker ne répond plus : le worker courant reprendra la discussion à votre prochain message.'
+                    : 'Worker qui coordonne cette discussion.'
                 "
                 >{{ origin }}{{ coordinatorLost(current.conversation) ? ' · injoignable' : '' }}</span
               >

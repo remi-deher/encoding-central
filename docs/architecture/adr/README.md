@@ -54,3 +54,5 @@ Une décision structurante : nouveau principe, changement d'un invariant des fic
 | [0036](0036-separation-stricte-central-worker.md) | Séparation stricte du central et du worker | accepted | cluster |
 | [0037](0037-ressources-a-plat.md) | Ressources de flow à plat, une version par fichier | implemented | flows |
 | [0038](0038-profils-et-depot-complet.md) | Profils de sous-titres et dépôt complet | implemented | plugins |
+| [0039](0039-version-exacte-worker-central.md) | Un worker doit avoir la version exacte du central | implemented | cluster |
+| [0040](0040-vocabulaire-central-worker.md) | Vocabulaire central / worker | accepted | cluster |

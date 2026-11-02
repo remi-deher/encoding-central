@@ -21,7 +21,7 @@ public sealed record WorkerIdentityState(
     string? DisplayName = null,
     IReadOnlyList<string>? KnownServerUrls = null)
 {
-    /// <summary>Vrai tant qu'un changement de cluster attend la confirmation du cluster d'accueil : l'ancien rattachement reste intact (0040).</summary>
+    /// <summary>Vrai tant qu'un changement de central attend la confirmation du central d'accueil : l'ancien rattachement reste intact (0040).</summary>
     public bool IsSwitching => Previous is not null;
 
     public bool HasCredentials =>
@@ -34,7 +34,7 @@ public sealed record WorkerIdentityState(
 
     public bool IsPairingPending => !Enrolled && HasCredentials && PairingPublished && !string.IsNullOrWhiteSpace(PairingKey);
 
-    public IReadOnlyList<string> GetCandidateServerUrls(NodeAgentOptions options)
+    public IReadOnlyList<string> GetCandidateServerUrls(WorkerAgentOptions options)
     {
         var urls = new List<string>();
         void Add(string? candidate)
@@ -54,7 +54,7 @@ public sealed record WorkerIdentityState(
     }
 }
 
-public sealed class WorkerIdentityStore(NodeAgentOptions options)
+public sealed class WorkerIdentityStore(WorkerAgentOptions options)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly SemaphoreSlim gate = new(1, 1);
@@ -132,7 +132,7 @@ public sealed class WorkerIdentityStore(NodeAgentOptions options)
                 state = await JsonSerializer.DeserializeAsync<WorkerIdentityState>(stream, JsonOptions, cancellationToken);
             }
             if (state?.IsEnrolled == true)
-                throw new InvalidOperationException("Ce worker est déjà rattaché à un cluster.");
+                throw new InvalidOperationException("Ce worker est déjà rattaché à un central.");
 
             var token = state?.NodeToken ?? Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
             var canReuseKey = state?.ClusterId == clusterId
@@ -168,7 +168,7 @@ public sealed class WorkerIdentityStore(NodeAgentOptions options)
         }
     }
 
-    /// <summary>Oublie le rattachement actuel et repart d'une identité neuve : un nœud retiré ne se réactive jamais (0017), il revient sous un nouvel identifiant.</summary>
+    /// <summary>Oublie le rattachement actuel et repart d'une identité neuve : un worker retiré ne se réactive jamais (0017), il revient sous un nouvel identifiant.</summary>
     public async Task ResetAsync(CancellationToken cancellationToken)
     {
         await gate.WaitAsync(cancellationToken);
@@ -186,8 +186,8 @@ public sealed class WorkerIdentityStore(NodeAgentOptions options)
     }
 
     /// <summary>
-    /// Première phase d'un changement de cluster (0040) : l'identité actuelle est mise de côté, intacte, et une identité neuve attend
-    /// l'accueil du nouveau cluster. Sans confirmation avant l'échéance, <see cref="RollbackSwitchAsync"/> rétablit l'ancienne.
+    /// Première phase d'un changement de central (0040) : l'identité actuelle est mise de côté, intacte, et une identité neuve attend
+    /// l'accueil du nouveau central. Sans confirmation avant l'échéance, <see cref="RollbackSwitchAsync"/> rétablit l'ancienne.
     /// </summary>
     public async Task BeginSwitchAsync(TimeSpan timeout, CancellationToken cancellationToken)
     {
@@ -195,8 +195,8 @@ public sealed class WorkerIdentityStore(NodeAgentOptions options)
         try
         {
             var current = await LoadAsync(cancellationToken);
-            if (!current.IsEnrolled) throw new InvalidOperationException("Ce worker n'est rattaché à aucun cluster.");
-            if (current.IsSwitching) throw new InvalidOperationException("Un changement de cluster est déjà en cours.");
+            if (!current.IsEnrolled) throw new InvalidOperationException("Ce worker n'est rattaché à aucun central.");
+            if (current.IsSwitching) throw new InvalidOperationException("Un changement de central est déjà en cours.");
             state = new WorkerIdentityState(Guid.NewGuid(), null, null, null, null, false,
                 Previous: current with { Previous = null, SwitchDeadline = null, SwitchFailure = null },
                 SwitchDeadline: DateTimeOffset.UtcNow.Add(timeout),
@@ -228,9 +228,9 @@ public sealed class WorkerIdentityStore(NodeAgentOptions options)
     }
 
     /// <summary>
-    /// Abandonne un rattachement qui n'a pas abouti (refus, cluster injoignable, clé expirée). Pendant un changement de cluster, l'ancien rattachement est rétabli
-    /// (<see cref="RollbackSwitchAsync"/>) ; pour un nœud autonome, l'identité en attente est effacée pour qu'il redevienne autonome au lieu de rester bloqué
-    /// sur un cluster qui ne l'a jamais accepté. L'identifiant du nœud est conservé : le cluster ne l'a jamais enregistré.
+    /// Abandonne un rattachement qui n'a pas abouti (refus, cluster injoignable, clé expirée). Pendant un changement de central, l'ancien rattachement est rétabli
+    /// (<see cref="RollbackSwitchAsync"/>) ; pour un worker autonome, l'identité en attente est effacée pour qu'il redevienne autonome au lieu de rester bloqué
+    /// sur un central qui ne l'a jamais accepté. L'identifiant du worker est conservé : le central ne l'a jamais enregistré.
     /// </summary>
     public async Task<bool> AbandonPendingAsync(string reason, CancellationToken cancellationToken)
     {
@@ -250,7 +250,7 @@ public sealed class WorkerIdentityStore(NodeAgentOptions options)
         }
     }
 
-    /// <summary>Seconde phase : le nouveau cluster a répondu. Retourne l'ancien rattachement pour que l'appelant prévienne son cluster, puis l'oublie.</summary>
+    /// <summary>Seconde phase : le nouveau central a répondu. Retourne l'ancien rattachement pour que l'appelant prévienne son central, puis l'oublie.</summary>
     public async Task<WorkerIdentityState?> CommitSwitchAsync(CancellationToken cancellationToken)
     {
         await gate.WaitAsync(cancellationToken);

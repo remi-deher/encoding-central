@@ -260,7 +260,7 @@ public sealed class SystemLogProviderTests
         var ringBuffer = new SystemLogRingBuffer(capacity: 100);
         var broadcaster = new SystemLogStreamBroadcaster();
         var nodeId = Guid.NewGuid();
-        var nodeContext = new DefaultSystemLogNodeContext(nodeId, "Worker-01");
+        var nodeContext = new DefaultSystemLogWorkerContext(nodeId, "Worker-01");
 
         using var provider = new SystemLogProvider(ringBuffer, broadcaster, nodeContext);
         var logger = provider.CreateLogger("Encoding.NodeAgent.Services.ToolCapabilityProbe");
@@ -345,14 +345,14 @@ public sealed class SystemLogMcpTests
         services.AddSingleton(db.Db);
         services.AddSingleton<LibraryRepository>();
         services.AddSingleton<LibraryWorkflowRepository>();
-        services.AddSingleton<LibraryNodeAccessRepository>();
+        services.AddSingleton<LibraryWorkerAccessRepository>();
         services.AddSingleton<LibraryProcessingRepository>();
         services.AddSingleton<FlowRepository>();
         services.AddSingleton<FlowComponentRegistry>();
         services.AddSingleton<FlowDefinitionValidator>();
-        services.AddSingleton<NodeRepository>();
-        services.AddSingleton<NodeGroupRepository>();
-        services.AddSingleton(new NodePresenceOptions(TimeSpan.FromSeconds(30)));
+        services.AddSingleton<WorkerRepository>();
+        services.AddSingleton<WorkerGroupRepository>();
+        services.AddSingleton(new WorkerPresenceOptions(TimeSpan.FromSeconds(30)));
         services.AddSingleton<ExecutionRepository>();
         services.AddSingleton<FlowScriptRepository>();
         services.AddSingleton(new ResourceBlobStore(config));
@@ -453,7 +453,7 @@ public sealed class SystemLogApiFactoryTests
             {
                 builder.UseSetting(Microsoft.AspNetCore.Hosting.WebHostDefaults.ContentRootKey, AppContext.BaseDirectory);
                 foreach(var setting in database.Settings()) builder.UseSetting(setting.Key,setting.Value);
-                builder.UseSetting("Node:DataDirectory",directory);
+                builder.UseSetting("Worker:DataDirectory",directory);
                 builder.UseSetting("PluginSettings:KeyDirectory",Path.Combine(directory,"keys"));
                 builder.UseSetting("Logging:LogLevel:Default", "Error");
                 builder.UseSetting("Auth:Enabled", "false");

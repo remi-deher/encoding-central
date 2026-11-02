@@ -271,7 +271,7 @@ export class WorkerSetupPageComponent {
     this.errorMessage.set(null);
     try {
       await firstValueFrom(
-        this.http.post('/api/v1/worker/clusters', { apiBaseUrl: this.centralAddress.trim() }),
+        this.http.post('/api/v1/worker/centrals', { apiBaseUrl: this.centralAddress.trim() }),
       );
       const status = await this.auth.ensureLoaded(true);
       if (status.setupRequired) {
@@ -327,6 +327,6 @@ export class WorkerSetupPageComponent {
   }
 
   protected openNodes(): void {
-    void this.router.navigate(['/nodes']);
+    void this.router.navigate(['/workers']);
   }
 }

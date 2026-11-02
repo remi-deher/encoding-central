@@ -54,7 +54,7 @@ test('analyse les étiquettes en clé ou clé=valeur', () => {
   });
 });
 
-test('évaluation d’un critère vide : correspond à tout nœud', () => {
+test('évaluation d’un critère vide : correspond à tout worker', () => {
   const node = makeNode();
   assert.equal(matchesGroupCriteria({}, node), true);
 });
@@ -94,7 +94,7 @@ test('évaluation des outils requis', () => {
   assert.equal(matchesGroupCriteria({ requiredToolIds: ['ffmpeg', 'mkvmerge'] }, node), false);
 });
 
-test('filtrage d’une liste de nœuds par critères', () => {
+test('filtrage d’une liste de workers par critères', () => {
   const node1 = makeNode({
     id: '1',
     roles: ['worker'],
@@ -144,7 +144,7 @@ test('formatage des critères en pastilles textuelles lisibles', () => {
   ]);
 });
 
-test('extraction des options disponibles depuis l’inventaire des nœuds', () => {
+test('extraction des options disponibles depuis l’inventaire des workers', () => {
   const node1 = makeNode({
     inventory: { operatingSystem: 'Linux', architecture: 'X64', processorCount: 8, memoryMb: 8192 },
     capabilities: [{ toolId: 'ffmpeg' }, { toolId: 'ffprobe' }],
@@ -197,7 +197,7 @@ test('détection du support des encodeurs et codecs vidéo majeurs', () => {
   assert.equal(nodeSupportsEncoder(nodeWithRawEncoders, 'h264'), true);
 });
 
-test('évaluation du critère requiredEncoders pour les groupes de nœuds', () => {
+test('évaluation du critère requiredEncoders pour les groupes de workers', () => {
   const av1Node = makeNode({
     capabilities: [
       {

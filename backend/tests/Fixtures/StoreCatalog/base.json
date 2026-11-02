@@ -751,7 +751,7 @@
             "options": [
               {
                 "value": "cluster",
-                "label": "Tout le cluster"
+                "label": "Tout le central"
               },
               {
                 "value": "library",
@@ -1348,7 +1348,7 @@
             "label": "Jeu de polices",
             "type": "text",
             "defaultValue": "Crunchyroll",
-            "description": "Nom du sous-dossier du dossier de polices du nœud.",
+            "description": "Nom du sous-dossier du dossier de polices du worker.",
             "importance": "advanced",
             "section": "Polices",
             "editor": "font-set",
@@ -1360,7 +1360,7 @@
             "label": "Ressource de polices",
             "type": "text",
             "defaultValue": "",
-            "description": "Une ou plusieurs ressources du catalogue, « identifiant:version », séparées par des virgules. Chaque ressource est un fichier. Le nœud les récupère et les ajoute : le jeu et la liste ci-dessous sont alors ignorés. Vide : utiliser le jeu de polices du nœud.",
+            "description": "Une ou plusieurs ressources du catalogue, « identifiant:version », séparées par des virgules. Chaque ressource est un fichier. Le worker les récupère et les ajoute : le jeu et la liste ci-dessous sont alors ignorés. Vide : utiliser le jeu de polices du worker.",
             "requiresPluginVersion": "1.3.0",
             "importance": "advanced",
             "section": "Polices",

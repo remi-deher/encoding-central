@@ -15,7 +15,7 @@ import {
   ManagementCatalogTemplateComponent,
 } from './management-catalog-template.component';
 
-/** Shell commun des vues qui maintiennent les nœuds, capacités et extensions du cluster. */
+/** Shell commun des vues qui maintiennent les workers, capacités et extensions du central. */
 @Component({
   selector: 'app-cluster-maintenance-template',
   changeDetection: ChangeDetectionStrategy.OnPush,

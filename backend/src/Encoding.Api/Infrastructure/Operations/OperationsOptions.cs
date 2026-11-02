@@ -1,6 +1,6 @@
 namespace Encoding.Api.Infrastructure.Operations;
 
-/// <summary>Réglages d’exploitation (section <c>Operations</c>) ; les valeurs par défaut sont identiques sur tous les nœuds serveur.</summary>
+/// <summary>Réglages d’exploitation (section <c>Operations</c>) ; les valeurs par défaut sont identiques sur tous les workers serveur.</summary>
 public sealed class OperationsOptions
 {
     public const string Section = "Operations";

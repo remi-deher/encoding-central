@@ -24,8 +24,8 @@ public sealed class McpExecutionsHandler(
     FlowRepository flows,
     FlowComponentRegistry components,
     FlowDefinitionValidator validator,
-    NodeRepository nodes,
-    NodePresenceOptions presenceOptions)
+    WorkerRepository nodes,
+    WorkerPresenceOptions presenceOptions)
     : IMcpDomainHandler
 {
     private static JsonSerializerOptions JsonOptions => McpToolHelpers.JsonOptions;

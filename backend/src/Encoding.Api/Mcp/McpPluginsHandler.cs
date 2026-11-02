@@ -266,7 +266,7 @@ public sealed class McpPluginsHandler(
                 mediaTypes = new[] { "general" },
                 commonOperations = new[] { "run_plugin_process", "execute_custom_script" },
                 scriptUsage = "Utilise le SDK encoding_plugin_sdk.py pour communiquer avec le worker.",
-                notes = "S'exécute sous le bac à sable Landlock (0032). Aucun accès aux secrets du nœud."
+                notes = "S'exécute sous le bac à sable Landlock (0032). Aucun accès aux secrets du worker."
             },
             new
             {
@@ -429,7 +429,7 @@ public sealed class McpPluginsHandler(
 
         // 5. Capabilities
         if (!defProp.TryGetProperty("capabilitiesExposed", out var capProp) || capProp.ValueKind != JsonValueKind.Array || capProp.GetArrayLength() == 0)
-            warnings.Add("Le champ 'capabilitiesExposed' est vide ou absent. L'outil n'annoncera aucune capacité au cluster.");
+            warnings.Add("Le champ 'capabilitiesExposed' est vide ou absent. L'outil n'annoncera aucune capacité au central.");
 
         var isValid = errors.Count == 0;
         var response = new

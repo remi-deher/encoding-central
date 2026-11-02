@@ -57,7 +57,7 @@ const STATUS_ORDER = { unhealthy: 0, degraded: 1, healthy: 2 } as const;
   template: `
     <app-configuration-section
       title="Santé du système"
-      description="État des services sur le nœud consulté."
+      description="État des services sur le worker consulté."
       icon="check"
     >
       @if (refreshError()) {
@@ -96,17 +96,17 @@ const STATUS_ORDER = { unhealthy: 0, degraded: 1, healthy: 2 } as const;
     </app-configuration-section>
 
     <app-configuration-section
-      title="Cluster"
+      title="Central"
       description="Identité de cette installation."
       icon="server"
     >
       @if (cluster(); as value) {
         <app-setting-group>
-          <app-setting-row label="Nom du cluster">
-            <span>{{ value.name || 'Nœud autonome' }}</span>
+          <app-setting-row label="Nom du central">
+            <span>{{ value.name || 'Worker autonome' }}</span>
           </app-setting-row>
           <app-setting-row label="Mode">
-            <span>{{ value.standalone ? 'Autonome' : 'Cluster maillé' }}</span>
+            <span>{{ value.standalone ? 'Autonome' : 'Central avec workers' }}</span>
           </app-setting-row>
           <app-setting-row label="Identifiant">
             <code>{{ value.id }}</code>
@@ -229,7 +229,7 @@ export class SystemTabComponent {
     if (this.refreshing()) return;
     this.refreshing.set(true);
     const outcomes = await Promise.allSettled([
-      firstValueFrom(this.http.get<ClusterIdentityResponse>('/api/v1/cluster')),
+      firstValueFrom(this.http.get<ClusterIdentityResponse>('/api/v1/central')),
       firstValueFrom(this.http.get<HealthDetailsResponse>('/health/details')),
     ]);
     const [identity, diagnostics] = outcomes;
@@ -246,7 +246,7 @@ export class SystemTabComponent {
     const map: Record<string, string> = {
       database: 'Base de données',
       migrations: 'Schéma de données',
-      cluster: 'Maillage du cluster',
+      cluster: 'Maillage du central',
       'flow-backups': 'Sauvegardes de flows',
       'artifact-storage': 'Stockage temporaire',
       'backup-storage': 'Stockage des sauvegardes',

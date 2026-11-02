@@ -17,7 +17,7 @@ internal static partial class Harness
         {
             Check(ProcessToolRunner.Find("mkvmerge") is not null,
                 "mkvmerge is required for extraction/consumption scenarios. Install MKVToolNix in the runtime test job or add its directory to PATH.");
-            var capabilities = Capabilities(true).Concat(new NodeToolCapability[] {
+            var capabilities = Capabilities(true).Concat(new WorkerToolCapability[] {
                 new("mkvtoolnix", "90.0", ["video"], []),
                 new(FlowArtifactReference.Capability, "1.0.0", ["general"], []) }).ToArray();
             await using (var advertise = db.CreateCommand("UPDATE cluster_nodes SET capabilities=@caps"))

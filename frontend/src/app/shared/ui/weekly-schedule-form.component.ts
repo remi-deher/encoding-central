@@ -35,7 +35,7 @@ import { WeeklyScheduleGridComponent } from './weekly-schedule-grid.component';
         Activer le calendrier
       </mat-slide-toggle>
       <p class="schedule-hint">
-        Hors des plages colorées, aucun nouveau traitement ne démarre sur ce nœud. Les traitements
+        Hors des plages colorées, aucun nouveau traitement ne démarre sur ce worker. Les traitements
         déjà en cours ne sont pas interrompus. Fuseau horaire : {{ timeZone() }}.
       </p>
       @if (enabled()) {

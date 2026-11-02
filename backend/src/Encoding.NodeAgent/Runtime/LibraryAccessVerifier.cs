@@ -1,7 +1,7 @@
 namespace Encoding.NodeAgent.Runtime;
 
 public sealed class LibraryAccessException(string operation, string path)
-    : IOException($"Accès effectif refusé ({operation}) dans « {path} ». Vérifiez les droits du processus et le montage du nœud.");
+    : IOException($"Accès effectif refusé ({operation}) dans « {path} ». Vérifiez les droits du processus et le montage du worker.");
 
 /// <summary>Tests effective process permissions using only dedicated, randomly named temporary files.</summary>
 public static class LibraryAccessVerifier

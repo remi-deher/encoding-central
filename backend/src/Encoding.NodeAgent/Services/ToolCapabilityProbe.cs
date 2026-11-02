@@ -10,7 +10,7 @@ namespace Encoding.NodeAgent.Services;
 public sealed class ToolCapabilityProbe(
     IProcessToolRunner processes,
     PluginProcessHost plugins,
-    NodeAgentOptions options,
+    WorkerAgentOptions options,
     ILogger<ToolCapabilityProbe> logger) : IToolCapabilityProbe
 {
     private static readonly Regex EncoderLine = new(
@@ -18,7 +18,7 @@ public sealed class ToolCapabilityProbe(
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private readonly SemaphoreSlim gate = new(1, 1);
-    private IReadOnlyList<NodeToolCapability>? cached;
+    private IReadOnlyList<WorkerToolCapability>? cached;
     private DateTimeOffset refreshed;
     private string? lastHardwareSummary;
 
@@ -29,7 +29,7 @@ public sealed class ToolCapabilityProbe(
         finally { gate.Release(); }
     }
 
-    public async Task<IReadOnlyList<NodeToolCapability>> DiscoverAsync(CancellationToken ct)
+    public async Task<IReadOnlyList<WorkerToolCapability>> DiscoverAsync(CancellationToken ct)
     {
         await gate.WaitAsync(ct);
         try
@@ -38,7 +38,7 @@ public sealed class ToolCapabilityProbe(
                 return cached;
 
             Directory.CreateDirectory(options.DataDirectory);
-            var list = new List<NodeToolCapability>
+            var list = new List<WorkerToolCapability>
             {
                 new("plugin/base", "1.9.0", ["general"], ["cpu"]),
                 new(Encoding.Contracts.Executions.SourceWriteProtocol.Capability, "1.0.0", ["general"], []),
@@ -73,7 +73,7 @@ public sealed class ToolCapabilityProbe(
                     if (version.Length == 0) version = "detected";
 
                     var encoders = new List<string>();
-                    var checks = new List<NodeEncoderCapability>();
+                    var checks = new List<WorkerEncoderCapability>();
                     var acceleration = new List<string>();
                     if (id == "ffmpeg")
                     {
@@ -123,7 +123,7 @@ public sealed class ToolCapabilityProbe(
     }
 
     /// <summary>Journalise au démarrage (et à chaque rafraîchissement du cache) le GPU retenu ou la raison du repli CPU.</summary>
-    private void LogHardwareEncoding(IReadOnlyCollection<string> encoders, IReadOnlyList<NodeEncoderCapability> checks)
+    private void LogHardwareEncoding(IReadOnlyCollection<string> encoders, IReadOnlyList<WorkerEncoderCapability> checks)
     {
         var usable = checks.Where(check => check.Status == "usable").Select(check => check.EncoderId).ToList();
         var hardware = usable.Where(id => !id.StartsWith("lib", StringComparison.Ordinal)).ToList();

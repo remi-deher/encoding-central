@@ -91,7 +91,7 @@ internal static partial class Harness
     internal static void EncoderKindContracts()
     {
         var (registry, validator, eligibility) = Services();
-        NodeToolCapability[] Worker(params string[] encoders) => [.. Capabilities(false), new NodeToolCapability("ffmpeg", "7.0", ["video"], ["cpu"], encoders)];
+        WorkerToolCapability[] Worker(params string[] encoders) => [.. Capabilities(false), new WorkerToolCapability("ffmpeg", "7.0", ["video"], ["cpu"], encoders)];
         FlowDefinition Flow(string? kind, string? encoder = "hevc")
         {
             var values = new Dictionary<string, JsonElement> { ["toolId"] = J("ffmpeg") };
@@ -117,9 +117,9 @@ internal static partial class Harness
     internal static void ProfileEncoderContracts()
     {
         var (registry, validator, eligibility) = Services();
-        NodeToolCapability Ffmpeg(params string[] usable) => new("ffmpeg", "7.0", ["video"], ["cpu", "qsv", "vaapi"], usable,
-            EncoderChecks: [.. usable.Select(id => new NodeEncoderCapability(id, "usable"))]);
-        NodeToolCapability[] Worker(params string[] usable) => [.. Capabilities(false), Ffmpeg(usable)];
+        WorkerToolCapability Ffmpeg(params string[] usable) => new("ffmpeg", "7.0", ["video"], ["cpu", "qsv", "vaapi"], usable,
+            EncoderChecks: [.. usable.Select(id => new WorkerEncoderCapability(id, "usable"))]);
+        WorkerToolCapability[] Worker(params string[] usable) => [.. Capabilities(false), Ffmpeg(usable)];
         FlowDefinition Flow(bool retryWithCpu = false, params EncodingProfileTarget[] targets)
         {
             var profile = new EncodingProfileSnapshot(Guid.NewGuid(), 1, "Matériel", "", targets);
@@ -140,7 +140,7 @@ internal static partial class Harness
             "An agent announcing nodes 1.6.0 does not receive a flow that uses the profile choice.");
     }
 
-    internal static IReadOnlyList<NodeToolCapability> Capabilities(bool encode) => [
+    internal static IReadOnlyList<WorkerToolCapability> Capabilities(bool encode) => [
         new("plugin/base", "1.9.0", ["general"], []),
         new("runtime/source-write-guard-v1", "1.0.0", ["general"], []),
         new("plugin/probe", "1.0.0", ["general"], []),
@@ -152,7 +152,7 @@ internal static partial class Harness
         new("plugin/conditions", "1.2.0", ["general"], []),
         new("plugin/plex", "1.1.0", ["general"], ["process"]),
         new("ffprobe", "7.0", ["video"], []),
-        .. encode ? new NodeToolCapability[] { new("ffmpeg", "7.0", ["video"], ["cpu"], ["libx264", "libx265", "aac"]) } : []];
+        .. encode ? new WorkerToolCapability[] { new("ffmpeg", "7.0", ["video"], ["cpu"], ["libx264", "libx265", "aac"]) } : []];
 
     internal static FlowNodeDefinition Node(FlowComponentRegistry registry, string id, string componentId, Dictionary<string, JsonElement>? values = null)
     {
@@ -168,8 +168,8 @@ internal static partial class Harness
 
     private sealed class FixedProbe(params string[] usable) : IToolCapabilityProbe
     {
-        public Task<IReadOnlyList<NodeToolCapability>> DiscoverAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<NodeToolCapability>>(
-            [.. Capabilities(false), new NodeToolCapability("ffmpeg", "7.0", ["video"], ["cpu", "qsv"], usable, [.. usable.Select(id => new NodeEncoderCapability(id, "usable"))])]);
+        public Task<IReadOnlyList<WorkerToolCapability>> DiscoverAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<WorkerToolCapability>>(
+            [.. Capabilities(false), new WorkerToolCapability("ffmpeg", "7.0", ["video"], ["cpu", "qsv"], usable, [.. usable.Select(id => new WorkerEncoderCapability(id, "usable"))])]);
     }
 
     private static FlowDefinition HardwareProfileFlow(FlowComponentRegistry registry, bool requireEncoder)
@@ -182,13 +182,13 @@ internal static partial class Harness
             [new("a", "entry", "success", "access"), new("b", "access", "yes", "encode"), new("c", "encode", "success", "end"), new("d", "access", "no", "relay"), new("e", "relay", "success", "end")]);
     }
 
-    /// <summary>« Bibliothèque sur ce nœud » avec « et encodeur du profil » : un nœud d'accès sans encodeur n'est pas écarté, il répond « non ».</summary>
+    /// <summary>« Bibliothèque sur ce worker » avec « et encodeur du profil » : un worker d'accès sans encodeur n'est pas écarté, il répond « non ».</summary>
     internal static void LibraryAccessWithEncoderContracts()
     {
         var (registry, validator, eligibility) = Services();
         var flow = HardwareProfileFlow(registry, true); var plain = HardwareProfileFlow(registry, false);
-        var cpuOnly = Capabilities(false).Concat([new NodeToolCapability("ffmpeg", "7.0", ["video"], ["cpu"], ["libx265"])]).ToArray();
-        var gpu = Capabilities(false).Concat([new NodeToolCapability("ffmpeg", "7.0", ["video"], ["cpu", "qsv"], ["hevc_qsv"], [new("hevc_qsv", "usable")])]).ToArray();
+        var cpuOnly = Capabilities(false).Concat([new WorkerToolCapability("ffmpeg", "7.0", ["video"], ["cpu"], ["libx265"])]).ToArray();
+        var gpu = Capabilities(false).Concat([new WorkerToolCapability("ffmpeg", "7.0", ["video"], ["cpu", "qsv"], ["hevc_qsv"], [new("hevc_qsv", "usable")])]).ToArray();
         var worker = Guid.NewGuid();
         var check = validator.Validate(flow); Check(check.IsValid, "The option is a valid setting: " + string.Join("; ", check.Issues.Select(i => i.Path + " " + i.Message)));
         Check(eligibility.CanRun(flow, gpu, worker), "A node with the profile encoder takes the flow.");
@@ -215,7 +215,7 @@ internal static partial class Harness
 
     private sealed class Probe : IToolCapabilityProbe
     {
-        public Task<IReadOnlyList<NodeToolCapability>> DiscoverAsync(CancellationToken ct) => Task.FromResult(Capabilities(true));
+        public Task<IReadOnlyList<WorkerToolCapability>> DiscoverAsync(CancellationToken ct) => Task.FromResult(Capabilities(true));
     }
 
     internal sealed partial class Fixture : IAsyncDisposable
@@ -234,7 +234,6 @@ internal static partial class Harness
         private PluginConfigurationRepository configurations = null!;
         private ExecutionRepository executions = null!;
         private readonly bool sourceWriteGuards;
-        private ClusterPeerIdentityStore? sourceWriteIdentity;
         private SourceWriteGuard? sourceWriteBarrier;
         private int rejectNextCheckpoint;
         private int rejectNextFinish;
@@ -254,23 +253,17 @@ internal static partial class Harness
             Directory.CreateDirectory(directory);
             testDb=await TestDatabase.CreateAsync(connection,"handoff"); db=testDb.Db;
             await DatabaseMigrator.ApplyAsync(db,RepositoryRoot(),CancellationToken.None);
-            var extensionActivation = new ClusterExtensionActivationState(
+            var extensionActivation = new CentralExtensionActivationState(
                 db,
-                new ClusterRegisterRepository(db),
+                new CentralRegisterRepository(db),
                 registry,
-                NullLogger<ClusterExtensionActivationState>.Instance);
+                NullLogger<CentralExtensionActivationState>.Instance);
             await extensionActivation.InitializeAsync(CancellationToken.None);
             var config=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?> { ["Runtime:ArtifactDirectory"]=Path.Combine(directory,"durable") }).Build();
             configurations=new(db,DataProtectionProvider.Create(new DirectoryInfo(Path.Combine(directory,"keys"))));
-            TaskOwnershipRepository? ownership=null;
-            if(sourceWriteGuards)
-            {
-                var keyConfig=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{["PluginSettings:KeyDirectory"]=Path.Combine(directory,"source-write-keys")}).Build();
-                sourceWriteIdentity=new(keyConfig,new EphemeralDataProtectionProvider());sourceWriteBarrier=new(db);
-                ownership=new(db,sourceWriteIdentity);await ownership.InitializeAsync(default);
-            }
-            runtime=new(db,eligibility,registry,new NodePresenceOptions(TimeSpan.FromHours(1)),configurations,new NodeGroupRepository(db),sourceWriteBarrier,ownership);
-            artifacts=new(db,config); executions=new(db,ownership:ownership);
+            if(sourceWriteGuards) sourceWriteBarrier=new(db);
+            runtime=new(db,eligibility,registry,new WorkerPresenceOptions(TimeSpan.FromHours(1)),configurations,new WorkerGroupRepository(db),sourceWriteBarrier);
+            artifacts=new(db,config); executions=new(db);
             foreach(var id in new[]{a,b,c})
             {
                 await using var command=db.CreateCommand("INSERT INTO cluster_nodes(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at,node_token_hash) VALUES(@id,@name,ARRAY['worker'],100,@caps,clock_timestamp(),@token)");
@@ -278,9 +271,9 @@ internal static partial class Harness
                 command.Parameters.AddWithValue("caps",SqlKind.Json,JsonSerializer.Serialize(Capabilities(true),Json));
                 command.Parameters.AddWithValue("token",SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Token))); await command.ExecuteNonQueryAsync();
             }
-            var presenceOptions = new NodePresenceOptions(TimeSpan.FromHours(1));
+            var presenceOptions = new WorkerPresenceOptions(TimeSpan.FromHours(1));
             var flowRepo = new FlowRepository(db);
-            var workflowRepo = new LibraryWorkflowRepository(db, validator, presenceOptions,ownership:ownership);
+            var workflowRepo = new LibraryWorkflowRepository(db, validator, presenceOptions);
             var builder=WebApplication.CreateBuilder(); builder.WebHost.UseUrls("http://127.0.0.1:0");
             builder.Logging.ClearProviders();
             builder.Logging.AddSimpleConsole(o => { o.SingleLine = true; o.IncludeScopes = false; });
@@ -288,19 +281,19 @@ internal static partial class Harness
             builder.Services.AddApiProblemDetails();
             builder.Services.ConfigureHttpJsonOptions(options => { options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase; });
             builder.Services.AddSingleton<System.Data.Common.DbDataSource>(db); builder.Services.AddSingleton(runtime); builder.Services.AddSingleton(artifacts);
-            builder.Services.AddSingleton(new ExecutionWaitRepository(db, presenceOptions)); builder.Services.AddSingleton(new RuntimeTransferRepository(db,ownership:ownership)); builder.Services.AddSingleton(new DiskLockRepository(db)); builder.Services.AddSingleton(configurations); builder.Services.AddSingleton<Encoding.Api.Plugins.PublicationGuardProvider>(); builder.Services.AddSingleton(new SourceReplacementRepository(db,sourceWriteBarrier)); builder.Services.AddSingleton(config);
+            builder.Services.AddSingleton(new ExecutionWaitRepository(db, presenceOptions)); builder.Services.AddSingleton(new RuntimeTransferRepository(db)); builder.Services.AddSingleton(new DiskLockRepository(db)); builder.Services.AddSingleton(configurations); builder.Services.AddSingleton<Encoding.Api.Plugins.PublicationGuardProvider>(); builder.Services.AddSingleton(new SourceReplacementRepository(db,sourceWriteBarrier)); builder.Services.AddSingleton(config);
             builder.Services.AddSingleton(new LibraryProcessingRepository(db)); builder.Services.AddSingleton(workflowRepo);
             builder.Services.AddSingleton(validator); builder.Services.AddSingleton(presenceOptions);
             builder.Services.AddSingleton(extensionActivation);
-            builder.Services.AddSingleton(eligibility); builder.Services.AddSingleton(new NodeRepository(db));
-            builder.Services.AddSingleton(new NodeDirectoryBrowserRepository(db));
+            builder.Services.AddSingleton(eligibility); builder.Services.AddSingleton(new WorkerRepository(db));
+            builder.Services.AddSingleton(new WorkerDirectoryBrowserRepository(db));
             builder.Services.AddSingleton(registry); builder.Services.AddSingleton(flowRepo); builder.Services.AddSingleton(new FlowArchiveService(flowRepo, validator));
             builder.Services.AddSingleton(new FlowTemplateRepository(db, registry));
             // Les routes des ressources du runtime ont besoin de ces services déclarés ; ces scénarios ne les appellent pas.
             builder.Services.AddSingleton(_ => new Encoding.Api.Resources.ResourceBlobStore(config));
             builder.Services.AddSingleton(provider => new Encoding.Api.Resources.ResourceRepository(db, provider.GetRequiredService<Encoding.Api.Resources.ResourceBlobStore>()));
             builder.Services.AddSingleton<Encoding.Api.Executions.RuntimeExecutionCoordinator>();
-            builder.Services.AddSingleton<Encoding.Api.Nodes.NodeManagementService>();
+            builder.Services.AddSingleton<Encoding.Api.Nodes.WorkerManagementService>();
             builder.Services.AddSingleton<Encoding.Api.Flows.FlowCoordinatorService>();
             app=builder.Build();
             app.Use(async (context,next) =>
@@ -358,26 +351,26 @@ internal static partial class Harness
 
         public async Task NodeGroupsAndLabelsAsync()
         {
-            var groups = new NodeGroupRepository(db);
+            var groups = new WorkerGroupRepository(db);
             await using (var inventory = db.CreateCommand("UPDATE cluster_nodes SET inventory=@inventory WHERE id=@id"))
             {
                 inventory.Parameters.AddWithValue("id", a);
-                inventory.Parameters.AddWithValue("inventory", SqlKind.Json, JsonSerializer.Serialize(new NodeInventory("Linux", "X64", 8, 32768), Json));
+                inventory.Parameters.AddWithValue("inventory", SqlKind.Json, JsonSerializer.Serialize(new WorkerInventory("Linux", "X64", 8, 32768), Json));
                 await inventory.ExecuteNonQueryAsync();
             }
-            var manual = new SaveNodeGroupRequest("Production", "Workers média", NodeGroupMode.Manual, new(),
+            var manual = new SaveWorkerGroupRequest("Production", "Workers média", WorkerGroupMode.Manual, new(),
                 new Dictionary<string,string?> { ["zone"]="group", ["gpu"]="nvidia" }, [a,b]);
             Check(await groups.SaveAsync(null, manual, CancellationToken.None), "A manual group is saved.");
-            var automatic = new SaveNodeGroupRequest("Workers RAM", "Au moins 8 Go", NodeGroupMode.Automatic,
-                new NodeGroupCriteria([NodeRole.Worker], MinimumMemoryMb: 8192), new Dictionary<string,string?> { ["zone"]="auto", ["memory"]="large" }, []);
+            var automatic = new SaveWorkerGroupRequest("Workers RAM", "Au moins 8 Go", WorkerGroupMode.Automatic,
+                new WorkerGroupCriteria([NodeRole.Worker], MinimumMemoryMb: 8192), new Dictionary<string,string?> { ["zone"]="auto", ["memory"]="large" }, []);
             Check(await groups.SaveAsync(null, automatic, CancellationToken.None), "An automatic group is saved.");
-            var identityRepository = new NodeGroupRepository(db);
+            var identityRepository = new WorkerGroupRepository(db);
             Check(await identityRepository.SaveNodeIdentityAsync(a, new("Transcode A", new Dictionary<string,string?> { ["zone"]="local" }), CancellationToken.None), "Node labels are saved.");
             var identity = await identityRepository.GetNodeIdentityAsync(a, CancellationToken.None);
             Check(identity is not null && identity.GroupIds.Count == 2, "Manual and automatic membership are both resolved.");
             Check(identity!.EffectiveLabels["zone"] == "local" && identity.EffectiveLabels["gpu"] == "nvidia" && identity.EffectiveLabels["memory"] == "large", "Node labels override group labels and inherit the remaining group labels.");
-            Check(Encoding.Contracts.Nodes.NodeLabelSelector.Matches("gpu=nvidia,memory=large", identity.EffectiveLabels), "Combined group and label selectors match effective labels.");
-            var node = await new NodeRepository(db).GetAsync(a, TimeSpan.FromHours(1), CancellationToken.None);
+            Check(Encoding.Contracts.Nodes.WorkerLabelSelector.Matches("gpu=nvidia,memory=large", identity.EffectiveLabels), "Combined group and label selectors match effective labels.");
+            var node = await new WorkerRepository(db).GetAsync(a, TimeSpan.FromHours(1), CancellationToken.None);
             Check(node?.DisplayName == "Transcode A", "The friendly name stays separate from the heartbeat name.");
 
             var production = (await groups.ListAsync(CancellationToken.None)).Single(g => g.Name == "Production");
@@ -443,7 +436,7 @@ internal static partial class Harness
                 capable.Parameters.AddWithValue("id",a);
                 capable.Parameters.AddWithValue("caps",SqlKind.Json,JsonSerializer.Serialize(Capabilities(true)
                     .Select(capability=>capability.ToolId=="ffmpeg"?capability with { Encoders=[..capability.Encoders??[],"ac3"] }:capability)
-                    .Append(new NodeToolCapability(RuntimeSourceObservation.Capability,"1.0.0",["general"],[])),Json));
+                    .Append(new WorkerToolCapability(RuntimeSourceObservation.Capability,"1.0.0",["general"],[])),Json));
                 await capable.ExecuteNonQueryAsync();
             }
             if (MediaIntegrityPolicy.IsExplicit(flow))
@@ -452,7 +445,7 @@ internal static partial class Harness
                 latest.Parameters.AddWithValue("a",a); latest.Parameters.AddWithValue("b",b); latest.Parameters.AddWithValue("c",c);
                 latest.Parameters.AddWithValue("caps",SqlKind.Json,JsonSerializer.Serialize(Capabilities(true)
                     .Select(cap => cap.ToolId == "plugin/probe" ? cap with { Version = "1.1.0" } : cap)
-                    .Append(new NodeToolCapability(MediaIntegrityPolicy.Capability,"1.0.0",["general"],[])),Json));
+                    .Append(new WorkerToolCapability(MediaIntegrityPolicy.Capability,"1.0.0",["general"],[])),Json));
                 await latest.ExecuteNonQueryAsync();
             }
             Check(validator.Validate(flow).IsValid,JsonSerializer.Serialize(validator.Validate(flow),Json));
@@ -638,7 +631,7 @@ internal static partial class Harness
             await using(var unsupported=db.CreateCommand("UPDATE cluster_nodes SET max_concurrent_tasks=10 WHERE id=@node; UPDATE library_node_accesses SET is_enabled=false WHERE node_id=@node AND library_id=(SELECT library_id FROM execution_work WHERE execution_id=@execution)"))
             { unsupported.Parameters.AddWithValue("node",b);unsupported.Parameters.AddWithValue("execution",id);await unsupported.ExecuteNonQueryAsync(); }
             Check(await runtime.ClaimAsync(b,CancellationToken.None) is null,"The receiver needs an enabled library access.");
-            Check(await new NodeRepository(db).DeleteAsync(a,CancellationToken.None)=="busy","The original source cannot be removed during a waiting relay.");
+            Check(await new WorkerRepository(db).DeleteAsync(a,CancellationToken.None)=="busy","The original source cannot be removed during a waiting relay.");
             Check(await executions.CancelAsync(id,CancellationToken.None),"Cancel integrity fixture.");await RecoverCancellationAsync(id);
         }
         public async Task FrozenConfigurationAsync()
@@ -686,9 +679,9 @@ internal static partial class Harness
             await using var command=db.CreateCommand("SELECT count(*) FROM media_reservations WHERE execution_id=@id");command.Parameters.AddWithValue("id",id);
             Check((long)(await command.ExecuteScalarAsync())! ==0,"Cancellation releases the reservation.");
         }
-        private RuntimeFlowRunner Runner(string name,out NodeAgentOptions options,IToolCapabilityProbe? capabilities=null)
+        private RuntimeFlowRunner Runner(string name,out WorkerAgentOptions options,IToolCapabilityProbe? capabilities=null)
         {
-            options=NodeAgentOptions.FromConfiguration(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?> { ["Node:DataDirectory"]=Path.Combine(directory,name) }).Build());
+            options=WorkerAgentOptions.FromConfiguration(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?> { ["Worker:DataDirectory"]=Path.Combine(directory,name) }).Build());
             var tools=new ProcessToolRunner();var scanner=new MediaScanner(tools);
             var probe=capabilities??new Probe();
             return new(options,scanner,new MediaActions(tools,scanner,probe),tools,new PluginProcessHost(tools,new ConfigurationBuilder().Build(),options),new PublicationGuardRunner(new NoGuardInvoker(),NullLogger<PublicationGuardRunner>.Instance),probe,localPublicationArtifacts,NullLogger<RuntimeFlowRunner>.Instance);
@@ -744,7 +737,7 @@ internal static partial class Harness
         {
             var advertised=Capabilities(true).Select(capability=>capability.ToolId=="ffmpeg"
                 ? capability with { AccelerationTypes=[..capability.AccelerationTypes,"qsv"],Encoders=[..capability.Encoders??[],"hevc_qsv"],
-                    EncoderChecks=[..capability.EncoderChecks??[],new NodeEncoderCapability("hevc_qsv","usable")] }
+                    EncoderChecks=[..capability.EncoderChecks??[],new WorkerEncoderCapability("hevc_qsv","usable")] }
                 : capability).ToArray();
             await using(var announce=db.CreateCommand("UPDATE cluster_nodes SET capabilities=@caps"))
             { announce.Parameters.AddWithValue("caps",SqlKind.Json,JsonSerializer.Serialize(advertised,Json)); await announce.ExecuteNonQueryAsync(); }
@@ -753,7 +746,7 @@ internal static partial class Harness
                 var flow=new FlowDefinition(1,Guid.NewGuid(),1,"Library access","video",
                     [Node(registry,"entry","base-input-file"),Node(registry,"access","nodes-library-access"),
                      Node(registry,"local","base-complete-flow",new(){["result"]=J("success")}),
-                     Node(registry,"elsewhere","base-complete-flow",new(){["result"]=J("failed"),["message"]=J("Fichier sans accès direct sur ce nœud.")})],
+                     Node(registry,"elsewhere","base-complete-flow",new(){["result"]=J("failed"),["message"]=J("Fichier sans accès direct sur ce worker.")})],
                     [new("a","entry","success","access"),new("b","access","yes","local"),new("c","access","no","elsewhere")]);
                 var(id,lease,_)=await EnqueueAsync(flow);
                 using var deadline=new CancellationTokenSource(TimeSpan.FromSeconds(20)); using var client=Client(a);
@@ -895,7 +888,6 @@ internal static partial class Harness
         public async ValueTask DisposeAsync()
         {
             if(app is not null) await app.DisposeAsync();
-            sourceWriteIdentity?.Dispose();
             if(testDb is not null) await testDb.DisposeAsync();
             if(Directory.Exists(directory)) Directory.Delete(directory,true);
         }

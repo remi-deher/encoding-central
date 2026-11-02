@@ -120,7 +120,7 @@ export const SIMULATION_PROFILE_SCHEMA: FlowComponentConfigurationSchema = {
       label: 'Langues des sous-titres, dans l’ordre des pistes',
       description: 'Séparées par des virgules : fra, eng',
     },
-    { id: 'sourceNodeId', type: 'text', label: 'Identifiant du nœud d’origine', required: true },
+    { id: 'sourceNodeId', type: 'text', label: 'Identifiant du worker d’origine', required: true },
     { id: 'workerNodeId', type: 'text', label: 'Identifiant du worker courant', required: true },
     { id: 'libraryId', type: 'text', label: 'Identifiant de la bibliothèque (facultatif)' },
     {

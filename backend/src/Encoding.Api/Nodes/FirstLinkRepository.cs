@@ -6,7 +6,7 @@ namespace Encoding.Api.Nodes;
 
 /// <summary>
 /// Mode « accepter la première liaison » (architecture 0040) : désactivé par défaut, activé explicitement par un administrateur,
-/// à usage unique (consommé par la première demande de rattachement) et à durée limitée. Partagé par tous les serveurs du cluster.
+/// à usage unique (consommé par la première demande de rattachement) et à durée limitée. Partagé par tous les serveurs du central.
 /// </summary>
 public sealed class FirstLinkRepository(DbDataSource dataSource)
 {

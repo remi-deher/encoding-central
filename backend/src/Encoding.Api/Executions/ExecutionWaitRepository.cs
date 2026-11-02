@@ -8,7 +8,7 @@ using Encoding.Contracts.Flows;
 namespace Encoding.Api.Executions;
 
 /// <summary>Attentes durables des blocs Attendre (architecture 0033) : mise en attente, décision unique, sondes de conditions de plugin.</summary>
-public sealed class ExecutionWaitRepository(DbDataSource dataSource,NodePresenceOptions presence)
+public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresenceOptions presence)
 {
     private static readonly JsonSerializerOptions Json=new(JsonSerializerDefaults.Web);
 

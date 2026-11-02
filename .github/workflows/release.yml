@@ -90,6 +90,8 @@ jobs:
           file: backend/Dockerfile
           target: central
           push: true
+          build-args: |
+            APP_VERSION=${{ steps.version.outputs.version }}
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/encoding-central:${{ steps.version.outputs.version }}
             ${{ secrets.DOCKERHUB_USERNAME }}/encoding-central:latest
@@ -102,6 +104,8 @@ jobs:
           file: backend/Dockerfile
           target: worker
           push: true
+          build-args: |
+            APP_VERSION=${{ steps.version.outputs.version }}
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/encoding-worker:${{ steps.version.outputs.version }}
             ${{ secrets.DOCKERHUB_USERNAME }}/encoding-worker:latest

@@ -30,25 +30,25 @@ if (args.FirstOrDefault() == "--isolated-process")
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddOperations();
-var pluginKeyDirectory = ClusterPeerIdentityStore.ResolveKeyDirectory(builder.Configuration, builder.Environment.ContentRootPath);
+var pluginKeyDirectory = CentralPeerIdentityStore.ResolveKeyDirectory(builder.Configuration, builder.Environment.ContentRootPath);
 Directory.CreateDirectory(pluginKeyDirectory);
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(pluginKeyDirectory))
     .SetApplicationName("Encoding.PluginSettings");
-var offlineAfterSeconds = builder.Configuration.GetValue("NodePresence:OfflineAfterSeconds", 30);
+var offlineAfterSeconds = builder.Configuration.GetValue("WorkerPresence:OfflineAfterSeconds", 30);
 if (offlineAfterSeconds <= 0)
 {
-    throw new InvalidOperationException("NodePresence:OfflineAfterSeconds doit être supérieur à zéro.");
+    throw new InvalidOperationException("WorkerPresence:OfflineAfterSeconds doit être supérieur à zéro.");
 }
 var localDatabase = DatabaseProvider.CreateRuntime(builder.Configuration);
 builder.Services.AddSingleton<System.Data.Common.DbDataSource>(localDatabase);
-builder.Services.AddSingleton(new NodePresenceOptions(TimeSpan.FromSeconds(offlineAfterSeconds)));
-builder.Services.AddSingleton<NodeRepository>();
-builder.Services.AddSingleton<NodeDirectoryBrowserRepository>();
-builder.Services.AddSingleton<NodeGroupRepository>();
+builder.Services.AddSingleton(new WorkerPresenceOptions(TimeSpan.FromSeconds(offlineAfterSeconds)));
+builder.Services.AddSingleton<WorkerRepository>();
+builder.Services.AddSingleton<WorkerDirectoryBrowserRepository>();
+builder.Services.AddSingleton<WorkerGroupRepository>();
 builder.Services.AddSingleton<EnrollmentWindowRepository>();
 builder.Services.AddSingleton<FirstLinkRepository>();
-builder.Services.AddSingleton<LocalNodeRegistry>();
+builder.Services.AddSingleton<LocalWorkerRegistry>();
 // Instances créées hors conteneur : le fournisseur de logs est résolu pendant l'initialisation de ILoggerFactory.
 var systemLogRepository = new SystemLogRepository(localDatabase);
 var systemLogSink = new SystemLogDbSink(systemLogRepository);
@@ -56,9 +56,9 @@ builder.Services.AddSingleton(systemLogRepository);
 builder.Services.AddSingleton(systemLogSink);
 builder.Services.AddSingleton<ISystemLogSink>(systemLogSink);
 builder.Services.AddHostedService(sp => sp.GetRequiredService<SystemLogDbSink>());
-var localNodeLogContext = new LocalNodeLogContext();
+var localNodeLogContext = new LocalWorkerLogContext();
 builder.Services.AddSingleton(localNodeLogContext);
-builder.Services.AddSingleton<ISystemLogNodeContext>(localNodeLogContext);
+builder.Services.AddSingleton<ISystemLogWorkerContext>(localNodeLogContext);
 builder.Services.AddSystemLogging();
 builder.Services.AddApiProblemDetails();
 builder.Services.AddClusterAuthentication(builder.Configuration);
@@ -75,8 +75,8 @@ builder.Services.AddHttpClient("release-updates", client =>
 builder.Services.AddSingleton<ExecutionStreamBroadcaster>();
 builder.Services.AddSingleton<ExecutionRepository>();
 builder.Services.AddSingleton<FlowComponentRegistry>();
-builder.Services.AddSingleton<Encoding.Api.Plugins.ClusterExtensionActivationState>();
-builder.Services.AddHostedService(services => services.GetRequiredService<Encoding.Api.Plugins.ClusterExtensionActivationState>());
+builder.Services.AddSingleton<Encoding.Api.Plugins.CentralExtensionActivationState>();
+builder.Services.AddHostedService(services => services.GetRequiredService<Encoding.Api.Plugins.CentralExtensionActivationState>());
 builder.Services.AddSingleton<FlowDefinitionValidator>();
 builder.Services.AddSingleton<FlowCatalogPromptBuilder>();
 builder.Services.AddSingleton<FlowAiGeneratorService>();
@@ -119,8 +119,8 @@ builder.Services.AddSingleton<IntegrationTriggerService>();
 builder.Services.AddSingleton<AiCliRuntime>();
 builder.Services.AddSingleton<AiQuotaService>();
 builder.Services.AddSingleton<AiModelCatalogService>();
-builder.Services.AddSingleton<AiClusterStore>();
-builder.Services.AddSingleton<AiClusterService>();
+builder.Services.AddSingleton<AiCentralStore>();
+builder.Services.AddSingleton<AiCentralService>();
 builder.Services.AddSingleton<AiAssistantSupportService>();
 builder.Services.AddSingleton<AiAssistantConversationsService>();
 builder.Services.AddSingleton<AiAssistantActionsService>();
@@ -135,9 +135,9 @@ builder.Services.AddSingleton<AiSettingsService>();
 builder.Services.AddSingleton<AiClientFactory>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<IntegrationTriggerService>());
 builder.Services.AddTransient<LocalAgentAuthenticationHandler>();
-builder.Services.AddHttpClient(Encoding.Api.Nodes.LocalNodeEndpoints.HttpClientName, (services, client) =>
+builder.Services.AddHttpClient(Encoding.Api.Nodes.LocalWorkerEndpoints.HttpClientName, (services, client) =>
 {
-    client.BaseAddress = new Uri(Encoding.Api.Nodes.LocalNodeEndpoints.AgentBaseUrl(services.GetRequiredService<IConfiguration>()));
+    client.BaseAddress = new Uri(Encoding.Api.Nodes.LocalWorkerEndpoints.AgentBaseUrl(services.GetRequiredService<IConfiguration>()));
     client.Timeout = TimeSpan.FromSeconds(30);
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false })
     .AddHttpMessageHandler<LocalAgentAuthenticationHandler>();
@@ -149,7 +149,6 @@ builder.Services.AddHttpClient("MetadataSources", client => client.Timeout = Tim
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddSingleton<AiMetadataEnrichmentService>();
 builder.Services.AddSingleton<RuntimeEligibility>();
-builder.Services.AddSingleton<TaskOwnershipRepository>();
 builder.Services.AddSingleton<SourceWriteGuard>();
 builder.Services.AddSingleton<FlowPlacementPlanner>();
 builder.Services.AddSingleton<RuntimeRepository>();
@@ -167,14 +166,14 @@ builder.Services.AddSingleton<LibraryWorkflowRepository>();
 builder.Services.AddSingleton<LibraryActivityRepository>();
 builder.Services.AddSingleton<LibraryProcessingRepository>();
 builder.Services.AddHostedService<LibraryMonitoringService>();
-builder.Services.AddSingleton<LibraryNodeAccessRepository>();
-builder.Services.AddSingleton<ClusterIdentityRepository>();
-builder.Services.AddSingleton<ClusterPeerIdentityStore>();
-builder.Services.AddSingleton<ClusterRegisterRepository>();
-builder.Services.AddSingleton<ClusterDataKeyStore>();
-builder.Services.AddHostedService<ClusterDiscoveryPublisher>();
+builder.Services.AddSingleton<LibraryWorkerAccessRepository>();
+builder.Services.AddSingleton<CentralIdentityRepository>();
+builder.Services.AddSingleton<CentralPeerIdentityStore>();
+builder.Services.AddSingleton<CentralRegisterRepository>();
+builder.Services.AddSingleton<CentralDataKeyStore>();
+builder.Services.AddHostedService<CentralDiscoveryPublisher>();
 builder.Services.AddSingleton<RuntimeExecutionCoordinator>();
-builder.Services.AddSingleton<NodeManagementService>();
+builder.Services.AddSingleton<WorkerManagementService>();
 builder.Services.AddSingleton<FlowCoordinatorService>();
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
@@ -195,9 +194,8 @@ await StandardFlowTemplateSeeder.EnsureAsync(
     app.Services.GetRequiredService<FlowDefinitionValidator>(),
     app.Lifetime.ApplicationStopping,
     app.Logger);
-await app.Services.GetRequiredService<Encoding.Api.Plugins.ClusterExtensionActivationState>()
+await app.Services.GetRequiredService<Encoding.Api.Plugins.CentralExtensionActivationState>()
     .InitializeAsync(app.Lifetime.ApplicationStopping);
-await app.Services.GetRequiredService<TaskOwnershipRepository>().InitializeAsync(app.Lifetime.ApplicationStopping);
 app.UseRequestObservability();
 app.UseTrustedProxies();
 app.UseSecurityHeaders();
@@ -237,7 +235,6 @@ app.MapNodeEndpoints();
 app.MapNodeGroupEndpoints();
 app.MapLocalNodeEndpoints();
 app.MapExecutionEndpoints();
-app.MapTaskOwnershipEndpoints();
 app.MapGet("/api/v1/system/version", (Encoding.Api.Updates.ReleaseService releases) =>
     Results.Ok(new { version = releases.Installed.Version, commit = releases.Installed.Commit }));
 app.MapGet("/api/v1/system/updates", (Encoding.Api.Updates.ReleaseService releases, CancellationToken ct) =>

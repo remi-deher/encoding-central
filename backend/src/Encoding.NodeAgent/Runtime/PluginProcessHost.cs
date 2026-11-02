@@ -18,7 +18,7 @@ public sealed class PluginLaunch
 }
 
 /// <summary>Third party implementations run as separate child processes with a versioned JSON envelope.</summary>
-public sealed class PluginProcessHost(IProcessToolRunner processes,IConfiguration configuration,NodeAgentOptions options)
+public sealed class PluginProcessHost(IProcessToolRunner processes,IConfiguration configuration,WorkerAgentOptions options)
 {
     private static readonly JsonSerializerOptions Json=new(JsonSerializerDefaults.Web);
     private const int MaxVariableChanges=64, MaxVariableNameLength=128, MaxVariableBytes=256*1024, MaxDetailLength=4096, MaxErrorLength=400, MaxFingerprintedFiles=5000;
@@ -105,7 +105,7 @@ public sealed class PluginProcessHost(IProcessToolRunner processes,IConfiguratio
             var path=Path.GetFullPath(candidate).TrimEnd(Path.DirectorySeparatorChar);
             if(protectedRoot==path || protectedRoot.StartsWith(path+Path.DirectorySeparatorChar,StringComparison.Ordinal)
                 || path.StartsWith(protectedRoot+Path.DirectorySeparatorChar,StringComparison.Ordinal))
-                throw new IOException("Les fichiers du plugin doivent être installés en dehors des données privées du nœud.");
+                throw new IOException("Les fichiers du plugin doivent être installés en dehors des données privées du worker.");
         }
     }
     public async Task<FlowStepResult> ExecuteAsync(FlowStepInvocation invocation,string workspace,CancellationToken ct)

@@ -15,7 +15,7 @@ public sealed class LibraryProcessingRepository(DbDataSource dataSource)
             cmd.Parameters.AddWithValue("id",library);await using var r=await cmd.ExecuteReaderAsync(ct);
             if(await r.ReadAsync(ct)){watch=r.GetBoolean(0);interval=r.GetInt32(1);maximum=r.IsDBNull(2)?null:r.GetInt32(2);revision=r.GetInt32(3);}
         }
-        var limits=new List<LibraryNodeProcessingLimit>();
+        var limits=new List<LibraryWorkerProcessingLimit>();
         await using(var cmd=dataSource.CreateCommand("SELECT node_id,max_concurrent_tasks FROM library_node_processing_limits WHERE library_id=@id ORDER BY node_id"))
         {
             cmd.Parameters.AddWithValue("id",library);await using var r=await cmd.ExecuteReaderAsync(ct);
@@ -39,7 +39,7 @@ public sealed class LibraryProcessingRepository(DbDataSource dataSource)
             await using var eligible=Sql.Command("SELECT EXISTS(SELECT 1 FROM library_node_accesses a JOIN cluster_nodes n ON n.id=a.node_id WHERE a.library_id=@library AND a.node_id=@node AND a.mode<>'unsupported' AND n.deleted_at IS NULL AND 'worker'=ANY(n.roles))",
                 c,tx);
             eligible.Parameters.AddWithValue("library",library);eligible.Parameters.AddWithValue("node",limit.NodeId);
-            if(!(await eligible.ScalarBoolAsync(ct)))throw new ArgumentException("Les limites par nœud exigent un worker disposant d’un accès à cette bibliothèque.");
+            if(!(await eligible.ScalarBoolAsync(ct)))throw new ArgumentException("Les limites par worker exigent un worker disposant d’un accès à cette bibliothèque.");
         }
         await using var save=Sql.Command("""
           INSERT INTO library_processing_settings(library_id,watch_enabled,scan_interval_seconds,max_concurrent_tasks,revision)
@@ -58,16 +58,16 @@ public sealed class LibraryProcessingRepository(DbDataSource dataSource)
         }
         await tx.CommitAsync(ct);return true;
     }
-    public async Task<NodeProcessingSettings?> NodeAsync(Guid node,CancellationToken ct)
+    public async Task<WorkerProcessingSettings?> NodeAsync(Guid node,CancellationToken ct)
     {
         await using var cmd=dataSource.CreateCommand("SELECT p.max_concurrent_tasks,COALESCE(p.max_concurrent_tasks,n.max_concurrent_tasks),COALESCE(p.revision,0),COALESCE(p.schedule_enabled,false),COALESCE(p.schedule_timezone,'UTC'),COALESCE(p.schedule_slots,repeat('1',672)) FROM cluster_nodes n LEFT JOIN node_processing_settings p ON p.node_id=n.id WHERE n.id=@id AND n.deleted_at IS NULL");
         cmd.Parameters.AddWithValue("id",node);await using var r=await cmd.ExecuteReaderAsync(ct);
-        return await r.ReadAsync(ct)?new(r.IsDBNull(0)?null:r.GetInt32(0),r.GetInt32(1),r.GetInt32(2),new NodeSchedule(r.GetBoolean(3),r.GetString(4),r.GetString(5))):null;
+        return await r.ReadAsync(ct)?new(r.IsDBNull(0)?null:r.GetInt32(0),r.GetInt32(1),r.GetInt32(2),new WorkerSchedule(r.GetBoolean(3),r.GetString(4),r.GetString(5))):null;
     }
-    public async Task<bool> SaveNodeAsync(Guid node,SaveNodeProcessingSettings request,CancellationToken ct)
+    public async Task<bool> SaveNodeAsync(Guid node,SaveWorkerProcessingSettings request,CancellationToken ct)
     {
         if(request.MaxConcurrentTasks is <1 or >1000 || request.ExpectedRevision is <0 or int.MaxValue)throw new ArgumentException("La limite doit être comprise entre 1 et 1 000, ou laissée vide.");
-        var schedule=request.Schedule??NodeSchedule.AlwaysOpen; if(schedule.Validate() is {} scheduleError)throw new ArgumentException(scheduleError);
+        var schedule=request.Schedule??WorkerSchedule.AlwaysOpen; if(schedule.Validate() is {} scheduleError)throw new ArgumentException(scheduleError);
         await using var c=await dataSource.OpenConnectionAsync(ct);await using var tx=await c.BeginTransactionAsync(ct);
         await using var locked=Sql.Command("SELECT id FROM cluster_nodes WHERE id=@id AND deleted_at IS NULL FOR UPDATE",c,tx);
         locked.Parameters.AddWithValue("id",node);if(await locked.ExecuteScalarAsync(ct) is null)return false;

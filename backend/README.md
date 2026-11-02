@@ -38,7 +38,7 @@ Attendu : `vainfo` liste `VAProfileH264Main` et `VAProfileHEVCMain` avec `VAEntr
 
 Les migrations SQLite versionnées (`NNNN_nom.sql`, numéro unique, empreinte enregistrée) s’appliquent au démarrage dans une transaction d’écriture immédiate ; ne jamais modifier une migration publiée, en ajouter une. Le service n’a pas de dépendance à un serveur de base externe.
 
-Le worker découvre les clusters annoncés en DNS-SD/mDNS (`_encoding._tcp`). Le service prend aussi en charge une adresse bootstrap `Cluster:ApiBaseUrl`, utilisée ici pour la découverte dans le réseau Compose où le multicast peut être indisponible. Pour un worker sur un autre hôte, définissez `CLUSTER_ADVERTISED_API_BASE_URL` avec une URL HTTPS joignable depuis ces machines, puis publiez le port API sur l’interface réseau prévue. Le réglage de développement lie volontairement l’API à la boucle locale.
+Le worker découvre les clusters annoncés en DNS-SD/mDNS (`_encoding._tcp`). Le service prend aussi en charge une adresse bootstrap `Central:ApiBaseUrl`, utilisée ici pour la découverte dans le réseau Compose où le multicast peut être indisponible. Pour un worker sur un autre hôte, définissez `CENTRAL_ADVERTISED_API_BASE_URL` avec une URL HTTPS joignable depuis ces machines, puis publiez le port API sur l’interface réseau prévue. Le réglage de développement lie volontairement l’API à la boucle locale.
 
 ## Enrôlement worker
 
@@ -48,7 +48,7 @@ Le worker découvre les clusters annoncés en DNS-SD/mDNS (`_encoding._tcp`). Le
 
 Ce parcours (confirmation locale) n’est accepté que si un administrateur a ouvert la **fenêtre d’enrôlement direct** depuis **Nœuds → Ajouter un nœud** (10 minutes). Autre parcours, sans fenêtre : cliquer sur **Générer une clé** dans **Nœuds → Ce nœud et son cluster** du nœud à ajouter, puis ouvrir **Ajouter un nœud** dans le catalogue du serveur et saisir la clé ; l’approbation exige un administrateur. Elle expire après 10 minutes et ne peut servir qu’une fois. Le worker attend la confirmation sur son heartbeat avant de se déclarer enrôlé.
 
-L’acceptation automatique se règle sur le worker avec `Worker__AutoAcceptEnrollment` (Compose : `WORKER_AUTO_ACCEPT_ENROLLMENT`). Elle est désactivée par défaut. Lorsqu’elle est activée, le worker rejoint le cluster explicitement configuré par `Cluster__ApiBaseUrl` ; sans cette configuration, il accepte automatiquement le seul cluster détecté et attend un choix explicite s’il en voit plusieurs.
+L’acceptation automatique se règle sur le worker avec `Worker__AutoAcceptEnrollment` (Compose : `WORKER_AUTO_ACCEPT_ENROLLMENT`). Elle est désactivée par défaut. Lorsqu’elle est activée, le worker rejoint le cluster explicitement configuré par `Central__ApiBaseUrl` ; sans cette configuration, il accepte automatiquement le seul cluster détecté et attend un choix explicite s’il en voit plusieurs.
 
 L’identité et le jeton aléatoire sont créés par l’agent, puis conservés dans son répertoire de données. Le serveur stocke uniquement le SHA-256 du jeton et l’exige pour les heartbeats via `X-Node-Token`. Les répétitions d’un enrôlement avec la même identité et le même jeton sont idempotentes. Un worker déjà enrôlé ne peut pas être déplacé par l’interface ; il faut réinitialiser son identité locale après avoir arrêté l’agent.
 
@@ -62,13 +62,13 @@ Au premier démarrage, l’interface propose un assistant d’initialisation (`/
 
 ## API `v1`
 
-- `GET /api/v1/cluster` retourne l’identité stable du cluster pour la découverte bootstrap.
-- `POST /api/v1/nodes/enroll` enrôle ou retrouve le nœud à partir de son identifiant stable et de son jeton propre.
-- `POST /api/v1/nodes/enrollment-requests` enregistre une demande temporaire associée à une clé de jumelage hachée.
-- `POST /api/v1/nodes/enrollment-requests/approve` consomme la clé et ajoute le worker au cluster.
-- `PUT /api/v1/nodes/{nodeId}/heartbeat` actualise un nœud avec son jeton dans `X-Node-Token`.
-- `GET /api/v1/nodes` liste les nœuds et calcule `status` à partir de `lastSeenAt`.
-- `GET /api/v1/nodes/{nodeId}` lit un nœud, ou retourne `404`.
+- `GET /api/v1/central` retourne l’identité stable du cluster pour la découverte bootstrap.
+- `POST /api/v1/workers/enroll` enrôle ou retrouve le nœud à partir de son identifiant stable et de son jeton propre.
+- `POST /api/v1/workers/enrollment-requests` enregistre une demande temporaire associée à une clé de jumelage hachée.
+- `POST /api/v1/workers/enrollment-requests/approve` consomme la clé et ajoute le worker au cluster.
+- `PUT /api/v1/workers/{nodeId}/heartbeat` actualise un nœud avec son jeton dans `X-Node-Token`.
+- `GET /api/v1/workers` liste les nœuds et calcule `status` à partir de `lastSeenAt`.
+- `GET /api/v1/workers/{nodeId}` lit un nœud, ou retourne `404`.
 - `GET /api/v1/libraries` liste les définitions de bibliothèques partagées.
 - `POST /api/v1/libraries` crée une définition avec un nom unique et un type `video`, `image`, `music` ou `subtitles`.
 

@@ -23,7 +23,7 @@ import {
             <app-status-badge
               [label]="
                 group().mode === 'manual'
-                  ? 'Manuel (' + memberNodes().length + ' nœuds)'
+                  ? 'Manuel (' + memberNodes().length + ' workers)'
                   : 'Automatique (' + memberNodes().length + ' matchés)'
               "
               [tone]="group().mode === 'manual' ? 'neutral' : 'accent'"
@@ -59,7 +59,7 @@ import {
           <span class="section-title">Membres ({{ memberNodes().length }})</span>
           <div class="pills-list">
             @if (memberNodes().length === 0) {
-              <span class="muted-hint">Aucun nœud membre</span>
+              <span class="muted-hint">Aucun worker membre</span>
             } @else {
               @for (node of displayedMembers(); track node.id) {
                 <span class="node-pill">

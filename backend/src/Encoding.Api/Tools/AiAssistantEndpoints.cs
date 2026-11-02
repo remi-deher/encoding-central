@@ -58,8 +58,8 @@ public static class AiAssistantEndpoints
             }))
         .AllowAssistantConversation();
 
-        group.MapPost("/messages", async (AiAssistantMessageRequest request, HttpContext http, AiAssistantService service, ClusterPeerIdentityStore identity,
-            AiClusterService cluster, CancellationToken ct) =>
+        group.MapPost("/messages", async (AiAssistantMessageRequest request, HttpContext http, AiAssistantService service, CentralPeerIdentityStore identity,
+            AiCentralService cluster, CancellationToken ct) =>
             await GuardAsync(async () =>
             {
                 // Une discussion préparée par un autre serveur (ancienne installation) est reprise par le central.
@@ -74,7 +74,7 @@ public static class AiAssistantEndpoints
         .RequireRateLimiting(AuthExtensions.HeavyOperationsPolicy);
 
         group.MapPost("/requests/{requestId:guid}/cancel", async (Guid requestId, HttpContext http, AiAssistantService service,
-            AiClusterService cluster, CancellationToken ct) =>
+            AiCentralService cluster, CancellationToken ct) =>
             await GuardAsync(async () =>
             {
                 var coordinatorId = await cluster.CoordinatorAsync(http.Request.Query["conversationId"].ToString(), ct)

@@ -276,7 +276,7 @@ export class LibraryCatalogPageComponent {
         firstValueFrom(this.clusterApi.listNodes()),
         firstValueFrom(
           this.http.get<readonly LibraryNodeAccessResponse[]>(
-            '/api/v1/libraries/' + library.id + '/node-access',
+            '/api/v1/libraries/' + library.id + '/worker-access',
           ),
         ),
       ]);
@@ -291,7 +291,7 @@ export class LibraryCatalogPageComponent {
       this.processingForm.set({
         title: 'Surveillance et limites',
         description:
-          'Les plafonds se cumulent avec la limite globale de chaque nœud. Les champs vides laissent les workers se partager les tâches disponibles.',
+          'Les plafonds se cumulent avec la limite globale de chaque worker. Les champs vides laissent les workers se partager les tâches disponibles.',
         submitLabel: 'Enregistrer',
         initialValues: {
           watch: String(settings.watchEnabled),
@@ -334,7 +334,7 @@ export class LibraryCatalogPageComponent {
             min: 1,
             max: 1000,
             step: 1,
-            hint: 'Tous nœuds confondus. Vide : pas de plafond supplémentaire.',
+            hint: 'Tous workers confondus. Vide : pas de plafond supplémentaire.',
           },
           ...workers.map((node) => ({
             id: 'limit_' + node.id,
@@ -343,7 +343,7 @@ export class LibraryCatalogPageComponent {
             min: 1,
             max: 1000,
             step: 1,
-            hint: 'Vide : partage selon les places disponibles sur ce nœud.',
+            hint: 'Vide : partage selon les places disponibles sur ce worker.',
           })),
         ],
       });
@@ -465,7 +465,7 @@ export class LibraryCatalogPageComponent {
       case 'edit':
         return 'Modifier ' + (this.selectedLibrary()?.name ?? 'la bibliothèque');
       default:
-        return 'Configurer les accès par nœud';
+        return 'Configurer les accès par worker';
     }
   });
   protected readonly actionDescription = computed(() =>
@@ -477,14 +477,14 @@ export class LibraryCatalogPageComponent {
           ? this.createFormData.description
           : this.actionType() === 'edit'
             ? 'Modifiez le nom de cette définition partagée.'
-            : `Définissez quels nœuds peuvent accéder à « ${this.selectedLibrary()?.name ?? 'cette bibliothèque'} » et leur mode d’accès.`,
+            : `Définissez quels workers peuvent accéder à « ${this.selectedLibrary()?.name ?? 'cette bibliothèque'} » et leur mode d’accès.`,
   );
 
   protected readonly createFormData: RecordFormData = {
     title: 'Ajouter une bibliothèque',
 
     description:
-      'Créez sa définition partagée. Les chemins et modes d’accès seront configurés séparément pour chaque nœud.',
+      'Créez sa définition partagée. Les chemins et modes d’accès seront configurés séparément pour chaque worker.',
 
     submitLabel: 'Créer la bibliothèque',
 
@@ -521,7 +521,7 @@ export class LibraryCatalogPageComponent {
       confirmation: (row) => ({
         title: 'Supprimer cette bibliothèque ?',
 
-        message: `La définition « ${row['name']} » et ses accès par nœud seront supprimés. Les fichiers média ne seront pas touchés. Cette action est irréversible.`,
+        message: `La définition « ${row['name']} » et ses accès par worker seront supprimés. Les fichiers média ne seront pas touchés. Cette action est irréversible.`,
 
         confirmLabel: 'Supprimer',
         variant: 'danger',
@@ -624,7 +624,7 @@ export class LibraryCatalogPageComponent {
       (!scan
         ? 'Aucune découverte effectuée.'
         : scan.state === 'queued'
-          ? 'En attente d’un nœud ayant un accès direct en lecture.'
+          ? 'En attente d’un worker ayant un accès direct en lecture.'
           : scan.detail)
     );
   });
@@ -796,7 +796,7 @@ export class LibraryCatalogPageComponent {
     try {
       await firstValueFrom(this.clusterApi.discoverLibrary(library.id));
 
-      this.notifications.show('Découverte demandée au nœud d’accès.');
+      this.notifications.show('Découverte demandée au worker d’accès.');
 
       this.workflowRefresh.update((value) => value + 1);
     } catch {
@@ -844,7 +844,7 @@ export class LibraryCatalogPageComponent {
   protected readonly detailTitle = computed(() => this.selectedLibrary()?.name ?? 'Bibliothèque');
 
   protected readonly detailDescription = computed(() =>
-    this.selectedLibrary() ? 'Définition et accès aux nœuds' : 'Détails de la bibliothèque',
+    this.selectedLibrary() ? 'Définition et accès aux workers' : 'Détails de la bibliothèque',
   );
 
   protected readonly accessStatus = computed(() => {
@@ -854,7 +854,7 @@ export class LibraryCatalogPageComponent {
       return 'Bibliothèque désactivée par le serveur. Les chemins et autorisations restent enregistrés.';
 
     if (!library?.configuredNodeCount)
-      return 'Aucun accès actif. Les nœuds ne peuvent pas encore traiter ses médias.';
+      return 'Aucun accès actif. Les workers ne peuvent pas encore traiter ses médias.';
 
     const modes = [
       library.directAccessNodeCount
@@ -870,11 +870,11 @@ export class LibraryCatalogPageComponent {
 
       .join(' · ');
 
-    return `${library.configuredNodeCount} nœud${library.configuredNodeCount > 1 ? 's' : ''} utilisable${library.configuredNodeCount > 1 ? 's' : ''} · ${modes}`;
+    return `${library.configuredNodeCount} worker${library.configuredNodeCount > 1 ? 's' : ''} utilisable${library.configuredNodeCount > 1 ? 's' : ''} · ${modes}`;
   });
 
   protected readonly accessColumns: readonly DataTableColumn[] = [
-    { key: 'nodeName', label: 'Nœud' },
+    { key: 'nodeName', label: 'Worker' },
 
     {
       key: 'isEnabled',
@@ -895,7 +895,7 @@ export class LibraryCatalogPageComponent {
             : {
                 title: 'Désactiver cet accès ?',
 
-                message: `Le nœud « ${row['nodeName']} » ne recevra plus de tâche pour cette bibliothèque.`,
+                message: `Le worker « ${row['nodeName']} » ne recevra plus de tâche pour cette bibliothèque.`,
 
                 confirmLabel: 'Désactiver',
               },
@@ -1014,16 +1014,16 @@ export class LibraryCatalogPageComponent {
       },
       {
         id: 'library-access',
-        title: 'Accès du cluster',
-        caption: accessCount ? `${accessCount} nœud(s) configuré(s)` : 'Aucun nœud configuré',
+        title: 'Accès du central',
+        caption: accessCount ? `${accessCount} worker(s) configuré(s)` : 'Aucun worker configuré',
         metrics: [
           {
             label: 'Accès direct',
-            value: `${library.directAccessNodeCount} nœud(s)`,
+            value: `${library.directAccessNodeCount} worker(s)`,
           },
           {
             label: 'Transfert vers worker',
-            value: `${library.transferNodeCount} nœud(s)`,
+            value: `${library.transferNodeCount} worker(s)`,
           },
         ],
       },
@@ -1314,7 +1314,7 @@ export class LibraryCatalogPageComponent {
       skipped ? `${skipped} déjà présente(s)` : '',
       failed ? `${failed} en échec` : '',
       activationFailed ? `${activationFailed} état(s) à vérifier` : '',
-      imported ? 'flows et accès des nœuds à reconfigurer' : '',
+      imported ? 'flows et accès des workers à reconfigurer' : '',
     ].filter(Boolean);
     this.notifications.show(details.join(' · '));
   }
@@ -1332,7 +1332,7 @@ export class LibraryCatalogPageComponent {
         : { label: 'Flow à attribuer', tone: 'warn' },
       library.configuredNodeCount
         ? { label: library.accessModes }
-        : { label: 'Aucun nœud n’a accès', tone: 'warn' },
+        : { label: 'Aucun worker n’a accès', tone: 'warn' },
       { label: `Surveillance ${library.monitoring.toLocaleLowerCase('fr')}` },
     ];
     if (!library.isActive) tags.unshift({ label: 'Désactivée', tone: 'warn' });
@@ -1354,7 +1354,7 @@ export class LibraryCatalogPageComponent {
         ariaLabel: `Activer la bibliothèque ${library.name}`,
         confirmOff: {
           title: 'Désactiver cette bibliothèque ?',
-          message: `« ${library.name} » ne sera plus disponible pour le cluster. Ses accès configurés seront conservés.`,
+          message: `« ${library.name} » ne sera plus disponible pour le central. Ses accès configurés seront conservés.`,
           confirmLabel: 'Désactiver',
         },
       },
@@ -1446,7 +1446,7 @@ export class LibraryCatalogPageComponent {
             action === 'delete'
               ? {
                   title: `Supprimer ${targets.length} bibliothèque(s) ?`,
-                  message: `Les définitions et accès par nœud de ${targets.map((item) => `« ${item.name} »`).join(', ')} seront supprimés. Les fichiers média ne seront pas touchés.`,
+                  message: `Les définitions et accès par worker de ${targets.map((item) => `« ${item.name} »`).join(', ')} seront supprimés. Les fichiers média ne seront pas touchés.`,
                   confirmLabel: 'Supprimer',
                   variant: 'danger',
                 }
@@ -1576,14 +1576,14 @@ export class LibraryCatalogPageComponent {
     this.http
 
       .put<LibraryNodeAccessResponse>(
-        `/api/v1/libraries/${library.id}/node-access/${access.nodeId}/activation`,
+        `/api/v1/libraries/${library.id}/worker-access/${access.nodeId}/activation`,
 
         { isEnabled: event.checked },
       )
 
       .pipe(
         catchError(() => {
-          this.notifications.show('L’accès de ce nœud n’a pas pu être modifié.');
+          this.notifications.show('L’accès de ce worker n’a pas pu être modifié.');
 
           return EMPTY;
         }),
@@ -1678,7 +1678,7 @@ export class LibraryCatalogPageComponent {
         this.accessSetupMode.set(true);
 
         this.notifications.show(
-          `Bibliothèque « ${created.name} » créée. Vous pouvez maintenant configurer les accès de ses nœuds.`,
+          `Bibliothèque « ${created.name} » créée. Vous pouvez maintenant configurer les accès de ses workers.`,
         );
 
         this.loadAccessForm(created.id);
@@ -1698,7 +1698,7 @@ export class LibraryCatalogPageComponent {
 
     this.http
 
-      .put<readonly LibraryNodeAccessResponse[]>(`/api/v1/libraries/${library.id}/node-access`, {
+      .put<readonly LibraryNodeAccessResponse[]>(`/api/v1/libraries/${library.id}/worker-access`, {
         nodes: values,
       })
 
@@ -1712,7 +1712,7 @@ export class LibraryCatalogPageComponent {
 
           this.notifications.show(
             validationMessage ??
-              'Les accès de la bibliothèque n’ont pas pu être enregistrés. Vérifiez le serveur et les nœuds sélectionnés.',
+              'Les accès de la bibliothèque n’ont pas pu être enregistrés. Vérifiez le serveur et les workers sélectionnés.',
           );
 
           return EMPTY;
@@ -1739,7 +1739,7 @@ export class LibraryCatalogPageComponent {
         this.actionOpen.set(false);
 
         this.notifications.show(
-          `Accès de « ${library.name} » enregistrés pour ${accesses.filter((item) => item.mode !== 'unsupported').length} nœud(s).`,
+          `Accès de « ${library.name} » enregistrés pour ${accesses.filter((item) => item.mode !== 'unsupported').length} worker(s).`,
         );
       });
   }
@@ -1837,7 +1837,7 @@ export class LibraryCatalogPageComponent {
 
     this.http
 
-      .get<readonly LibraryNodeAccessResponse[]>(`/api/v1/libraries/${libraryId}/node-access`)
+      .get<readonly LibraryNodeAccessResponse[]>(`/api/v1/libraries/${libraryId}/worker-access`)
 
       .pipe(
         catchError(() => {
@@ -1860,16 +1860,16 @@ export class LibraryCatalogPageComponent {
 
     forkJoin({
       nodes: this.clusterApi.listNodes(),
-      groups: this.http.get<readonly NodeGroupResponse[]>('/api/v1/node-groups'),
+      groups: this.http.get<readonly NodeGroupResponse[]>('/api/v1/worker-groups'),
 
       accesses: this.http.get<readonly LibraryNodeAccessResponse[]>(
-        `/api/v1/libraries/${libraryId}/node-access`,
+        `/api/v1/libraries/${libraryId}/worker-access`,
       ),
       otherLibraryAccesses: otherLibraryIds.length
         ? forkJoin(
             otherLibraryIds.map((id) =>
               this.http.get<readonly LibraryNodeAccessResponse[]>(
-                `/api/v1/libraries/${id}/node-access`,
+                `/api/v1/libraries/${id}/worker-access`,
               ),
             ),
           )
@@ -1880,7 +1880,7 @@ export class LibraryCatalogPageComponent {
           this.accessFormLoading.set(false);
 
           this.notifications.show(
-            'Les nœuds ou les accès de cette bibliothèque n’ont pas pu être chargés.',
+            'Les workers ou les accès de cette bibliothèque n’ont pas pu être chargés.',
           );
 
           return EMPTY;
@@ -1946,7 +1946,7 @@ export class LibraryCatalogPageComponent {
 
       transferNodeCount: transferCount,
 
-      configuredNodes: configuredCount ? `${configuredCount} nœud(s) utilisable(s)` : 'Aucun accès',
+      configuredNodes: configuredCount ? `${configuredCount} worker(s) utilisable(s)` : 'Aucun accès',
 
       accessModes: modes || 'Non configuré',
 
@@ -2081,7 +2081,7 @@ export class LibraryCatalogPageComponent {
 
       transferNodeCount: transferCount,
 
-      configuredNodes: configuredCount ? `${configuredCount} nœud(s) utilisable(s)` : 'Aucun accès',
+      configuredNodes: configuredCount ? `${configuredCount} worker(s) utilisable(s)` : 'Aucun accès',
 
       accessModes: modes || 'Non configuré',
 

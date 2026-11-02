@@ -42,13 +42,13 @@ public sealed partial class ArchitectureTests
         "Encoding.Api/Flows/FlowAiEndpoints.cs",
         "Encoding.Api/Flows/FlowScriptEndpoints.cs",
         "Encoding.Api/Flows/FlowTemplateEndpoints.cs",
-        "Encoding.Api/Infrastructure/ClusterEndpoints.cs",
+        "Encoding.Api/Infrastructure/CentralEndpoints.cs",
         "Encoding.Api/Libraries/LibraryActivityEndpoints.cs",
         "Encoding.Api/Libraries/LibraryEndpoints.cs",
         "Encoding.Api/Libraries/LibraryWorkflowEndpoints.cs",
         "Encoding.Api/Logging/SystemLogEndpoints.cs",
-        "Encoding.Api/Nodes/LocalNodeEndpoints.cs",
-        "Encoding.Api/Nodes/NodeGroupEndpoints.cs",
+        "Encoding.Api/Nodes/LocalWorkerEndpoints.cs",
+        "Encoding.Api/Nodes/WorkerGroupEndpoints.cs",
         "Encoding.Api/Plugins/ArrWebhookEndpoints.cs",
         "Encoding.Api/Plugins/PluginConfigurationEndpoints.cs",
         "Encoding.Api/Plugins/PluginStoreEndpoints.cs",
@@ -59,7 +59,7 @@ public sealed partial class ArchitectureTests
     private static readonly string[] HttpClientConstructionDebt =
     [
         "Encoding.Api/Mcp/McpCommand.cs",
-        "Encoding.NodeAgent/Services/WorkerClusterDiscovery.cs",
+        "Encoding.NodeAgent/Services/WorkerCentralDiscovery.cs",
         "Encoding.NodeAgent/Services/WorkerEnrollmentService.cs",
     ];
 

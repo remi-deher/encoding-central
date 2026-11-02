@@ -8,7 +8,7 @@ namespace Encoding.Api.Executions;
 public sealed class RuntimeArtifactStore(DbDataSource dataSource,IConfiguration configuration)
 {
     private readonly string root=Path.GetFullPath(configuration["Runtime:ArtifactDirectory"]
-        ??(configuration["Node:DataDirectory"] is { Length: > 0 } dataDir ? Path.Combine(dataDir,"runtime-artifacts") : Path.Combine(AppContext.BaseDirectory,"runtime-artifacts")));
+        ??(configuration["Worker:DataDirectory"] is { Length: > 0 } dataDir ? Path.Combine(dataDir,"runtime-artifacts") : Path.Combine(AppContext.BaseDirectory,"runtime-artifacts")));
     public string Root=>root;
     public string DirectoryFor(Guid id)=>Path.Combine(root,id.ToString("D"));
     public static bool ValidDigest(string digest)=>Regex.IsMatch(digest??"","^[0-9a-f]{64}$",RegexOptions.CultureInvariant);

@@ -6,7 +6,7 @@ namespace Encoding.NodeAgent;
 
 /// <summary>
 /// Relais de l'interface worker vers le central. Le navigateur reste sur le worker, donc le cookie de session
-/// reste sur cette origine. Les routes de l'agent lui-même ne sont pas relayées. « Ce nœud » interroge cet agent,
+/// reste sur cette origine. Les routes de l'agent lui-même ne sont pas relayées. « Ce worker » interroge cet agent,
 /// après vérification de la session auprès du central.
 /// </summary>
 internal static class CentralUiProxy
@@ -59,7 +59,7 @@ internal static class CentralUiProxy
                 return;
             }
 
-            if (context.Request.Path.StartsWithSegments("/api/v1/local-node"))
+            if (context.Request.Path.StartsWithSegments("/api/v1/local-worker"))
             {
                 await RelayLocalNodeAsync(context, client, central, localPort, secretFile);
                 return;
@@ -136,7 +136,7 @@ internal static class CentralUiProxy
             await context.Response.WriteAsJsonAsync(new { title = "L’agent de ce worker n’a pas de secret local." });
             return;
         }
-        var suffix = context.Request.Path.Value?["/api/v1/local-node".Length..] ?? "";
+        var suffix = context.Request.Path.Value?["/api/v1/local-worker".Length..] ?? "";
         using var outgoing = new HttpRequestMessage(new HttpMethod(context.Request.Method),
             new Uri($"http://127.0.0.1:{localPort}/api/v1/worker{suffix}{context.Request.QueryString}"));
         outgoing.Headers.TryAddWithoutValidation(LocalEnrollment.HeaderName, secret);
@@ -155,7 +155,7 @@ internal static class CentralUiProxy
         CopyHeaders(context, incoming, central);
         var body = await incoming.Content.ReadAsByteArrayAsync(context.RequestAborted);
         if (incoming.IsSuccessStatusCode && !string.Equals(role, "admin", StringComparison.Ordinal)
-            && context.Request.Path.StartsWithSegments("/api/v1/local-node/status"))
+            && context.Request.Path.StartsWithSegments("/api/v1/local-worker/status"))
             body = HideSecrets(body);
         context.Response.ContentLength = body.Length;
         await context.Response.Body.WriteAsync(body, context.RequestAborted);

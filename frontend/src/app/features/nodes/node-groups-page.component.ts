@@ -112,9 +112,9 @@ export class NodeGroupsPageComponent {
     const current = this.editingGroup();
     try {
       if (current) {
-        await firstValueFrom(this.http.put(`/api/v1/node-groups/${current.id}`, payload));
+        await firstValueFrom(this.http.put(`/api/v1/worker-groups/${current.id}`, payload));
       } else {
-        await firstValueFrom(this.http.post('/api/v1/node-groups', payload));
+        await firstValueFrom(this.http.post('/api/v1/worker-groups', payload));
       }
       await this.load();
       this.closeForm();
@@ -136,7 +136,7 @@ export class NodeGroupsPageComponent {
         data: {
           title: `Supprimer le groupe « ${group.name} » ?`,
           message:
-            'Ce groupe et ses étiquettes partagées seront supprimés. Les nœuds membres et leur inventaire ne sont pas affectés. Attention : un groupe ciblé par un flow ne peut pas être supprimé.',
+            'Ce groupe et ses étiquettes partagées seront supprimés. Les workers membres et leur inventaire ne sont pas affectés. Attention : un groupe ciblé par un flow ne peut pas être supprimé.',
           confirmLabel: 'Supprimer',
           variant: 'danger',
         },
@@ -151,7 +151,7 @@ export class NodeGroupsPageComponent {
 
   private async deleteGroup(group: NodeGroupResponse): Promise<void> {
     try {
-      await firstValueFrom(this.http.delete(`/api/v1/node-groups/${group.id}`));
+      await firstValueFrom(this.http.delete(`/api/v1/worker-groups/${group.id}`));
       await this.load();
       if (this.selectedGroup()?.id === group.id) {
         this.closeDetail();
@@ -171,15 +171,15 @@ export class NodeGroupsPageComponent {
     this.state.set('loading');
     try {
       const [groups, nodes] = await Promise.all([
-        firstValueFrom(this.http.get<readonly NodeGroupResponse[]>('/api/v1/node-groups')),
-        firstValueFrom(this.http.get<readonly NodeResponse[]>('/api/v1/nodes')),
+        firstValueFrom(this.http.get<readonly NodeGroupResponse[]>('/api/v1/worker-groups')),
+        firstValueFrom(this.http.get<readonly NodeResponse[]>('/api/v1/workers')),
       ]);
       this.groups.set(groups);
       this.nodes.set(nodes);
       this.state.set('ready');
     } catch {
       this.state.set('error');
-      this.message.set('Impossible de charger les groupes de nœuds et les membres du cluster.');
+      this.message.set('Impossible de charger les groupes de workers et les membres du central.');
     }
   }
 }

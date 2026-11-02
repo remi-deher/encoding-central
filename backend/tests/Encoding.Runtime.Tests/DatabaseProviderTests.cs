@@ -13,7 +13,7 @@ public sealed class DatabaseProviderTests
     {
         var values = new Dictionary<string, string?>();
         if (provider is not null) values["Database:Provider"] = provider;
-        if (connection is not null) values["ConnectionStrings:Cluster"] = connection;
+        if (connection is not null) values["ConnectionStrings:Central"] = connection;
         return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
     }
 

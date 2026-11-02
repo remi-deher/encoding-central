@@ -135,7 +135,7 @@ jobs:
       - name: Real containers on a Docker network (central image, worker image, docker kill of a worker)
         run: >-
           dotnet test backend/tests/Encoding.Runtime.Tests --configuration Release --no-build
-          --filter "FullyQualifiedName~DockerClusterTests"
+          --filter "FullyQualifiedName~DockerCentralTests"
           --logger "trx;LogFileName=docker-cluster.trx" --results-directory test-results
         env:
           ENCODING_TEST_DOCKER: '1'

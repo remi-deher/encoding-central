@@ -4,7 +4,7 @@ using Encoding.NodeAgent.Services;
 
 namespace Encoding.NodeAgent.Runtime;
 
-public sealed class RuntimeWorkerService(NodeAgentOptions options,WorkerIdentityStore identities,RuntimeFlowRunner runner,ILogger<RuntimeWorkerService> logger) : BackgroundService
+public sealed class RuntimeWorkerService(WorkerAgentOptions options,WorkerIdentityStore identities,RuntimeFlowRunner runner,ILogger<RuntimeWorkerService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken ct)
     {

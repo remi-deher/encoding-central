@@ -60,7 +60,7 @@ import {
         </mat-form-field>
 
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
-          <mat-label>Nœuds serveurs (une adresse par ligne)</mat-label>
+          <mat-label>Workers serveurs (une adresse par ligne)</mat-label>
           <textarea
             matInput
             rows="3"
@@ -68,7 +68,7 @@ import {
             (ngModelChange)="backendsText.set($event)"
           ></textarea>
           <mat-hint>
-            Adresse de chaque nœud, pas celle du proxy. Le port 8443 entre nœuds n’est jamais
+            Adresse de chaque worker, pas celle du proxy. Le port 8443 entre workers n’est jamais
             exposé.
           </mat-hint>
         </mat-form-field>
@@ -82,7 +82,7 @@ import {
             Redondance de l’interface web
           </mat-checkbox>
           @if (!canRedundancy()) {
-            <p class="hint">Ajoutez au moins deux nœuds serveurs pour activer la redondance.</p>
+            <p class="hint">Ajoutez au moins deux workers serveurs pour activer la redondance.</p>
           }
           @if (proxy() !== 'npm') {
             <mat-checkbox [checked]="https()" (change)="https.set($event.checked)">
@@ -92,7 +92,7 @@ import {
         </div>
 
         @if (!backends().length) {
-          <p class="hint" role="alert">Saisissez au moins une adresse de nœud.</p>
+          <p class="hint" role="alert">Saisissez au moins une adresse de worker.</p>
         } @else {
           <pre
             class="preview"

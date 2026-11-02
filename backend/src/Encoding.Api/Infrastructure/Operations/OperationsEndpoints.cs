@@ -19,7 +19,7 @@ public static class OperationsEndpoints
     {
         var options = OperationsOptions.From(builder.Configuration);
         builder.Services.AddSingleton(options);
-        builder.Services.AddSingleton<ClusterMetricsCollector>();
+        builder.Services.AddSingleton<CentralMetricsCollector>();
         builder.Services.AddSingleton<ArtifactRetention>();
         builder.Services.AddHostedService<ArtifactRetentionService>();
 
@@ -28,7 +28,7 @@ public static class OperationsEndpoints
         builder.Services.AddHealthChecks()
             .AddCheck<DatabaseHealthCheck>("database", tags: [ReadyTag])
             .AddCheck<MigrationsHealthCheck>("migrations")
-            .AddCheck<ClusterHealthCheck>("cluster")
+            .AddCheck<CentralHealthCheck>("cluster")
             .AddCheck<FlowBackupHealthCheck>("flow-backups")
             .Add(new HealthCheckRegistration("artifact-storage", _ => new StorageHealthCheck(artifacts, options.Health.MinFreeDiskBytes), null, null))
             .Add(new HealthCheckRegistration("backup-storage", _ => new StorageHealthCheck(backups, options.Health.MinFreeDiskBytes), null, null));
@@ -37,7 +37,7 @@ public static class OperationsEndpoints
     public static void MapOperationsEndpoints(this WebApplication app)
     {
         var options = app.Services.GetRequiredService<OperationsOptions>();
-        // Vivacité : le processus répond. Aucun contrôle de base ou de pair, pour qu’un orchestrateur ne redémarre pas un nœud isolé.
+        // Vivacité : le processus répond. Aucun contrôle de base ou de pair, pour qu’un orchestrateur ne redémarre pas un worker isolé.
         app.MapGet("/health/live", (HttpContext context) =>
         {
             context.Response.Headers.AccessControlAllowOrigin = "*";
@@ -60,7 +60,7 @@ public static class OperationsEndpoints
         if (options.Metrics.Enabled)
         {
             // Sans jeton Bearer configuré, les métriques exigent une session ; avec jeton, un collecteur Prometheus s’authentifie par ce seul jeton.
-            var metrics = app.MapGet("/metrics", async (HttpContext context, ClusterMetricsCollector collector, CancellationToken cancellationToken) =>
+            var metrics = app.MapGet("/metrics", async (HttpContext context, CentralMetricsCollector collector, CancellationToken cancellationToken) =>
             {
                 if (!Authorized(context, options.Metrics.Token)) return Results.Unauthorized();
                 return Results.Text(await collector.CollectAsync(cancellationToken), "text/plain; version=0.0.4; charset=utf-8");

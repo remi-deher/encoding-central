@@ -12,16 +12,16 @@ Application auto-hébergée pour gérer et distribuer le traitement de biblioth�
 - Base de données : **SQLite, une seule, celle du central**. Ne jamais partager un fichier SQLite entre hôtes. Voir [replication-storage](docs/architecture/domains/replication-storage.md).
 - Ne pas remplacer ces choix sans décision explicite du propriétaire du projet.
 
-## Modèle de nœud
+## Modèle central / workers
 
 - Deux images distinctes. Le **central** embarque l'API, l'interface web, la base et un worker intégré ; il est autonome et reste l'**unique autorité** du cluster : il pilote les workers. Le **worker** embarque seulement l'agent et une interface web, sans base de données ; il n'est jamais autonome, alimenté par l'API et le SSE du central, enrôlé à son setup avec un compte administrateur du central. **Aucune passation** de la fonction serveur pour l'instant ([ADR 0036](docs/architecture/adr/0036-separation-stricte-central-worker.md)).
-- « Nœud » est le terme unique ; serveur et worker sont des rôles fixés par l'image. Un central seul est **autonome** ; un worker rejoint un central, avec un compte administrateur de celui-ci. Détails : [cluster](docs/architecture/domains/cluster.md).
+- Il n'y a plus de notion de cluster ni de nœud : un **central** et des **workers** (le central embarque son propre worker). « Worker » est le terme unique pour toute machine qui traite ; le rôle est fixé par l'image. Un worker doit avoir **exactement la version du central** ([ADR 0039](docs/architecture/adr/0039-version-exacte-worker-central.md)). Un central seul est **autonome** ; un worker rejoint un central, avec un compte administrateur de celui-ci. Détails : [cluster](docs/architecture/domains/cluster.md).
 - Le central est l'unique détenteur de la base et l'unique serveur : **pas de maillage, pas de réplication entre serveurs** ([ADR 0036](docs/architecture/adr/0036-separation-stricte-central-worker.md)). Les baux et réservations sont locaux au central qui attribue.
 
 ## Bibliothèques et accès aux médias
 
-- Une bibliothèque est une définition logique commune au cluster (règles, profils, paramètres). Les flows sont créés indépendamment puis attribués à une bibliothèque via une **version publiée précise** ; la découverte des fichiers est faite par un nœud en accès direct, sans saisie de chemin média par l'utilisateur.
-- Chaque nœud déclare son accès à chaque bibliothèque : **accès direct** (chemin local ou montage), **non pris en charge**, ou **transfert** (un nœud à accès direct transfère la source par WebDAV au worker, qui traite une copie locale puis renvoie le résultat). Les outils travaillent sur des fichiers locaux, jamais directement sur un média distant. Aucune tâche n'est attribuée à un nœud sans accès adapté.
+- Une bibliothèque est une définition logique commune au central (règles, profils, paramètres). Les flows sont créés indépendamment puis attribués à une bibliothèque via une **version publiée précise** ; la découverte des fichiers est faite par un nœud en accès direct, sans saisie de chemin média par l'utilisateur.
+- Chaque worker déclare son accès à chaque bibliothèque : **accès direct** (chemin local ou montage), **non pris en charge**, ou **transfert** (un worker à accès direct transfère la source par WebDAV au worker, qui traite une copie locale puis renvoie le résultat). Les outils travaillent sur des fichiers locaux, jamais directement sur un média distant. Aucune tâche n'est attribuée à un nœud sans accès adapté.
 
 ## Tâches et intégrité des fichiers
 
@@ -38,7 +38,7 @@ Application auto-hébergée pour gérer et distribuer le traitement de biblioth�
 - Le catalogue de composants vient des plugins (manifestes déclaratifs versionnés, descriptions de chaque sortie et champ). Aucun plugin ne fournit de code d'interface ; aucun ne contourne attribution, accès bibliothèque, baux, scan, validation et publication.
 - Les plugins tiers s'exécutent dans un **processus séparé sous Landlock** (pas de repli non confiné, pas de conteneur par plugin). La disponibilité d'un descripteur n'est pas la capacité d'un worker à l'exécuter. Voir [plugins](docs/architecture/domains/plugins.md).
 - Par défaut un worker traite le fichier entier ; la cession à un autre worker n'existe que par le bloc explicite `nodes-handoff`.
-- Distinguer dans le code composants de flow, composants UI Angular et nœuds de cluster.
+- Distinguer dans le code composants de flow, composants UI Angular et workers.
 
 ## Outils média
 

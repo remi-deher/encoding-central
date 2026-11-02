@@ -31,7 +31,7 @@ test('shows versions, safely displays notes and works on desktop and mobile', as
   await page.goto('/updates');
   await expect(page.getByRole('heading', { name: 'Mise à jour', exact: true })).toBeVisible();
   await expect(page.getByText('Une nouvelle version est disponible : 1.10.0.')).toBeVisible();
-  await expect(page.getByText('Installée sur ce nœud')).toBeVisible();
+  await expect(page.getByText('Installée sur ce worker')).toBeVisible();
   await expect(
     page.getByText('Correction <script>alert(1)</script>', { exact: false }),
   ).toBeVisible();
@@ -63,7 +63,7 @@ test('distinguishes a failed check and retries automatically', async ({ page }) 
       'Impossible de charger les informations de version. Une vérification sera retentée automatiquement.',
     ),
   ).toBeVisible();
-  await expect(page.getByText('Ce nœud est à jour.')).toHaveCount(0);
+  await expect(page.getByText('Ce worker est à jour.')).toHaveCount(0);
   unavailable = false;
   await page.clock.fastForward(15 * 60_000);
   await expect(page.getByText('Vérification indisponible.', { exact: false })).toBeVisible();

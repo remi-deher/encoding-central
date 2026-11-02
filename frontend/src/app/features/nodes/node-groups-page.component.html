@@ -1,5 +1,5 @@
 <app-management-catalog-template
-  title="Groupes de nœuds"
+  title="Groupes de workers"
   [titleVisuallyHidden]="true"
   filterLabel="Groupes"
   searchLabel="Rechercher par nom, description ou étiquette"
@@ -8,7 +8,7 @@
   [catalogState]="state()"
   [catalogMessage]="message()"
   [actionOpen]="formOpen()"
-  [actionTitle]="editingGroup() ? 'Modifier le groupe' : 'Nouveau groupe de nœuds'"
+  [actionTitle]="editingGroup() ? 'Modifier le groupe' : 'Nouveau groupe de workers'"
   actionDescription="Configurez les membres manuels ou les critères dynamiques et étiquettes partagées."
   drawerSize="wide"
   [detailOpen]="detailOpen()"
@@ -18,7 +18,7 @@
   (detailClosed)="closeDetail()"
 >
   <ng-template #pageActions>
-    <a matButton="outlined" routerLink="/nodes">Retour aux nœuds</a>
+    <a matButton="outlined" routerLink="/workers">Retour aux workers</a>
     @if (isAdmin()) {
       <button matButton="filled" type="button" (click)="create()">Créer un groupe</button>
     }
@@ -32,10 +32,10 @@
         @if (searchQuery().trim()) {
           <h3 class="empty-title">Aucun résultat</h3>
           <p class="empty-desc">
-            Aucun groupe de nœuds ne correspond à la recherche « {{ searchQuery() }} ».
+            Aucun groupe de workers ne correspond à la recherche « {{ searchQuery() }} ».
           </p>
         } @else {
-          <h3 class="empty-title">Aucun groupe de nœuds</h3>
+          <h3 class="empty-title">Aucun groupe de workers</h3>
           <p class="empty-desc">
             Les groupes permettent d’organiser vos serveurs et workers, d’attribuer des étiquettes
             partagées et de contraindre l’exécution des flows.

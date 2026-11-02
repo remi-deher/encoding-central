@@ -5,7 +5,7 @@ import { LibraryNodeAccessResponse } from '../ui/library-node-access-types';
 function node(id: string, extra: Partial<NodeResponse> = {}): NodeResponse {
   return {
     id,
-    name: 'nœud-' + id,
+    name: 'worker-' + id,
     roles: ['worker'],
     maxConcurrentTasks: 1,
     capabilities: [],

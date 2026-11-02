@@ -3,8 +3,8 @@ using Encoding.NodeAgent.Services;
 
 namespace Encoding.NodeAgent.Runtime;
 
-/// <summary>Exécute, sur le nœud ayant l'accès direct, les restaurations demandées et la purge des sauvegardes après la période de grâce.</summary>
-public sealed class SourceReplacementService(NodeAgentOptions options,WorkerIdentityStore identities,ILogger<SourceReplacementService> logger) : BackgroundService
+/// <summary>Exécute, sur le worker ayant l'accès direct, les restaurations demandées et la purge des sauvegardes après la période de grâce.</summary>
+public sealed class SourceReplacementService(WorkerAgentOptions options,WorkerIdentityStore identities,ILogger<SourceReplacementService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken ct)
     {

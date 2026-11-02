@@ -14,7 +14,7 @@
       >
         <span class="mode-title">Groupe manuel</span>
         <span class="mode-desc">
-          Affectation explicite et fixe de nœuds spécifiques au cluster.
+          Affectation explicite et fixe de workers spécifiques au central.
         </span>
       </button>
       <button
@@ -25,7 +25,7 @@
       >
         <span class="mode-title">Groupe automatique</span>
         <span class="mode-desc">
-          Résolution dynamique des nœuds selon leurs capacités (RAM, CPU, outils, OS).
+          Résolution dynamique des workers selon leurs capacités (RAM, CPU, outils, OS).
         </span>
       </button>
     </div>
@@ -67,16 +67,16 @@
     </div>
   </section>
 
-  <!-- Section Mode Manuel : Sélection des Nœuds -->
+  <!-- Section Mode Manuel : Sélection des Workers -->
   @if (mode() === 'manual') {
     <section class="editor-section">
       <div class="section-header">
         <h3>
-          Nœuds membres ({{ selectedNodeIds().size }} sélectionné{{
+          Workers membres ({{ selectedNodeIds().size }} sélectionné{{
             selectedNodeIds().size > 1 ? 's' : ''
           }})
         </h3>
-        <p>Cochez les nœuds faisant partie de ce groupe manuel.</p>
+        <p>Cochez les workers faisant partie de ce groupe manuel.</p>
       </div>
 
       <div class="nodes-selection-toolbar">
@@ -84,7 +84,7 @@
           class="search-field"
           variant="filled"
           name="nodeSearch"
-          label="Filtrer les nœuds"
+          label="Filtrer les workers"
           placeholder="Rechercher par nom, système ou architecture..."
           [value]="nodeSearchQuery()"
           (valueChange)="nodeSearchQuery.set($event)"
@@ -104,9 +104,9 @@
         @if (filteredNodes().length === 0) {
           <div class="nodes-empty">
             @if (nodes().length === 0) {
-              Aucun nœud n’est encore enregistré dans le cluster.
+              Aucun worker n’est encore enregistré dans le central.
             } @else {
-              Aucun nœud ne correspond au filtre de recherche.
+              Aucun worker ne correspond au filtre de recherche.
             }
           </div>
         } @else {
@@ -162,7 +162,7 @@
       <div class="section-header">
         <h3>Critères d’attribution automatique</h3>
         <p>
-          Les nœuds du cluster qui valident tous ces critères feront automatiquement partie du
+          Les workers du central qui valident tous ces critères feront automatiquement partie du
           groupe.
         </p>
       </div>
@@ -289,9 +289,9 @@
         [class.no-matches]="matchedNodes().length === 0"
       >
         <div class="preview-header">
-          <span>Aperçu des nœuds correspondants</span>
+          <span>Aperçu des workers correspondants</span>
           <span class="preview-count">
-            {{ matchedNodes().length }} nœud{{ matchedNodes().length > 1 ? 's' : '' }} éligible{{
+            {{ matchedNodes().length }} worker{{ matchedNodes().length > 1 ? 's' : '' }} éligible{{
               matchedNodes().length > 1 ? 's' : ''
             }}
           </span>
@@ -312,8 +312,8 @@
           </div>
         } @else {
           <p class="preview-empty-note">
-            ⚠️ Aucun nœud du cluster ne remplit actuellement ces critères. Le groupe sera vide
-            jusqu'à ce qu'un nœud compatible soit détecté ou enrôlé.
+            ⚠️ Aucun worker du central ne remplit actuellement ces critères. Le groupe sera vide
+            jusqu'à ce qu'un worker compatible soit détecté ou enrôlé.
           </p>
         }
       </div>
@@ -326,7 +326,7 @@
       <h3>Étiquettes partagées (Labels)</h3>
       <p>
         Ces étiquettes seront héritées par tous les membres du groupe. Les étiquettes locales d'un
-        nœud remplacent celles du groupe pour une même clé.
+        worker remplacent celles du groupe pour une même clé.
       </p>
     </div>
 

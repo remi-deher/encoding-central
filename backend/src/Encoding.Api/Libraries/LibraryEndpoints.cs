@@ -15,7 +15,7 @@ public static class LibraryEndpoints
         libraries.MapGet("/overview", async (LibraryRepository repository, CancellationToken cancellationToken) =>
             Results.Ok(await repository.OverviewAsync(cancellationToken)))
             .WithName("GetLibrariesOverview");
-        libraries.MapGet("/export", async (LibraryRepository repository, Infrastructure.ClusterIdentityRepository cluster, HttpContext http, CancellationToken cancellationToken) =>
+        libraries.MapGet("/export", async (LibraryRepository repository, Infrastructure.CentralIdentityRepository cluster, HttpContext http, CancellationToken cancellationToken) =>
         {
             var identity = await cluster.GetAsync(cancellationToken);
             http.Response.Headers.ContentDisposition = "attachment; filename=\"bibliotheques.json\"";
@@ -66,19 +66,19 @@ public static class LibraryEndpoints
             }
         }).WithName("DeleteLibrary");
 
-        libraries.MapGet("/{libraryId:guid}/node-access", async (
+        libraries.MapGet("/{libraryId:guid}/worker-access", async (
             Guid libraryId,
-            LibraryNodeAccessRepository repository,
+            LibraryWorkerAccessRepository repository,
             CancellationToken cancellationToken) =>
         {
             var accesses = await repository.ListAsync(libraryId, cancellationToken);
             return accesses is null ? ApiProblem.NotFound() : Results.Ok(accesses);
         }).WithName("ListLibraryNodeAccesses");
 
-        libraries.MapPut("/{libraryId:guid}/node-access", async (
+        libraries.MapPut("/{libraryId:guid}/worker-access", async (
             Guid libraryId,
-            ConfigureLibraryNodeAccessRequest request,
-            LibraryNodeAccessRepository repository,
+            ConfigureLibraryWorkerAccessRequest request,
+            LibraryWorkerAccessRepository repository,
             CancellationToken cancellationToken) =>
         {
             try
@@ -86,17 +86,17 @@ public static class LibraryEndpoints
                 var accesses = await repository.ConfigureAsync(libraryId, request, cancellationToken);
                 return accesses is null ? ApiProblem.NotFound() : Results.Ok(accesses);
             }
-            catch (LibraryNodeAccessValidationException exception)
+            catch (LibraryWorkerAccessValidationException exception)
             {
                 return ApiProblem.Validation(exception.Errors.ToDictionary(pair => pair.Key, pair => pair.Value));
             }
         }).WithName("ConfigureLibraryNodeAccesses");
 
-        libraries.MapPut("/{libraryId:guid}/node-access/{nodeId:guid}/activation", async (
+        libraries.MapPut("/{libraryId:guid}/worker-access/{nodeId:guid}/activation", async (
             Guid libraryId,
             Guid nodeId,
-            SetLibraryNodeAccessActivationRequest request,
-            LibraryNodeAccessRepository repository,
+            SetLibraryWorkerAccessActivationRequest request,
+            LibraryWorkerAccessRepository repository,
             CancellationToken cancellationToken) =>
         {
             var access = await repository.SetEnabledAsync(libraryId, nodeId, request.IsEnabled, cancellationToken);

@@ -13,7 +13,7 @@ internal static class SubtitlesMediaTests
 {
     private sealed class NoProbe : IToolCapabilityProbe
     {
-        public Task<IReadOnlyList<Encoding.Contracts.Nodes.NodeToolCapability>> DiscoverAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<Encoding.Contracts.Nodes.NodeToolCapability>>([]);
+        public Task<IReadOnlyList<Encoding.Contracts.Nodes.WorkerToolCapability>> DiscoverAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<Encoding.Contracts.Nodes.WorkerToolCapability>>([]);
     }
 
     private static string Srt(IEnumerable<string> lines)
@@ -84,7 +84,7 @@ internal static class SubtitlesMediaTests
             Check(second.Primary is null, "A second pass finds nothing to change.");
             Console.WriteLine("PASS: subtitles on a synthetic MKV (SRT to profile ASS, forced deduced, duplicate removed, custom ASS and source intact, idempotent).");
 
-            // Polices : jeu déclaré par le nœud, seulement celles qui manquent.
+            // Polices : jeu déclaré par le worker, seulement celles qui manquent.
             var fontRoot = P("fonts"); Directory.CreateDirectory(Path.Combine(fontRoot, "Crunchyroll"));
             await File.WriteAllBytesAsync(Path.Combine(fontRoot, "Crunchyroll", "A.ttf"), new byte[2048]);
             await File.WriteAllBytesAsync(Path.Combine(fontRoot, "Crunchyroll", "B.ttf"), new byte[2048]);

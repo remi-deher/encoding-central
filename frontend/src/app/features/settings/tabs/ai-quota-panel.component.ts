@@ -27,7 +27,7 @@ import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-
       icon="api"
     >
       <p>
-        Actualisation chaque minute. Plusieurs nœuds peuvent utiliser le même compte : leurs quotas
+        Actualisation chaque minute. Plusieurs workers peuvent utiliser le même compte : leurs quotas
         ne s’additionnent pas.
       </p>
       @if (error()) {
@@ -206,7 +206,7 @@ export class AiQuotaPanelComponent {
               providers: node.providers.map((quota) => ({
                 ...quota,
                 state: 'stale' as const,
-                message: 'Nœud indisponible. Dernière observation conservée.',
+                message: 'Worker indisponible. Dernière observation conservée.',
               })),
             })),
           ]);

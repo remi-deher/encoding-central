@@ -97,7 +97,7 @@ export function settingsDomain(value: string | null): SettingsMainTab {
             <app-system-tab />
             <app-configuration-section
               title="Journaux système"
-              description="Événements des services sur le nœud consulté."
+              description="Événements des services sur le worker consulté."
               ><app-system-log-viewer
             /></app-configuration-section>
           }
@@ -122,11 +122,11 @@ export class SettingsPageComponent {
   protected readonly createdToken = signal<CreatedApiTokenResponse | null>(null);
   protected readonly descriptions: Record<SettingsMainTab, string> = {
     interface: 'Vos préférences pour cette interface.',
-    access: 'Les comptes et les accès des applications à votre cluster.',
+    access: 'Les comptes et les accès des applications à votre central.',
     ai: 'Le moteur, les fournisseurs, la consommation et les assistants externes.',
-    connections: 'Les applications qui s’adressent à votre cluster et la supervision.',
-    network: 'L’adresse publique de ce nœud et son reverse proxy.',
-    operations: 'La santé des services et les événements de ce nœud.',
+    connections: 'Les applications qui s’adressent à votre central et la supervision.',
+    network: 'L’adresse publique de ce worker et son reverse proxy.',
+    operations: 'La santé des services et les événements de ce worker.',
   };
   protected readonly mainTabs: readonly CategoryTabOption[] = [
     { value: 'interface', label: 'Interface' },

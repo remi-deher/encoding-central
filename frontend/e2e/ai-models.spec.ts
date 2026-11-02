@@ -3,14 +3,14 @@ import { expect, test, type Locator } from '@playwright/test';
 
 const nodeId = '00000000-0000-0000-0000-000000000002';
 const conversationId = '00000000000000000000000000000002.00000000000000000000000000000003';
-const source = { kind: 'node', resourceId: nodeId, label: 'Nœud Salon', href: '/nodes' };
+const source = { kind: 'node', resourceId: nodeId, label: 'Worker Salon', href: '/workers' };
 const conversation = {
   id: conversationId,
   provider: 'codex-cli',
   model: 'server-model-a',
   reasoningEffort: 'high',
   nodeId,
-  title: 'Inspecter le nœud',
+  title: 'Inspecter le worker',
   source,
   createdAt: '2030-01-01T00:00:00Z',
   updatedAt: '2030-01-01T00:00:00Z',
@@ -181,7 +181,7 @@ test('backend models and reasoning drive each turn while old turns retain observ
   await reasoning.press('End');
   await expect(assistant.locator('.effort-value')).toHaveText('Maximum');
   await expect(reasoning).toHaveAttribute('aria-valuetext', 'Maximum');
-  await assistant.getByRole('textbox', { name: 'Votre question' }).fill('Analyser ce nœud');
+  await assistant.getByRole('textbox', { name: 'Votre question' }).fill('Analyser ce worker');
   await assistant.getByRole('button', { name: 'Envoyer', exact: true }).click();
   await expect.poll(() => received).toBeTruthy();
   expect(received).toMatchObject({
@@ -278,7 +278,7 @@ test('administrators disable discovered models through the backend policy', asyn
       },
     }),
   );
-  await page.route('**/api/v1/tools/ai/cluster', (route) => route.fulfill({ json: { nodes: [] } }));
+  await page.route('**/api/v1/tools/ai/central', (route) => route.fulfill({ json: { nodes: [] } }));
   await page.route('**/api/v1/tools/ai/quotas', (route) => route.fulfill({ json: { nodes: [] } }));
   await page.route('**/api/v1/tools/ai/sessions?*', (route) =>
     route.fulfill({ json: { items: [], offset: 0, hasMore: false } }),
@@ -405,7 +405,7 @@ test('floating launcher follows scrolling and compact chat preserves conversatio
       })),
     }),
   );
-  await page.route('**/api/v1/nodes', (route) =>
+  await page.route('**/api/v1/workers', (route) =>
     route.fulfill({
       json: [
         {
@@ -500,12 +500,12 @@ test('floating launcher follows scrolling and compact chat preserves conversatio
   await widget.getByRole('combobox', { name: 'Fournisseur IA', exact: true }).click();
   await page.getByRole('option', { name: 'Claude', exact: true }).click();
   await widget.getByRole('button', { name: 'Joindre un fichier ou une ressource' }).click();
-  await page.getByRole('menuitem', { name: 'Un nœud' }).click();
+  await page.getByRole('menuitem', { name: 'Un worker' }).click();
   await widget.getByRole('combobox', { name: 'Ressource', exact: true }).click();
   await page.getByRole('option', { name: 'Salon', exact: true }).click();
   await widget.getByRole('button', { name: 'Joindre', exact: true }).click();
   await widget.getByRole('button', { name: 'Fermer l’espace de travail' }).click();
-  await widget.getByRole('textbox', { name: 'Votre question' }).fill('Analyser ce nœud');
+  await widget.getByRole('textbox', { name: 'Votre question' }).fill('Analyser ce worker');
   await widget.getByRole('textbox', { name: 'Votre question' }).press('Enter');
   await expect(widget.getByText('Réponse du widget', { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/activity\?type=ai$/);
@@ -559,7 +559,7 @@ test('compact resource selector keeps its empty label clear of the pointer targe
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 800 });
-  await page.route('**/api/v1/nodes', (route) =>
+  await page.route('**/api/v1/workers', (route) =>
     route.fulfill({
       json: [
         {
@@ -579,7 +579,7 @@ test('compact resource selector keeps its empty label clear of the pointer targe
   await page.getByRole('button', { name: /Assistant rapide/ }).click();
   const widget = page.locator('#assistant-widget-panel');
   await widget.getByRole('button', { name: 'Joindre un fichier ou une ressource' }).click();
-  await page.getByRole('menuitem', { name: 'Un nœud' }).click();
+  await page.getByRole('menuitem', { name: 'Un worker' }).click();
   const selector = widget.getByRole('combobox', { name: 'Ressource', exact: true });
   await expect
     .poll(() =>

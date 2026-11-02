@@ -4,9 +4,9 @@ using System.Text.RegularExpressions;
 
 namespace Encoding.Api.Nodes;
 
-public sealed record NodePresenceOptions(TimeSpan OfflineAfter);
+public sealed record WorkerPresenceOptions(TimeSpan OfflineAfter);
 
-public static class NodeHeartbeatValidator
+public static class WorkerHeartbeatValidator
 {
     private static readonly HashSet<string> SupportedMediaTypes = new(StringComparer.Ordinal)
     {
@@ -14,7 +14,7 @@ public static class NodeHeartbeatValidator
     };
     private static readonly Regex PairingKeyPattern = new("^[0-9A-F]{16}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-    public static Dictionary<string, string[]> Validate(NodeHeartbeatRequest request)
+    public static Dictionary<string, string[]> Validate(WorkerHeartbeatRequest request)
     {
         var errors = new Dictionary<string, string[]>();
         if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Length > 128)
@@ -61,28 +61,29 @@ public static class NodeHeartbeatValidator
         return errors;
     }
 
-    public static Dictionary<string, string[]> Validate(NodeEnrollmentRequest request)
+    public static Dictionary<string, string[]> Validate(WorkerEnrollmentRequest request)
     {
-        var errors = Validate(new NodeHeartbeatRequest(request.Name, request.Roles, request.MaxConcurrentTasks, request.Capabilities, request.Inventory));
-        if (request.Id == Guid.Empty) errors["id"] = ["L’identifiant du nœud doit être un UUID non vide."];
+        var errors = Validate(new WorkerHeartbeatRequest(request.Name, request.Roles, request.MaxConcurrentTasks, request.Capabilities, request.Inventory));
+        if (request.Id == Guid.Empty) errors["id"] = ["L’identifiant du worker doit être un UUID non vide."];
         if (string.IsNullOrWhiteSpace(request.NodeToken) || request.NodeToken.Length is < 40 or > 256)
-            errors["nodeToken"] = ["L’identité locale du nœud est invalide."];
+            errors["nodeToken"] = ["L’identité locale du worker est invalide."];
+        if (AppVersion.MismatchReason(request.Version) is { } mismatch) errors["version"] = [mismatch];
         if (request.DisplayName is { Length: > 128 })
-            errors["displayName"] = [$"Le nom d’affichage ne peut pas dépasser {LocalNodeRegistry.MaximumNameLength} caractères."];
+            errors["displayName"] = [$"Le nom d’affichage ne peut pas dépasser {LocalWorkerRegistry.MaximumNameLength} caractères."];
         return errors;
     }
 
-    public static Dictionary<string, string[]> Validate(CreateNodeEnrollmentRequest request)
+    public static Dictionary<string, string[]> Validate(CreateWorkerEnrollmentRequest request)
     {
         if (request.Node is null)
-            return new Dictionary<string, string[]> { ["node"] = ["Les informations du nœud sont obligatoires."] };
+            return new Dictionary<string, string[]> { ["node"] = ["Les informations du worker sont obligatoires."] };
         var errors = Validate(request.Node);
         if (request.PairingKey is null || !PairingKeyPattern.IsMatch(request.PairingKey))
             errors["pairingKey"] = ["La clé de jumelage doit contenir 16 caractères hexadécimaux majuscules."];
         return errors;
     }
 
-    public static Dictionary<string, string[]> Validate(ApproveNodeEnrollmentRequest request)
+    public static Dictionary<string, string[]> Validate(ApproveWorkerEnrollmentRequest request)
     {
         var errors = new Dictionary<string, string[]>();
         if (request.PairingKey is null || !PairingKeyPattern.IsMatch(request.PairingKey))

@@ -81,6 +81,6 @@ public sealed class ContainerPredictabilityTests
 
     private sealed class EmptyCapabilities : IToolCapabilityProbe
     {
-        public Task<IReadOnlyList<NodeToolCapability>> DiscoverAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<NodeToolCapability>>([]);
+        public Task<IReadOnlyList<WorkerToolCapability>> DiscoverAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<WorkerToolCapability>>([]);
     }
 }

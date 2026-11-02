@@ -37,12 +37,12 @@ describe('AiUsagePanelComponent', () => {
     });
   });
 
-  it('affiche le total du cluster, chaque nœud et les échanges sans consommation', () => {
+  it('affiche le total du central, chaque worker et les échanges sans consommation', () => {
     api.getUsage.mockReturnValue(of(usage));
     const fixture = TestBed.createComponent(AiUsagePanelComponent);
     fixture.detectChanges();
     const text = fixture.nativeElement.textContent as string;
-    expect(text).toContain('Total du cluster');
+    expect(text).toContain('Total du central');
     expect(text).toContain('nas-51');
     expect(text).toContain('1 échange sans consommation rapportée');
     expect(api.getUsage).toHaveBeenCalledWith(30);

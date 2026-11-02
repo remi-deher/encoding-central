@@ -14,7 +14,7 @@ public sealed class SystemLogProvider : ILoggerProvider
 {
     private readonly SystemLogRingBuffer _ringBuffer;
     private readonly SystemLogStreamBroadcaster _broadcaster;
-    private readonly Func<ISystemLogNodeContext?>? _nodeContextAccessor;
+    private readonly Func<ISystemLogWorkerContext?>? _nodeContextAccessor;
     private readonly Func<ISystemLogSink?>? _sinkAccessor;
     private readonly SystemLogOptions _options;
     private readonly ConcurrentDictionary<string, SystemLogger> _loggers = new(StringComparer.OrdinalIgnoreCase);
@@ -22,7 +22,7 @@ public sealed class SystemLogProvider : ILoggerProvider
     public SystemLogProvider(
         SystemLogRingBuffer ringBuffer,
         SystemLogStreamBroadcaster broadcaster,
-        ISystemLogNodeContext? nodeContext = null,
+        ISystemLogWorkerContext? nodeContext = null,
         ISystemLogSink? sink = null,
         SystemLogOptions? options = null)
         : this(ringBuffer, broadcaster, () => nodeContext, () => sink, options)
@@ -32,7 +32,7 @@ public sealed class SystemLogProvider : ILoggerProvider
     public SystemLogProvider(
         SystemLogRingBuffer ringBuffer,
         SystemLogStreamBroadcaster broadcaster,
-        Func<ISystemLogNodeContext?>? nodeContextAccessor,
+        Func<ISystemLogWorkerContext?>? nodeContextAccessor,
         Func<ISystemLogSink?>? sinkAccessor,
         SystemLogOptions? options = null)
     {
@@ -71,7 +71,7 @@ public sealed class SystemLogger : ILogger
     private readonly string _category;
     private readonly SystemLogRingBuffer _ringBuffer;
     private readonly SystemLogStreamBroadcaster _broadcaster;
-    private readonly Func<ISystemLogNodeContext?>? _nodeContextAccessor;
+    private readonly Func<ISystemLogWorkerContext?>? _nodeContextAccessor;
     private readonly Func<ISystemLogSink?>? _sinkAccessor;
     private readonly SystemLogOptions _options;
 
@@ -79,7 +79,7 @@ public sealed class SystemLogger : ILogger
         string category,
         SystemLogRingBuffer ringBuffer,
         SystemLogStreamBroadcaster broadcaster,
-        ISystemLogNodeContext? nodeContext,
+        ISystemLogWorkerContext? nodeContext,
         ISystemLogSink? sink,
         SystemLogOptions options)
         : this(category, ringBuffer, broadcaster, () => nodeContext, () => sink, options)
@@ -90,7 +90,7 @@ public sealed class SystemLogger : ILogger
         string category,
         SystemLogRingBuffer ringBuffer,
         SystemLogStreamBroadcaster broadcaster,
-        Func<ISystemLogNodeContext?>? nodeContextAccessor,
+        Func<ISystemLogWorkerContext?>? nodeContextAccessor,
         Func<ISystemLogSink?>? sinkAccessor,
         SystemLogOptions options)
     {

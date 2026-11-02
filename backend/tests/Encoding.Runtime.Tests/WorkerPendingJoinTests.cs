@@ -8,30 +8,30 @@ using Xunit;
 
 namespace Encoding.Runtime.Tests;
 
-/// <summary>Un rattachement qui n'aboutit pas ne doit jamais laisser le nœud bloqué sur un cluster qui ne l'a pas accepté (architectures 0040 et 0045).</summary>
+/// <summary>Un rattachement qui n'aboutit pas ne doit jamais laisser le worker bloqué sur un central qui ne l'a pas accepté (architectures 0040 et 0045).</summary>
 public sealed class WorkerPendingJoinTests
 {
     private sealed class NoTools : IToolCapabilityProbe
     {
-        public Task<IReadOnlyList<NodeToolCapability>> DiscoverAsync(CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<NodeToolCapability>>([]);
+        public Task<IReadOnlyList<WorkerToolCapability>> DiscoverAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<WorkerToolCapability>>([]);
     }
 
-    private static NodeAgentOptions Options(string directory) =>
-        NodeAgentOptions.FromConfiguration(new ConfigurationBuilder().AddInMemoryCollection([new("Node:DataDirectory", directory)]).Build());
+    private static WorkerAgentOptions Options(string directory) =>
+        WorkerAgentOptions.FromConfiguration(new ConfigurationBuilder().AddInMemoryCollection([new("Worker:DataDirectory", directory)]).Build());
 
     private static string NewDirectory() => Path.Combine(Path.GetTempPath(), "encoding-pending-join-" + Guid.NewGuid().ToString("N"));
 
-    private static (WorkerEnrollmentService Enrollment, WorkerIdentityStore Store, WorkerClusterDiscovery Discovery) Build(string directory)
+    private static (WorkerEnrollmentService Enrollment, WorkerIdentityStore Store, WorkerCentralDiscovery Discovery) Build(string directory)
     {
         var options = Options(directory);
         var store = new WorkerIdentityStore(options);
-        var discovery = new WorkerClusterDiscovery(options, NullLogger<WorkerClusterDiscovery>.Instance);
+        var discovery = new WorkerCentralDiscovery(options, NullLogger<WorkerCentralDiscovery>.Instance);
         var json = Microsoft.Extensions.Options.Options.Create(new Microsoft.AspNetCore.Http.Json.JsonOptions());
         return (new WorkerEnrollmentService(options, store, discovery, new NoTools(), NullLogger<WorkerEnrollmentService>.Instance, json), store, discovery);
     }
 
-    /// <summary>Serveur de cluster minimal : répond à l'identité, puis à tout autre appel avec le statut demandé.</summary>
+    /// <summary>Serveur de central minimal : répond à l'identité, puis à tout autre appel avec le statut demandé.</summary>
     private static (HttpListener Listener, string Url, Guid Id, Task Serving) Cluster(HttpStatusCode otherStatus)
     {
         var socket = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
@@ -48,7 +48,7 @@ public sealed class WorkerPendingJoinTests
             {
                 HttpListenerContext context;
                 try { context = await listener.GetContextAsync(); } catch (Exception) { return; }
-                var identity = context.Request.Url!.AbsolutePath == "/api/v1/cluster";
+                var identity = context.Request.Url!.AbsolutePath == "/api/v1/central";
                 context.Response.StatusCode = identity ? 200 : (int)otherStatus;
                 context.Response.ContentType = "application/json";
                 var body = System.Text.Encoding.UTF8.GetBytes(identity ? $"{{\"id\":\"{id}\",\"name\":\"Maison\"}}" : "{}");
@@ -181,7 +181,7 @@ public sealed class WorkerPendingJoinTests
     {
         var (enrollment, store, discovery) = Build(NewDirectory());
         // Set an existing enrolled identity with a display name
-        await store.SaveEnrollmentAsync(Guid.NewGuid().ToString("D"), "Maison", "http://127.0.0.1:1/", CancellationToken.None, displayName: "Mon Nœud 50");
+        await store.SaveEnrollmentAsync(Guid.NewGuid().ToString("D"), "Maison", "http://127.0.0.1:1/", CancellationToken.None, displayName: "Mon Worker 50");
         await store.MarkEnrolledAsync(CancellationToken.None);
 
         var (listener, url, id, _) = Cluster(HttpStatusCode.Accepted);
@@ -195,6 +195,6 @@ public sealed class WorkerPendingJoinTests
         Assert.Equal(6, response.VerificationCode.Length);
 
         var identity = await store.GetAsync(CancellationToken.None);
-        Assert.Equal("Mon Nœud 50", identity.DisplayName);
+        Assert.Equal("Mon Worker 50", identity.DisplayName);
     }
 }

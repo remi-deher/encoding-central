@@ -8,8 +8,8 @@ public sealed class WorkerAutoEnrollmentTests
     [Fact]
     public void ConfiguredClusterIsSelectedWhenOtherClustersAreDiscovered()
     {
-        var configured = new DiscoveredCluster(Guid.NewGuid(), "Configured", "http://server:8080/", DateTimeOffset.UtcNow, "configured");
-        var discovered = new DiscoveredCluster(Guid.NewGuid(), "Discovered", "http://other:8080/", DateTimeOffset.UtcNow);
+        var configured = new DiscoveredCentral(Guid.NewGuid(), "Configured", "http://server:8080/", DateTimeOffset.UtcNow, "configured");
+        var discovered = new DiscoveredCentral(Guid.NewGuid(), "Discovered", "http://other:8080/", DateTimeOffset.UtcNow);
 
         Assert.Same(configured, WorkerAutoEnrollmentService.GetAutomaticEnrollmentTarget([discovered, configured], hasConfiguredApiBaseUrl: true));
     }
@@ -19,8 +19,8 @@ public sealed class WorkerAutoEnrollmentTests
     {
         var clusters = new[]
         {
-            new DiscoveredCluster(Guid.NewGuid(), "First", "http://first:8080/", DateTimeOffset.UtcNow),
-            new DiscoveredCluster(Guid.NewGuid(), "Second", "http://second:8080/", DateTimeOffset.UtcNow)
+            new DiscoveredCentral(Guid.NewGuid(), "First", "http://first:8080/", DateTimeOffset.UtcNow),
+            new DiscoveredCentral(Guid.NewGuid(), "Second", "http://second:8080/", DateTimeOffset.UtcNow)
         };
 
         Assert.Null(WorkerAutoEnrollmentService.GetAutomaticEnrollmentTarget(clusters, hasConfiguredApiBaseUrl: false));
@@ -29,7 +29,7 @@ public sealed class WorkerAutoEnrollmentTests
     [Fact]
     public void SingleDiscoveredClusterIsSelectedWithoutConfiguration()
     {
-        var cluster = new DiscoveredCluster(Guid.NewGuid(), "Discovered", "http://server:8080/", DateTimeOffset.UtcNow);
+        var cluster = new DiscoveredCentral(Guid.NewGuid(), "Discovered", "http://server:8080/", DateTimeOffset.UtcNow);
 
         Assert.Same(cluster, WorkerAutoEnrollmentService.GetAutomaticEnrollmentTarget([cluster], hasConfiguredApiBaseUrl: false));
     }
@@ -37,7 +37,7 @@ public sealed class WorkerAutoEnrollmentTests
     [Fact]
     public void ConfiguredClusterIsNotReplacedWhileItIsUnavailable()
     {
-        var discovered = new DiscoveredCluster(Guid.NewGuid(), "Discovered", "http://other:8080/", DateTimeOffset.UtcNow);
+        var discovered = new DiscoveredCentral(Guid.NewGuid(), "Discovered", "http://other:8080/", DateTimeOffset.UtcNow);
 
         Assert.Null(WorkerAutoEnrollmentService.GetAutomaticEnrollmentTarget([discovered], hasConfiguredApiBaseUrl: true));
     }

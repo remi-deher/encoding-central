@@ -183,7 +183,7 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
                 autocomplete="off"
               />
 
-              <label for="cluster-name-input">Nom du cluster</label>
+              <label for="cluster-name-input">Nom du central</label>
               <input
                 id="cluster-name-input"
                 type="text"
@@ -218,7 +218,7 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
                   <dd>{{ effectiveNodeName() }}</dd>
                 </div>
                 <div>
-                  <dt>Cluster</dt>
+                  <dt>Central</dt>
                   <dd>{{ clusterName().trim() || defaultClusterName() }}</dd>
                 </div>
                 <div>
@@ -282,7 +282,7 @@ export class SetupWizardPageComponent {
           exhaustMap(() =>
             this.accountCreated()
               ? of(null)
-              : this.http!.get<SetupNodeSheet>('/api/v1/auth/setup/node').pipe(
+              : this.http!.get<SetupNodeSheet>('/api/v1/auth/setup/worker').pipe(
                   timeout(8_000),
                   catchError(() => of(null)),
                 ),
@@ -384,7 +384,7 @@ export class SetupWizardPageComponent {
   });
 
   protected readonly defaultClusterName = computed(() => {
-    return 'Cluster ' + this.effectiveNodeName();
+    return 'Central ' + this.effectiveNodeName();
   });
 
   protected readonly cpuInfo = computed(() => {

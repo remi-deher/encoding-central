@@ -16,7 +16,7 @@ import { AiClusterUsage, AiUsageTotals } from '../../../shared/models/ai-tools';
 import { aiTypeLabel } from '../../ai/components/ai-model-selection';
 import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-section.component';
 
-/** Tokens rapportés par les fournisseurs, par nœud exécutant et au global ; jamais estimés. */
+/** Tokens rapportés par les fournisseurs, par worker exécutant et au global ; jamais estimés. */
 @Component({
   selector: 'app-ai-usage-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -24,7 +24,7 @@ import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-
   template: `
     <app-configuration-section
       title="Consommation de tokens"
-      description="Tokens rapportés par les fournisseurs, regroupés par nœud qui a exécuté la demande."
+      description="Tokens rapportés par les fournisseurs, regroupés par worker qui a exécuté la demande."
       icon="api"
     >
       <div section-actions>
@@ -48,7 +48,7 @@ import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-
       }
       @if (usage(); as view) {
         <div class="total">
-          <strong>Total du cluster</strong>
+          <strong>Total du central</strong>
           <span>{{ view.total.inputTokens | number }} tokens en entrée</span>
           <span>{{ view.total.outputTokens | number }} en sortie</span>
           @if (view.total.cachedInputTokens) {

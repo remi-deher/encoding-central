@@ -16,7 +16,7 @@ public static class FlowAiEndpoints
     {
         var group = app.MapGroup("/api/v1/flows/ai").WithTags("Flow AI Assistant");
 
-        group.MapPost("/generate", async (FlowAiGenerateRequest request, FlowAiGeneratorService service, AiAssistantService activity, AiClusterService cluster,
+        group.MapPost("/generate", async (FlowAiGenerateRequest request, FlowAiGeneratorService service, AiAssistantService activity, AiCentralService cluster,
             ClaimsPrincipal user, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(request.UserPrompt))
@@ -44,7 +44,7 @@ public static class FlowAiEndpoints
             }
         }).WithName("GenerateFlowWithAi");
 
-        group.MapPost("/refactor", async (FlowAiRefactorRequest request, FlowAiGeneratorService service, AiAssistantService activity, AiClusterService cluster,
+        group.MapPost("/refactor", async (FlowAiRefactorRequest request, FlowAiGeneratorService service, AiAssistantService activity, AiCentralService cluster,
             ClaimsPrincipal user, CancellationToken ct) =>
         {
             if (request.CurrentFlow is null || string.IsNullOrWhiteSpace(request.UserPrompt))
@@ -74,7 +74,7 @@ public static class FlowAiEndpoints
 
         group.MapPost("/{id:guid}/draft-refactor", async (Guid id, FlowAiDraftRefactorRequest request,
             FlowRepository flows, FlowAiGeneratorService service, AiAssistantService activity,
-            AiClusterService cluster, ClaimsPrincipal user, CancellationToken ct) =>
+            AiCentralService cluster, ClaimsPrincipal user, CancellationToken ct) =>
         {
             if (request.ExpectedDraftRevision < 1 || string.IsNullOrWhiteSpace(request.UserPrompt))
                 return Results.BadRequest(new { message = "La révision du brouillon et l’instruction sont obligatoires." });
@@ -110,7 +110,7 @@ public static class FlowAiEndpoints
             }
         }).WithName("ProposeFlowDraftRefactor");
 
-        group.MapPost("/explain", async (FlowAiExplainRequest request, FlowAiGeneratorService service, AiAssistantService activity, AiClusterService cluster,
+        group.MapPost("/explain", async (FlowAiExplainRequest request, FlowAiGeneratorService service, AiAssistantService activity, AiCentralService cluster,
             ClaimsPrincipal user, CancellationToken ct) =>
         {
             if (request.Flow is null)
@@ -170,7 +170,7 @@ public static class FlowAiEndpoints
         : JsonDocument.Parse(node.ToJsonString()).RootElement.Clone();
 
     private static async Task<(string? Model, string? ReasoningEffort)> ResolveModelSelectionAsync(
-        AiSettingsDto settings, string provider, AiClusterService cluster, CancellationToken ct)
+        AiSettingsDto settings, string provider, AiCentralService cluster, CancellationToken ct)
     {
         var model = settings.FlowModel ?? (settings.FlowProvider is null ? settings.DefaultModel : null);
         var effort = settings.FlowReasoningEffort

@@ -27,6 +27,8 @@ RUN npm run build \
  && npm run build -- --configuration production,worker --output-path dist/worker
 
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
+# Un worker ne fonctionne qu'avec la version exacte du central : la même valeur est compilée dans les deux images.
+ARG APP_VERSION=0.0.0-dev
 WORKDIR /source/backend
 
 COPY backend/src/Encoding.Api/Encoding.Api.csproj ./src/Encoding.Api/
@@ -47,9 +49,9 @@ RUN --mount=type=cache,target=/root/.local/share/NuGet/http-cache \
     rm -f /tmp/ca-bundle.pem
 COPY backend/migrations/ ./migrations/
 COPY backend/src ./src
-RUN dotnet publish ./src/Encoding.Api/Encoding.Api.csproj --configuration Release --output /app/api --no-restore \
- && dotnet publish ./src/Encoding.NodeAgent/Encoding.NodeAgent.csproj --configuration Release --output /app/agent --no-restore \
- && dotnet publish ./src/Encoding.Launcher/Encoding.Launcher.csproj --configuration Release --output /app/launcher --no-restore
+RUN dotnet publish ./src/Encoding.Api/Encoding.Api.csproj --configuration Release --output /app/api --no-restore -p:InformationalVersion=${APP_VERSION} \
+ && dotnet publish ./src/Encoding.NodeAgent/Encoding.NodeAgent.csproj --configuration Release --output /app/agent --no-restore -p:InformationalVersion=${APP_VERSION} \
+ && dotnet publish ./src/Encoding.Launcher/Encoding.Launcher.csproj --configuration Release --output /app/launcher --no-restore -p:InformationalVersion=${APP_VERSION}
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime-common
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -92,7 +94,7 @@ WORKDIR /app
 # (ex. /dev/dri/renderD129) et LIBVA_DRIVER_NAME (iHD, i965, radeonsi) restent libres pour forcer le choix sur l'hôte.
 ENV NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
-ENV Node__DataDirectory=/var/lib/encoding-node \
+ENV Worker__DataDirectory=/var/lib/encoding-node \
     Runtime__ArtifactDirectory=/var/lib/encoding-node/runtime-artifacts \
     Runtime__CustomPluginDirectory=/opt/encoding/custom-plugins \
     Runtime__ManagedToolDirectory=/opt/encoding/managed-tools \
@@ -107,9 +109,9 @@ COPY --from=build /app/api ./api
 COPY --from=build /app/agent ./agent
 COPY --from=build /app/launcher ./launcher
 COPY --from=frontend-build /frontend/dist/frontend/browser ./api/wwwroot
-ENV Node__Roles=server,worker \
-    ConnectionStrings__Cluster="Data Source=/var/lib/encoding-node/cluster.db" \
-    Node__DataDirectory=/var/lib/encoding-node \
+ENV Worker__Roles=server,worker \
+    ConnectionStrings__Central="Data Source=/var/lib/encoding-node/cluster.db" \
+    Worker__DataDirectory=/var/lib/encoding-node \
     PluginSettings__KeyDirectory=/var/lib/encoding-node/plugin-keys \
     FlowBackups__Directory=/var/lib/encoding-node/flow-backups \
     PluginStore__Directory=/var/lib/encoding-node/plugin-store \
@@ -121,8 +123,8 @@ ENTRYPOINT ["dotnet", "/app/launcher/Encoding.Launcher.dll"]
 FROM runtime-common AS worker
 COPY --from=build /app/agent ./agent
 COPY --from=frontend-build /frontend/dist/worker/browser ./api/wwwroot
-ENV Node__Roles=worker \
-    Node__WorkerImage=true \
+ENV Worker__Roles=worker \
+    Worker__WorkerImage=true \
     WorkerUi__Expose=true \
     PluginSettings__KeyDirectory=/var/lib/encoding-node/plugin-keys \
     PluginStore__Directory=/var/lib/encoding-node/plugin-store

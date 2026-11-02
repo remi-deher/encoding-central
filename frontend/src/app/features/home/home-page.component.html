@@ -44,7 +44,7 @@
     <app-summary-tiles
       monitor-summary
       [hidden]="overviewView() !== 'general'"
-      [label]="standalone() ? 'Indicateurs de ce nœud' : 'Indicateurs du cluster'"
+      [label]="standalone() ? 'Indicateurs de ce worker' : 'Indicateurs du central'"
       [tiles]="metrics()"
     />
 
@@ -103,10 +103,10 @@
       @if (overviewView() !== 'activity') {
         <div class="panel-heading">
           <div>
-            <h2 id="nodes-heading">{{ standalone() ? 'Ce nœud' : 'Nœuds du cluster' }}</h2>
+            <h2 id="nodes-heading">{{ standalone() ? 'Ce worker' : 'Workers du central' }}</h2>
           </div>
-          <a class="subtle-link" routerLink="/nodes"
-            >{{ standalone() ? 'Gérer ce nœud' : 'Voir les nœuds' }}
+          <a class="subtle-link" routerLink="/workers"
+            >{{ standalone() ? 'Gérer ce worker' : 'Voir les workers' }}
             <span aria-hidden="true"><app-icon name="forward" /></span
           ></a>
         </div>
@@ -148,8 +148,8 @@
               <p class="empty-panel-message">
                 {{
                   standalone()
-                    ? 'Aucune information sur ce nœud.'
-                    : 'Aucun nœud enregistré dans le cluster.'
+                    ? 'Aucune information sur ce worker.'
+                    : 'Aucun worker enregistré dans le central.'
                 }}
               </p>
             }
@@ -241,8 +241,8 @@
             <p>
               {{
                 standalone()
-                  ? 'Comment ce nœud atteint chaque bibliothèque.'
-                  : 'Comment chaque nœud atteint chaque bibliothèque.'
+                  ? 'Comment ce worker atteint chaque bibliothèque.'
+                  : 'Comment chaque worker atteint chaque bibliothèque.'
               }}
             </p>
           </div>
@@ -253,10 +253,10 @@
         <app-matrix-table
           [caption]="
             standalone()
-              ? 'Accès de ce nœud à chaque bibliothèque'
-              : 'Accès de chaque nœud à chaque bibliothèque'
+              ? 'Accès de ce worker à chaque bibliothèque'
+              : 'Accès de chaque worker à chaque bibliothèque'
           "
-          cornerLabel="Nœud"
+          cornerLabel="Worker"
           [rows]="matrixRows()"
           [columns]="matrixColumns()"
           [cells]="matrixCells()"

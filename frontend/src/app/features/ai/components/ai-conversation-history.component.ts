@@ -147,6 +147,6 @@ export class AiConversationHistoryComponent {
   protected coordinatorLabel(conversation: AiAssistantConversation): string | null {
     if (!conversation.coordinatorId) return null;
     const node = this.nodes().find((candidate) => candidate.nodeId === conversation.coordinatorId);
-    return node ? `Discussion du nœud ${node.name}` : 'Discussion d’un autre nœud';
+    return node ? `Discussion du worker ${node.name}` : 'Discussion d’un autre worker';
   }
 }

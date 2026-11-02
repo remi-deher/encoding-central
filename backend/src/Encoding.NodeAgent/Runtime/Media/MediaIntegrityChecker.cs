@@ -12,7 +12,7 @@ public sealed record MediaIntegrityReport(string Sha256, string Mode, string Acc
 public sealed class MediaIntegrityChecker(ProcessToolRunner tools, MediaScanner scanner)
 {
     public async Task<MediaIntegrityReport> CheckAsync(string path, string sha256, string mediaType,
-        string mode, string acceleration, IReadOnlyList<NodeToolCapability> capabilities, CancellationToken ct)
+        string mode, string acceleration, IReadOnlyList<WorkerToolCapability> capabilities, CancellationToken ct)
     {
         var started = System.Diagnostics.Stopwatch.StartNew();
         MediaIntegrityReport Report(string output, string used, string? reason = null) =>

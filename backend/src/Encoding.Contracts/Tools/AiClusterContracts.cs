@@ -1,8 +1,8 @@
 namespace Encoding.Contracts.Tools;
 
-public sealed record AiNodeAvailability(Guid NodeId, string Name, IReadOnlyList<string> Providers, bool Reachable = true,
+public sealed record AiWorkerAvailability(Guid NodeId, string Name, IReadOnlyList<string> Providers, bool Reachable = true,
     IReadOnlyDictionary<string, string?>? Models = null, IReadOnlyList<AiModelCatalog>? Catalogs = null);
-public sealed record AiClusterView(IReadOnlyList<AiNodeAvailability> Nodes);
+public sealed record AiCentralView(IReadOnlyList<AiWorkerAvailability> Nodes);
 public sealed record AiSessionTurn(Guid RequestId, string UserPrompt, string Content, AiUsage? Usage = null, DateTimeOffset? CompletedAt = null,
     AiTurnModelSelection? Selection = null, Guid? ExecutorNodeId = null);
 public sealed record AiSessionState(string Id, string Provider, string SystemPrompt, IReadOnlyList<AiSessionTurn> Turns,
@@ -20,5 +20,5 @@ public sealed record ClaudeTokenRequest(string Token);
 /// <summary>Consommation observée (tokens rapportés par les fournisseurs) ; jamais estimée quand elle n'est pas rapportée.</summary>
 public sealed record AiUsageTotals(long Turns, long InputTokens, long OutputTokens, long CachedInputTokens, decimal? CostUsd, long TurnsWithoutUsage);
 public sealed record AiProviderUsage(string Provider, AiUsageTotals Totals);
-public sealed record AiNodeUsage(Guid? NodeId, string Name, IReadOnlyList<AiProviderUsage> Providers, AiUsageTotals Total);
-public sealed record AiClusterUsage(int Days, DateTimeOffset Since, IReadOnlyList<AiNodeUsage> Nodes, AiUsageTotals Total, bool Truncated);
+public sealed record AiWorkerUsage(Guid? NodeId, string Name, IReadOnlyList<AiProviderUsage> Providers, AiUsageTotals Total);
+public sealed record AiCentralUsage(int Days, DateTimeOffset Since, IReadOnlyList<AiWorkerUsage> Nodes, AiUsageTotals Total, bool Truncated);

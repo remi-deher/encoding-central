@@ -1,7 +1,7 @@
 @if (loadingSettings()) {
   <app-configuration-section
     title="Moteur et usages"
-    description="Quel fournisseur répond à l’assistant et aux flows, pour tout le cluster."
+    description="Quel fournisseur répond à l’assistant et aux flows, pour tout le central."
     icon="settings"
   >
     <p role="status">Chargement des paramètres…</p>
@@ -14,11 +14,11 @@
   <form id="ai-settings-form" #settingsForm="ngForm" (ngSubmit)="saveSettings()">
     <app-configuration-section
       title="Moteur et usages"
-      description="Quel fournisseur répond à l’assistant et aux flows. Valable pour tout le cluster."
+      description="Quel fournisseur répond à l’assistant et aux flows. Valable pour tout le central."
       icon="settings"
     >
       @if (loadingModelCatalog()) {
-        <app-settings-notice>Chargement des modèles annoncés par les nœuds…</app-settings-notice>
+        <app-settings-notice>Chargement des modèles annoncés par les workers…</app-settings-notice>
       } @else if (!modelCatalog()) {
         <app-settings-notice tone="warning"
           >Impossible de charger les modèles annoncés. Une nouvelle vérification sera effectuée en
@@ -153,7 +153,7 @@
         }
         <app-setting-row
           label="Assistant : local uniquement"
-          hint="Exige Ollama sur une adresse de boucle locale ; rien n’est envoyé aux autres nœuds ni fournisseurs."
+          hint="Exige Ollama sur une adresse de boucle locale ; rien n’est envoyé aux autres workers ni fournisseurs."
         >
           <mat-slide-toggle
             name="assistantLocalOnly"
@@ -238,7 +238,7 @@
 
     <app-configuration-section
       title="Fournisseurs"
-      description="Les connexions Codex, Claude Code et les clés OpenAI et Anthropic sont copiées chiffrées sur tous les nœuds : si le serveur tombe, les flows IA continuent."
+      description="Les connexions Codex, Claude Code et les clés OpenAI et Anthropic sont copiées chiffrées sur tous les workers : si le serveur tombe, les flows IA continuent."
       icon="api"
     >
       <app-setting-group>
@@ -283,10 +283,10 @@
         }
       </app-setting-group>
       @if (cluster(); as view) {
-        <h3 class="subheading">Réplication par nœud</h3>
+        <h3 class="subheading">Réplication par worker</h3>
         <app-ai-replication-panel [view]="view" />
       } @else {
-        <p class="muted">Disponibilité du cluster indisponible.</p>
+        <p class="muted">Disponibilité du central indisponible.</p>
       }
     </app-configuration-section>
   </form>
@@ -295,7 +295,7 @@
   <mat-expansion-panel class="ai-secondary-panel">
     <mat-expansion-panel-header>
       <mat-panel-title>Modèles disponibles</mat-panel-title>
-      <mat-panel-description>Choix des modèles autorisés pour le cluster</mat-panel-description>
+      <mat-panel-description>Choix des modèles autorisés pour le central</mat-panel-description>
     </mat-expansion-panel-header>
     <ng-template matExpansionPanelContent>
       <app-ai-model-catalog />
@@ -319,13 +319,13 @@
   <form #providerForm="ngForm" class="provider-editor" (ngSubmit)="saveSettings()">
     <p>
       Les connexions Codex, Claude Code et les clés OpenAI et Anthropic sont partagées avec tout le
-      cluster : les modifier ici les modifie sur chaque nœud. Les adresses et modèles Ollama et
-      OpenAI restent propres à ce nœud.
+      cluster : les modifier ici les modifie sur chaque worker. Les adresses et modèles Ollama et
+      OpenAI restent propres à ce worker.
     </p>
     @if (cluster(); as view) {
-      <section class="drawer-replication" aria-label="Réplication par nœud">
+      <section class="drawer-replication" aria-label="Réplication par worker">
         <h4>
-          {{ selectedProvider() === 'ollama' ? 'Disponibilité par nœud' : 'Réplication par nœud' }}
+          {{ selectedProvider() === 'ollama' ? 'Disponibilité par worker' : 'Réplication par worker' }}
         </h4>
         <app-ai-replication-panel [view]="view" [only]="selectedProvider()" />
       </section>
@@ -388,7 +388,7 @@
             <mat-hint>{{
               hasOpenAiApiKey()
                 ? 'Clé enregistrée. Laissez vide pour la conserver.'
-                : 'La clé sera copiée chiffrée sur tous les nœuds.'
+                : 'La clé sera copiée chiffrée sur tous les workers.'
             }}</mat-hint>
           </mat-form-field>
         </div>
@@ -419,7 +419,7 @@
             <mat-hint>{{
               hasAnthropicApiKey()
                 ? 'Clé enregistrée. Laissez vide pour la conserver.'
-                : 'La clé sera copiée chiffrée sur tous les nœuds.'
+                : 'La clé sera copiée chiffrée sur tous les workers.'
             }}</mat-hint>
           </mat-form-field>
         </div>
@@ -432,14 +432,14 @@
           >
             <span class="badge">{{ authLabel(tool.authStatus.state) }}</span
             ><span>{{
-              tool.isInstalled ? 'Outil installé sur ce nœud' : 'Outil non installé sur ce nœud'
+              tool.isInstalled ? 'Outil installé sur ce worker' : 'Outil non installé sur ce worker'
             }}</span>
           </div>
           @if (tool.authStatus.errorMessage) {
             <p class="connection-error" role="status">{{ tool.authStatus.errorMessage }}</p>
           }
           @if (!tool.isInstalled) {
-            <p>Installez l’outil officiel sur ce nœud pour y ajouter une connexion.</p>
+            <p>Installez l’outil officiel sur ce worker pour y ajouter une connexion.</p>
           } @else {
             @if (isAdmin()) {
               <button
@@ -454,12 +454,12 @@
             <p class="help">
               @if (tool.id === 'codex-cli') {
                 Le lien et le code sont fournis par Codex. Une fois connecté, le compte est copié
-                chiffré sur tous les nœuds du cluster ; un renouvellement ou une déconnexion s’y
+                chiffré sur tous les workers du central ; un renouvellement ou une déconnexion s’y
                 propage aussi.
               } @else {
                 Claude Code ouvre une connexion navigateur. Le lien est affiché ici ; si la CLI
                 demande un code, vous pourrez le coller. La connexion est ensuite copiée chiffrée
-                sur tous les nœuds.
+                sur tous les workers.
               }
             </p>
           }
@@ -497,7 +497,7 @@
     @if (selectedTool(); as tool) {
       @if (tool.authStatus.state === 'authorized' && isAdmin()) {
         <button matButton="text" type="button" [disabled]="connecting()" (click)="revoke(tool.id)">
-          Déconnecter le cluster
+          Déconnecter le central
         </button>
       }
     }

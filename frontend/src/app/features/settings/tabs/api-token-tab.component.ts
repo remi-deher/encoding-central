@@ -166,7 +166,7 @@ export class ApiTokenTabComponent {
       visibleWhen: (row) => !!row['isActive'],
       confirmation: (row) => ({
         title: 'Révoquer ce jeton ?',
-        message: `Les applications utilisant « ${row.title} » perdront leur accès au cluster.`,
+        message: `Les applications utilisant « ${row.title} » perdront leur accès au central.`,
         confirmLabel: 'Révoquer',
       }),
     },

@@ -10,7 +10,7 @@ namespace Encoding.NodeAgent.Runtime;
 /// Exécute un flow pour un bail donné : renouvellement du bail, préparation de la source, enchaînement des blocs,
 /// puis clôture. L'état d'une exécution vit dans cette instance, jamais dans le singleton <see cref="RuntimeFlowRunner"/>.
 /// </summary>
-internal sealed partial class RuntimeFlowExecution(NodeAgentOptions options, MediaScanner scanner, MediaActions actions, ProcessToolRunner tools,
+internal sealed partial class RuntimeFlowExecution(WorkerAgentOptions options, MediaScanner scanner, MediaActions actions, ProcessToolRunner tools,
     PluginProcessHost plugins, PublicationGuardRunner guards, Encoding.NodeAgent.Services.IToolCapabilityProbe capabilities,
     LocalPublicationArtifactStore localPublicationArtifacts, ILogger logger, RuntimeLease lease, RuntimeClient client,
     CancellationToken stoppingToken) : IDisposable
@@ -52,9 +52,9 @@ internal sealed partial class RuntimeFlowExecution(NodeAgentOptions options, Med
             // les médias invalides. FailureAsync renouvelle d'abord le bail et confirme un échec terminal ;
             // si le bail a réellement changé d'époque, le renouvellement sera refusé et l'ancien worker
             // ne pourra rien modifier.
-            logger.LogWarning(exception, "Complétion de l’exécution {ExecutionId} refusée par le cluster ; tentative de clôture en échec.", lease.ExecutionId);
+            logger.LogWarning(exception, "Complétion de l’exécution {ExecutionId} refusée par le central ; tentative de clôture en échec.", lease.ExecutionId);
             state.MarkLost();
-            await FailureAsync("failed", "cluster_refused : Le cluster a refusé une étape ou une complétion de l’exécution.");
+            await FailureAsync("failed", "cluster_refused : Le central a refusé une étape ou une complétion de l’exécution.");
         }
         catch (HttpRequestException exception) when (exception.StatusCode is null || (int)exception.StatusCode >= 500)
         {
@@ -121,7 +121,7 @@ internal sealed partial class RuntimeFlowExecution(NodeAgentOptions options, Med
                     catch (OperationCanceledException) when (job.IsCancellationRequested) { break; }
                     catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
                     {
-                        logger.LogWarning("Bail de l’exécution {ExecutionId} révoqué par le cluster (HTTP 409).", lease.ExecutionId);
+                        logger.LogWarning("Bail de l’exécution {ExecutionId} révoqué par le central (HTTP 409).", lease.ExecutionId);
                         state.MarkLost();
                         job.Cancel();
                         break;
@@ -379,7 +379,7 @@ internal sealed partial class RuntimeFlowExecution(NodeAgentOptions options, Med
             await client.PostAsync<object>($"executions/{lease.ExecutionId:D}/finish", new FinishRuntimeExecution(lease.Epoch, Guid.NewGuid(), status!.Revision, state, detail, null, null,
                 Commands: commandCapture.Pending()), timeout.Token);
         }
-        catch (Exception) { logger.LogWarning("Le résultat de l’exécution {ExecutionId} n’a pas pu être confirmé par le cluster.", lease.ExecutionId); }
+        catch (Exception) { logger.LogWarning("Le résultat de l’exécution {ExecutionId} n’a pas pu être confirmé par le central.", lease.ExecutionId); }
     }
 
     private async Task FinishAsync()

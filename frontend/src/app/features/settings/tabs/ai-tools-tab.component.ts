@@ -332,7 +332,7 @@ export class AiToolsTabComponent implements OnInit, OnDestroy {
       this.assistantActivityRetentionDays() < 1 ||
       this.assistantActivityRetentionDays() > 3650
     ) {
-      this.notifications.show('Vérifiez les limites du cluster.');
+      this.notifications.show('Vérifiez les limites du central.');
       return;
     }
     if (
@@ -636,7 +636,7 @@ export class AiToolsTabComponent implements OnInit, OnDestroy {
     const title: unknown = error.error?.title;
     return typeof title === 'string' && title.trim()
       ? title
-      : 'Impossible de joindre le service de connexion. Consultez les journaux système de ce nœud.';
+      : 'Impossible de joindre le service de connexion. Consultez les journaux système de ce worker.';
   }
   revoke(id: string): void {
     if (!this.isAdmin()) return;
@@ -644,14 +644,14 @@ export class AiToolsTabComponent implements OnInit, OnDestroy {
     const message =
       id === 'codex-cli' || id === 'claude-cli'
         ? count > 1
-          ? `La connexion sera supprimée sur les ${count} nœuds du cluster, y compris ceux qui sont injoignables : ils la perdront à leur retour. Les flows qui utilisent ce fournisseur échoueront tant qu’une nouvelle connexion n’est pas enregistrée.`
+          ? `La connexion sera supprimée sur les ${count} workers du central, y compris ceux qui sont injoignables : ils la perdront à leur retour. Les flows qui utilisent ce fournisseur échoueront tant qu’une nouvelle connexion n’est pas enregistrée.`
           : 'La connexion sera supprimée. Les flows qui utilisent ce fournisseur échoueront tant qu’une nouvelle connexion n’est pas enregistrée.'
         : 'La connexion sera supprimée.';
     this.dialog
       .open(ConfirmationDialogComponent, {
         data: {
           title: `Déconnecter ${this.providerName(id)} ?`,
-          eyebrow: count > 1 ? 'Action sur le cluster' : undefined,
+          eyebrow: count > 1 ? 'Action sur le central' : undefined,
           message,
           confirmLabel: 'Déconnecter',
           variant: 'danger',
@@ -667,7 +667,7 @@ export class AiToolsTabComponent implements OnInit, OnDestroy {
     this.aiService.revokeAuth(id).subscribe({
       next: () => {
         this.connecting.set(false);
-        this.notifications.show('Connexion supprimée ; la suppression se propage au cluster.');
+        this.notifications.show('Connexion supprimée ; la suppression se propage au central.');
         this.refreshTools();
       },
       error: () => {
@@ -681,7 +681,7 @@ export class AiToolsTabComponent implements OnInit, OnDestroy {
     if (!view) return 'Disponibilité à vérifier';
     const count = view.nodes.filter((n) => n.providers.includes(id)).length;
     return count
-      ? `${count} nœud${count > 1 ? 's' : ''} configuré${count > 1 ? 's' : ''}`
+      ? `${count} worker${count > 1 ? 's' : ''} configuré${count > 1 ? 's' : ''}`
       : 'Aucune connexion déclarée';
   }
   providerNames(ids: readonly string[]): string {

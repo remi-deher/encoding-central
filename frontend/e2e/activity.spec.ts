@@ -134,7 +134,7 @@ test.beforeEach(async ({ page }) => {
       json: { setupRequired: false, user: { id: 'admin', username: 'admin', role: 'admin' } },
     }),
   );
-  await page.route('**/api/v1/cluster', (route) =>
+  await page.route('**/api/v1/central', (route) =>
     route.fulfill({ json: { id: 'cluster', name: 'Maison', standalone: true } }),
   );
   await page.route('**/api/v1/activity/stream**', (route) => route.abort());

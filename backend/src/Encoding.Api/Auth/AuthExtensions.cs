@@ -10,7 +10,7 @@ public static class AuthExtensions
     public const string AnonymousPolicy = "anonymous-protocol";
     public const string ClusterMeshPolicy = "cluster-mesh";
     public const string HeavyOperationsPolicy = "heavy-operations";
-    /// <summary>Lecture répétée de la fiche du nœud par l'assistant de premier démarrage ; quota distinct de la connexion.</summary>
+    /// <summary>Lecture répétée de la fiche du worker par l'assistant de premier démarrage ; quota distinct de la connexion.</summary>
     public const string SetupProbePolicy = "setup-probe";
     public const string AdministratorPolicy = "Administrator";
 
@@ -39,7 +39,7 @@ public static class AuthExtensions
                 await Encoding.Api.Infrastructure.ApiProblem.TooManyRequests()
                     .ExecuteAsync(context.HttpContext);
             };
-            // Quota par adresse source pour les routes joignables sans compte (connexion, initialisation, jumelage des nœuds).
+            // Quota par adresse source pour les routes joignables sans compte (connexion, initialisation, jumelage des workers).
             limiter.AddPolicy(AnonymousPolicy, http => RateLimitPartition.GetFixedWindowLimiter(
                 http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = options.AnonymousRequestsPerMinute, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));

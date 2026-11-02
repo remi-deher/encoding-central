@@ -5,7 +5,7 @@ using Encoding.NodeAgent.Services;
 
 namespace Encoding.NodeAgent.Runtime;
 
-public sealed class RuntimeTransferService(NodeAgentOptions options,WorkerIdentityStore identities,MediaScanner scanner,PublicationGuardRunner guards,
+public sealed class RuntimeTransferService(WorkerAgentOptions options,WorkerIdentityStore identities,MediaScanner scanner,PublicationGuardRunner guards,
     ILocalPublicationArtifactStore localArtifacts,ILogger<RuntimeTransferService> logger) : BackgroundService
 {
     private readonly ConcurrentDictionary<Guid,Task> active=new();

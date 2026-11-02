@@ -57,7 +57,7 @@ public sealed class ApiTokenRepository(DbDataSource dataSource)
     }
 
     /// <summary>
-    /// Crée le jeton administrateur du cluster lors de sa création ou adoption s'il n'existe pas encore.
+    /// Crée le jeton administrateur du central lors de sa création ou adoption s'il n'existe pas encore.
     /// Retourne le jeton en clair s'il vient d'être généré, ou null s'il existait déjà.
     /// </summary>
     public async Task<string?> EnsureClusterTokenAsync(CancellationToken ct)
@@ -153,7 +153,7 @@ public sealed class ApiTokenRepository(DbDataSource dataSource)
         return list;
     }
 
-    /// <summary>Identifiants et états de révocation connus de ce nœud, pour contrôler la propagation du cluster.</summary>
+    /// <summary>Identifiants et états de révocation connus de ce worker, pour contrôler la propagation du central.</summary>
     public async Task<IReadOnlyList<ApiTokenReplicationEntry>> ReplicationStateAsync(CancellationToken ct)
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);

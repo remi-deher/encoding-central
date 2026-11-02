@@ -4,7 +4,7 @@ namespace Encoding.Api.Plugins;
 
 /// <summary>
 /// Transforme les imports signalés par un service externe en exécutions. Chaque demande suit le chemin commun des
-/// bibliothèques : découverte par un nœud en accès direct, puis mise en file du fichier détecté. Aucun chemin média
+/// bibliothèques : découverte par un worker en accès direct, puis mise en file du fichier détecté. Aucun chemin média
 /// reçu du réseau n’est exécuté sans être retrouvé dans la bibliothèque.
 /// </summary>
 public sealed class IntegrationTriggerService(IntegrationTriggerRepository requests, LibraryWorkflowRepository workflow,

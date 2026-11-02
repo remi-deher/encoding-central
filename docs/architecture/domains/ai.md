@@ -15,14 +15,14 @@ tags: [ia, codex, claude, ollama, session, checkpoint, assistant, générateur d
 
 ## Fournisseurs et connexion
 - CLI officielles lancées par le serveur : **Codex** (`codex exec --json --ephemeral`, connexion `codex login --device-auth`) et **Claude** (`claude -p --output-format stream-json …`, jeton `claude setup-token` protégé par Data Protection et passé par `CLAUDE_CODE_OAUTH_TOKEN`), plus API compatibles OpenAI/Ollama (non configurées sur une nouvelle installation). Le lien/code de connexion émis par la CLI reste en mémoire (15 min max), jamais journalisé ni persisté ; le succès n'est confirmé qu'après `codex login status` / `claude auth status`, même si le processus interactif est encore en attente de fermeture.
-- Profils par fournisseur (`CODEX_HOME`, `CLAUDE_CONFIG_DIR`) sous `AiTools:CredentialsDirectory` (défaut `Node:DataDirectory/credentials/ai-tools`) : propres au central (aucune réplication : ADR [0036](../adr/0036-separation-stricte-central-worker.md)). CLI installées sous `AiTools:RuntimeDirectory` (`/opt/encoding/ai-cli`).
+- Profils par fournisseur (`CODEX_HOME`, `CLAUDE_CONFIG_DIR`) sous `AiTools:CredentialsDirectory` (défaut `Worker:DataDirectory/credentials/ai-tools`) : propres au central (aucune réplication : ADR [0036](../adr/0036-separation-stricte-central-worker.md)). CLI installées sous `AiTools:RuntimeDirectory` (`/opt/encoding/ai-cli`).
 - CLI **confinées par Landlock** (code partagé dans `Encoding.Core.Runtime`) ; sans Landlock elles refusent de démarrer. Claude sans outils/MCP/skills/réglages hérités ; Codex en lecture seule sans approbation interactive. Aucune réponse simulée si la CLI est absente ; plus de flow synthétique en cas d'échec.
 - La page « IA & fournisseurs » distingue moteur par défaut et fiche sélectionnée ; les secrets restent masqués ; `hasOpenAiApiKey` seulement.
 - Les connexions des CLI et leur réplication sont relues en arrière-plan toutes les 15 s ; quotas toutes les 60 s et historique des sessions toutes les 30 s. La fenêtre d’association vérifie son état automatiquement.
 - Fermer ou recharger l’interface n’annule pas le processus d’association, qui continue côté serveur jusqu’à sa confirmation ou son expiration (15 min maximum).
 
 ## Accès
-- Le central héberge les connexions IA et exécute l'inférence ; il n'existe plus d'échange entre serveurs (`/api/v1/cluster/ai/exchange` est retiré). Les workers n'exécutent pas d'inférence.
+- Le central héberge les connexions IA et exécute l'inférence ; il n'existe plus d'échange entre serveurs (`/api/v1/central/ai/exchange` est retiré). Les workers n'exécutent pas d'inférence.
 
 ## Sessions, contexte, reprise
 - Le contexte appartient à Encoding (consignes, demandes identifiées, tours validés), **chiffré et écrit dans les registres locaux avant de confirmer** ; checkpoint ≤ 512 Kio ; les CLI n'ont pas de conversation native persistante.

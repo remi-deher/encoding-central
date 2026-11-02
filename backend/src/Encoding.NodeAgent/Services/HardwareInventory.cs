@@ -5,7 +5,7 @@ using Encoding.Contracts.Nodes;
 namespace Encoding.NodeAgent.Services;
 
 /// <summary>
-/// Inventaire matériel statique du nœud. Source unique pour l'enrôlement et les battements de cœur.
+/// Inventaire matériel statique du worker. Source unique pour l'enrôlement et les battements de cœur.
 /// Le modèle de processeur et les GPU sont des informations best-effort ; leur absence n'est jamais une erreur.
 /// </summary>
 public static class HardwareInventory
@@ -21,11 +21,11 @@ public static class HardwareInventory
     private static readonly string[] PciIdsPaths = ["/usr/share/hwdata/pci.ids", "/usr/share/misc/pci.ids", "/usr/share/pci.ids"];
 
     /// <summary>Lu une seule fois : le matériel ne change pas pendant la vie du processus et la base PCI est volumineuse.</summary>
-    private static readonly Lazy<NodeInventory> CurrentInventory = new(() => Read("/proc/cpuinfo", "/sys/class/drm"));
+    private static readonly Lazy<WorkerInventory> CurrentInventory = new(() => Read("/proc/cpuinfo", "/sys/class/drm"));
 
-    public static NodeInventory Current() => CurrentInventory.Value with { FontSets = FontInventory.Read(Environment.GetEnvironmentVariable("ENCODING_FONT_DIR") ?? "/app/common/Fonts") };
+    public static WorkerInventory Current() => CurrentInventory.Value with { FontSets = FontInventory.Read(Environment.GetEnvironmentVariable("ENCODING_FONT_DIR") ?? "/app/common/Fonts") };
 
-    public static NodeInventory Read(string cpuInfoPath, string drmRoot) => new(
+    public static WorkerInventory Read(string cpuInfoPath, string drmRoot) => new(
         RuntimeInformation.OSDescription,
         RuntimeInformation.ProcessArchitecture.ToString(),
         Environment.ProcessorCount,
@@ -116,9 +116,9 @@ public static class HardwareInventory
         return null;
     }
 
-    public static IReadOnlyList<NodeGpu> ReadGpus(string drmRoot, IReadOnlyList<string>? pciIdsPaths = null)
+    public static IReadOnlyList<WorkerGpu> ReadGpus(string drmRoot, IReadOnlyList<string>? pciIdsPaths = null)
     {
-        var gpus = new List<NodeGpu>();
+        var gpus = new List<WorkerGpu>();
         try
         {
             if (!Directory.Exists(drmRoot)) return gpus;
@@ -133,7 +133,7 @@ public static class HardwareInventory
                 var driver = ReadUeventValue(Path.Combine(device, "uevent"), "DRIVER");
                 var friendly = deviceId is null ? null : LookupDeviceName(vendorId, deviceId, pciIdsPaths ?? PciIdsPaths);
                 var name = friendly is not null ? $"{vendor} {friendly}" : deviceId is null ? vendor : $"{vendor} {deviceId}";
-                gpus.Add(new NodeGpu(name, vendor, driver, Path.GetFileName(card)));
+                gpus.Add(new WorkerGpu(name, vendor, driver, Path.GetFileName(card)));
                 if (gpus.Count == 16) break;
             }
         }

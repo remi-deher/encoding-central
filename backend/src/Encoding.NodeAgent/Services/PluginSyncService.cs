@@ -10,7 +10,7 @@ namespace Encoding.NodeAgent.Services;
 /// l'empreinte SHA-256 annoncée, extrait dans un dossier temporaire puis le renomme, et retire les versions que le serveur ne
 /// propose plus. Une panne réseau ne retire rien : le worker garde ce qu'il a.
 /// </summary>
-public sealed class PluginSyncService(NodeAgentOptions options, WorkerIdentityStore identityStore, IConfiguration configuration,
+public sealed class PluginSyncService(WorkerAgentOptions options, WorkerIdentityStore identityStore, IConfiguration configuration,
     ToolCapabilityProbe capabilityProbe, ILogger<PluginSyncService> logger) : BackgroundService
 {
     private sealed record Listed(string Id, string Version, string Sha256);
@@ -52,7 +52,7 @@ public sealed class PluginSyncService(NodeAgentOptions options, WorkerIdentitySt
             catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or JsonException && !ct.IsCancellationRequested) { }
         }
         if (listed is null || activeServerUrl is null)
-            throw new HttpRequestException("Aucun serveur du cluster n'est joignable pour synchroniser les plugins.");
+            throw new HttpRequestException("Aucun serveur du central n'est joignable pour synchroniser les plugins.");
         Directory.CreateDirectory(root);
         var changed = false;
         foreach (var plugin in listed)

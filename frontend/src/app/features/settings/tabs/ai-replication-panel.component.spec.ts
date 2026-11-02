@@ -44,8 +44,8 @@ describe('AiReplicationPanelComponent', () => {
 
   it('annonce un fournisseur à reconnecter et n’invente pas de réplication pour Ollama', () => {
     const text = render();
-    expect(text).toContain('doit être reconnecté sur 1 nœud');
-    expect(text).toContain('Local à chaque nœud');
+    expect(text).toContain('doit être reconnecté sur 1 worker');
+    expect(text).toContain('Local à chaque worker');
   });
 
   it('affiche la date .NET reçue et ignore une date illisible sans lever d’erreur', () => {

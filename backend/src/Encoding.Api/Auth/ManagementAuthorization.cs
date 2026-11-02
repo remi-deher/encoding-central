@@ -3,14 +3,14 @@ using Microsoft.AspNetCore.Authorization;
 
 namespace Encoding.Api.Auth;
 
-/// <summary>Marque une opération en POST qui ne modifie aucun état du cluster : le rôle lecture peut l’appeler.</summary>
+/// <summary>Marque une opération en POST qui ne modifie aucun état du central : le rôle lecture peut l’appeler.</summary>
 public sealed record ViewerAccessMetadata;
 
 /// <summary>Autorise un viewer à appeler une route d’assistant qui ne peut agir que sur ses conversations privées.</summary>
 public sealed record AssistantConversationAccessMetadata;
 
-/// <summary>Marque une lecture appelée aussi par les workers, authentifiés par leur jeton de nœud plutôt que par une session.</summary>
-public sealed record NodeCredentialAccessMetadata;
+/// <summary>Marque une lecture appelée aussi par les workers, authentifiés par leur jeton de worker plutôt que par une session.</summary>
+public sealed record WorkerCredentialAccessMetadata;
 
 public static class ManagementAccessExtensions
 {
@@ -21,7 +21,7 @@ public static class ManagementAccessExtensions
         builder.WithMetadata(new AssistantConversationAccessMetadata());
 
     public static TBuilder AllowNodeCredentials<TBuilder>(this TBuilder builder) where TBuilder : IEndpointConventionBuilder =>
-        builder.WithMetadata(new NodeCredentialAccessMetadata());
+        builder.WithMetadata(new WorkerCredentialAccessMetadata());
 }
 
 public sealed class ManagementAccessRequirement : IAuthorizationRequirement;
@@ -30,7 +30,7 @@ public sealed class ManagementAccessRequirement : IAuthorizationRequirement;
 /// Règle unique d’accès à l’API de gestion : toute route exige une session ; lecture pour tout rôle,
 /// modification réservée aux administrateurs et protégée contre les requêtes inter-sites.
 /// </summary>
-public sealed class ManagementAccessHandler(NodeRepository nodes) : AuthorizationHandler<ManagementAccessRequirement>
+public sealed class ManagementAccessHandler(WorkerRepository nodes) : AuthorizationHandler<ManagementAccessRequirement>
 {
     public const string CsrfHeader = "X-Encoding-Csrf";
 
@@ -40,7 +40,7 @@ public sealed class ManagementAccessHandler(NodeRepository nodes) : Authorizatio
         var endpoint = http.GetEndpoint();
         var safe = HttpMethods.IsGet(http.Request.Method) || HttpMethods.IsHead(http.Request.Method);
 
-        if (safe && endpoint?.Metadata.GetMetadata<NodeCredentialAccessMetadata>() is not null
+        if (safe && endpoint?.Metadata.GetMetadata<WorkerCredentialAccessMetadata>() is not null
             && http.Request.Headers["X-Node-Token"].ToString() is { Length: > 0 } token
             && await nodes.AuthenticateTokenAsync(token, http.RequestAborted))
         {

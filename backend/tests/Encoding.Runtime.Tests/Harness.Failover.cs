@@ -34,7 +34,7 @@ internal static partial class Harness
             await command.ExecuteNonQueryAsync();
         }
 
-        /// <summary>Exécution terminée côté worker : résultat enregistré, publication demandée au nœud d'accès (a).</summary>
+        /// <summary>Exécution terminée côté worker : résultat enregistré, publication demandée au worker d'accès (a).</summary>
         private async Task<(Guid Id,RuntimeLease Lease,Guid Library,string SourceSha,string ResultSha)> PublicationRequestedAsync(bool replacement,int graceHours=1,string mediaPolicy="keep")
         {
             var flow=Chain(Node(registry,"entry","base-input-file"),Node(registry,"end","base-complete-flow"));
@@ -129,7 +129,7 @@ internal static partial class Harness
         {
             var flow=Chain(Node(registry,"entry","base-input-file"),Node(registry,"end","base-complete-flow")) with { Id=Guid.NewGuid() };
             var repository=new FlowRepository(db); Check(await repository.SaveAsync(new(0,flow),CancellationToken.None) is not null,"Publish the monitoring flow.");
-            var workflow=new LibraryWorkflowRepository(db,validator,new NodePresenceOptions(TimeSpan.FromHours(1)));
+            var workflow=new LibraryWorkflowRepository(db,validator,new WorkerPresenceOptions(TimeSpan.FromHours(1)));
             Check(await workflow.AssignAsync(library,new(flow.Id,1,0),CancellationToken.None),"Assign the flow to the library.");
             var modified=new DateTimeOffset(2024,5,6,7,8,9,TimeSpan.Zero);
             var scan=Guid.NewGuid();
@@ -148,9 +148,9 @@ internal static partial class Harness
         }
 
         /// <summary>Service de reprise complet (règles d'éligibilité et de présence), comme en production.</summary>
-        private RuntimeRecoveryService FullRecovery()=>new(db,NullLogger<RuntimeRecoveryService>.Instance,new NodeGroupRepository(db),eligibility,new NodePresenceOptions(TimeSpan.FromHours(1)));
+        private RuntimeRecoveryService FullRecovery()=>new(db,NullLogger<RuntimeRecoveryService>.Instance,new WorkerGroupRepository(db),eligibility,new WorkerPresenceOptions(TimeSpan.FromHours(1)));
 
-        /// <summary>ADR 0024 : une exécution neuve qu'aucun nœud ne pourra jamais faire échoue tôt et explicitement ; une exécution possible reste en file.</summary>
+        /// <summary>ADR 0024 : une exécution neuve qu'aucun worker ne pourra jamais faire échoue tôt et explicitement ; une exécution possible reste en file.</summary>
         public async Task FreshExecutionWithoutAnyCapableNodeFailsEarlyAsync()
         {
             await using(var leftovers=db.CreateCommand("UPDATE executions SET state='cancelled' WHERE state='queued'")) await leftovers.ExecuteNonQueryAsync();
@@ -176,7 +176,7 @@ internal static partial class Harness
             var possible=await QueueAsync(Chain(Node(registry,"entry","base-input-file"),Node(registry,"end","base-complete-flow")));
             await FullRecovery().ProcessOnceAsync(CancellationToken.None);
             var failed=await executions.GetAsync(impossible,CancellationToken.None);
-            Check(failed!.State=="failed","Une exécution qu'aucun nœud ne peut faire échoue tôt.");
+            Check(failed!.State=="failed","Une exécution qu'aucun worker ne peut faire échoue tôt.");
             Check((await executions.GetAsync(possible,CancellationToken.None))!.State=="queued","Une exécution possible reste en file.");
             Check(await executions.CancelAsync(possible,CancellationToken.None),"Nettoyage.");
         }
@@ -285,7 +285,7 @@ internal static partial class Harness
             var flow=Chain(Node(registry,"entry","base-input-file"),Node(registry,"variable","base-variable",new(){["name"]=J("kept"),["value"]=J("7")}),Node(registry,"end","base-complete-flow"));
             var(id,first,context)=await EnqueueAsync(flow);
             await CompleteAsync(id,a,first,"entry",context);
-            // Le dernier relais du flow désignait le nœud b (encodage confié à un seul nœud) : sa destination reste la règle de la reprise.
+            // Le dernier relais du flow désignait le worker b (encodage confié à un seul worker) : sa destination reste la règle de la reprise.
             await using(var relay=db.CreateCommand("UPDATE execution_work SET handoff_selector=@selector WHERE execution_id=@id"))
             { relay.Parameters.AddWithValue("id",id); relay.Parameters.AddWithValue("selector",SqlKind.Json,JsonSerializer.Serialize(new RuntimeHandoffSelector("node",b),new JsonSerializerOptions(JsonSerializerDefaults.Web))); await relay.ExecuteNonQueryAsync(); }
             await ExpireAsync(id);
@@ -294,7 +294,7 @@ internal static partial class Harness
             Check(await runtime.ClaimAsync(c,CancellationToken.None) is null && await runtime.ClaimAsync(a,CancellationToken.None) is null,"A resume never leaves the node chosen by the last relay while that node is available.");
             var resumed=await runtime.ClaimAsync(b,CancellationToken.None)??throw new InvalidOperationException("The relay destination resumes the execution.");
             Check(resumed.ExecutionId==id && resumed.Checkpoint?.NextNodeId=="variable","The destination resumes at the checkpoint.");
-            // Si ce nœud est perdu à son tour, la reprise ne part pas ailleurs : elle échoue après le délai de grâce.
+            // Si ce worker est perdu à son tour, la reprise ne part pas ailleurs : elle échoue après le délai de grâce.
             await ExpireAsync(id);
             await recovery.ProcessOnceAsync(CancellationToken.None);
             await using(var aged=db.CreateCommand("UPDATE executions SET updated_at=clock_timestamp()-interval '10 minutes' WHERE id=@id")){ aged.Parameters.AddWithValue("id",id); await aged.ExecuteNonQueryAsync(); }

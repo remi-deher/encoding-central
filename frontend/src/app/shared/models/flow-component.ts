@@ -48,7 +48,7 @@ export const FLOW_COMPONENT_CATEGORIES = {
   arr: 'Intégrations *ARR',
   'media-servers': 'Serveurs et bibliothèques média',
   communications: 'API, réseau et communication',
-  cluster: 'Nœuds et cluster',
+  cluster: 'Workers',
   orchestration: 'Exécution et orchestration',
   reporting: 'Journaux, rapports et notifications',
   utilities: 'Utilitaires',

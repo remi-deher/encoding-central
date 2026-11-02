@@ -51,7 +51,7 @@ Le propriétaire a explicitement choisi de conserver le compte `admin` de `.51` 
 5. Sur `.51`, vérification de l'égalité des deux instantanés avec leurs événements. Acquittement transactionnel de leur projection dans `cluster_sync_entities` et retrait de leurs seuls marqueurs en attente. Les définitions, les statuts locaux des sauvegardes et le journal des événements ont été conservés. Aucun compte ni événement utilisateur n'a été supprimé pour contourner la collision.
 6. Configuration réseau réciproque par TrueNAS :
 
-| Hôte | `Cluster__Reconciliation__AdvertisedApiBaseUrl` | `Cluster__Reconciliation__Peers__0` |
+| Hôte | `Central__Reconciliation__AdvertisedApiBaseUrl` | `Central__Reconciliation__Peers__0` |
 | --- | --- | --- |
 | `.50` | `http://192.168.1.50:8090/` | `http://192.168.1.51:8090/` |
 | `.51` | `http://192.168.1.51:8090/` | `http://192.168.1.50:8090/` |

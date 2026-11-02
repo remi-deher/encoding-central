@@ -32,7 +32,7 @@ import {
               <p>Une nouvelle version est disponible : {{ status.latestVersion }}.</p>
             }
             @case ('current') {
-              <p>Ce nœud est à jour.</p>
+              <p>Ce worker est à jour.</p>
             }
             @case ('development') {
               <p>Version de développement : recherche de mises à jour désactivée.</p>
@@ -49,13 +49,13 @@ import {
           }
         }
       </div>
-      <p>Pour installer une version, mettez à jour l’image Docker du nœud.</p>
+      <p>Pour installer une version, mettez à jour l’image Docker du worker.</p>
     </app-configuration-section>
     @if (data(); as status) {
       @for (release of filteredReleases(); track release.version) {
         <app-configuration-section
           [title]="'Version ' + release.version"
-          [badge]="release.version === status.installedVersion ? 'Installée sur ce nœud' : ''"
+          [badge]="release.version === status.installedVersion ? 'Installée sur ce worker' : ''"
           [attr.id]="'release-' + release.version"
         >
           <p>{{ release.publishedAt | date: 'dd/MM/yyyy' }}</p>

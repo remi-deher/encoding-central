@@ -41,7 +41,7 @@ tags: [ressource, police, image, audio, catalogue, version, sha-256, distributio
 - **Récupération par un pair** : livrée dans une PR séparée (protocole à concevoir après lecture du maillage).
 
 ## Récupération d'un octet par un pair (conception proposée, à valider dans sa PR)
-- L'échange de réconciliation existant ne convient pas : sa signature couvre le corps de la requête (≤ 16 Mio, `ClusterReconciliationSignature.MaximumBodyBytes`) et ses lots sont comptés en événements (32). Il faut un point d'accès dédié, authentifié par les mêmes identités de pairs admis : `GET /api/v1/cluster/resources/blobs/{sha256}`.
+- L'échange de réconciliation existant ne convient pas : sa signature couvre le corps de la requête (≤ 16 Mio, `ClusterReconciliationSignature.MaximumBodyBytes`) et ses lots sont comptés en événements (32). Il faut un point d'accès dédié, authentifié par les mêmes identités de pairs admis : `GET /api/v1/central/resources/blobs/{sha256}`.
 - Signature versionnée sur la méthode, le chemin, l'horodatage et l'identité du pair (pas sur un corps) ; mêmes en-têtes et même fenêtre d'horloge que la réconciliation, limiteur `cluster-mesh`, pairs admis et actifs uniquement, jamais d'accès anonyme.
 - Réponse en flux avec `Range` (reprise). Le demandeur vérifie taille et SHA-256 **avant** de publier le fichier dans son magasin (écriture temporaire, puis déplacement sans écrasement).
 - Qui possède l'octet n'est pas répliqué : le demandeur interroge les pairs connus, dans l'ordre, jusqu'à trouver l'empreinte (les adresses des pairs sont déjà mémorisées par la réconciliation).

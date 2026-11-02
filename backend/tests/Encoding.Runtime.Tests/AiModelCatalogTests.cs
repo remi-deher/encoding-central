@@ -150,11 +150,11 @@ public sealed class AiModelCatalogTests
     {
         var id = Guid.NewGuid();
         var catalog = new AiModelCatalog("codex-cli", "available", [new("a", "A", ["high"])], DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
-        var node = new AiNodeAvailability(id, "node", ["codex-cli"], Catalogs: [catalog]);
-        Assert.True(AiClusterService.Supports(node, "codex-cli", new("s", "u", Model: "a", ReasoningEffort: "high", NodeId: id)));
-        Assert.False(AiClusterService.Supports(node, "codex-cli", new("s", "u", Model: "a", ReasoningEffort: "max")));
-        Assert.False(AiClusterService.Supports(node, "codex-cli", new("s", "u", Model: "a", NodeId: Guid.NewGuid())));
-        Assert.False(AiClusterService.Supports(node with { Catalogs = [catalog with { State = "stale" }] }, "codex-cli", new("s", "u", Model: "a")));
+        var node = new AiWorkerAvailability(id, "node", ["codex-cli"], Catalogs: [catalog]);
+        Assert.True(AiCentralService.Supports(node, "codex-cli", new("s", "u", Model: "a", ReasoningEffort: "high", NodeId: id)));
+        Assert.False(AiCentralService.Supports(node, "codex-cli", new("s", "u", Model: "a", ReasoningEffort: "max")));
+        Assert.False(AiCentralService.Supports(node, "codex-cli", new("s", "u", Model: "a", NodeId: Guid.NewGuid())));
+        Assert.False(AiCentralService.Supports(node with { Catalogs = [catalog with { State = "stale" }] }, "codex-cli", new("s", "u", Model: "a")));
     }
 
     [Fact]

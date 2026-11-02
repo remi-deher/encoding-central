@@ -23,4 +23,4 @@ internal static class SharedSourceWriteLock
     }
 }
 
-internal sealed class SourceWriteDeferredException() : IOException("Écriture différée : autorisation du cluster indisponible.");
+internal sealed class SourceWriteDeferredException() : IOException("Écriture différée : autorisation du central indisponible.");

@@ -33,7 +33,7 @@ export interface ApiTokenReplicationEntry {
   readonly id: string;
   readonly revoked: boolean;
 }
-/** `tokens` vaut null pour un nœud injoignable : son état est inconnu. */
+/** `tokens` vaut null pour un worker injoignable : son état est inconnu. */
 export interface ApiTokenReplicationNode {
   readonly nodeId: string;
   readonly name: string;
@@ -49,7 +49,7 @@ export interface TokenPropagation {
   readonly tone: 'success' | 'warning' | 'neutral';
 }
 
-/** Propagation d'un jeton aux autres nœuds ; null sur un nœud seul (rien à propager). */
+/** Propagation d'un jeton aux autres workers ; null sur un worker seul (rien à propager). */
 export function tokenPropagation(
   token: Pick<ApiTokenResponse, 'id' | 'isActive'>,
   view: ApiTokenReplicationView | null,
@@ -64,7 +64,7 @@ export function tokenPropagation(
   const suffix = unreachable ? ` · ${unreachable} injoignable${unreachable > 1 ? 's' : ''}` : '';
   const complete = upToDate === answering.length;
   const label = token.isActive
-    ? `Présent sur ${upToDate} nœud${upToDate > 1 ? 's' : ''} sur ${view.nodes.length}${suffix}`
-    : `Révocation reçue par ${upToDate} nœud${upToDate > 1 ? 's' : ''} sur ${view.nodes.length}${suffix}`;
+    ? `Présent sur ${upToDate} worker${upToDate > 1 ? 's' : ''} sur ${view.nodes.length}${suffix}`
+    : `Révocation reçue par ${upToDate} worker${upToDate > 1 ? 's' : ''} sur ${view.nodes.length}${suffix}`;
   return { label, tone: complete && !unreachable ? 'success' : complete ? 'neutral' : 'warning' };
 }

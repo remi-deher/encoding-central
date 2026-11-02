@@ -436,7 +436,7 @@ internal sealed partial class RuntimeFlowExecution
     private async Task<StepOutcome> CheckLibraryAccessAsync(StepContext ctx)
     {
         var node = ctx.Node; var c = ctx.Config;
-        // Ce worker est le nœud d'accès du fichier et le monte directement (accès par transfert : « non »).
+        // Ce worker est le worker d'accès du fichier et le monte directement (accès par transfert : « non »).
         var direct = lease.SourceNodeId == client.NodeId && lease.SourceRoot is not null;
         if (direct && RuntimeHandoffPolicy.LibraryAccessNeedsEncoder(node))
             direct = Encoding.Contracts.Flows.MediaCodecPolicy.ProfileTargetAvailable(lease.Flow, (await capabilities.DiscoverAsync(job.Token)).FirstOrDefault(c => c.ToolId == "ffmpeg"));

@@ -270,13 +270,13 @@ public sealed class PluginConfigurationRepository(DbDataSource dataSource, IData
             && !string.IsNullOrWhiteSpace(groupTarget.GetString()) && (!Guid.TryParse(groupTarget.GetString(),out var groupId) || groupId==Guid.Empty))
             throw new PluginConfigurationValidationException("L'identifiant du groupe destinataire est invalide.");
         if(requireTarget && values.TryGetValue("mode",out var mode) && mode.GetString()=="node" && !provided)
-            throw new PluginConfigurationValidationException("Choisissez le nœud par défaut pour cette destination.");
+            throw new PluginConfigurationValidationException("Choisissez le worker par défaut pour cette destination.");
         if(requireTarget && values.TryGetValue("mode",out mode) && mode.GetString()=="selector"
             && !(values.TryGetValue("targetGroupId",out var group) && group.ValueKind==JsonValueKind.String && Guid.TryParse(group.GetString(),out _))
             && !(values.TryGetValue("requiredLabels",out var labels) && labels.ValueKind==JsonValueKind.String && !string.IsNullOrWhiteSpace(labels.GetString())))
             throw new PluginConfigurationValidationException("Choisissez un groupe ou des étiquettes pour cette destination.");
         if(values.TryGetValue("requiredLabels",out var labelSelector) && labelSelector.ValueKind==JsonValueKind.String
-            && !string.IsNullOrWhiteSpace(labelSelector.GetString()) && !Encoding.Contracts.Nodes.NodeLabelSelector.IsValid(labelSelector.GetString()))
+            && !string.IsNullOrWhiteSpace(labelSelector.GetString()) && !Encoding.Contracts.Nodes.WorkerLabelSelector.IsValid(labelSelector.GetString()))
             throw new PluginConfigurationValidationException("Le filtre d’étiquettes doit utiliser clé ou clé=valeur, séparés par des virgules.");
     }
 

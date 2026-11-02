@@ -13,7 +13,7 @@ public sealed class MediaAssemblyTests
 {
     private sealed class Capabilities : IToolCapabilityProbe
     {
-        public Task<IReadOnlyList<NodeToolCapability>> DiscoverAsync(CancellationToken ct)=>Task.FromResult<IReadOnlyList<NodeToolCapability>>([]);
+        public Task<IReadOnlyList<WorkerToolCapability>> DiscoverAsync(CancellationToken ct)=>Task.FromResult<IReadOnlyList<WorkerToolCapability>>([]);
     }
     private static Dictionary<string,JsonElement> Config(object value)=>JsonSerializer.Deserialize<Dictionary<string,JsonElement>>(JsonSerializer.Serialize(value))!;
 

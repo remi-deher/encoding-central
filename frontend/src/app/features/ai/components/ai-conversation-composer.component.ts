@@ -80,7 +80,7 @@ export const AI_ASSISTANT_FILE_ACCEPT =
           </button>
           <button mat-menu-item type="button" (click)="resourceChosen.emit('node')">
             <app-icon name="server" />
-            <span>Un nœud</span>
+            <span>Un worker</span>
           </button>
           <button mat-menu-item type="button" (click)="resourceChosen.emit('library')">
             <app-icon name="library" />

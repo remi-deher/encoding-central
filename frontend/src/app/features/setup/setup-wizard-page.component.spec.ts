@@ -119,7 +119,7 @@ describe('SetupWizardPageComponent', () => {
     const fixture = TestBed.createComponent(SetupWizardPageComponent);
     fixture.componentInstance['setupSheet'].set({
       name: 'encoding-host',
-      displayName: 'Nœud Salon',
+      displayName: 'Worker Salon',
       agentAvailable: true,
       inventory: {
         operatingSystem: 'Ubuntu 24.04 LTS',
@@ -259,12 +259,12 @@ describe('SetupWizardPageComponent', () => {
     const component = fixture.componentInstance;
 
     fillAdmin(component);
-    component['clusterName'].set('Mon Cluster Maison');
+    component['clusterName'].set('Mon Central Maison');
     await component['submitCreateCluster']();
 
     expect(setupFn).toHaveBeenCalledWith({
       nodeDisplayName: 'Serveur Salon',
-      clusterName: 'Mon Cluster Maison',
+      clusterName: 'Mon Central Maison',
       username: 'admin',
       password: VALID_PASSWORD,
     });

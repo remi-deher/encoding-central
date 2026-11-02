@@ -22,7 +22,7 @@ const applicationRoutes: Routes = [
   {
     path: 'worker',
     pathMatch: 'full',
-    redirectTo: 'nodes',
+    redirectTo: 'workers',
   },
   {
     path: 'activity',
@@ -145,7 +145,7 @@ const applicationRoutes: Routes = [
         keywords: ['polices', 'fonts', 'fichiers', 'profils', 'sous-titres'],
       },
       description:
-        'Partagez des polices, des profils et des fichiers de sous-titres avec tous les nœuds du cluster.',
+        'Partagez des polices, des profils et des fichiers de sous-titres avec tous les workers du central.',
     },
   },
   {
@@ -182,7 +182,7 @@ const applicationRoutes: Routes = [
         order: 1,
         keywords: ['médias', 'bibliothèques'],
       },
-      description: 'Gérez les bibliothèques multimédias et les points d’accès des nœuds.',
+      description: 'Gérez les bibliothèques multimédias et les points d’accès des workers.',
     },
   },
   {
@@ -239,26 +239,26 @@ const applicationRoutes: Routes = [
     },
   },
   {
-    path: 'nodes',
+    path: 'workers',
     loadComponent: () =>
       import('./features/nodes/node-catalog-page.component').then(
         (module) => module.NodeCatalogPageComponent,
       ),
     data: {
-      title: 'Nœuds',
+      title: 'Workers',
       navigation: {
         group: 'Infrastructure',
-        label: 'Nœuds',
+        label: 'Workers',
         glyph: '▣',
         order: 1,
         keywords: ['workers', 'serveurs'],
       },
-      description: 'Consultez les rôles, capacités et états des installations du cluster.',
+      description: 'Consultez les rôles, capacités et états des installations du central.',
     },
   },
   {
-    path: 'node-groups',
-    redirectTo: () => '/nodes?tab=groups',
+    path: 'worker-groups',
+    redirectTo: () => '/workers?tab=groups',
   },
   {
     path: 'plugins',
@@ -283,7 +283,7 @@ const applicationRoutes: Routes = [
           'intégrations',
         ],
       },
-      description: 'Gérez les plugins, les outils média et les dépôts configurés pour le cluster.',
+      description: 'Gérez les plugins, les outils média et les dépôts configurés pour le central.',
     },
   },
   {
@@ -341,7 +341,7 @@ const publicRoutes: Routes = [
   },
 ];
 
-/** Toute route de gestion exige une session ; l'ancienne console redirige vers la page Nœuds protégée. */
+/** Toute route de gestion exige une session ; l'ancienne console redirige vers la page Workers protégée. */
 export const routes: Routes = [
   ...publicRoutes,
   ...applicationRoutes.map((route) =>

@@ -4,5 +4,5 @@ namespace Encoding.NodeAgent.Services;
 
 public interface IToolCapabilityProbe
 {
-    Task<IReadOnlyList<NodeToolCapability>> DiscoverAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<WorkerToolCapability>> DiscoverAsync(CancellationToken cancellationToken);
 }

@@ -5,7 +5,7 @@ namespace Encoding.Api.Executions;
 
 /// <summary>
 /// Autorisation d'écrire sur une source. Le central est l'unique serveur ([ADR 0036](../../../../docs/architecture/adr/0036-separation-stricte-central-worker.md)) :
-/// il n'y a plus de pair à attendre. Reste à vérifier que le nœud qui écrit est admis, non en quarantaine et compatible.
+/// il n'y a plus de pair à attendre. Reste à vérifier que le worker qui écrit est admis, non en quarantaine et compatible.
 /// L'exclusion sur le système de fichiers reste vérifiée par le worker qui écrit.
 /// </summary>
 public sealed class SourceWriteGuard(DbDataSource db)

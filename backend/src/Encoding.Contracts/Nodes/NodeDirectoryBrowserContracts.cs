@@ -1,17 +1,17 @@
 namespace Encoding.Contracts.Nodes;
 
-public sealed record NodeDirectoryBrowserRequest(string? Path);
-public sealed record NodeDirectoryBrowserEntry(string Name, string Path);
-public sealed record NodeDirectoryBrowseClaim(Guid Id, string Path);
-public sealed record NodeDirectoryBrowseCompletion(
-    IReadOnlyList<NodeDirectoryBrowserEntry>? Entries,
+public sealed record WorkerDirectoryBrowserRequest(string? Path);
+public sealed record WorkerDirectoryBrowserEntry(string Name, string Path);
+public sealed record WorkerDirectoryBrowseClaim(Guid Id, string Path);
+public sealed record WorkerDirectoryBrowseCompletion(
+    IReadOnlyList<WorkerDirectoryBrowserEntry>? Entries,
     bool HasMore,
     string? Error);
-public sealed record NodeDirectoryBrowserResponse(
+public sealed record WorkerDirectoryBrowserResponse(
     Guid Id,
     Guid NodeId,
     string Path,
     string State,
-    IReadOnlyList<NodeDirectoryBrowserEntry> Entries,
+    IReadOnlyList<WorkerDirectoryBrowserEntry> Entries,
     bool HasMore,
     string? Error);

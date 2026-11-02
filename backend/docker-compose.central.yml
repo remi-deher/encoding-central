@@ -11,7 +11,7 @@ services:
       target: central
     hostname: encoding-central
     environment:
-      Node__Name: encoding-central
+      Worker__Name: encoding-central
     ports:
       - "${CENTRAL_API_PORT:-5080}:8080"
     volumes:
@@ -29,7 +29,7 @@ services:
       target: worker
     hostname: encoding-worker
     environment:
-      Node__Name: encoding-worker
+      Worker__Name: encoding-worker
       WorkerUi__Port: 8081
     ports:
       - "5081:8081"

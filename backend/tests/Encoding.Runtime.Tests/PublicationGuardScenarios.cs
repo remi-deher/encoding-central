@@ -99,7 +99,7 @@ internal static class PublicationGuardScenarios
         Check((await StepAsync(new Scripted(() => "error"), true)).Verdict.Allowed, "A guard without an opinion (no path mapping) does not prevent a step from writing.");
         Check((await StepAsync(new NoGuardInvoker(), true, guards: [])).Verdict.Allowed, "Without a configured guard a step writes immediately.");
 
-        // Le contrat survit au transport JSON entre serveur et nœud d'accès.
+        // Le contrat survit au transport JSON entre serveur et worker d'accès.
         var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         var roundTrip = JsonSerializer.Deserialize<RuntimeTransfer>(JsonSerializer.Serialize(Transfer(Guard()), json), json)!;
         Check(roundTrip.Guards is { Count: 1 } && roundTrip.Guards[0].WaitOutputs.SequenceEqual(["playing"]) && roundTrip.LibraryId is not null, "Guards travel with the transfer.");

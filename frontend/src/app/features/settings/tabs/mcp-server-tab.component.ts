@@ -52,7 +52,7 @@ type ClientPlatform = 'claude' | 'cursor' | 'antigravity' | 'stdio';
   template: `
     <app-configuration-section
       title="Assistants externes (MCP)"
-      description="Donnez accès au cluster à votre assistant ou à votre éditeur. Lecture seule par défaut."
+      description="Donnez accès au central à votre assistant ou à votre éditeur. Lecture seule par défaut."
       icon="terminal"
     >
       <button section-actions matButton="tonal" type="button" (click)="openClient()">

@@ -6,39 +6,39 @@ public static class EnrollmentWindowEndpoints
 {
     public static void MapEnrollmentWindowEndpoints(this WebApplication app)
     {
-        var window = app.MapGroup("/api/v1/nodes/enrollment-window").WithTags("Nodes");
-        window.MapGet("", async (NodeManagementService service, CancellationToken ct) =>
+        var window = app.MapGroup("/api/v1/workers/enrollment-window").WithTags("Nodes");
+        window.MapGet("", async (WorkerManagementService service, CancellationToken ct) =>
             Results.Ok(await service.GetEnrollmentWindowAsync(ct))).WithName("GetEnrollmentWindow");
-        window.MapPut("", async (OpenEnrollmentWindowRequest request, NodeManagementService service, CancellationToken ct) =>
+        window.MapPut("", async (OpenEnrollmentWindowRequest request, WorkerManagementService service, CancellationToken ct) =>
         {
-            if (request.Minutes is < 1 or > NodeManagementService.MaximumEnrollmentWindowMinutes)
+            if (request.Minutes is < 1 or > WorkerManagementService.MaximumEnrollmentWindowMinutes)
                 return (IResult)Results.ValidationProblem(new Dictionary<string, string[]>
                 {
-                    ["minutes"] = [$"La durée doit être comprise entre 1 et {NodeManagementService.MaximumEnrollmentWindowMinutes} minutes."],
+                    ["minutes"] = [$"La durée doit être comprise entre 1 et {WorkerManagementService.MaximumEnrollmentWindowMinutes} minutes."],
                 });
             return Results.Ok(await service.OpenEnrollmentWindowAsync(request.Minutes, ct));
         }).WithName("OpenEnrollmentWindow");
-        window.MapDelete("", async (NodeManagementService service, CancellationToken ct) =>
+        window.MapDelete("", async (WorkerManagementService service, CancellationToken ct) =>
         {
             await service.CloseEnrollmentWindowAsync(ct);
             return Results.NoContent();
         }).WithName("CloseEnrollmentWindow");
 
         // Première liaison implicite (0040) : réservée aux administrateurs, comme toute écriture de gestion.
-        var firstLink = app.MapGroup("/api/v1/nodes/first-link").WithTags("Nodes");
-        firstLink.MapGet("", async (NodeManagementService service, CancellationToken ct) =>
+        var firstLink = app.MapGroup("/api/v1/workers/first-link").WithTags("Nodes");
+        firstLink.MapGet("", async (WorkerManagementService service, CancellationToken ct) =>
             Results.Ok(await service.GetFirstLinkAcceptanceAsync(ct))).WithName("GetFirstLinkAcceptance");
-        firstLink.MapPut("", async (OpenEnrollmentWindowRequest request, NodeManagementService service, HttpContext http, CancellationToken ct) =>
+        firstLink.MapPut("", async (OpenEnrollmentWindowRequest request, WorkerManagementService service, HttpContext http, CancellationToken ct) =>
         {
-            if (request.Minutes is < 1 or > NodeManagementService.MaximumFirstLinkMinutes)
+            if (request.Minutes is < 1 or > WorkerManagementService.MaximumFirstLinkMinutes)
                 return (IResult)Results.ValidationProblem(new Dictionary<string, string[]>
                 {
-                    ["minutes"] = [$"La durée doit être comprise entre 1 et {NodeManagementService.MaximumFirstLinkMinutes} minutes."],
+                    ["minutes"] = [$"La durée doit être comprise entre 1 et {WorkerManagementService.MaximumFirstLinkMinutes} minutes."],
                 });
             var administrator = http.User.Identity?.Name ?? "administrateur";
             return Results.Ok(await service.EnableFirstLinkAcceptanceAsync(request.Minutes, administrator, ct));
         }).WithName("EnableFirstLinkAcceptance");
-        firstLink.MapDelete("", async (NodeManagementService service, CancellationToken ct) =>
+        firstLink.MapDelete("", async (WorkerManagementService service, CancellationToken ct) =>
         {
             await service.DisableFirstLinkAcceptanceAsync(ct);
             return Results.NoContent();

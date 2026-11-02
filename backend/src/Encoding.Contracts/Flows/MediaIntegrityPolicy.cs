@@ -9,7 +9,7 @@ public static class MediaIntegrityPolicy
     public static string? DescribeFailure(string? reason) => reason switch {
         "invalid_configuration" => "Configuration du contrôle invalide.",
         "artifact_changed" => "Le fichier a changé ; contrôle et publication refusés.",
-        "ffmpeg_unavailable" => "FFmpeg est indisponible sur ce nœud.",
+        "ffmpeg_unavailable" => "FFmpeg est indisponible sur ce worker.",
         "gpu_decoder_unavailable" => "Aucun décodeur GPU utilisable pour ce média ; le secours CPU est interdit.",
         "gpu_video_required" => "Le GPU demandé nécessite une piste vidéo compatible.",
         "duration_unavailable" => "La durée est indisponible ; les passages représentatifs ne peuvent pas être choisis.",

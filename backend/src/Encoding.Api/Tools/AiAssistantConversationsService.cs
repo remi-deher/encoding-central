@@ -136,7 +136,7 @@ public sealed class AiAssistantConversationsService(AiAssistantSupportService su
         await support.Store.DeleteAsync(AiAssistantSupportService.ConversationKey(stored.OwnerId, stored.Conversation.Id), ct);
         await support.Store.DeleteAsync(AiAssistantSupportService.SessionOwnerKey(stored.Conversation.Id), ct);
         await support.Store.DeleteAsync("session/" + stored.Conversation.Id, ct);
-            await support.Store.DeleteAsync(AiClusterService.CoordinatorKey(stored.Conversation.Id), ct);
+            await support.Store.DeleteAsync(AiCentralService.CoordinatorKey(stored.Conversation.Id), ct);
         for (var attempt = 1; attempt <= AiAssistantSupportService.MaxTitleAttemptTurns; attempt++)
         {
             var titleSessionId = $"{stored.Conversation.Id.Split('.')[0]}.{AiAssistantSupportService.TitleRequestId(stored.Conversation.Id, attempt):N}";

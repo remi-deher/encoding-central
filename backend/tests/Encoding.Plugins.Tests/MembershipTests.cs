@@ -10,7 +10,7 @@ using static Encoding.Plugins.Tests.Support;
 
 namespace Encoding.Plugins.Tests;
 
-/// <summary>Rattachement d'un nœud à un cluster : départ, changement en deux phases et cluster injoignable.</summary>
+/// <summary>Rattachement d'un worker à un central : départ, changement en deux phases et cluster injoignable.</summary>
 internal static class MembershipTests
 {
     public static async Task RunAsync()
@@ -22,7 +22,7 @@ internal static class MembershipTests
         var clusterBuilder = WebApplication.CreateBuilder();
         clusterBuilder.WebHost.UseUrls("http://127.0.0.1:0");
         await using var cluster = clusterBuilder.Build();
-        cluster.MapPost("/api/v1/nodes/{id}/leave", (string id, HttpRequest request) =>
+        cluster.MapPost("/api/v1/workers/{id}/leave", (string id, HttpRequest request) =>
         {
             leaves.Add((request.Path.Value!, request.Headers["X-Node-Token"].ToString()));
             return Results.StatusCode((int)leaveStatus);
@@ -36,13 +36,13 @@ internal static class MembershipTests
             var secretFile = Path.Combine(data, "secret");
             File.WriteAllText(secretFile, "secret");
             var localUrl = "http://127.0.0.1:18080/";
-            var options = new NodeAgentOptions("membership", [Encoding.Contracts.Nodes.NodeRole.Server, Encoding.Contracts.Nodes.NodeRole.Worker], 1, data,
+            var options = new WorkerAgentOptions("membership", [Encoding.Contracts.Nodes.NodeRole.Server, Encoding.Contracts.Nodes.NodeRole.Worker], 1, data,
                 localUrl, false, TimeSpan.FromSeconds(10), 8081, secretFile);
             var store = new WorkerIdentityStore(options);
-            var enrollment = new WorkerEnrollmentService(options, store, new WorkerClusterDiscovery(options, NullLogger<WorkerClusterDiscovery>.Instance),
+            var enrollment = new WorkerEnrollmentService(options, store, new WorkerCentralDiscovery(options, NullLogger<WorkerCentralDiscovery>.Instance),
                 null!, NullLogger<WorkerEnrollmentService>.Instance, Microsoft.Extensions.Options.Options.Create(new Microsoft.AspNetCore.Http.Json.JsonOptions()));
 
-            // Rattaché au cluster distant : le départ le prévient avec son jeton, efface l'identité et efface l'identité locale.
+            // Rattaché au central distant : le départ le prévient avec son jeton, efface l'identité et efface l'identité locale.
             var joined = await store.SaveEnrollmentAsync(Guid.NewGuid().ToString("D"), "Cluster B", clusterUrl, CancellationToken.None);
             await store.MarkEnrolledAsync(CancellationToken.None);
             leaveStatus = HttpStatusCode.Conflict;
@@ -54,16 +54,16 @@ internal static class MembershipTests
             leaveStatus = HttpStatusCode.NoContent;
             await enrollment.LeaveAsync(CancellationToken.None);
             var left = await store.GetAsync(CancellationToken.None);
-            Check(leaves.Last().Path == $"/api/v1/nodes/{joined.Id:D}/leave" && leaves.Last().Token == joined.NodeToken, "The node tells its cluster, authenticated by its own token.");
+            Check(leaves.Last().Path == $"/api/v1/workers/{joined.Id:D}/leave" && leaves.Last().Token == joined.NodeToken, "The node tells its cluster, authenticated by its own token.");
             Check(!left.HasCredentials && left.Id != joined.Id, "After leaving, the node restarts from a fresh identity (a removed identity never comes back).");
 
             // Cluster distant injoignable : le départ reste possible, localement.
-            var orphan = await store.SaveEnrollmentAsync(Guid.NewGuid().ToString("D"), "Cluster perdu", "http://127.0.0.1:1/", CancellationToken.None);
+            var orphan = await store.SaveEnrollmentAsync(Guid.NewGuid().ToString("D"), "Central perdu", "http://127.0.0.1:1/", CancellationToken.None);
             await enrollment.LeaveAsync(CancellationToken.None);
             Check(!(await store.GetAsync(CancellationToken.None)).HasCredentials, "An unreachable cluster does not trap the node.");
             Check(orphan.NodeToken is not null, "Sanity: the abandoned enrollment had credentials.");
 
-            // Changement de cluster en deux phases (0040) : l'ancien rattachement reste intact jusqu'à la confirmation du nouveau.
+            // Changement de central en deux phases (0040) : l'ancien rattachement reste intact jusqu'à la confirmation du nouveau.
             var clusterA = await store.SaveEnrollmentAsync(Guid.NewGuid().ToString("D"), "Cluster A", clusterUrl, CancellationToken.None);
             await store.MarkEnrolledAsync(CancellationToken.None);
             await store.BeginSwitchAsync(TimeSpan.FromMinutes(5), CancellationToken.None);
@@ -76,7 +76,7 @@ internal static class MembershipTests
             leaves.Clear();
             Check(await store.RollbackSwitchAsync("annulé à la main", CancellationToken.None) && (await store.GetAsync(CancellationToken.None)).Id == clusterA.Id, "A switch can be cancelled by hand.");
 
-            // Échéance dépassée sans approbation : retour automatique à l'ancien cluster, avec la raison.
+            // Échéance dépassée sans approbation : retour automatique à l'ancien central, avec la raison.
             await store.BeginSwitchAsync(TimeSpan.FromSeconds(-1), CancellationToken.None);
             await store.SaveEnrollmentAsync(Guid.NewGuid().ToString("D"), "Cluster B", clusterUrl, CancellationToken.None);
             Check(await enrollment.RollbackExpiredSwitchAsync(CancellationToken.None), "A switch whose deadline passed is rolled back.");
@@ -85,20 +85,20 @@ internal static class MembershipTests
             Check(restored.SwitchFailure is { } failure && failure.Contains("Cluster B") && leaves.Count == 0,
                 "The reason is kept and the old cluster was never told to remove the node.");
 
-            // Confirmation du nouveau cluster : l'ancien est prévenu, son identité oubliée.
+            // Confirmation du nouveau central : l'ancien est prévenu, son identité oubliée.
             await store.BeginSwitchAsync(TimeSpan.FromMinutes(5), CancellationToken.None);
             var arrived = await store.SaveEnrollmentAsync(Guid.NewGuid().ToString("D"), "Cluster B", "http://127.0.0.1:2/", CancellationToken.None);
             await store.MarkEnrolledAsync(CancellationToken.None);
             await enrollment.CompleteSwitchAsync(CancellationToken.None);
             var done = await store.GetAsync(CancellationToken.None);
             Check(done.IsEnrolled && done.Id == arrived.Id && !done.IsSwitching, "After confirmation the node belongs to the new cluster only.");
-            Check(leaves.Single().Path == $"/api/v1/nodes/{clusterA.Id:D}/leave" && leaves.Single().Token == clusterA.NodeToken, "The old cluster is told to remove the node, with the old token.");
+            Check(leaves.Single().Path == $"/api/v1/workers/{clusterA.Id:D}/leave" && leaves.Single().Token == clusterA.NodeToken, "The old cluster is told to remove the node, with the old token.");
 
             // Le code de vérification est le même des deux côtés et change avec l'identité.
-            var code = NodeVerificationCode.FromToken(arrived.Id, arrived.NodeToken!);
-            Check(code.Length == NodeVerificationCode.Length && code == NodeVerificationCode.FromTokenHash(arrived.Id, System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(arrived.NodeToken!))),
+            var code = WorkerVerificationCode.FromToken(arrived.Id, arrived.NodeToken!);
+            Check(code.Length == WorkerVerificationCode.Length && code == WorkerVerificationCode.FromTokenHash(arrived.Id, System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(arrived.NodeToken!))),
                 "The node and the cluster compute the same verification code.");
-            Check(code != NodeVerificationCode.FromToken(Guid.NewGuid(), arrived.NodeToken!) && code != NodeVerificationCode.FromToken(arrived.Id, "autre-jeton"), "Another identity has another code.");
+            Check(code != WorkerVerificationCode.FromToken(Guid.NewGuid(), arrived.NodeToken!) && code != WorkerVerificationCode.FromToken(arrived.Id, "autre-jeton"), "Another identity has another code.");
 
             Console.WriteLine("PASS: cluster membership (leave, two-phase switch, rollback, verification code).");
         }

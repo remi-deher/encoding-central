@@ -40,13 +40,13 @@ import {
   template: `
     <app-configuration-section
       title="Adresse publique"
-      description="Réglage propre à ce nœud."
+      description="Réglage propre à ce worker."
       icon="link"
     >
       <app-setting-group>
         <app-setting-row
           label="URL publique"
-          hint="Adresse par laquelle ce nœud est joignable. Elle remplace celle du navigateur dans les adresses à copier (webhooks, Prometheus, assistants MCP). Laissez vide pour utiliser l’adresse de la page."
+          hint="Adresse par laquelle ce worker est joignable. Elle remplace celle du navigateur dans les adresses à copier (webhooks, Prometheus, assistants MCP). Laissez vide pour utiliser l’adresse de la page."
           [stacked]="true"
         >
           <mat-form-field appearance="outline" class="field" subscriptSizing="dynamic">
@@ -70,7 +70,7 @@ import {
     </app-configuration-section>
     <app-configuration-section
       title="Reverse proxy"
-      description="Réglage propre à ce nœud."
+      description="Réglage propre à ce worker."
       icon="server"
     >
       <button section-actions matButton="tonal" type="button" (click)="openGenerator()">

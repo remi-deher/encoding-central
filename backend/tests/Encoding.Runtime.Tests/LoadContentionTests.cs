@@ -12,7 +12,7 @@ using Xunit;
 namespace Encoding.Runtime.Tests;
 
 /// <summary>
-/// Régressions de charge sur la base SQLite d'un nœud (verrou d'écriture unique) : une grosse file ne doit ni bloquer les heartbeats,
+/// Régressions de charge sur la base SQLite d'un worker (verrou d'écriture unique) : une grosse file ne doit ni bloquer les heartbeats,
 /// ni produire d'erreur « database is locked », ni faire échouer des exécutions saines quand un heartbeat est en retard.
 /// Les bornes sont larges : elles détectent une régression, pas une performance précise.
 /// </summary>
@@ -26,7 +26,7 @@ public sealed class LoadContentionTests
     {
         var database = await TestDatabase.CreateSqliteAsync(prefix);
         await DatabaseMigrator.ApplyAsync(database.Db, Harness.RepositoryRoot(), CancellationToken.None);
-        var repository = new NodeRepository(database.Db);
+        var repository = new WorkerRepository(database.Db);
         var nodes = new Guid[nodeCount];
         for (var i = 0; i < nodeCount; i++)
         {
@@ -72,9 +72,9 @@ public sealed class LoadContentionTests
         var cluster = await SeedAsync("load-mixed", nodeCount, queued);
         await using var _ = cluster.Database;
         var db = cluster.Database.Db;
-        var nodes = new NodeRepository(db);
+        var nodes = new WorkerRepository(db);
         var executions = new ExecutionRepository(db);
-        var recovery = new RuntimeRecoveryService(db, NullLogger<RuntimeRecoveryService>.Instance, presence: new NodePresenceOptions(TimeSpan.FromSeconds(30)));
+        var recovery = new RuntimeRecoveryService(db, NullLogger<RuntimeRecoveryService>.Instance, presence: new WorkerPresenceOptions(TimeSpan.FromSeconds(30)));
         var failures = new ConcurrentQueue<string>();
         var slowestHeartbeat = 0L; var slowestOverview = 0L; var heartbeats = 0; var overviews = 0; var passes = 0;
         using var stop = new CancellationTokenSource(duration);
@@ -95,7 +95,7 @@ public sealed class LoadContentionTests
         for (var i = 0; i < cluster.Nodes.Length; i++)
         {
             var node = cluster.Nodes[i];
-            var request = new NodeHeartbeatRequest("node-" + i, [NodeRole.Server, NodeRole.Worker], 1, [], ProtocolVersion: ClusterProtocol.Current, SessionNonce: "session-" + i);
+            var request = new WorkerHeartbeatRequest("node-" + i, [NodeRole.Server, NodeRole.Worker], 1, [], Version: AppVersion.Current, SessionNonce: "session-" + i);
             work.Add(Loop("heartbeat", async () =>
             {
                 var clock = Stopwatch.StartNew();
@@ -131,15 +131,15 @@ public sealed class LoadContentionTests
         var cluster = await SeedAsync("load-delayed", 2, 40);
         await using var _ = cluster.Database;
         var db = cluster.Database.Db;
-        var recovery = new RuntimeRecoveryService(db, NullLogger<RuntimeRecoveryService>.Instance, presence: new NodePresenceOptions(TimeSpan.FromSeconds(30)));
+        var recovery = new RuntimeRecoveryService(db, NullLogger<RuntimeRecoveryService>.Instance, presence: new WorkerPresenceOptions(TimeSpan.FromSeconds(30)));
 
-        // Le nœud qui détient l'accès direct ne s'est pas manifesté depuis 90 s (heartbeat retardé par un verrou ou un redémarrage).
+        // Le worker qui détient l'accès direct ne s'est pas manifesté depuis 90 s (heartbeat retardé par un verrou ou un redémarrage).
         await Exec(db, "UPDATE cluster_nodes SET last_seen_at = strftime('%Y-%m-%d %H:%M:%f', 'now', '-90 seconds') || '000Z'");
         for (var i = 0; i < 3; i++) await recovery.ProcessOnceAsync(CancellationToken.None);
         Assert.Equal(40L, await Scalar(db, "SELECT count(*) FROM executions WHERE state = 'queued'"));
         Assert.Equal(0L, await Scalar(db, "SELECT count(*) FROM executions WHERE state = 'failed'"));
 
-        // Un nœud réellement perdu (absent depuis 30 minutes) finit par faire échouer les exécutions qui dépendent de lui.
+        // Un worker réellement perdu (absent depuis 30 minutes) finit par faire échouer les exécutions qui dépendent de lui.
         await Exec(db, "UPDATE cluster_nodes SET last_seen_at = strftime('%Y-%m-%d %H:%M:%f', 'now', '-30 minutes') || '000Z'");
         for (var i = 0; i < 3; i++) await recovery.ProcessOnceAsync(CancellationToken.None);
         Assert.Equal(40L, await Scalar(db, "SELECT count(*) FROM executions WHERE state = 'failed'"));

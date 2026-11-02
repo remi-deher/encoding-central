@@ -103,7 +103,7 @@ test('an old agent without GPU data says so instead of claiming none', () => {
 
 test('a standalone node names no cluster and an invalid date stays unknown', () => {
   const sheet = localNodeSheet({ ...base, standalone: true, clusterName: null });
-  assert.equal(sheet.subtitle, 'Nœud autonome');
+  assert.equal(sheet.subtitle, 'Worker autonome');
   assert.equal(formatLastSignal('n’importe quoi'), null);
 });
 
@@ -116,7 +116,7 @@ test('a member without a local server still shows its technical information from
   assert.equal(section(sheet, 'capabilities').items[0].label, 'Moteur d’accélération');
   const [load, signal] = section(sheet, 'state').metrics;
   assert.equal(load.value, 'Indisponible');
-  assert.match(signal.detail, /serveur du cluster/);
+  assert.match(signal.detail, /serveur du central/);
 });
 
 test('cluster join step waiting highlights the verification code as heroCode', () => {
@@ -151,5 +151,5 @@ test('formatNodeLabel returns single name when identical or case-insensitive mat
 test('formatNodeLabel falls back gracefully when either name is missing', () => {
   assert.equal(formatNodeLabel('ENCODING-50', null), 'ENCODING-50');
   assert.equal(formatNodeLabel('', 'TRUENAS'), 'TRUENAS');
-  assert.equal(formatNodeLabel('', ''), 'Nœud inconnu');
+  assert.equal(formatNodeLabel('', ''), 'Worker inconnu');
 });

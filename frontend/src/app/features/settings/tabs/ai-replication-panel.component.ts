@@ -26,14 +26,14 @@ const WHEN = new Intl.DateTimeFormat('fr-FR', {
   minute: '2-digit',
 });
 
-/** Date reçue d'un autre nœud : une valeur absente ou illisible (nœud d'une autre version) ne doit jamais faire échouer l'affichage. */
+/** Date reçue d'un autre worker : une valeur absente ou illisible (worker d'une autre version) ne doit jamais faire échouer l'affichage. */
 export function formatSyncedAt(value: unknown): string | null {
   if (typeof value !== 'string' && typeof value !== 'number') return null;
   const time = new Date(value).getTime();
   return Number.isNaN(time) ? null : WHEN.format(time).replace(',', '');
 }
 
-/** Où chaque connexion IA du cluster est présente, et si chaque nœud est à jour (état déclaré par le nœud lui-même). */
+/** Où chaque connexion IA du central est présente, et si chaque worker est à jour (état déclaré par le worker lui-même). */
 @Component({
   selector: 'app-ai-replication-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -41,8 +41,8 @@ export function formatSyncedAt(value: unknown): string | null {
     @for (row of rows(); track row.id) {
       @if (row.reconnect) {
         <p class="banner" role="status">
-          <strong>{{ row.name }}</strong> est enregistré dans le cluster mais doit être reconnecté
-          sur {{ row.reconnect }} nœud{{ row.reconnect > 1 ? 's' : '' }}.
+          <strong>{{ row.name }}</strong> est enregistré dans le central mais doit être reconnecté
+          sur {{ row.reconnect }} worker{{ row.reconnect > 1 ? 's' : '' }}.
         </p>
       }
     }
@@ -51,7 +51,7 @@ export function formatSyncedAt(value: unknown): string | null {
         <header>
           <h4>{{ row.name }}</h4>
           <span>{{
-            row.replicated ? 'Connexion partagée par le cluster' : 'Local à chaque nœud'
+            row.replicated ? 'Connexion partagée par le central' : 'Local à chaque worker'
           }}</span>
         </header>
         <ul>
@@ -67,7 +67,7 @@ export function formatSyncedAt(value: unknown): string | null {
         </ul>
       </article>
     } @empty {
-      <p>Disponibilité du cluster indisponible.</p>
+      <p>Disponibilité du central indisponible.</p>
     }
   `,
   styles: `
@@ -187,11 +187,11 @@ export class AiReplicationPanelComponent {
         ...base,
         label: 'À reconnecter',
         tone: 'warning',
-        detail: 'Connexion refusée sur ce nœud',
+        detail: 'Connexion refusée sur ce worker',
       };
     const status = node.credentials?.find((c) => c.provider === id);
     if (!status)
-      return { ...base, label: 'État inconnu', tone: 'muted', detail: 'Nœud à mettre à jour ?' };
+      return { ...base, label: 'État inconnu', tone: 'muted', detail: 'Worker à mettre à jour ?' };
     if (status.state === 'absent')
       return { ...base, label: 'Aucune connexion', tone: 'muted', detail: null };
     const behind = status.state === 'pending' || (status.revision ?? 0) < latest;

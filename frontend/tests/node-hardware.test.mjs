@@ -17,7 +17,7 @@ const ffmpeg = (checks, accelerationTypes = []) => ({
   encoderChecks: checks.map(([encoderId, status]) => ({ encoderId, status })),
 });
 
-test('un nœud sans worker n’a pas d’accélérateur applicable', () => {
+test('un worker sans worker n’a pas d’accélérateur applicable', () => {
   assert.deepEqual(nodeAcceleratorBadges(node({ roles: ['server'] })), ['Non applicable']);
 });
 
@@ -168,7 +168,7 @@ test('carte : un accélérateur vérifié devient principal avec son ton', () =>
   assert.equal(accelerator.folded, undefined);
 });
 
-test('carte : charge inconnue ou nœud hors ligne n’affiche pas de jauge', () => {
+test('carte : charge inconnue ou worker hors ligne n’affiche pas de jauge', () => {
   const offline = nodeMemberSections(node({ status: 'offline', maxConcurrentTasks: 2 }), {
     activeTasks: 1,
     libraryAccess: 'x',

@@ -15,7 +15,7 @@ public sealed class AiClientFactory(
 
     public IAiTextClient CreateClient(string? preferredProvider = null, bool localOnly = false)
     {
-        if (services is not null) return new ClusterClient(services.GetRequiredService<AiClusterService>(), preferredProvider, localOnly);
+        if (services is not null) return new CentralClient(services.GetRequiredService<AiCentralService>(), preferredProvider, localOnly);
         return CreateLocalClient(preferredProvider);
     }
 
@@ -67,7 +67,7 @@ public sealed class AiClientFactory(
             loggerFactory?.CreateLogger<CliAiTextClient>());
     }
 
-    private sealed class ClusterClient(AiClusterService cluster, string? provider, bool localOnly) : IAiTextClient
+    private sealed class CentralClient(AiCentralService cluster, string? provider, bool localOnly) : IAiTextClient
     {
         public Task<AiCompletionResult> GenerateTextAsync(AiPrompt prompt, CancellationToken ct = default) => cluster.GenerateAsync(provider, prompt, ct, localOnly);
     }

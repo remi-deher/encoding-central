@@ -33,18 +33,18 @@ Déjà livré (PR #205), complété par l'ADR [0029](adr/0029-store-plugins-outi
 ### 8. ~~Aucun déclencheur « après publication »~~ — traitée
 Résolue par l'ADR [0003](adr/0003-publication-etape-de-flow.md) : le bloc `base-publish-result` publie au milieu du flow et les blocs Plex, Radarr, Sonarr, Jellyfin le suivent. `media.published` reste un événement d'audit. Reste : un runner réel n'a pas encore exécuté le bloc de bout en bout, et le modèle de flow livré (FileFlows V3) n'utilise pas encore ce bloc.
 
-### 9. Compatibilité entre versions de nœuds
+### 9. Compatibilité entre versions de nœuds — décidée (2026-11-02, [ADR 0039](adr/0039-version-exacte-worker-central.md))
+Un worker doit avoir la version exacte du central ; remplace le contrôle `ClusterProtocol`. Le texte d'origine suit.
 Seule la version de protocole (`Current = 1`) est contrôlée. Pas de plage de schéma, pas de règle « serveurs avant workers ». Les migrations doivent rester additives en attendant.
 
 ### 10. Séparation stricte central / worker et retrait du maillage (2026-11-02)
 Décidés par l'[ADR 0036](adr/0036-separation-stricte-central-worker.md) : central autonome et unique autorité, worker sans base, aucune passation, **maillage multi-serveurs retiré** (réplication, journal, pairs, capture des changements, transferts et propriété de tâches entre serveurs). Reste :
-- **Résidus** : `task_ownership` et `task_server_identity` subsistent (le central est l'unique propriétaire) et pourraient être retirés avec le prédicat `TaskOwnershipRepository.ActiveSql` ; la route `GET /api/v1/executions/{id}/ownership` ne sert plus à l'interface.
+- **Résidus retirés (2026-11-02)** : `task_ownership`, `task_server_identity`, `TaskOwnershipRepository`/`ActiveSql` et la route `GET /api/v1/executions/{id}/ownership` (migration 0068). Restent : le mode de cession `server` des blocs `nodes-handoff` (aujourd'hui refusé à l'exécution), l'identité `CentralPeerIdentityStore`, les tables `cluster_identity`/`cluster_sync_registers`, les mots « cluster » et « nœud » (renommage vers « worker » à faire par phases).
 - **Worker et SSE** : l'interface du worker doit consommer le SSE du central ; l'attribution des tâches reste par heartbeat et baux.
-- **Tests multi-conteneurs** : `DockerClusterTests` (images `central` et `worker`, worker tué en plein ffmpeg) et `WorkerProcessLossTests` ont été exécutés le 2026-11-02 en local et passent. Le scénario de compatibilité avec la dernière image worker publiée reste ignoré tant qu'aucune image `encoding-worker` n'est publiée (`ENCODING_TEST_PREVIOUS_WORKER_IMAGE`). La CI de promotion n'a pas encore exécuté les workflows réécrits.
+- **Tests multi-conteneurs** : `DockerCentralTests` (images `central` et `worker`, worker tué en plein ffmpeg) et `WorkerProcessLossTests` ont été exécutés le 2026-11-02 en local et passent. Le scénario de compatibilité avec la dernière image worker publiée reste ignoré tant qu'aucune image `encoding-worker` n'est publiée (`ENCODING_TEST_PREVIOUS_WORKER_IMAGE`). La CI de promotion n'a pas encore exécuté les workflows réécrits.
 
 ## Hygiène du dépôt
 
-- `backend/migrations/0036_library_cluster_tombstones.sql` (racine) n'est pas chargé par le migrateur (seul `migrations/sqlite/` l'est) : reliquat à supprimer.
 - Les instructions du projet (mission) et la mémoire d'équipe citent encore PostgreSQL ; le code, `AGENTS.md` et la production (vérifiée le 2026-10-21) sont en SQLite seul. À aligner côté instructions du projet, hors dépôt.
 - Documents d'exploitation : ré-audités le 2026-10-21 (index dans `docs/operations/README.md`). Restent à ré-auditer : `docs/design/*`.
 - `backend/README.md` : sections datées par numéros de migration (« la migration 0008 ajoute… ») à réécrire en renvoyant vers les fiches.

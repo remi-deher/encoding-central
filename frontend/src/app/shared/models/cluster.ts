@@ -23,7 +23,7 @@ export interface NodeResponse {
   readonly inventory?: NodeInventory | null;
   readonly displayName?: string | null;
   readonly labels?: Readonly<Record<string, string | null>>;
-  /** Mode demandé par un administrateur et pas encore appliqué par le nœud. */
+  /** Mode demandé par un administrateur et pas encore appliqué par le worker. */
   /** État de cycle de vie ; le plus restrictif l'emporte (ADR 0041). */
   readonly lifecycle?: 'online' | 'offline' | 'draining' | 'incompatible' | 'quarantined' | null;
   readonly lifecycleReason?: string | null;
@@ -108,7 +108,7 @@ export interface NodeProcessingSettings {
 }
 
 /**
- * Formate le nom d'un nœud en affichant son nom d'affichage et son nom d'hôte entre parenthèses
+ * Formate le nom d'un worker en affichant son nom d'affichage et son nom d'hôte entre parenthèses
  * lorsqu'ils sont tous deux présents et différents (ex. "TRUENAS (ENCODING-50)").
  */
 export function formatNodeLabel(name: string, displayName?: string | null): string {
@@ -120,5 +120,5 @@ export function formatNodeLabel(name: string, displayName?: string | null): stri
   if (display && host) {
     return `${display} (${host})`;
   }
-  return display || host || 'Nœud inconnu';
+  return display || host || 'Worker inconnu';
 }

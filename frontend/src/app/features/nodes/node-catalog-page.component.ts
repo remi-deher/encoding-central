@@ -298,9 +298,9 @@ export class NodeCatalogPageComponent {
       this.localNode()?.displayName?.trim() ||
       this.local.status()?.displayName?.trim() ||
       this.local.status()?.name ||
-      'Ce nœud',
+      'Ce worker',
   );
-  /** Tâches actives du nœud local ; inconnues tant que la source n'a pas répondu. */
+  /** Tâches actives du worker local ; inconnues tant que la source n'a pas répondu. */
   protected readonly localActivity = toSignal(
     toObservable(computed(() => this.localNode()?.id ?? null)).pipe(
       switchMap((id) =>
@@ -308,7 +308,7 @@ export class NodeCatalogPageComponent {
           ? timer(0, 5000).pipe(
               exhaustMap(() =>
                 this.http
-                  .get<NodeActivityResponse>('/api/v1/nodes/' + id + '/activity')
+                  .get<NodeActivityResponse>('/api/v1/workers/' + id + '/activity')
                   .pipe(catchError(() => of(null))),
               ),
             )
@@ -403,7 +403,7 @@ export class NodeCatalogPageComponent {
     }
   }
   protected readonly clusterName = computed(
-    () => this.clusterIdentity()?.name ?? this.local.status()?.clusterName ?? 'Cluster',
+    () => this.clusterIdentity()?.name ?? this.local.status()?.clusterName ?? 'Central',
   );
   protected readonly clusterAddress = computed(
     () =>
@@ -463,10 +463,10 @@ export class NodeCatalogPageComponent {
       label: 'Supprimer',
       visibleWhen: () => !this.bulkBusy(),
       confirmation: (rows) => ({
-        title: 'Supprimer ' + rows.length + ' nœud(s) ?',
+        title: 'Supprimer ' + rows.length + ' worker(s) ?',
         message:
-          'Les accès seront révoqués ; les fichiers et l’historique sont conservés. Les nœuds avec des traitements actifs peuvent refuser le retrait.',
-        confirmLabel: 'Supprimer les nœuds',
+          'Les accès seront révoqués ; les fichiers et l’historique sont conservés. Les workers avec des traitements actifs peuvent refuser le retrait.',
+        confirmLabel: 'Supprimer les workers',
       }),
     },
   ];
@@ -474,12 +474,12 @@ export class NodeCatalogPageComponent {
     if (!this.isAdmin() || this.bulkBusy()) return;
     const ids = event.rows.map((row) => String(row['id']));
     if (event.actionId === 'delete')
-      this.runBulk(ids, (id) => this.http.delete<void>('/api/v1/nodes/' + id), 'suppression');
+      this.runBulk(ids, (id) => this.http.delete<void>('/api/v1/workers/' + id), 'suppression');
     else if (event.actionId === 'drain' || event.actionId === 'resume')
       this.runBulk(
         ids,
         (id) =>
-          this.http.put<void>('/api/v1/nodes/' + id + '/draining', {
+          this.http.put<void>('/api/v1/workers/' + id + '/draining', {
             draining: event.actionId === 'drain',
           }),
         event.actionId === 'drain' ? 'vidange' : 'reprise',
@@ -494,7 +494,7 @@ export class NodeCatalogPageComponent {
     const pending = this.pendingEnrollments().length;
     return [
       {
-        label: 'Nœuds en ligne',
+        label: 'Workers en ligne',
         value: `${online.length} / ${nodes.length}`,
         detail: 'selon le dernier signal reçu',
       },
@@ -541,15 +541,15 @@ export class NodeCatalogPageComponent {
   protected readonly selectedNodeTabIndex = signal(0);
   protected readonly identityForm = signal<RecordFormData | null>(null);
   protected readonly createFormData: RecordFormData = {
-    title: 'Ajouter un nœud',
+    title: 'Ajouter un worker',
     description:
-      'Examinez les demandes des nœuds avant de les accepter. Si un nœud n’apparaît pas, générez une clé depuis sa page Nœuds (« Cluster puis Rejoindre un cluster ») et saisissez-la ici ; elle expire au bout de 10 minutes.',
-    submitLabel: 'Accepter le nœud',
+      'Examinez les demandes des workers avant de les accepter. Si un worker n’apparaît pas, générez une clé depuis sa page Workers (« Cluster puis Rejoindre un central ») et saisissez-la ici ; elle expire au bout de 10 minutes.',
+    submitLabel: 'Accepter le worker',
     reviewTitle: 'Vérifier le jumelage',
     fields: [
       {
         id: 'pairingKey',
-        label: 'Clé générée sur le nœud',
+        label: 'Clé générée sur le worker',
         type: 'text',
         required: true,
         maxLength: 16,
@@ -558,27 +558,27 @@ export class NodeCatalogPageComponent {
   };
   protected readonly title = computed(() => {
     if (this.pageTab() === 'groups') {
-      return 'Groupes de nœuds';
+      return 'Groupes de workers';
     }
     if (this.pageTab() === 'cluster') {
       return !this.local.standalone() && this.clusterIdentity()
         ? this.clusterName()
-        : ((this.routeData()['title'] as string) ?? 'Nœuds');
+        : ((this.routeData()['title'] as string) ?? 'Workers');
     }
-    return this.localName() || ((this.routeData()['title'] as string) ?? 'Nœuds');
+    return this.localName() || ((this.routeData()['title'] as string) ?? 'Workers');
   });
   protected readonly catalogMessage = computed(() => {
     if (this.pageTab() === 'groups') return this.groupMessage();
     return this.loadState() === 'error'
-      ? 'Impossible de joindre l’API du cluster. Vérifiez que le serveur et sa base de données sont disponibles.'
-      : 'Chargement des nœuds du cluster…';
+      ? 'Impossible de joindre l’API du central. Vérifiez que le serveur et sa base de données sont disponibles.'
+      : 'Chargement des workers du central…';
   });
   protected readonly detailTitle = computed(() => {
     const raw = this.rawNode();
-    return raw ? formatNodeLabel(raw.name, raw.displayName) : 'Détails du nœud';
+    return raw ? formatNodeLabel(raw.name, raw.displayName) : 'Détails du worker';
   });
   protected readonly detailDescription = computed(
-    () => this.selectedNode()?.roleLabel ?? 'État observé par le cluster',
+    () => this.selectedNode()?.roleLabel ?? 'État observé par le central',
   );
 
   protected readonly removalBusy = signal(false);
@@ -587,9 +587,9 @@ export class NodeCatalogPageComponent {
     const node = this.rawNode();
     switch (node?.lifecycle) {
       case 'draining':
-        return 'Vidange en cours : le nœud termine ses tâches et n’en reçoit plus de nouvelles.';
+        return 'Vidange en cours : le worker termine ses tâches et n’en reçoit plus de nouvelles.';
       case 'incompatible':
-        return 'Version incompatible avec le cluster : ' + (node.lifecycleReason ?? '');
+        return 'Version incompatible avec le central : ' + (node.lifecycleReason ?? '');
       case 'quarantined':
         return (
           'Quarantaine : ' +
@@ -610,7 +610,7 @@ export class NodeCatalogPageComponent {
           ? timer(0, 5000).pipe(
               exhaustMap(() =>
                 this.http
-                  .get<NodeActivityResponse>('/api/v1/nodes/' + id + '/activity')
+                  .get<NodeActivityResponse>('/api/v1/workers/' + id + '/activity')
                   .pipe(catchError(() => of(null))),
               ),
               startWith(null),
@@ -650,7 +650,7 @@ export class NodeCatalogPageComponent {
       {
         id: 'node-general-identity',
         title: 'Identité et rôles',
-        caption: 'Membre du cluster',
+        caption: 'Membre du central',
         items: [
           {
             label: node.displayName?.trim() || node.name,
@@ -698,7 +698,7 @@ export class NodeCatalogPageComponent {
             unavailable: !activity,
           },
           {
-            label: 'Tâches alimentées par ce nœud',
+            label: 'Tâches alimentées par ce worker',
             value: activity?.sourceTasks.toString() ?? 'Indisponible',
             unavailable: !activity,
           },
@@ -864,9 +864,9 @@ export class NodeCatalogPageComponent {
     settings: NodeProcessingSettings,
   ): RecordFormData {
     return {
-      title: 'Limite globale du nœud',
+      title: 'Limite globale du worker',
       description:
-        'Ce plafond concerne toutes ses bibliothèques. Les limites de bibliothèque et les limites par nœud/bibliothèque s’appliquent aussi.',
+        'Ce plafond concerne toutes ses bibliothèques. Les limites de bibliothèque et les limites par worker/bibliothèque s’appliquent aussi.',
       submitLabel: 'Enregistrer',
       review: false,
       cancellable: false,
@@ -908,7 +908,7 @@ export class NodeCatalogPageComponent {
         schedule,
         revision: settings.revision + 1,
       };
-      this.notifications.show('Calendrier du nœud enregistré.');
+      this.notifications.show('Calendrier du worker enregistré.');
     } catch {
       this.notifications.show('Calendrier invalide ou configuration modifiée ailleurs.');
     } finally {
@@ -938,7 +938,7 @@ export class NodeCatalogPageComponent {
       };
       this.processingSettings = updated;
       this.processingForm.set(this.processingLimitForm(node, updated));
-      this.notifications.show('Limite globale du nœud enregistrée.');
+      this.notifications.show('Limite globale du worker enregistrée.');
     } catch {
       this.notifications.show('Limite invalide ou configuration modifiée ailleurs.');
     } finally {
@@ -954,7 +954,7 @@ export class NodeCatalogPageComponent {
           labels: Readonly<Record<string, string | null>>;
           effectiveLabels: Readonly<Record<string, string | null>>;
           groupIds: readonly string[];
-        }>(`/api/v1/nodes/${node.id}/identity`),
+        }>(`/api/v1/workers/${node.id}/identity`),
       );
       if (this.selectedNode()?.id !== node.id) this.selectedNodeTabIndex.set(0);
       this.selectedNode.set(node);
@@ -985,7 +985,7 @@ export class NodeCatalogPageComponent {
       this.actionType.set('identity');
       this.actionOpen.set(true);
     } catch {
-      this.notifications.show('Impossible de charger l’identité du nœud.');
+      this.notifications.show('Impossible de charger l’identité du worker.');
     }
   }
 
@@ -1007,7 +1007,7 @@ export class NodeCatalogPageComponent {
     }
     try {
       await firstValueFrom(
-        this.http.put(`/api/v1/nodes/${node.id}/identity`, {
+        this.http.put(`/api/v1/workers/${node.id}/identity`, {
           displayName: values['displayName'] || null,
           labels,
         }),
@@ -1020,9 +1020,9 @@ export class NodeCatalogPageComponent {
         ),
       );
       this.actionOpen.set(false);
-      this.notifications.show('Identité du nœud enregistrée.');
+      this.notifications.show('Identité du worker enregistrée.');
     } catch {
-      this.notifications.show('Les étiquettes ou le nom du nœud sont invalides.');
+      this.notifications.show('Les étiquettes ou le nom du worker sont invalides.');
     }
   }
   protected readonly capabilityFields = computed(() =>
@@ -1039,12 +1039,12 @@ export class NodeCatalogPageComponent {
       tone: 'danger',
       visibleWhen: () => !this.removalBusy(),
       confirmation: (row) => ({
-        title: 'Supprimer ce nœud ?',
+        title: 'Supprimer ce worker ?',
         message:
-          'Le nœud « ' +
+          'Le worker « ' +
           row['name'] +
-          ' » sera retiré du cluster et ses accès révoqués. Les fichiers et l’historique seront conservés. Pour le rattacher de nouveau, son identité locale devra être renouvelée.',
-        confirmLabel: 'Supprimer le nœud',
+          ' » sera retiré du central et ses accès révoqués. Les fichiers et l’historique seront conservés. Pour le rattacher de nouveau, son identité locale devra être renouvelée.',
+        confirmLabel: 'Supprimer le worker',
       }),
     },
   ];
@@ -1058,10 +1058,10 @@ export class NodeCatalogPageComponent {
     const id = String(event.row['id']);
     this.removalBusy.set(true);
     this.http
-      .delete<void>('/api/v1/nodes/' + id)
+      .delete<void>('/api/v1/workers/' + id)
       .pipe(
         catchError((error: { error?: { title?: string } }) => {
-          this.notifications.show(error.error?.title ?? 'Impossible de supprimer ce nœud.');
+          this.notifications.show(error.error?.title ?? 'Impossible de supprimer ce worker.');
           return EMPTY;
         }),
         finalize(() => this.removalBusy.set(false)),
@@ -1070,20 +1070,20 @@ export class NodeCatalogPageComponent {
         this.nodes.update((nodes) => nodes.filter((node) => node.id !== id));
         if (this.selectedNode()?.id === id) this.onDetailClosed();
         this.loadLibraryAccessSummary();
-        this.notifications.show('Nœud supprimé du cluster.');
+        this.notifications.show('Worker supprimé du central.');
       });
   }
   protected clearQuarantine(): void {
     const node = this.rawNode();
     if (!node || this.lifecycleBusy()) return;
-    this.sendLifecycle(this.http.post<void>('/api/v1/nodes/' + node.id + '/quarantine/clear', {}));
+    this.sendLifecycle(this.http.post<void>('/api/v1/workers/' + node.id + '/quarantine/clear', {}));
   }
   private sendLifecycle(request: Observable<void>): void {
     this.lifecycleBusy.set(true);
     request
       .pipe(
         catchError(() => {
-          this.notifications.show('Impossible de modifier l’état du nœud.');
+          this.notifications.show('Impossible de modifier l’état du worker.');
           return EMPTY;
         }),
         finalize(() => this.lifecycleBusy.set(false)),
@@ -1109,7 +1109,7 @@ export class NodeCatalogPageComponent {
   }
   protected readonly actionTitle = computed(() =>
     this.actionType() === 'identity'
-      ? 'Nom et étiquettes du nœud'
+      ? 'Nom et étiquettes du worker'
       : this.actionType() === 'library-access'
         ? `Accès à ${this.selectedNodeLibrary()?.name ?? 'la bibliothèque'}`
         : this.actionType() === 'create-library'
@@ -1120,15 +1120,15 @@ export class NodeCatalogPageComponent {
     this.actionType() === 'identity'
       ? 'Le nom affiché est distinct du nom envoyé par heartbeat. Les étiquettes locales remplacent celles des groupes.'
       : this.actionType() === 'library-access'
-        ? 'Renseignez le chemin local de cette bibliothèque pour ce nœud.'
+        ? 'Renseignez le chemin local de cette bibliothèque pour ce worker.'
         : this.actionType() === 'create-library'
-          ? 'Le serveur crée la définition partagée. Vous pourrez ensuite autoriser les nœuds et configurer leurs chemins.'
+          ? 'Le serveur crée la définition partagée. Vous pourrez ensuite autoriser les workers et configurer leurs chemins.'
           : this.createFormData.description,
   );
   protected readonly createLibraryFormData: RecordFormData = {
     title: 'Déclarer une bibliothèque',
     description:
-      'Créez une définition partagée côté serveur. Cette création ne donne pas encore accès aux médias à ce nœud.',
+      'Créez une définition partagée côté serveur. Cette création ne donne pas encore accès aux médias à ce worker.',
     submitLabel: 'Déclarer la bibliothèque',
     fields: [{ id: 'name', label: 'Nom', type: 'text', required: true, maxLength: 128 }],
   };
@@ -1140,21 +1140,21 @@ export class NodeCatalogPageComponent {
       toggle: {
         showStatusLabel: false,
         ariaLabel: (row, checked) =>
-          `${checked ? 'Désactiver' : row['mode'] === 'unsupported' ? 'Configurer' : 'Activer'} l’accès à ${row['name']} sur ce nœud`,
+          `${checked ? 'Désactiver' : row['mode'] === 'unsupported' ? 'Configurer' : 'Activer'} l’accès à ${row['name']} sur ce worker`,
         disabledWhen: (row) =>
           this.nodeAccessActivationBusy().has(`${this.selectedNode()?.id}:${row['id']}`),
         confirmation: (row, checked) =>
           checked
             ? undefined
             : {
-                title: 'Désactiver cette bibliothèque sur ce nœud ?',
-                message: `« ${row['name']} » restera déclarée et ses accès sur les autres nœuds ne changeront pas.`,
-                confirmLabel: 'Désactiver sur ce nœud',
+                title: 'Désactiver cette bibliothèque sur ce worker ?',
+                message: `« ${row['name']} » restera déclarée et ses accès sur les autres workers ne changeront pas.`,
+                confirmLabel: 'Désactiver sur ce worker',
               },
       },
     },
     { key: 'modeLabel', label: 'Mode autorisé', sortable: true },
-    { key: 'pathLabel', label: 'Chemin sur ce nœud' },
+    { key: 'pathLabel', label: 'Chemin sur ce worker' },
   ];
   protected readonly nodeLibraryActions: readonly DataTableRowAction[] = [
     { id: 'edit', label: 'Modifier' },
@@ -1163,9 +1163,9 @@ export class NodeCatalogPageComponent {
       label: 'Supprimer',
       tone: 'danger',
       confirmation: (row) => ({
-        title: 'Retirer cette bibliothèque du nœud ?',
-        message: `L’accès de ce nœud à « ${row['name']} » sera supprimé. La bibliothèque et ses accès sur les autres nœuds resteront inchangés.`,
-        confirmLabel: 'Retirer du nœud',
+        title: 'Retirer cette bibliothèque du worker ?',
+        message: `L’accès de ce worker à « ${row['name']} » sera supprimé. La bibliothèque et ses accès sur les autres workers resteront inchangés.`,
+        confirmLabel: 'Retirer du worker',
         variant: 'danger',
       }),
     },
@@ -1184,7 +1184,7 @@ export class NodeCatalogPageComponent {
           ? 'Non pris en charge'
           : access.isEnabled
             ? 'Active'
-            : 'Désactivée sur ce nœud';
+            : 'Désactivée sur ce worker';
       const stateTone: StatusTone = !library.isActive
         ? 'neutral'
         : access.mode === 'unsupported' || !access.isEnabled
@@ -1240,7 +1240,7 @@ export class NodeCatalogPageComponent {
           name: library.name,
           isEnabled: access.isEnabled,
           mode: access.mode,
-          modeLabel: `${localMode}${access.mode !== 'unsupported' && !access.isEnabled ? ' · Désactivée sur ce nœud' : ''}${library.isActive ? '' : ' · Désactivée globalement'}`,
+          modeLabel: `${localMode}${access.mode !== 'unsupported' && !access.isEnabled ? ' · Désactivée sur ce worker' : ''}${library.isActive ? '' : ' · Désactivée globalement'}`,
           pathLabel:
             access.localPath ??
             (access.mode === 'transfer'
@@ -1270,7 +1270,7 @@ export class NodeCatalogPageComponent {
   });
 
   protected readonly columns: readonly DataTableColumn[] = [
-    { key: 'name', label: 'Nom du nœud', sortable: true },
+    { key: 'name', label: 'Nom du worker', sortable: true },
     { key: 'roleLabel', label: 'Rôle', sortable: true },
     { key: 'libraryAccess', label: 'Accès aux bibliothèques', sortable: true },
     { key: 'workerLoad', label: 'Traitements', sortable: true },
@@ -1314,7 +1314,7 @@ export class NodeCatalogPageComponent {
     this.filteredRawNodes().map((node) => this.toRecord(node)),
   );
 
-  /** Cartes de synthèse des membres du cluster, avec actions secondaires dans le menu. */
+  /** Cartes de synthèse des membres du central, avec actions secondaires dans le menu. */
   protected readonly memberCards = computed<readonly MemberCard[]>(() =>
     this.filteredRawNodes().map((node) => {
       const lifecycle = nodeLifecycle(node);
@@ -1430,7 +1430,7 @@ export class NodeCatalogPageComponent {
     else if (accepted === null) note = 'Comptage des tâches indisponible.';
     else if (nodeLifecycle(node) === 'draining')
       note = 'Admission suspendue : les places libres ne sont pas attribuées.';
-    else if (nodeLifecycle(node) !== 'online') note = 'Nœud indisponible pour recevoir des tâches.';
+    else if (nodeLifecycle(node) !== 'online') note = 'Worker indisponible pour recevoir des tâches.';
 
     return { accepted, remaining, maximum, note };
   }
@@ -1466,10 +1466,10 @@ export class NodeCatalogPageComponent {
             data: {
               compact: true,
               variant: 'danger',
-              eyebrow: 'Traitements du nœud',
+              eyebrow: 'Traitements du worker',
               title: `Suspendre les nouvelles tâches sur « ${node.displayName?.trim() || node.name} » ?`,
               message:
-                'Aucune nouvelle tâche ne sera affectée à ce nœud. Les traitements déjà en cours ne sont pas interrompus et pourront se terminer normalement.',
+                'Aucune nouvelle tâche ne sera affectée à ce worker. Les traitements déjà en cours ne sont pas interrompus et pourront se terminer normalement.',
               confirmLabel: 'Suspendre les tâches',
             },
           })
@@ -1480,19 +1480,19 @@ export class NodeCatalogPageComponent {
     this.admissionBusy.update((busy) => new Set(busy).add(node.id));
     try {
       await firstValueFrom(
-        this.http.put<void>(`/api/v1/nodes/${node.id}/draining`, { draining: !enabled }),
+        this.http.put<void>(`/api/v1/workers/${node.id}/draining`, { draining: !enabled }),
       );
       const nodes = await firstValueFrom(this.clusterApi.listNodes());
       this.nodes.set(nodes);
       this.notifications.show(
         enabled
-          ? `Le nœud « ${node.displayName?.trim() || node.name} » peut de nouveau recevoir des tâches.`
+          ? `Le worker « ${node.displayName?.trim() || node.name} » peut de nouveau recevoir des tâches.`
           : `Les nouvelles tâches sont suspendues sur « ${node.displayName?.trim() || node.name} ».`,
       );
     } catch (error) {
       this.notifications.show(
         (error as { error?: { title?: string } } | null)?.error?.title ??
-          'Impossible de modifier l’admission des tâches sur ce nœud.',
+          'Impossible de modifier l’admission des tâches sur ce worker.',
       );
     } finally {
       this.admissionBusy.update((busy) => {
@@ -1556,8 +1556,8 @@ export class NodeCatalogPageComponent {
       });
   }
 
-  /** Cartes de nœuds : ce qui demande une action d'abord, puis par nom (architecture 0046). */
-  /** Tâches actives par nœud (clé : identifiant), rafraîchies avec la liste. */
+  /** Cartes de workers : ce qui demande une action d'abord, puis par nom (architecture 0046). */
+  /** Tâches actives par worker (clé : identifiant), rafraîchies avec la liste. */
   private readonly activeTasks = signal<Readonly<Record<string, number>>>({});
   protected readonly bulkBusy = signal(false);
   protected readonly selectedState = signal('all');
@@ -1606,8 +1606,8 @@ export class NodeCatalogPageComponent {
         const failed = results.filter((ok) => !ok).length;
         this.notifications.show(
           failed
-            ? `${label} : ${results.length - failed} nœud(s) traité(s), ${failed} en échec.`
-            : `${label} : ${results.length} nœud(s) traité(s).`,
+            ? `${label} : ${results.length - failed} worker(s) traité(s), ${failed} en échec.`
+            : `${label} : ${results.length} worker(s) traité(s).`,
         );
         this.clusterApi
           .listNodes()
@@ -1622,7 +1622,7 @@ export class NodeCatalogPageComponent {
   }
 
   protected readonly enrollmentColumns: readonly DataTableColumn[] = [
-    { key: 'name', label: 'Nœud détecté', sortable: true },
+    { key: 'name', label: 'Worker détecté', sortable: true },
     { key: 'verificationCode', label: 'Code à comparer', sortable: false },
     { key: 'rolesLabel', label: 'Rôle annoncé', sortable: true },
     { key: 'capabilitiesLabel', label: 'Capacités', sortable: true },
@@ -1640,7 +1640,7 @@ export class NodeCatalogPageComponent {
     const card: DetailCard = {
       id: `enrollment-${request.id}`,
       title: cardTitle,
-      subtitle: 'Nœud demandeur',
+      subtitle: 'Worker demandeur',
       icon: 'server',
       status: { label: 'En attente', tone: 'warning' },
       tags: request.roles.map((role) => ({ label: NODE_ROLE_LABELS[role], tone: 'accent' })),
@@ -1669,8 +1669,8 @@ export class NodeCatalogPageComponent {
     };
     const codeCard: DetailCard = {
       id: `enrollment-code-${request.id}`,
-      title: 'Cluster d’accueil',
-      subtitle: 'Adresse de référence annoncée par ce cluster',
+      title: 'Central d’accueil',
+      subtitle: 'Adresse de référence annoncée par ce central',
       icon: 'server',
       tags: [],
       sections: [
@@ -1678,8 +1678,8 @@ export class NodeCatalogPageComponent {
           title: 'Vérification à deux écrans',
           items: [
             {
-              label: 'Adresse du cluster',
-              description: this.clusterAddress() ?? 'Cluster actuel',
+              label: 'Adresse du central',
+              description: this.clusterAddress() ?? 'Central actuel',
             },
           ],
         },
@@ -1689,7 +1689,7 @@ export class NodeCatalogPageComponent {
       {
         id: 'request',
         label: 'Demande',
-        description: 'Vérifiez le nœud et les fonctions qu’il annonce au cluster.',
+        description: 'Vérifiez le worker et les fonctions qu’il annonce au central.',
         cards: [card],
         actions: [
           { id: 'cancel', label: 'Annuler' },
@@ -1704,14 +1704,14 @@ export class NodeCatalogPageComponent {
           ? {
               code: request.verificationCode,
               label: 'Code de vérification',
-              helper: 'Comparez avec le code affiché sur le nœud demandeur.',
+              helper: 'Comparez avec le code affiché sur le worker demandeur.',
               badge: 'Vérification requise',
               tone: 'warning',
             }
           : undefined,
         cards: [codeCard],
         note: request.verificationCode
-          ? 'Confirmez uniquement si le code correspond exactement sur les deux nœuds.'
+          ? 'Confirmez uniquement si le code correspond exactement sur les deux workers.'
           : 'Aucun code de vérification n’est disponible. Cette demande ne peut pas être approuvée ; actualisez les demandes et réessayez.',
         acknowledgement: {
           label: 'J’ai comparé les deux écrans et les codes sont identiques.',
@@ -1730,9 +1730,9 @@ export class NodeCatalogPageComponent {
       {
         id: 'approval',
         label: 'Approbation',
-        description: `Le nœud rejoindra le cluster ${this.clusterName()} avec les rôles et capacités annoncés.`,
+        description: `Le worker rejoindra le central ${this.clusterName()} avec les rôles et capacités annoncés.`,
         cards: [card],
-        note: 'Après approbation, le nœud apparaît parmi les membres dès qu’il confirme sa connexion.',
+        note: 'Après approbation, le worker apparaît parmi les membres dès qu’il confirme sa connexion.',
         actions: [
           { id: 'back', label: 'Précédent' },
           { id: 'approve', label: 'Approuver le rattachement', primary: true },
@@ -1756,7 +1756,7 @@ export class NodeCatalogPageComponent {
   constructor() {
     this.destroyRef.onDestroy(
       this.pageShellContext.register({
-        searchPlaceholder: 'Rechercher dans les nœuds…',
+        searchPlaceholder: 'Rechercher dans les workers…',
         query: this.pageSearchQuery,
         onSearchQueryChange: (query) => {
           if (this.pageTab() === 'groups') this.groupSearchQuery.set(query);
@@ -1786,10 +1786,10 @@ export class NodeCatalogPageComponent {
           forkJoin({
             nodes: this.clusterApi.listNodes(),
             pending: this.http.get<readonly PendingNodeEnrollmentResponse[]>(
-              '/api/v1/nodes/enrollment-requests',
+              '/api/v1/workers/enrollment-requests',
             ),
             activity: this.http
-              .get<Readonly<Record<string, number>>>('/api/v1/nodes/activity')
+              .get<Readonly<Record<string, number>>>('/api/v1/workers/activity')
               .pipe(catchError(() => of(null))),
           }).pipe(
             catchError(() => {
@@ -1847,8 +1847,8 @@ export class NodeCatalogPageComponent {
         .map((group) => ({
           id: `node-group:${group.id}`,
           label: group.name,
-          description: group.description || 'Groupe de nœuds',
-          group: 'Groupes de nœuds',
+          description: group.description || 'Groupe de workers',
+          group: 'Groupes de workers',
           glyph: '▦',
           run: () => this.openGroupDetail(group),
         }));
@@ -1868,7 +1868,7 @@ export class NodeCatalogPageComponent {
           id: `node:${node.id}`,
           label: formatNodeLabel(node.name, node.displayName),
           description: `${NODE_LIFECYCLE_LABELS[nodeLifecycle(node)]} · ${node.roles.map((role) => NODE_ROLE_LABELS[role]).join(' · ')}`,
-          group: 'Nœuds du cluster',
+          group: 'Workers du central',
           glyph: '▤',
           run: () => this.openNodeCard(node.id),
         }));
@@ -1879,8 +1879,8 @@ export class NodeCatalogPageComponent {
           {
             id: `node:${local.id}`,
             label: formatNodeLabel(local.name, local.displayName),
-            description: 'Ce nœud',
-            group: 'Nœud local',
+            description: 'Ce worker',
+            group: 'Worker local',
             glyph: '▤',
             run: () => this.pageTab.set('node'),
           },
@@ -2030,14 +2030,14 @@ export class NodeCatalogPageComponent {
       return;
     this.enrollmentApprovalBusy.set(true);
     this.http
-      .post<NodeResponse>(`/api/v1/nodes/enrollment-requests/${request.id}/approve`, {})
+      .post<NodeResponse>(`/api/v1/workers/enrollment-requests/${request.id}/approve`, {})
       .pipe(
         finalize(() => this.enrollmentApprovalBusy.set(false)),
         catchError((error: { status?: number }) => {
           this.notifications.show(
             error.status === 404
               ? 'Cette demande a expiré ou a déjà été traitée. Actualisez la liste.'
-              : 'Le nœud n’a pas pu être accepté. Vérifiez que le serveur est disponible.',
+              : 'Le worker n’a pas pu être accepté. Vérifiez que le serveur est disponible.',
           );
           return EMPTY;
         }),
@@ -2051,7 +2051,7 @@ export class NodeCatalogPageComponent {
         this.selectedEnrollment.set(null);
         this.enrollmentView.set('requests');
         this.loadState.set('ready');
-        this.notifications.show(`Le nœud « ${node.name} » a rejoint le cluster.`);
+        this.notifications.show(`Le worker « ${node.name} » a rejoint le central.`);
       });
   }
 
@@ -2060,13 +2060,13 @@ export class NodeCatalogPageComponent {
     if (!pairingKey) return;
     this.actionOpen.set(false);
     this.http
-      .post<NodeResponse>('/api/v1/nodes/enrollment-requests/approve', { pairingKey })
+      .post<NodeResponse>('/api/v1/workers/enrollment-requests/approve', { pairingKey })
       .pipe(
         catchError((error: { status?: number }) => {
           this.notifications.show(
             error.status === 404
-              ? 'Cette clé est invalide, expirée ou déjà utilisée. Générez-en une nouvelle depuis le nœud.'
-              : 'Le nœud n’a pas pu être accepté. Vérifiez que le serveur est disponible.',
+              ? 'Cette clé est invalide, expirée ou déjà utilisée. Générez-en une nouvelle depuis le worker.'
+              : 'Le worker n’a pas pu être accepté. Vérifiez que le serveur est disponible.',
           );
           return EMPTY;
         }),
@@ -2078,7 +2078,7 @@ export class NodeCatalogPageComponent {
         ]);
         this.pendingEnrollments.update((current) => current.filter((item) => item.id !== node.id));
         this.loadState.set('ready');
-        this.notifications.show(`Le nœud « ${node.name} » a rejoint le cluster.`);
+        this.notifications.show(`Le worker « ${node.name} » a rejoint le central.`);
       });
   }
 
@@ -2150,12 +2150,12 @@ export class NodeCatalogPageComponent {
     this.nodeAccessActivationBusy.update((current) => new Set(current).add(busyKey));
     this.http
       .put<LibraryNodeAccessResponse>(
-        `/api/v1/libraries/${library.id}/node-access/${node.id}/activation`,
+        `/api/v1/libraries/${library.id}/worker-access/${node.id}/activation`,
         { isEnabled: event.checked },
       )
       .pipe(
         catchError(() => {
-          this.notifications.show('L’accès de ce nœud n’a pas pu être modifié.');
+          this.notifications.show('L’accès de ce worker n’a pas pu être modifié.');
           return EMPTY;
         }),
         finalize(() =>
@@ -2223,7 +2223,7 @@ export class NodeCatalogPageComponent {
       .subscribe((library) => {
         this.allLibraries.update((current) => [...current, library]);
         this.notifications.show(
-          `La bibliothèque « ${library.name} » est déclarée sur le serveur. Autorisez ce nœud pour configurer son accès.`,
+          `La bibliothèque « ${library.name} » est déclarée sur le serveur. Autorisez ce worker pour configurer son accès.`,
         );
         this.editNodeLibraryAccess(library);
       });
@@ -2259,7 +2259,7 @@ export class NodeCatalogPageComponent {
   ): void {
     this.accessFormBusy.set(true);
     this.http
-      .put<readonly LibraryNodeAccessResponse[]>(`/api/v1/libraries/${library.id}/node-access`, {
+      .put<readonly LibraryNodeAccessResponse[]>(`/api/v1/libraries/${library.id}/worker-access`, {
         nodes: configured,
       })
       .pipe(
@@ -2280,7 +2280,7 @@ export class NodeCatalogPageComponent {
         this.actionOpen.set(false);
         this.notifications.show(
           action === 'delete'
-            ? `Bibliothèque « ${library.name} » retirée du nœud ${node.name}.`
+            ? `Bibliothèque « ${library.name} » retirée du worker ${node.name}.`
             : `Accès à « ${library.name} » enregistré pour ${node.name}.`,
         );
       });
@@ -2300,7 +2300,7 @@ export class NodeCatalogPageComponent {
               ? forkJoin(
                   libraries.map((library) =>
                     this.http.get<readonly LibraryNodeAccessResponse[]>(
-                      `/api/v1/libraries/${library.id}/node-access`,
+                      `/api/v1/libraries/${library.id}/worker-access`,
                     ),
                   ),
                 )
@@ -2310,7 +2310,7 @@ export class NodeCatalogPageComponent {
         catchError(() => {
           this.nodeLibraryLoading.set(false);
           this.notifications.show(
-            'Les bibliothèques autorisées pour ce nœud n’ont pas pu être chargées.',
+            'Les bibliothèques autorisées pour ce worker n’ont pas pu être chargées.',
           );
           return EMPTY;
         }),
@@ -2336,7 +2336,7 @@ export class NodeCatalogPageComponent {
               ? forkJoin(
                   libraries.map((library) =>
                     this.http.get<readonly LibraryNodeAccessResponse[]>(
-                      `/api/v1/libraries/${library.id}/node-access`,
+                      `/api/v1/libraries/${library.id}/worker-access`,
                     ),
                   ),
                 )
@@ -2460,9 +2460,9 @@ export class NodeCatalogPageComponent {
     const current = this.groupEditing();
     try {
       if (current) {
-        await firstValueFrom(this.http.put(`/api/v1/node-groups/${current.id}`, payload));
+        await firstValueFrom(this.http.put(`/api/v1/worker-groups/${current.id}`, payload));
       } else {
-        await firstValueFrom(this.http.post('/api/v1/node-groups', payload));
+        await firstValueFrom(this.http.post('/api/v1/worker-groups', payload));
       }
       await this.loadGroups();
       this.closeGroupForm();
@@ -2484,7 +2484,7 @@ export class NodeCatalogPageComponent {
         data: {
           title: `Supprimer le groupe « ${group.name} » ?`,
           message:
-            'Ce groupe et ses étiquettes partagées seront supprimés. Les nœuds membres et leur inventaire ne sont pas affectés. Attention : un groupe ciblé par un flow ne peut pas être supprimé.',
+            'Ce groupe et ses étiquettes partagées seront supprimés. Les workers membres et leur inventaire ne sont pas affectés. Attention : un groupe ciblé par un flow ne peut pas être supprimé.',
           confirmLabel: 'Supprimer',
           variant: 'danger',
         },
@@ -2499,7 +2499,7 @@ export class NodeCatalogPageComponent {
 
   private async removeGroup(group: NodeGroupResponse): Promise<void> {
     try {
-      await firstValueFrom(this.http.delete(`/api/v1/node-groups/${group.id}`));
+      await firstValueFrom(this.http.delete(`/api/v1/worker-groups/${group.id}`));
       await this.loadGroups();
       if (this.selectedGroupForDetail()?.id === group.id) {
         this.closeGroupDetail();
@@ -2519,12 +2519,12 @@ export class NodeCatalogPageComponent {
     this.groupState.set('loading');
     try {
       this.groups.set(
-        await firstValueFrom(this.http.get<readonly NodeGroupResponse[]>('/api/v1/node-groups')),
+        await firstValueFrom(this.http.get<readonly NodeGroupResponse[]>('/api/v1/worker-groups')),
       );
       this.groupState.set('ready');
     } catch {
       this.groupState.set('error');
-      this.groupMessage.set('Impossible de charger les groupes de nœuds.');
+      this.groupMessage.set('Impossible de charger les groupes de workers.');
     }
   }
 }

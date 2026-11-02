@@ -171,7 +171,7 @@ public sealed partial class MediaActions
     }
 
     private static string ApplyProfileVideoTranscode(
-        RuntimePlanStep step, int stepIndex, string codec, JsonElement profileValue, NodeToolCapability ffmpeg,
+        RuntimePlanStep step, int stepIndex, string codec, JsonElement profileValue, WorkerToolCapability ffmpeg,
         int sourceWidth, int sourceHeight, string? sourcePixFmt, JsonElement? vStream,
         IReadOnlyDictionary<string, JsonElement> c, Guid workerId,
         List<string> input, List<string> args, List<ResolvedVideoEncoding> resolutions,
@@ -217,7 +217,7 @@ public sealed partial class MediaActions
     }
 
     private static string ApplyManualVideoTranscode(
-        int stepIndex, string codec, NodeToolCapability ffmpeg,
+        int stepIndex, string codec, WorkerToolCapability ffmpeg,
         int sourceWidth, int sourceHeight, string? sourcePixFmt, JsonElement? vStream,
         IReadOnlyDictionary<string, JsonElement> c,
         List<string> input, List<string> args,

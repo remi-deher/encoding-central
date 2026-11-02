@@ -1,13 +1,13 @@
 namespace Encoding.NodeAgent.Services;
 
 /// <summary>
-/// Enrôle le worker sans intervention : le nœud local de l'image unique rejoint toujours le serveur de son conteneur
-/// (architecture 0037) ; sinon, l'acceptation automatique optionnelle accepte un cluster unique détecté.
+/// Enrôle le worker sans intervention : le worker local de l'image unique rejoint toujours le serveur de son conteneur
+/// (architecture 0037) ; sinon, l'acceptation automatique optionnelle accepte un central unique détecté.
 /// </summary>
 public sealed class WorkerAutoEnrollmentService(
-    NodeAgentOptions options,
+    WorkerAgentOptions options,
     WorkerIdentityStore identityStore,
-    WorkerClusterDiscovery discovery,
+    WorkerCentralDiscovery discovery,
     WorkerEnrollmentService enrollment,
     ILogger<WorkerAutoEnrollmentService> logger) : BackgroundService
 {
@@ -20,8 +20,8 @@ public sealed class WorkerAutoEnrollmentService(
             return;
         }
 
-        if (localEnabled) logger.LogInformation("Le nœud local rejoint automatiquement le serveur de ce conteneur.");
-        if (options.AutomaticEnrollmentEnabled) logger.LogInformation("L’acceptation automatique est activée ; un seul cluster détecté sera accepté automatiquement.");
+        if (localEnabled) logger.LogInformation("Le worker local rejoint automatiquement le serveur de ce conteneur.");
+        if (options.AutomaticEnrollmentEnabled) logger.LogInformation("L’acceptation automatique est activée ; un seul central détecté sera accepté automatiquement.");
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -36,18 +36,18 @@ public sealed class WorkerAutoEnrollmentService(
                 }
                 var clusters = discovery.List();
                 var local = clusters.FirstOrDefault(enrollment.IsLocalCluster);
-                // Un nœud qui a déjà choisi un autre cluster (jumelage en cours ou enrôlé) n'est pas ramené au serveur local.
+                // Un worker qui a déjà choisi un autre central (jumelage en cours ou enrôlé) n'est pas ramené au serveur local.
                 var choseElsewhere = identity.HasCredentials && local is not null && identity.ClusterId != local.Id.ToString("D");
                 if (!identity.IsEnrolled && local is not null && !choseElsewhere)
                 {
                     await enrollment.EnrollAsync(local.Id, stoppingToken);
-                    logger.LogInformation("Le nœud local a rejoint le cluster {ClusterId}.", local.Id);
+                    logger.LogInformation("Le worker local a rejoint le central {ClusterId}.", local.Id);
                 }
                 else if (options.AutomaticEnrollmentEnabled && !identity.IsEnrolled
                     && GetAutomaticEnrollmentTarget(clusters, options.ClusterApiBaseUrl is not null) is { } automaticTarget)
                 {
                     await enrollment.EnrollAsync(automaticTarget.Id, stoppingToken);
-                    logger.LogInformation("L’enrôlement automatique auprès du cluster {ClusterId} est terminé.", automaticTarget.Id);
+                    logger.LogInformation("L’enrôlement automatique auprès du central {ClusterId} est terminé.", automaticTarget.Id);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -63,7 +63,7 @@ public sealed class WorkerAutoEnrollmentService(
         }
     }
 
-    internal static DiscoveredCluster? GetAutomaticEnrollmentTarget(IReadOnlyList<DiscoveredCluster> clusters, bool hasConfiguredApiBaseUrl) =>
+    internal static DiscoveredCentral? GetAutomaticEnrollmentTarget(IReadOnlyList<DiscoveredCentral> clusters, bool hasConfiguredApiBaseUrl) =>
         clusters.FirstOrDefault(cluster => cluster.Source == "configured")
         ?? (hasConfiguredApiBaseUrl || clusters.Count != 1 ? null : clusters[0]);
 }

@@ -25,7 +25,7 @@ function accelerationOf(encoderId: string): string | null {
 }
 
 /**
- * Accélérateurs d'un nœud : le premier encodeur vérifié par mire, puis les autres vérifiés.
+ * Accélérateurs d'un worker : le premier encodeur vérifié par mire, puis les autres vérifiés.
  * Repli sur CPU quand aucun encodeur matériel n'est vérifié.
  * Les encodeurs seulement présents dans la compilation FFmpeg (mire échouée) ne sont
  * jamais présentés comme des accélérateurs utilisables.
@@ -174,7 +174,7 @@ function hardwareSection(node: NodeResponse): ResourceCardSection {
   if (!inventory)
     return {
       label: 'Matériel déclaré',
-      hint: 'Non renseigné : disponible après le prochain signal du nœud.',
+      hint: 'Non renseigné : disponible après le prochain signal du worker.',
     };
   const gpus = inventory.gpus;
   return {
@@ -228,7 +228,7 @@ function processingSection(node: NodeResponse, input: NodeProcessingInput): Reso
   };
 }
 
-/** Blocs de la carte d'un membre du cluster : accélérateur (optionnel), matériel, traitements. */
+/** Blocs de la carte d'un membre du central : accélérateur (optionnel), matériel, traitements. */
 export function nodeMemberSections(
   node: NodeResponse,
   input: NodeProcessingInput,

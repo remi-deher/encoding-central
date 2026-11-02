@@ -9,7 +9,7 @@ namespace Encoding.Api.Flows;
 
 public sealed class FlowDefinitionValidator(
     FlowComponentRegistry registry,
-    ClusterExtensionActivationState? activation = null)
+    CentralExtensionActivationState? activation = null)
 {
     public FlowValidationResult ValidateDraft(FlowDefinition flow)
     {
@@ -94,7 +94,7 @@ public sealed class FlowDefinitionValidator(
                 ? legacyTarget.PluginId
                 : reference.PluginId;
             if (checkPluginActivation && activation is not null && !activation.IsPluginEnabled(pluginId))
-                Issue("plugin.disabled", path + "/component", "Ce plugin est désactivé pour les nouveaux traitements du cluster.");
+                Issue("plugin.disabled", path + "/component", "Ce plugin est désactivé pour les nouveaux traitements du central.");
             nodes.Add(node.Id, component);
             if (!component.SupportedFlowMediaTypes.Contains(flow.MediaType, StringComparer.Ordinal)) Issue("component.incompatible", path + "/component",
                 "Composant incompatible avec le média du flow.");
@@ -152,14 +152,14 @@ public sealed class FlowDefinitionValidator(
                 var labels = node.Configuration.TryGetValue("requiredLabels", out var labelSelector)
                     && labelSelector.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(labelSelector.GetString());
                 if (!exact && !group && !labels)
-                    Issue("field.invalid", path + "/configuration", "Définissez un nœud, un groupe ou au moins une étiquette requise.");
+                    Issue("field.invalid", path + "/configuration", "Définissez un worker, un groupe ou au moins une étiquette requise.");
                 if (node.Configuration.ContainsKey("targetNodeId") && !exact)
-                    Issue("field.invalid", path + "/configuration/targetNodeId", "L’identifiant du nœud doit être un UUID valide.");
+                    Issue("field.invalid", path + "/configuration/targetNodeId", "L’identifiant du worker doit être un UUID valide.");
                 if (node.Configuration.ContainsKey("targetGroupId") && !group)
                     Issue("field.invalid", path + "/configuration/targetGroupId", "L’identifiant du groupe doit être un UUID valide.");
                 if (node.Configuration.TryGetValue("requiredLabels", out labelSelector)
                     && (labelSelector.ValueKind != JsonValueKind.String
-                        || !string.IsNullOrWhiteSpace(labelSelector.GetString()) && !Encoding.Contracts.Nodes.NodeLabelSelector.IsValid(labelSelector.GetString())))
+                        || !string.IsNullOrWhiteSpace(labelSelector.GetString()) && !Encoding.Contracts.Nodes.WorkerLabelSelector.IsValid(labelSelector.GetString())))
                     Issue("field.invalid", path + "/configuration/requiredLabels", "Utilisez au plus 64 étiquettes sous la forme clé ou clé=valeur.");
             }
             if (node.Component.PluginId == "nodes" && node.Component.ComponentId == "nodes-require-capability"

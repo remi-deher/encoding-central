@@ -13,19 +13,19 @@ import { DiscoveredCluster, LocalNodePairing, LocalNodeStatus } from './local-no
 import { NodeResponse } from './cluster';
 
 export const NODE_MANAGEMENT_TABS = [
-  { value: 'node', label: 'Ce nœud' },
-  { value: 'cluster', label: 'Cluster' },
-  { value: 'groups', label: 'Groupes de nœuds' },
+  { value: 'node', label: 'Ce worker' },
+  { value: 'cluster', label: 'Central' },
+  { value: 'groups', label: 'Groupes de workers' },
 ];
 export const CREATE_CLUSTER_FORM: RecordFormData = {
-  title: 'Créer un cluster',
-  description: 'Ce nœud devient le premier membre du nouveau cluster.',
-  submitLabel: 'Créer le cluster',
-  reviewTitle: 'Créer ce cluster ?',
+  title: 'Créer un central',
+  description: 'Ce worker devient le premier membre du nouveau central.',
+  submitLabel: 'Créer le central',
+  reviewTitle: 'Créer ce central ?',
   fields: [
     {
       id: 'name',
-      label: 'Nom du cluster',
+      label: 'Nom du central',
       type: 'text',
       required: true,
       maxLength: 128,
@@ -77,7 +77,7 @@ export function runtimeEnvironmentLabel(value: string | null | undefined): strin
   }
 }
 
-/** Quatre blocs de synthèse communs aux cartes des membres du cluster. */
+/** Quatre blocs de synthèse communs aux cartes des membres du central. */
 export function memberNodeOverviewSections(
   node: NodeResponse,
   activeTasks: number | null,
@@ -198,7 +198,7 @@ export function memberNodeOverviewSections(
       fields: [
         { label: 'Identifiant', value: node.id, mono: true },
         { label: 'Nom technique', value: node.name },
-        { label: 'Cluster', value: clusterName },
+        { label: 'Central', value: clusterName },
       ],
     },
   ];
@@ -216,7 +216,7 @@ export interface LocalNodeSheetInput {
 }
 
 /**
- * Fiche du nœud local, fondée uniquement sur les états observés : une fonction inconnue n'est jamais présentée
+ * Fiche du worker local, fondée uniquement sur les états observés : une fonction inconnue n'est jamais présentée
  * comme inactive, et une valeur périmée est identifiée comme dernière valeur connue.
  */
 export function localNodeSheet(input: LocalNodeSheetInput): {
@@ -277,7 +277,7 @@ export function localNodeSheet(input: LocalNodeSheetInput): {
   if (agentUnavailable)
     notices.push({
       tone: 'danger',
-      title: 'L’agent de ce nœud ne répond pas',
+      title: 'L’agent de ce worker ne répond pas',
       description:
         'Les informations ci-dessous sont les dernières connues ; elles peuvent ne plus être exactes.',
     });
@@ -310,7 +310,7 @@ export function localNodeSheet(input: LocalNodeSheetInput): {
               label: 'Dernier signal',
               value: 'Indisponible',
               unavailable: true,
-              detail: node ? undefined : 'Le suivi du nœud est assuré par le serveur du cluster.',
+              detail: node ? undefined : 'Le suivi du worker est assuré par le serveur du central.',
             },
       ],
     },
@@ -359,7 +359,7 @@ export function localNodeSheet(input: LocalNodeSheetInput): {
               label: 'Matériel',
               value: 'Non renseigné',
               unavailable: true,
-              detail: 'Disponible après le prochain signal du nœud.',
+              detail: 'Disponible après le prochain signal du worker.',
             },
           ],
     },
@@ -445,21 +445,21 @@ export function localNodeSheet(input: LocalNodeSheetInput): {
       title: 'Identité et appartenance',
       fields: [
         { label: 'Nom technique', value: status?.name ?? 'Indisponible' },
-        { label: 'Identifiant du nœud', value: status?.nodeId ?? 'Indisponible', mono: true },
+        { label: 'Identifiant du worker', value: status?.nodeId ?? 'Indisponible', mono: true },
         {
-          label: 'Cluster',
+          label: 'Central',
           value: standalone
-            ? 'Aucun (nœud autonome)'
-            : (input.clusterName ?? status?.clusterName ?? 'Cluster'),
+            ? 'Aucun (worker autonome)'
+            : (input.clusterName ?? status?.clusterName ?? 'Central'),
         },
       ],
     },
   ];
   return {
-    title: node?.displayName?.trim() || status?.name || 'Ce nœud',
+    title: node?.displayName?.trim() || status?.name || 'Ce worker',
     subtitle: standalone
-      ? 'Nœud autonome'
-      : `Membre de ${input.clusterName ?? status?.clusterName ?? 'son cluster'}`,
+      ? 'Worker autonome'
+      : `Membre de ${input.clusterName ?? status?.clusterName ?? 'son central'}`,
     notices,
     sections,
   };
@@ -473,14 +473,14 @@ export const AUTONOMOUS_CARDS: readonly DetailCard[] = [
       'Aucun rattachement obligatoire',
       [
         {
-          label: 'Un nœud autonome',
+          label: 'Un worker autonome',
           description:
-            'Gérez les fonctions et les capacités de cette installation depuis l’onglet Ce nœud.',
+            'Gérez les fonctions et les capacités de cette installation depuis l’onglet Ce worker.',
         },
         {
           label: 'Une configuration partagée quand vous le souhaitez',
           description:
-            'Un cluster permet de gérer plusieurs nœuds et de leur répartir les traitements.',
+            'Un central permet de gérer plusieurs workers et de leur répartir les traitements.',
         },
       ],
     ),
@@ -490,14 +490,14 @@ export const AUTONOMOUS_CARDS: readonly DetailCard[] = [
 
 export function clusterAddressForm(address: string): RecordFormData {
   return {
-    title: 'Adresse du cluster',
+    title: 'Adresse du central',
     description: '',
     submitLabel: 'Vérifier la connexion',
     review: false,
     fields: [
       {
         id: 'address',
-        label: 'Adresse du cluster',
+        label: 'Adresse du central',
         type: 'text',
         required: true,
         hint: 'Exemple : http://192.168.1.51:8090',
@@ -518,7 +518,7 @@ interface JoinPresentation {
 }
 
 export function clusterJoinSteps(data: JoinPresentation): readonly GuidedStep[] {
-  const name = data.target?.name ?? data.status?.clusterName ?? 'le cluster d’accueil';
+  const name = data.target?.name ?? data.status?.clusterName ?? 'le central d’accueil';
   const expires =
     data.pairing?.expiresAt ?? data.status?.pairingExpiresAt ?? data.status?.switching?.deadline;
   const expiry = expires
@@ -530,14 +530,14 @@ export function clusterJoinSteps(data: JoinPresentation): readonly GuidedStep[] 
   return [
     {
       id: 'address',
-      label: 'Choisir le cluster',
+      label: 'Choisir le central',
       description:
-        'Choisissez un cluster détecté ou saisissez l’adresse d’un nœud serveur du cluster à rejoindre.',
+        'Choisissez un central détecté ou saisissez l’adresse d’un worker serveur du central à rejoindre.',
       ...(data.clusters.length
         ? {
             choices: {
               columns: [
-                { key: 'name', label: 'Cluster' },
+                { key: 'name', label: 'Central' },
                 { key: 'address', label: 'Adresse' },
                 { key: 'state', label: 'Disponibilité' },
               ],
@@ -556,25 +556,25 @@ export function clusterJoinSteps(data: JoinPresentation): readonly GuidedStep[] 
         : {}),
       form: data.addressForm,
       note: data.canChoose
-        ? 'La vérification contacte ce cluster. Aucune demande de rattachement n’est encore envoyée.'
-        : 'La fonction worker est indisponible. Activez-la depuis Ce nœud ou rétablissez sa connexion avant de continuer.',
+        ? 'La vérification contacte ce central. Aucune demande de rattachement n’est encore envoyée.'
+        : 'La fonction worker est indisponible. Activez-la depuis Ce worker ou rétablissez sa connexion avant de continuer.',
     },
     {
       id: 'identity',
       label: 'Vérifier et confirmer',
       description:
-        'Le cluster répond. Comparez son nom et son identifiant avec ceux indiqués sur le serveur d’accueil.',
+        'Le central répond. Comparez son nom et son identifiant avec ceux indiqués sur le serveur d’accueil.',
       cards: data.target
         ? [
-            informationCard('join-target', data.target.name, 'Cluster joignable', [
+            informationCard('join-target', data.target.name, 'Central joignable', [
               { label: 'Adresse', description: data.target.apiBaseUrl },
-              { label: 'Identifiant du cluster', description: data.target.id },
+              { label: 'Identifiant du central', description: data.target.id },
             ]),
           ]
         : [],
       note: data.localServerActive
-        ? 'Après approbation, le serveur local reste actif. Les configurations et états convergent avec le cluster par le maillage SQLite. Les fichiers médias et résultats ne sont pas répliqués et doivent rester accessibles selon les accès configurés. La configuration locale n’est pas importée automatiquement. Un changement en cours peut être annulé avant l’approbation.'
-        : 'Le cluster d’accueil doit approuver votre demande. Les accès aux bibliothèques et les capacités de ce nœud restent nécessaires pour recevoir des traitements.',
+        ? 'Après approbation, le serveur local reste actif. Les configurations et états convergent avec le central par le maillage SQLite. Les fichiers médias et résultats ne sont pas répliqués et doivent rester accessibles selon les accès configurés. La configuration locale n’est pas importée automatiquement. Un changement en cours peut être annulé avant l’approbation.'
+        : 'Le central d’accueil doit approuver votre demande. Les accès aux bibliothèques et les capacités de ce worker restent nécessaires pour recevoir des traitements.',
       actions: [
         { id: 'back', label: 'Modifier l’adresse' },
         { id: 'request', label: 'Envoyer la demande', primary: true },
@@ -583,12 +583,12 @@ export function clusterJoinSteps(data: JoinPresentation): readonly GuidedStep[] 
     {
       id: 'waiting',
       label: 'Approbation',
-      description: `Demande envoyée à ${name}. Un administrateur doit la vérifier depuis Nœuds, puis Cluster, puis Demandes de rattachement.`,
+      description: `Demande envoyée à ${name}. Un administrateur doit la vérifier depuis Workers, puis Demandes de rattachement.`,
       heroCode: code
         ? {
             code,
             label: 'Code à comparer',
-            helper: `Un administrateur du cluster ${name} doit confirmer ce code identique sur son écran.`,
+            helper: `Un administrateur du central ${name} doit confirmer ce code identique sur son écran.`,
             badge: 'En attente d’approbation',
             tone: 'accent',
           }
@@ -599,7 +599,7 @@ export function clusterJoinSteps(data: JoinPresentation): readonly GuidedStep[] 
           'En attente d’approbation',
           'Le rattachement précédent est conservé pendant la vérification',
           [
-            { label: 'Nœud demandeur', description: data.status?.name ?? 'Ce nœud' },
+            { label: 'Worker demandeur', description: data.status?.name ?? 'Ce worker' },
             ...(code
               ? []
               : [{ label: 'Code à comparer', description: 'Lecture du code de vérification…' }]),
@@ -615,7 +615,7 @@ export function clusterJoinSteps(data: JoinPresentation): readonly GuidedStep[] 
           ],
         ),
       ],
-      note: 'L’approbation peut arrêter cette interface locale. En cas de perte de connexion, consultez le cluster d’accueil pour connaître le résultat ; une déconnexion ne prouve pas une réussite.',
+      note: 'L’approbation peut arrêter cette interface locale. En cas de perte de connexion, consultez le central d’accueil pour connaître le résultat ; une déconnexion ne prouve pas une réussite.',
       actions: [
         { id: 'later', label: 'Fermer et suivre plus tard' },
         { id: 'cancel', label: 'Annuler la demande' },
@@ -624,17 +624,17 @@ export function clusterJoinSteps(data: JoinPresentation): readonly GuidedStep[] 
     {
       id: 'done',
       label: 'Rattachement terminé',
-      description: `Le nœud a confirmé son rattachement à ${name}.`,
+      description: `Le worker a confirmé son rattachement à ${name}.`,
       cards: [
-        informationCard('join-complete', `Membre de ${name}`, 'Rattachement confirmé par le nœud', [
+        informationCard('join-complete', `Membre de ${name}`, 'Rattachement confirmé par le worker', [
           {
             label: 'Traitement des bibliothèques',
             description:
-              'Le cluster attribue les tâches selon les capacités et les accès aux médias déclarés pour ce nœud.',
+              'Le central attribue les tâches selon les capacités et les accès aux médias déclarés pour ce worker.',
           },
         ]),
       ],
-      actions: [{ id: 'finish', label: 'Voir le cluster', primary: true }],
+      actions: [{ id: 'finish', label: 'Voir le central', primary: true }],
     },
   ];
 }

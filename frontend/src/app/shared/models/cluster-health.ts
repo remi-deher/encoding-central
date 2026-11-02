@@ -20,7 +20,7 @@ export const NODE_LIFECYCLE_TONES: Record<NodeLifecycleState, StatusTone> = {
   quarantined: 'danger',
 };
 
-/** État affiché d'un nœud : le cycle de vie du serveur, sinon la présence observée. */
+/** État affiché d'un worker : le cycle de vie du serveur, sinon la présence observée. */
 export function nodeLifecycle(node: NodeResponse): NodeLifecycleState {
   return node.lifecycle ?? (node.status === 'online' ? 'online' : 'offline');
 }
@@ -31,7 +31,7 @@ export interface ClusterHealth {
   readonly issues: readonly string[];
 }
 
-/** Synthèse de santé : ce qui empêche le nœud ou le cluster de travailler normalement. */
+/** Synthèse de santé : ce qui empêche le worker ou le central de travailler normalement. */
 export function assessClusterHealth(
   nodes: readonly NodeResponse[],
   libraries: readonly LibraryResponse[],
@@ -72,7 +72,7 @@ export function assessClusterHealth(
   if (!issues.length)
     return {
       tone: 'success',
-      title: standalone ? 'Le nœud fonctionne normalement.' : 'Le cluster fonctionne normalement.',
+      title: standalone ? 'Le worker fonctionne normalement.' : 'Le central fonctionne normalement.',
       issues,
     };
   return {

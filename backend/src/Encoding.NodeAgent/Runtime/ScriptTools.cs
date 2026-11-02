@@ -51,7 +51,7 @@ internal static class ScriptTools
               if (!allowed.includes(name)) throw new Error('Outil non autorisé : ' + name + '. Outils disponibles : ' + allowed.join(', ') + '.');
               if (!Array.isArray(args) || args.some(a => typeof a !== 'string' && typeof a !== 'number')) throw new Error('Les arguments doivent être une liste de chaînes.');
               const executable = find(name);
-              if (!executable) throw new Error('Outil indisponible sur ce nœud : ' + name + '.');
+              if (!executable) throw new Error('Outil indisponible sur ce worker : ' + name + '.');
               const seconds = Math.max(1, Number(options.timeoutSeconds ?? __TIMEOUT__));
               const started = Date.now();
               const r = cp.spawnSync(executable, args.map(String), { cwd, input: options.input, encoding: 'utf8', shell: false, timeout: seconds * 1000, maxBuffer: 64 * 1024 * 1024, killSignal: 'SIGKILL' });
@@ -83,7 +83,7 @@ internal static class ScriptTools
                     raise RuntimeError('Les arguments doivent être une liste de chaînes.')
                 executable = self._find(name)
                 if executable is None:
-                    raise RuntimeError('Outil indisponible sur ce nœud : %s.' % name)
+                    raise RuntimeError('Outil indisponible sur ce worker : %s.' % name)
                 started = _time.time()
                 try:
                     r = _sp.run([executable] + [str(a) for a in args], cwd=_os.getcwd(), input=input, capture_output=True, text=True, errors='replace', timeout=max(1, float(timeout_seconds)), shell=False)

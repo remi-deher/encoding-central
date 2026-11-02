@@ -85,12 +85,12 @@ const PLUGIN_RECORDS: readonly StaticPluginRecord[] = [
   },
   {
     id: 'nodes',
-    name: 'Nœuds',
+    name: 'Workers',
     family: 'cluster',
-    familyLabel: 'Cluster',
+    familyLabel: 'Central',
     category: 'Orchestration des workers',
     version: '1.1.0',
-    components: 'Transférer la suite, choisir un nœud ou exiger une capacité',
+    components: 'Transférer la suite, choisir un worker ou exiger une capacité',
     runtime: 'Intégré au répartiteur et au worker',
     configuration: 'Cible par défaut, avec dérogations par flow et par bloc',
     state: 'Actif par défaut',
@@ -264,7 +264,7 @@ const PLUGIN_RECORDS: readonly StaticPluginRecord[] = [
 
 const PLUGIN_FAMILY_OPTIONS: readonly { readonly value: PluginFamily; readonly label: string }[] = [
   { value: 'base', label: 'Noyau' },
-  { value: 'cluster', label: 'Cluster' },
+  { value: 'cluster', label: 'Central' },
   { value: 'media', label: 'Média' },
   { value: 'automation', label: 'Automatisation' },
   { value: 'custom', label: 'Tiers' },
@@ -670,8 +670,8 @@ export class PluginCatalogPageComponent {
       this.setPluginActivationView(plugin.id, result.enabled);
       this.notifications.show(
         result.enabled
-          ? `Plugin « ${plugin.name} » activé pour le cluster.`
-          : `Plugin « ${plugin.name} » désactivé pour les nouveaux traitements du cluster.`,
+          ? `Plugin « ${plugin.name} » activé pour le central.`
+          : `Plugin « ${plugin.name} » désactivé pour les nouveaux traitements du central.`,
       );
     } catch (error) {
       this.setPluginActivationView(plugin.id, plugin.enabled);
@@ -691,8 +691,8 @@ export class PluginCatalogPageComponent {
       this.setToolActivationView(tool.id, result.enabled);
       this.notifications.show(
         result.enabled
-          ? `Outil « ${tool.name} » activé pour le cluster.`
-          : `Outil « ${tool.name} » désactivé pour les nouveaux traitements du cluster.`,
+          ? `Outil « ${tool.name} » activé pour le central.`
+          : `Outil « ${tool.name} » désactivé pour les nouveaux traitements du central.`,
       );
     } catch (error) {
       this.setToolActivationView(tool.id, tool.enabled);

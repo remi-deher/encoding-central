@@ -69,7 +69,7 @@ test.beforeEach(async ({ page }) => {
     route.fulfill({ json: { items: [], offset: 0, hasMore: false } }),
   );
   await page.route('**/api/v1/tools/ai/quotas', (route) => route.fulfill({ json: { nodes: [] } }));
-  await page.route('**/api/v1/tools/ai/cluster', (route) =>
+  await page.route('**/api/v1/tools/ai/central', (route) =>
     route.fulfill({
       json: {
         nodes: [
@@ -176,11 +176,11 @@ test('Codex only shows the supplied code and closing keeps the attempt active', 
 test('settings navigation and system health use shared components in both themes', async ({
   page,
 }, testInfo) => {
-  await page.route('**/api/v1/cluster', (route) =>
+  await page.route('**/api/v1/central', (route) =>
     route.fulfill({
       json: {
         id: '00000000-0000-0000-0000-000000000001',
-        name: 'Cluster de test',
+        name: 'Central de test',
         standalone: false,
       },
     }),
@@ -196,7 +196,7 @@ test('settings navigation and system health use shared components in both themes
             name: 'cluster',
             status: 'degraded',
             durationMs: 2000,
-            description: 'Le nœud truenas-51 ne répond plus.',
+            description: 'Le worker truenas-51 ne répond plus.',
           },
         ],
       },
@@ -205,11 +205,11 @@ test('settings navigation and system health use shared components in both themes
   await page.goto('/settings?tab=system');
   const settings = page.locator('app-settings-page');
   await expect(settings.getByText('Base de données')).toBeVisible();
-  await expect(settings.getByText('Le nœud truenas-51 ne répond plus.')).toBeVisible();
+  await expect(settings.getByText('Le worker truenas-51 ne répond plus.')).toBeVisible();
   await expect(settings.getByText('Opérationnel').first()).toBeVisible();
-  await expect(settings.getByText('Cluster de test')).toBeVisible();
+  await expect(settings.getByText('Central de test')).toBeVisible();
   await expect(
-    settings.getByRole('region', { name: 'Cluster' }).getByRole('button', { name: 'Copier' }),
+    settings.getByRole('region', { name: 'Central' }).getByRole('button', { name: 'Copier' }),
   ).toBeVisible();
   // Row backgrounds animate on theme change: axe must not sample a colour halfway between themes.
   await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; }' });

@@ -7,7 +7,7 @@ using Encoding.NodeAgent.Runtime;
 namespace Encoding.NodeAgent.Services;
 
 /// <summary>Synchronise les paquets d'outils gérés vers un worker et vérifie le hash avant extraction.</summary>
-public sealed class ToolPackageSyncService(NodeAgentOptions options, WorkerIdentityStore identityStore, IConfiguration configuration,
+public sealed class ToolPackageSyncService(WorkerAgentOptions options, WorkerIdentityStore identityStore, IConfiguration configuration,
     ToolCapabilityProbe capabilityProbe, ILogger<ToolPackageSyncService> logger) : BackgroundService
 {
     private sealed record Listed(string Id, string Version, string Platform, string ArchiveSha256);
@@ -40,7 +40,7 @@ public sealed class ToolPackageSyncService(NodeAgentOptions options, WorkerIdent
             try { listed = await Get(identity, server, ct); activeServer = server; break; }
             catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or JsonException && !ct.IsCancellationRequested) { }
         }
-        if (listed is null || activeServer is null) throw new HttpRequestException("Aucun serveur du cluster n'est joignable pour synchroniser les outils.");
+        if (listed is null || activeServer is null) throw new HttpRequestException("Aucun serveur du central n'est joignable pour synchroniser les outils.");
 
         Directory.CreateDirectory(Root);
         var platform = ToolPackagePlatform.Current;

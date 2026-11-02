@@ -22,7 +22,7 @@ export interface ClusterSnapshot {
   readonly identity: ClusterIdentity;
   readonly nodes: readonly NodeResponse[];
   readonly libraries: readonly LibraryResponse[];
-  /** Accès de chaque nœud à chaque bibliothèque (liste vide si indisponible). */
+  /** Accès de chaque worker à chaque bibliothèque (liste vide si indisponible). */
   readonly accesses: readonly LibraryNodeAccessResponse[];
   readonly observedAt: Date;
 }

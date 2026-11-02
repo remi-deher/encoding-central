@@ -327,9 +327,9 @@ export class HomePageComponent {
         id: `overview-node:${node.id}`,
         label: node.displayName?.trim() || node.name,
         description: `${node.status === 'online' ? 'En ligne' : 'Hors ligne'} · ${node.roles.join(' · ')}`,
-        group: 'Nœuds',
+        group: 'Workers',
         glyph: '▤',
-        path: '/nodes?tab=cluster',
+        path: '/workers?tab=cluster',
       }));
     const executions = [...this.homeExecutionState().active, ...this.homeExecutionState().publications]
       .filter((item) => matches(item.media, item.library, item.flow, item.node ?? '', item.detail))

@@ -21,7 +21,7 @@ import {
             <app-status-badge
               [label]="
                 g.mode === 'manual'
-                  ? 'Manuel (' + memberNodes().length + ' nœuds)'
+                  ? 'Manuel (' + memberNodes().length + ' workers)'
                   : 'Automatique (' + memberNodes().length + ' matchés)'
               "
               [tone]="g.mode === 'manual' ? 'neutral' : 'accent'"
@@ -35,19 +35,19 @@ import {
         <!-- Membres réels -->
         <section class="detail-section">
           <div class="section-header">
-            <h4>Membres actuels du cluster ({{ memberNodes().length }})</h4>
+            <h4>Membres actuels du central ({{ memberNodes().length }})</h4>
             <p>
               {{
                 g.mode === 'manual'
-                  ? 'Nœuds affectés directement à ce groupe manuel.'
-                  : 'Nœuds satisfaisant actuellement tous les critères d’inventaire.'
+                  ? 'Workers affectés directement à ce groupe manuel.'
+                  : 'Workers satisfaisant actuellement tous les critères d’inventaire.'
               }}
             </p>
           </div>
 
           <div class="members-grid">
             @if (memberNodes().length === 0) {
-              <p class="empty-hint">Aucun nœud n’appartient actuellement à ce groupe.</p>
+              <p class="empty-hint">Aucun worker n’appartient actuellement à ce groupe.</p>
             } @else {
               @for (node of memberNodes(); track node.id) {
                 <div class="member-card">
@@ -111,7 +111,7 @@ import {
           <div class="section-header">
             <h4>Étiquettes partagées (Labels)</h4>
             <p>
-              Transmises automatiquement à tous les membres. Les étiquettes locales du nœud
+              Transmises automatiquement à tous les membres. Les étiquettes locales du worker
               prévalent en cas de clé identique.
             </p>
           </div>

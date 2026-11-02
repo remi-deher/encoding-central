@@ -82,8 +82,8 @@ internal static class AudioRuleScenarios
             new("rules", null, new("base", "1.2.0", "base-audio-rules", "1.2.0", 1), new Dictionary<string, JsonElement> { ["processingMode"] = J("direct") })],
             [new("edge", "input", "success", "rules")]);
         var worker = Guid.NewGuid();
-        NodeToolCapability Ffmpeg(params string[] encoders) => new("ffmpeg", "7.0", ["video"], ["cpu"], encoders);
-        NodeToolCapability[] Node(NodeToolCapability ffmpeg) => [new("plugin/base", "1.6.0", ["general"], []), new("ffprobe", "7.0", ["video"], []), ffmpeg];
+        WorkerToolCapability Ffmpeg(params string[] encoders) => new("ffmpeg", "7.0", ["video"], ["cpu"], encoders);
+        WorkerToolCapability[] Node(WorkerToolCapability ffmpeg) => [new("plugin/base", "1.6.0", ["general"], []), new("ffprobe", "7.0", ["video"], []), ffmpeg];
         Check(validator.Validate(FlowWith()).IsValid, "A flow with the audio rules block is valid.");
         Check(eligibility.CanRun(FlowWith(), Node(Ffmpeg("aac", "ac3")), worker), "A worker with AAC and AC-3 encoders can run the rules.");
         Check(!eligibility.CanRun(FlowWith(), Node(Ffmpeg("aac")), worker), "A worker without an AC-3 encoder never receives the rules.");

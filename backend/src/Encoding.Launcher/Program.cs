@@ -4,7 +4,7 @@ using Encoding.Launcher;
 var builder = Host.CreateApplicationBuilder(args);
 var configuration = builder.Configuration;
 
-var dataDirectory = Path.GetFullPath(configuration["Node:DataDirectory"] ?? "/var/lib/encoding-node");
+var dataDirectory = Path.GetFullPath(configuration["Worker:DataDirectory"] ?? "/var/lib/encoding-node");
 var apiPort = configuration.GetValue("Launcher:ApiPort", 8080);
 var agentPort = configuration.GetValue("WorkerUi:Port", 8081);
 var localEnrollmentSecretFile = Path.Combine(dataDirectory, LocalEnrollment.FileName);
@@ -16,8 +16,8 @@ IReadOnlyDictionary<string, string> ServerEnvironment()
     var environment = new Dictionary<string, string>
     {
         ["ASPNETCORE_URLS"] = $"http://+:{apiPort}",
-        ["Node__DataDirectory"] = dataDirectory,
-        ["Node__LocalEnrollmentSecretFile"] = localEnrollmentSecretFile,
+        ["Worker__DataDirectory"] = dataDirectory,
+        ["Worker__LocalEnrollmentSecretFile"] = localEnrollmentSecretFile,
     };
     if (string.IsNullOrWhiteSpace(configuration["PluginSettings:KeyDirectory"]))
         environment["PluginSettings__KeyDirectory"] = Path.Combine(dataDirectory, "plugin-keys");
@@ -34,12 +34,12 @@ IReadOnlyDictionary<string, string> AgentEnvironment()
     var environment = new Dictionary<string, string>
     {
         ["ASPNETCORE_URLS"] = $"http://+:{agentPort}",
-        ["Node__Roles"] = "server,worker",
-        ["Node__DataDirectory"] = dataDirectory,
-        ["Node__LocalEnrollmentSecretFile"] = localEnrollmentSecretFile,
+        ["Worker__Roles"] = "server,worker",
+        ["Worker__DataDirectory"] = dataDirectory,
+        ["Worker__LocalEnrollmentSecretFile"] = localEnrollmentSecretFile,
     };
-    if (string.IsNullOrWhiteSpace(configuration["Cluster:ApiBaseUrl"]))
-        environment["Cluster__ApiBaseUrl"] = $"http://127.0.0.1:{apiPort}";
+    if (string.IsNullOrWhiteSpace(configuration["Central:ApiBaseUrl"]))
+        environment["Central__ApiBaseUrl"] = $"http://127.0.0.1:{apiPort}";
     return environment;
 }
 

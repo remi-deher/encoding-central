@@ -24,7 +24,7 @@ import { AccessTemplateComponent } from '../../shared/templates/access-template.
     <app-access-template
       view="login"
       title="Connexion"
-      description="Identifiez-vous pour gérer le cluster."
+      description="Identifiez-vous pour gérer le central."
       [busy]="busy()"
       progressLabel="Connexion en cours"
     >

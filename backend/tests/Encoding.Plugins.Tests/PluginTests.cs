@@ -192,7 +192,7 @@ internal static class PluginTests
         var current = new Dictionary<string, string?>
         {
             ["PATH"] = "/usr/bin", ["LANG"] = "fr_FR.UTF-8",
-            ["ConnectionStrings__Cluster"] = "Host=db;Password=hunter2", ["Node__Token"] = "t0ken", ["ANTHROPIC_API_KEY"] = "sk-x", ["HOME"] = "/root"
+            ["ConnectionStrings__Central"] = "Host=db;Password=hunter2", ["Worker__Token"] = "t0ken", ["ANTHROPIC_API_KEY"] = "sk-x", ["HOME"] = "/root"
         };
         var minimal = Encoding.Core.Runtime.ProcessSandbox.MinimalEnvironment(current, "/work");
         Check(minimal["PATH"] == "/usr/bin" && minimal["LANG"] == "fr_FR.UTF-8", "Locale and PATH are kept.");

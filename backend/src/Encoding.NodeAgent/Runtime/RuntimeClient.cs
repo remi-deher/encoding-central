@@ -19,7 +19,7 @@ public sealed class RuntimeClient : IDisposable
     }
     public Guid NodeId=>identity.Id;
     public string ApiBaseUrl { get; }
-    private string Route(string path)=>$"api/v1/runtime/nodes/{identity.Id:D}/{path}";
+    private string Route(string path)=>$"api/v1/runtime/workers/{identity.Id:D}/{path}";
     public async Task<T?> PostAsync<T>(string path,object body,CancellationToken ct)
     {
         using var response=await http.PostAsJsonAsync(Route(path),body,AgentJson.Options,ct);

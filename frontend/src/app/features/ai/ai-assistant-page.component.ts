@@ -224,11 +224,11 @@ export class AiAssistantPageComponent implements OnDestroy {
   protected readonly readTools = [
     { name: 'list_flows', label: 'Lister les flows' },
     { name: 'get_flow', label: 'Relire le flow sélectionné' },
-    { name: 'list_nodes', label: 'Lister les nœuds' },
+    { name: 'list_nodes', label: 'Lister les workers' },
     { name: 'list_executions', label: 'Consulter les exécutions récentes' },
     { name: 'get_libraries_overview', label: 'Consulter les bibliothèques' },
     { name: 'list_libraries', label: 'Lister les bibliothèques' },
-    { name: 'list_node_groups', label: 'Lister les groupes de nœuds' },
+    { name: 'list_node_groups', label: 'Lister les groupes de workers' },
     { name: 'list_scripts', label: 'Lister les scripts' },
     { name: 'list_encoding_profiles', label: 'Lister les profils d’encodage' },
     { name: 'list_templates', label: 'Lister les modèles de flow' },
@@ -553,7 +553,7 @@ export class AiAssistantPageComponent implements OnDestroy {
       href: {
         flow: '/flows',
         execution: '/activity',
-        node: '/nodes',
+        node: '/workers',
         library: '/libraries',
       }[option.type],
       version: option.version,
@@ -1364,16 +1364,16 @@ export class AiAssistantPageComponent implements OnDestroy {
     });
   }
 
-  /** Nœud qui coordonne la discussion, pour l'indication « Discussion du nœud … ». */
+  /** Worker qui coordonne la discussion, pour l'indication « Discussion du worker … ». */
   protected coordinatorLabel(conversation: AiAssistantConversation): string | null {
     if (!conversation.coordinatorId) return null;
     const node = this.aiNodes().find(
       (candidate) => candidate.nodeId === conversation.coordinatorId,
     );
-    return node ? `Discussion du nœud ${node.name}` : 'Discussion d’un autre nœud';
+    return node ? `Discussion du worker ${node.name}` : 'Discussion d’un autre worker';
   }
 
-  /** Vrai quand le coordinateur ne répond plus : le nœud courant reprendra la discussion au prochain message. */
+  /** Vrai quand le coordinateur ne répond plus : le worker courant reprendra la discussion au prochain message. */
   protected coordinatorLost(conversation: AiAssistantConversation): boolean {
     return this.aiNodes().some(
       (candidate) => candidate.nodeId === conversation.coordinatorId && !candidate.reachable,

@@ -49,7 +49,7 @@ internal static class TriggerTests
     {
         var registry = StoreCatalogFixture.Create();
         var validator = new FlowDefinitionValidator(registry);
-        var presence = new NodePresenceOptions(TimeSpan.FromHours(1));
+        var presence = new WorkerPresenceOptions(TimeSpan.FromHours(1));
         var workflow = new LibraryWorkflowRepository(db, validator, presence);
         var configurations = new PluginConfigurationRepository(db, DataProtectionProvider.Create(new DirectoryInfo(Path.Combine(directory, "keys"))));
         var triggers = new IntegrationTriggerRepository(db);
@@ -137,7 +137,7 @@ internal static class TriggerTests
         Check(await State(db) == "pending" && await ScalarAsync(db, "SELECT count(*) FROM library_scans WHERE library_id=@id AND state IN('queued','running')", library) == 1, "A scan is requested and the request keeps waiting.");
         Check(await ScalarAsync(db, "SELECT count(*) FROM executions") == 0, "No execution exists before the file is discovered.");
 
-        // Un nœud en accès direct découvre la bibliothèque (chemin réel de la découverte), sans le fichier attendu.
+        // Un worker en accès direct découvre la bibliothèque (chemin réel de la découverte), sans le fichier attendu.
         await CompleteScanAsync(workflow, node, []);
         await db.CreateCommand("UPDATE integration_trigger_requests SET claimed_until=NULL").ExecuteNonQueryAsync();
         await service.ProcessAsync(CancellationToken.None);

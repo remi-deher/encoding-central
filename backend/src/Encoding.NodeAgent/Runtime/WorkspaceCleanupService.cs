@@ -3,12 +3,12 @@ using Encoding.NodeAgent.Services;
 
 namespace Encoding.NodeAgent.Runtime;
 
-/// <summary>Durées de conservation des dossiers de travail locaux (<c>executions/</c>, <c>transfers/</c> et, sur un nœud sans fonction serveur, <c>runtime-artifacts/</c>) d'un nœud.</summary>
+/// <summary>Durées de conservation des dossiers de travail locaux (<c>executions/</c>, <c>transfers/</c> et, sur un worker sans fonction serveur, <c>runtime-artifacts/</c>) d'un worker.</summary>
 public sealed record WorkspaceRetentionOptions(bool Enabled, TimeSpan Completed, TimeSpan Failed, TimeSpan Unknown, TimeSpan Interval)
 {
     public static WorkspaceRetentionOptions FromConfiguration(IConfiguration configuration)
     {
-        var section = configuration.GetSection("Node:Workspace");
+        var section = configuration.GetSection("Worker:Workspace");
         var options = new WorkspaceRetentionOptions(
             section.GetValue("CleanupEnabled", true),
             TimeSpan.FromHours(section.GetValue("CompletedRetentionHours", 0.0)),
@@ -16,8 +16,8 @@ public sealed record WorkspaceRetentionOptions(bool Enabled, TimeSpan Completed,
             TimeSpan.FromHours(section.GetValue("UnknownRetentionHours", 72.0)),
             TimeSpan.FromMinutes(section.GetValue("CleanupIntervalMinutes", 10.0)));
         if (options.Completed < TimeSpan.Zero || options.Failed < TimeSpan.Zero || options.Unknown < TimeSpan.Zero)
-            throw new InvalidOperationException("Node:Workspace : les durées de conservation ne peuvent pas être négatives.");
-        if (options.Interval < TimeSpan.FromMinutes(1)) throw new InvalidOperationException("Node:Workspace:CleanupIntervalMinutes doit être au moins 1.");
+            throw new InvalidOperationException("Worker:Workspace : les durées de conservation ne peuvent pas être négatives.");
+        if (options.Interval < TimeSpan.FromMinutes(1)) throw new InvalidOperationException("Worker:Workspace:CleanupIntervalMinutes doit être au moins 1.");
         return options;
     }
 
@@ -38,7 +38,7 @@ public sealed record WorkspaceRetentionOptions(bool Enabled, TimeSpan Completed,
 /// Supprime les dossiers de travail des exécutions terminées (ils contiennent des copies de la source et des sorties volumineuses).
 /// Ne touche ni aux médias de bibliothèque ni aux dossiers d'une exécution non terminée.
 /// </summary>
-public sealed class WorkspaceCleanupService(NodeAgentOptions options, WorkerIdentityStore identities, IConfiguration configuration, ILogger<WorkspaceCleanupService> logger) : BackgroundService
+public sealed class WorkspaceCleanupService(WorkerAgentOptions options, WorkerIdentityStore identities, IConfiguration configuration, ILogger<WorkspaceCleanupService> logger) : BackgroundService
 {
     private static readonly string[] Roots = ["executions", "transfers"];
     private const string ArtifactsRoot = "runtime-artifacts";
@@ -46,7 +46,7 @@ public sealed class WorkspaceCleanupService(NodeAgentOptions options, WorkerIden
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         var retention = WorkspaceRetentionOptions.FromConfiguration(configuration);
-        if (!retention.Enabled) { logger.LogInformation("Nettoyage des dossiers de travail désactivé (Node:Workspace:CleanupEnabled)."); return; }
+        if (!retention.Enabled) { logger.LogInformation("Nettoyage des dossiers de travail désactivé (Worker:Workspace:CleanupEnabled)."); return; }
         while (!ct.IsCancellationRequested)
         {
             try { await SweepAsync(retention, ct); }

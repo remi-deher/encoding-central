@@ -13,7 +13,7 @@ describe('SystemTabComponent', () => {
     const http = TestBed.inject(HttpTestingController);
     fixture.detectChanges();
     http
-      .expectOne('/api/v1/cluster')
+      .expectOne('/api/v1/central')
       .flush({ id: 'abc-123', name: 'Maison', standalone: true, hasClusterToken: false });
     http.expectOne('/health/details').flush({
       status: 'degraded',
@@ -32,7 +32,7 @@ describe('SystemTabComponent', () => {
   it('lists the services needing attention first, with their reason', async () => {
     const element = await setup();
     const names = [...element.querySelectorAll('.service strong')].map((n) => n.textContent);
-    expect(names).toEqual(['Maillage du cluster', 'Base de données']);
+    expect(names).toEqual(['Maillage du central', 'Base de données']);
     expect(element.querySelector('.service.attention')?.textContent).toContain('Pair muet');
     expect(element.querySelector('.banner')?.textContent).toContain('1 service demande');
   });

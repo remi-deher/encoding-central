@@ -20,7 +20,7 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     Args = args,
     WebRootPath = Path.GetFullPath("../api/wwwroot", AppContext.BaseDirectory)
 });
-var options = NodeAgentOptions.FromConfiguration(builder.Configuration);
+var options = WorkerAgentOptions.FromConfiguration(builder.Configuration);
 if (options.WorkerImage && options.LocalEnrollmentSecretFile is { } localSecretFile)
     LocalEnrollment.Create(localSecretFile);
 Environment.SetEnvironmentVariable(ManagedToolCatalog.DirectoryEnvironmentVariable,
@@ -36,10 +36,10 @@ builder.Services.AddSingleton(options);
 builder.Services.AddHttpClient(CentralUiProxy.ClientName, client => client.Timeout = Timeout.InfiniteTimeSpan)
     .ConfigurePrimaryHttpMessageHandler(CentralUiProxy.CreateHandler);
 builder.Services.AddSingleton<WorkerIdentityStore>();
-builder.Services.AddSingleton<ISystemLogNodeContext>(sp =>
+builder.Services.AddSingleton<ISystemLogWorkerContext>(sp =>
 {
     var identityStore = sp.GetRequiredService<WorkerIdentityStore>();
-    return new DefaultSystemLogNodeContext(() =>
+    return new DefaultSystemLogWorkerContext(() =>
     {
         return (identityStore.CurrentId, identityStore.CurrentDisplayName);
     });
@@ -60,16 +60,16 @@ builder.Services.AddHostedService<RuntimeTransferService>();
 builder.Services.AddHostedService<WorkspaceCleanupService>();
 builder.Services.AddHostedService<SourceReplacementService>();
 builder.Services.AddHostedService<LibraryDiscoveryService>();
-builder.Services.AddHostedService<NodeDirectoryBrowserService>();
+builder.Services.AddHostedService<WorkerDirectoryBrowserService>();
 builder.Services.AddHostedService<RuntimeWorkerService>();
 builder.Services.AddHostedService<ResourcePrefetchWorker>();
 builder.Services.AddSingleton<ToolCapabilityProbe>();
 builder.Services.AddSingleton<IToolCapabilityProbe>(provider => provider.GetRequiredService<ToolCapabilityProbe>());
-builder.Services.AddSingleton<WorkerClusterDiscovery>();
+builder.Services.AddSingleton<WorkerCentralDiscovery>();
 builder.Services.AddSingleton<WorkerEnrollmentService>();
-builder.Services.AddHostedService<WorkerClusterDiscovery>(provider => provider.GetRequiredService<WorkerClusterDiscovery>());
+builder.Services.AddHostedService<WorkerCentralDiscovery>(provider => provider.GetRequiredService<WorkerCentralDiscovery>());
 builder.Services.AddHostedService<WorkerAutoEnrollmentService>();
-builder.Services.AddHostedService<NodeHeartbeatService>();
+builder.Services.AddHostedService<WorkerHeartbeatService>();
 builder.Services.AddHostedService<PluginSyncService>();
 builder.Services.AddHostedService<ToolPackageSyncService>();
 builder.Services.ConfigureHttpJsonOptions(json =>
@@ -86,7 +86,7 @@ CentralUiProxy.Use(
             return identity.ApiBaseUrl;
         if (!string.IsNullOrWhiteSpace(options.ClusterApiBaseUrl))
             return options.ClusterApiBaseUrl;
-        return context.RequestServices.GetRequiredService<WorkerClusterDiscovery>()
+        return context.RequestServices.GetRequiredService<WorkerCentralDiscovery>()
             .List()
             .FirstOrDefault(cluster => cluster.Source == "manual" && cluster.Reachable)
             ?.ApiBaseUrl;
@@ -108,8 +108,8 @@ app.MapGet(WorkerAgentGate.HardwarePath, async (IToolCapabilityProbe capabilityP
         (await capabilityProbe.DiscoverAsync(cancellationToken))
             .Select(tool => new WorkerHardwareTool(tool.ToolId, tool.AccelerationTypes ?? []))
             .ToArray()))).WithName("GetWorkerHardware");
-app.MapGet("/api/v1/worker/clusters", (WorkerClusterDiscovery discovery) => Results.Ok(discovery.List()));
-app.MapPost("/api/v1/worker/clusters", async (WorkerClusterAddress request, WorkerClusterDiscovery discovery, CancellationToken cancellationToken) =>
+app.MapGet("/api/v1/worker/centrals", (WorkerCentralDiscovery discovery) => Results.Ok(discovery.List()));
+app.MapPost("/api/v1/worker/centrals", async (WorkerCentralAddress request, WorkerCentralDiscovery discovery, CancellationToken cancellationToken) =>
 {
     try
     {
@@ -124,11 +124,11 @@ app.MapPost("/api/v1/worker/clusters", async (WorkerClusterAddress request, Work
         return Results.Problem(statusCode: StatusCodes.Status502BadGateway, title: exception.Message);
     }
 }).WithName("AddWorkerClusterByAddress");
-app.MapDelete("/api/v1/worker/clusters/{clusterId:guid}", (Guid clusterId, WorkerClusterDiscovery discovery) =>
+app.MapDelete("/api/v1/worker/centrals/{clusterId:guid}", (Guid clusterId, WorkerCentralDiscovery discovery) =>
     discovery.Forget(clusterId)
         ? Results.NoContent()
-        : Results.NotFound(new { title = "Seule une adresse ajoutée à la main peut être oubliée ; ce cluster est détecté automatiquement." })).WithName("ForgetWorkerCluster");
-app.MapGet("/api/v1/worker/status", async (NodeAgentOptions agentOptions, WorkerIdentityStore identityStore, IToolCapabilityProbe capabilityProbe,
+        : Results.NotFound(new { title = "Seule une adresse ajoutée à la main peut être oubliée ; ce central est détecté automatiquement." })).WithName("ForgetWorkerCluster");
+app.MapGet("/api/v1/worker/status", async (WorkerAgentOptions agentOptions, WorkerIdentityStore identityStore, IToolCapabilityProbe capabilityProbe,
     WorkerEnrollmentService enrollment, CancellationToken cancellationToken) =>
 {
     var identity = await identityStore.GetAsync(cancellationToken);
@@ -148,7 +148,7 @@ app.MapGet("/api/v1/worker/status", async (NodeAgentOptions agentOptions, Worker
         clusterId = identity.ClusterId,
         clusterName = identity.ClusterName,
         displayName = identity.DisplayName ?? agentOptions.DisplayName,
-        verificationCode = identity.HasCredentials ? NodeVerificationCode.FromToken(identity.Id, identity.NodeToken!) : null,
+        verificationCode = identity.HasCredentials ? WorkerVerificationCode.FromToken(identity.Id, identity.NodeToken!) : null,
         switching = identity.IsSwitching
             ? new { previousClusterName = identity.Previous!.ClusterName, deadline = identity.SwitchDeadline }
             : null,
@@ -172,7 +172,7 @@ app.MapGet("/api/v1/worker/logs", (
     return Results.Ok(ringBuffer.Query(query));
 }).WithName("GetWorkerLogs");
 app.MapPost("/api/v1/worker/enroll", async (
-    WorkerEnrollmentRequest request,
+    JoinCentralRequest request,
     WorkerEnrollmentService enrollment,
     HttpContext http,
     CancellationToken cancellationToken) =>
@@ -194,7 +194,7 @@ app.MapPost("/api/v1/worker/enroll", async (
 }).WithName("ConfirmWorkerEnrollment");
 
 app.MapPost("/api/v1/worker/pairing-key", async (
-    WorkerEnrollmentRequest request,
+    JoinCentralRequest request,
     WorkerEnrollmentService enrollment,
     CancellationToken cancellationToken) =>
 {
@@ -233,6 +233,6 @@ app.MapFallbackToFile("index.html");
 
 await app.RunAsync();
 
-public sealed record WorkerClusterAddress(string ApiBaseUrl);
+public sealed record WorkerCentralAddress(string ApiBaseUrl);
 
-public sealed record WorkerEnrollmentRequest(Guid ClusterId, bool LeaveCurrent = false, string? DisplayName = null);
+public sealed record JoinCentralRequest(Guid ClusterId, bool LeaveCurrent = false, string? DisplayName = null);

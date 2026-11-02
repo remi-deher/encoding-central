@@ -4,7 +4,7 @@ using Encoding.Core.Tools;
 
 namespace Encoding.NodeAgent.Runtime;
 
-/// <summary>Résout les rôles fournis par les paquets du Store déjà vérifiés sur ce nœud.</summary>
+/// <summary>Résout les rôles fournis par les paquets du Store déjà vérifiés sur ce worker.</summary>
 public static class ManagedToolCatalog
 {
     public const string DefaultDirectory = "/opt/encoding/managed-tools";

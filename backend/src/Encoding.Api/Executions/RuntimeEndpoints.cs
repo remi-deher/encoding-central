@@ -13,7 +13,7 @@ public static class RuntimeEndpoints
     public static void MapRuntimeEndpoints(this WebApplication app)
     {
         app.MapRuntimeArtifactEndpoints();
-        var group = app.MapGroup("/api/v1/runtime/nodes/{nodeId:guid}").AllowAnonymous().WithTags("Runtime");
+        var group = app.MapGroup("/api/v1/runtime/workers/{nodeId:guid}").AllowAnonymous().WithTags("Runtime");
         group.AddEndpointFilter(async (context, next) =>
         {
             var node = Guid.Parse((string)context.HttpContext.Request.RouteValues["nodeId"]!);
@@ -65,7 +65,7 @@ public static class RuntimeEndpoints
             await coordinator.ClaimDirectoryBrowseAsync(nodeId, ct) is { } claim ? Results.Ok(claim) : Results.NoContent());
 
         group.MapPost("/directory-browser/{requestId:guid}/complete", async (
-            Guid nodeId, Guid requestId, NodeDirectoryBrowseCompletion request,
+            Guid nodeId, Guid requestId, WorkerDirectoryBrowseCompletion request,
             RuntimeExecutionCoordinator coordinator, CancellationToken ct) =>
             await coordinator.CompleteDirectoryBrowseAsync(requestId, nodeId, request, ct) ? Results.NoContent() : Results.Conflict());
     }

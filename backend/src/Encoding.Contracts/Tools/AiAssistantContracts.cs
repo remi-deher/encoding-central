@@ -20,7 +20,7 @@ public sealed record AiAssistantConversation(
     string? Model = null,
     string? ReasoningEffort = null, Guid? NodeId = null,
     string? TitleSource = null,
-    /// <summary>Nœud qui coordonne la discussion (reprise comprise), renseigné à la lecture.</summary>
+    /// <summary>Worker qui coordonne la discussion (reprise comprise), renseigné à la lecture.</summary>
     Guid? CoordinatorId = null);
 
 public sealed record AiAssistantRenameRequest(string Title);
@@ -30,7 +30,7 @@ public sealed record AiAssistantModelOption(string Provider, string? Model, stri
     string? DefaultReasoningEffort = null, bool ReasoningKnown = false, bool IsDefault = false);
 
 public sealed record AiAssistantOptions(string DefaultProvider, string? DefaultModel,
-    IReadOnlyList<AiAssistantModelOption> Models, IReadOnlyList<AiNodeModelCatalog>? Catalogs = null,
+    IReadOnlyList<AiAssistantModelOption> Models, IReadOnlyList<AiWorkerModelCatalog>? Catalogs = null,
     string? DefaultReasoningEffort = null);
 
 public sealed record AiAssistantResourceReference(string Type, Guid Id, int? Version = null);

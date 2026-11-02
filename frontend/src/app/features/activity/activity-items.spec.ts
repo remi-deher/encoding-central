@@ -10,7 +10,7 @@ const execution = (state: ExecutionResponse['state']): ExecutionResponse => ({
   flowVersion: 2,
   state,
   nodeId: 'n1',
-  node: 'nœud-1',
+  node: 'worker-1',
   progress: 40,
   detail: 'Encodage',
   attempt: 1,

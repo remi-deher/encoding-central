@@ -9,7 +9,7 @@ namespace Encoding.Api.Executions;
 
 public sealed partial class FlowPlacementPlanner
 {
-    public IReadOnlyList<FlowPathRequirements> ExtractPathRequirements(FlowDefinition flow, JsonElement? sourceMetadata, IReadOnlyList<NodePlacementCandidate>? candidates = null)
+    public IReadOnlyList<FlowPathRequirements> ExtractPathRequirements(FlowDefinition flow, JsonElement? sourceMetadata, IReadOnlyList<WorkerPlacementCandidate>? candidates = null)
     {
         var inputNode = flow.Nodes.FirstOrDefault(n => registry.Resolve(n.Component)?.Kind == "input");
         if (inputNode is null) return [];
@@ -68,7 +68,7 @@ public sealed partial class FlowPlacementPlanner
                 }
                 else if (candidates is not null && node.Component.PluginId == "nodes" && node.Component.ComponentId == "nodes-library-access" && RuntimeHandoffPolicy.LibraryAccessNeedsEncoder(node))
                 {
-                    // Si aucun nœud à accès direct ne possède une cible déclarée du profil,
+                    // Si aucun worker à accès direct ne possède une cible déclarée du profil,
                     // la branche « oui » ne sera jamais empruntée : le repli CPU ne la rend pas vraie.
                     var anyDirectCanEncode = candidates.Any(c =>
                         c.IsOnline && c.IsWorker
@@ -124,7 +124,7 @@ public sealed partial class FlowPlacementPlanner
         var videoTranscodes = new List<VideoTranscodeRequirement>();
         var audioEncoders = new HashSet<string>(StringComparer.Ordinal);
         var fontSets = new HashSet<string>(StringComparer.Ordinal);
-        var runConstraints = new List<NodeRunConstraint>();
+        var runConstraints = new List<WorkerRunConstraint>();
         var capabilityConstraints = new List<CapabilityConstraint>();
 
         foreach (var node in nodes)
@@ -255,7 +255,7 @@ public sealed partial class FlowPlacementPlanner
             capabilityConstraints);
     }
 
-    public bool NodeSatisfiesPath(NodePlacementCandidate node, FlowPathRequirements path, out List<string> missing)
+    public bool NodeSatisfiesPath(WorkerPlacementCandidate node, FlowPathRequirements path, out List<string> missing)
     {
         missing = [];
 
@@ -310,10 +310,10 @@ public sealed partial class FlowPlacementPlanner
         foreach (var constraint in path.RunConstraints)
         {
             if (constraint.TargetNodeId.HasValue && constraint.TargetNodeId.Value != node.NodeId)
-                missing.Add($"nœud cible imposé {constraint.TargetNodeId.Value:D}");
+                missing.Add($"worker cible imposé {constraint.TargetNodeId.Value:D}");
             if (constraint.TargetGroupId.HasValue && (node.Identity is null || !node.Identity.GroupIds.Contains(constraint.TargetGroupId.Value)))
                 missing.Add($"groupe imposé {constraint.TargetGroupId.Value:D}");
-            if (!string.IsNullOrWhiteSpace(constraint.RequiredLabels) && !NodeLabelSelector.Matches(constraint.RequiredLabels, node.Identity?.EffectiveLabels))
+            if (!string.IsNullOrWhiteSpace(constraint.RequiredLabels) && !WorkerLabelSelector.Matches(constraint.RequiredLabels, node.Identity?.EffectiveLabels))
                 missing.Add($"étiquettes imposées {constraint.RequiredLabels}");
         }
 
@@ -347,7 +347,7 @@ public sealed partial class FlowPlacementPlanner
         return missing.Count == 0;
     }
 
-    private static bool NodeSatisfiesTranscodeRequirements(NodePlacementCandidate node, FlowPathRequirements path)
+    private static bool NodeSatisfiesTranscodeRequirements(WorkerPlacementCandidate node, FlowPathRequirements path)
     {
         if (path.VideoTranscodes.Count == 0) return true;
         var ffmpeg = node.Capabilities.FirstOrDefault(c => c.ToolId == "ffmpeg");

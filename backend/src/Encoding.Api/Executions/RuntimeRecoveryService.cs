@@ -9,7 +9,7 @@ using Encoding.Contracts.Nodes;
 namespace Encoding.Api.Executions;
 
 public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<RuntimeRecoveryService> logger,
-    NodeGroupRepository? nodeGroups = null, RuntimeEligibility? eligibility = null, NodePresenceOptions? presence = null,TaskOwnershipRepository? ownership=null) : BackgroundService
+    WorkerGroupRepository? nodeGroups = null, RuntimeEligibility? eligibility = null, WorkerPresenceOptions? presence = null) : BackgroundService
 {
     private static readonly JsonSerializerOptions Json=new(JsonSerializerDefaults.Web);
     private readonly TimeSpan offlineAfter=presence?.OfflineAfter??TimeSpan.FromSeconds(30);
@@ -31,12 +31,12 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
     /// <summary>Reprises automatiques d'une même exécution après perte du worker (ADR 0004).</summary>
     public const int MaximumResumes=2;
     private static readonly TimeSpan ResumeGrace=TimeSpan.FromMinutes(2);
-    /// <summary>Délai avant de déclarer qu'aucun nœud du cluster ne peut jamais exécuter une exécution neuve (ADR 0024).</summary>
+    /// <summary>Délai avant de déclarer qu'aucun worker du central ne peut jamais exécuter une exécution neuve (ADR 0024).</summary>
     private static readonly TimeSpan FreshPlacementGrace=TimeSpan.FromMinutes(2);
 
     private static readonly string ExpiredWorkPredicate = $"""
-        ((e.state='cancelling' AND (w.lease_until IS NULL OR w.lease_until<=clock_timestamp()) AND {TaskOwnershipRepository.ActiveSql("e.id",true)})
-        OR (e.state='running' AND w.worker_node_id IS NOT NULL AND w.lease_until IS NOT NULL AND w.lease_until<=clock_timestamp() AND {TaskOwnershipRepository.ActiveSql("e.id")}))
+        ((e.state='cancelling' AND (w.lease_until IS NULL OR w.lease_until<=clock_timestamp()))
+        OR (e.state='running' AND w.worker_node_id IS NOT NULL AND w.lease_until IS NOT NULL AND w.lease_until<=clock_timestamp()))
         """;
 
     private async Task<bool> HasExpiredWorkAsync(CancellationToken ct)
@@ -53,7 +53,6 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
     /// </summary>
     public async Task<int> ProcessOnceAsync(CancellationToken ct)
     {
-        if(ownership is not null && !await ownership.PrepareClaimsAsync(ct)) return 0;
         // This is only an admission hint: all predicates are rechecked inside the writer transaction.
         if (!await HasExpiredWorkAsync(ct) && !await RuntimeRepository.HasUnavailableSourcesAsync(dataSource, offlineAfter, ct))
             return await FailUnavailableTargetsAsync(ct);
@@ -95,7 +94,7 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
                         if(policy is not null && item.Attempt<=policy.MaximumRetries)
                         {
                             var child=await ExecutionRepository.RetryInTransactionAsync(item.Id,policy.Selector,previous,
-                                $"Nouvelle tentative {item.Attempt+1} créée par la règle du flow après perte du worker.",c,tx,ct,ownership);
+                                $"Nouvelle tentative {item.Attempt+1} créée par la règle du flow après perte du worker.",c,tx,ct);
                             if(child is not null) logger.LogInformation("L’exécution {ExecutionId} crée la tentative bornée {RetryId} après perte du worker {WorkerId}.",item.Id,child,previous);
                         }
                     }
@@ -127,7 +126,7 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
         catch(ArgumentException) { return false; }
         var detail=$"Le worker a perdu sa connexion ; reprise {resumes+1}/{MaximumResumes} depuis le dernier checkpoint par un autre worker éligible.";
         if(!await ExecutionRepository.RecordInTransactionAsync(id,new(Guid.NewGuid(),revision,"running",worker,null,detail),c,tx,ct)) return false;
-        // La destination du dernier relais (nœud, groupe, étiquettes) reste la règle de la reprise : un encodage confié à .51 ne reprend pas ailleurs.
+        // La destination du dernier relais (worker, groupe, étiquettes) reste la règle de la reprise : un encodage confié à .51 ne reprend pas ailleurs.
         RuntimeHandoffSelector? previousSelector=null;
         await using(var read=Sql.Command("SELECT handoff_selector::text FROM execution_work WHERE execution_id=@id",c,tx))
         {
@@ -159,7 +158,7 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
             w.previous_worker_node_id,w.library_id,w.source_node_id,
             (SELECT checkpoint::text FROM execution_steps s WHERE s.execution_id=e.id AND s.completed_at IS NOT NULL ORDER BY s.completed_revision DESC LIMIT 1),e.updated_at,w.placement_plan::text
           FROM executions e JOIN execution_work w ON w.execution_id=e.id
-          WHERE {TaskOwnershipRepository.ActiveSql("e.id")} AND w.worker_node_id IS NULL AND w.available_at<=clock_timestamp()
+          WHERE w.worker_node_id IS NULL AND w.available_at<=clock_timestamp()
             AND (w.handoff_selector IS NOT NULL AND w.handoff_selector->>'mode'<>'server'
                   AND ((e.state='running' AND w.handoff_pending) OR (e.state='queued' AND e.retry_of IS NOT NULL))
               OR w.handoff_selector IS NULL AND e.state='queued' AND e.retry_of IS NULL AND w.lease_until IS NULL
@@ -188,7 +187,7 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
             if(await HasEligibleWorkerAsync(item,flow,selector,checkpoint,fresh,ct)) continue;
 
             await using var c=await dataSource.OpenConnectionAsync(ct);await using var tx=await c.BeginTransactionAsync(ct);
-            var detail=fresh?"placement_impossible: "+(item.Plan?.Reason??"Aucun worker du cluster ne peut exécuter ce flow (capacité absente, désignation de nœud impossible ou aucun accès à la bibliothèque)."):
+            var detail=fresh?"placement_impossible: "+(item.Plan?.Reason??"Aucun worker du central ne peut exécuter ce flow (capacité absente, désignation de worker impossible ou aucun accès à la bibliothèque)."):
                 selector.IsResume?"Aucun worker éligible n’a pu reprendre cette tâche après la perte de son worker (capacités, accès au média ou limites) ; l’exécution échoue.":"Aucun worker en ligne ne correspond à la destination de ce relais ou de cette relance ; l’exécution échoue.";
             if(await ExecutionRepository.RecordInTransactionAsync(item.Id,new(Guid.NewGuid(),item.Revision,"failed",item.Actor,null,detail),c,tx,ct))
             {
@@ -205,10 +204,10 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
         (Guid Id,Guid? Actor,int Revision,string State,string Flow,string Selector,Guid? Previous,Guid Library,Guid? Source,string? Checkpoint,DateTimeOffset Updated,FlowPlacementPlan? Plan) item,
         FlowDefinition flow,RuntimeHandoffSelector selector,RuntimeCheckpoint? checkpoint,bool fresh,CancellationToken ct)
     {
-        // Un nœud momentanément hors ligne, en drainage ou hors plage horaire reste un destinataire possible :
-        // les relais, reprises et relances attendent le retour du nœud sans mettre la tâche en échec.
+        // Un worker momentanément hors ligne, en drainage ou hors plage horaire reste un destinataire possible :
+        // les relais, reprises et relances attendent le retour du worker sans mettre la tâche en échec.
         var offline=TimeSpan.FromDays(36500);
-        var candidates=new List<(Guid Id,NodeToolCapability[] Capabilities,int Capacity,bool ScheduleEnabled,string? Timezone,string? Slots,NodeInventory? Inventory)>();
+        var candidates=new List<(Guid Id,WorkerToolCapability[] Capabilities,int Capacity,bool ScheduleEnabled,string? Timezone,string? Slots,WorkerInventory? Inventory)>();
         await using(var c=await dataSource.OpenConnectionAsync(ct))
         await using(var cmd=Sql.Command("""
           SELECT n.id,n.capabilities::text,
@@ -223,10 +222,10 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
         {
             cmd.Parameters.AddWithValue("offline",offline); cmd.Parameters.AddWithValue("fresh",fresh);
             await using var r=await cmd.ExecuteReaderAsync(ct);
-            while(await r.ReadAsync(ct)) candidates.Add((r.GetGuid(0),JsonSerializer.Deserialize<NodeToolCapability[]>(r.GetString(1),Json)??[],r.GetInt32(2),r.GetBoolean(3),
-                r.IsDBNull(4)?null:r.GetString(4),r.IsDBNull(5)?null:r.GetString(5),r.IsDBNull(6)?null:JsonSerializer.Deserialize<NodeInventory>(r.GetString(6),Json)));
+            while(await r.ReadAsync(ct)) candidates.Add((r.GetGuid(0),JsonSerializer.Deserialize<WorkerToolCapability[]>(r.GetString(1),Json)??[],r.GetInt32(2),r.GetBoolean(3),
+                r.IsDBNull(4)?null:r.GetString(4),r.IsDBNull(5)?null:r.GetString(5),r.IsDBNull(6)?null:JsonSerializer.Deserialize<WorkerInventory>(r.GetString(6),Json)));
         }
-        // Aucun worker déclaré : le cluster n'est pas encore configuré, ce n'est pas une impossibilité du flow.
+        // Aucun worker déclaré : le central n'est pas encore configuré, ce n'est pas une impossibilité du flow.
         if(fresh && candidates.Count==0) return true;
         if(item.Plan?.Strategy==FlowPlacementPlan.StrategyImpossible) return false;
         var entry=checkpoint?.NextNodeId??flow.Nodes.Single(node=>node.Component.PluginId=="base" && node.Component.ComponentId.StartsWith("base-input-",StringComparison.Ordinal)).Id;
@@ -239,7 +238,7 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
             var identity=await nodeGroups!.GetNodeIdentityAsync(candidate.Id,ct);
             if(!selector.Accepts(candidate.Id,item.Previous??Guid.Empty,identity)) continue;
             if(!fresh && candidate.ScheduleEnabled && candidate.Timezone is not null && candidate.Slots is not null
-                && !new NodeSchedule(true,candidate.Timezone,candidate.Slots).IsOpen(DateTimeOffset.UtcNow)) continue;
+                && !new WorkerSchedule(true,candidate.Timezone,candidate.Slots).IsOpen(DateTimeOffset.UtcNow)) continue;
             if(!eligibility.CanRun(flow,candidate.Capabilities,candidate.Id,entry,checkpoint is not null,checkpoint?.Context,identity,candidate.Inventory,item.Plan?.NodeAssignments)) continue;
             // Un worker occupé (baux actifs au maximum de sa capacité) reste un destinataire valide : il prend la tâche en file dès qu'il se libère.
             await using var c=await dataSource.OpenConnectionAsync(ct);

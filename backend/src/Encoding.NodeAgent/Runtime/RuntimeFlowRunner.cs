@@ -6,7 +6,7 @@ using Encoding.NodeAgent.Runtime.Media;
 
 namespace Encoding.NodeAgent.Runtime;
 
-public sealed class RuntimeFlowRunner(NodeAgentOptions options,MediaScanner scanner,MediaActions actions,ProcessToolRunner tools,PluginProcessHost plugins,
+public sealed class RuntimeFlowRunner(WorkerAgentOptions options,MediaScanner scanner,MediaActions actions,ProcessToolRunner tools,PluginProcessHost plugins,
     PublicationGuardRunner guards,Encoding.NodeAgent.Services.IToolCapabilityProbe capabilities,LocalPublicationArtifactStore localPublicationArtifacts,
     ILogger<RuntimeFlowRunner> logger)
 {

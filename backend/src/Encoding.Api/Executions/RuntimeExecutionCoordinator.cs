@@ -53,7 +53,7 @@ public record RuntimeAiMetadataEnrichmentOutcome(
 
 public sealed class RuntimeExecutionCoordinator(
     RuntimeRepository runtime,
-    NodeDirectoryBrowserRepository browser,
+    WorkerDirectoryBrowserRepository browser,
     LibraryProcessingRepository libraryProcessing,
     LibraryWorkflowRepository libraryWorkflow,
     DiskLockRepository diskLocks,
@@ -68,11 +68,11 @@ public sealed class RuntimeExecutionCoordinator(
     public Task<bool> AuthenticateAsync(Guid nodeId, string? token, CancellationToken ct) =>
         runtime.AuthenticateAsync(nodeId, token ?? string.Empty, ct);
 
-    public Task<NodeDirectoryBrowseClaim?> ClaimDirectoryBrowseAsync(Guid nodeId, CancellationToken ct) =>
+    public Task<WorkerDirectoryBrowseClaim?> ClaimDirectoryBrowseAsync(Guid nodeId, CancellationToken ct) =>
         browser.ClaimAsync(nodeId, ct);
 
     public Task<bool> CompleteDirectoryBrowseAsync(
-        Guid requestId, Guid nodeId, NodeDirectoryBrowseCompletion request, CancellationToken ct) =>
+        Guid requestId, Guid nodeId, WorkerDirectoryBrowseCompletion request, CancellationToken ct) =>
         browser.CompleteAsync(requestId, nodeId, request, ct);
 
     public async Task<RuntimeAiSubtitleTranslationOutcome> TranslateSubtitlesAsync(
@@ -110,7 +110,7 @@ public sealed class RuntimeExecutionCoordinator(
                 ErrorMessage: "La configuration du bloc de traduction est invalide."));
         }
 
-        var ai = Get<AiClusterService>();
+        var ai = Get<AiCentralService>();
         if (ai is null)
         {
             return RuntimeAiSubtitleTranslationOutcome.Ok(new RuntimeAiSubtitleTranslationResponse(false, ErrorCode: "error",
@@ -135,8 +135,8 @@ public sealed class RuntimeExecutionCoordinator(
 
         var requestId = DeriveBatchRequestId(id, request.InvocationId, request.FlowNodeId, request.BatchIndex);
         var sessionKey = $"runtime-ai/subtitles/{id:N}/{request.InvocationId:N}/{request.BatchIndex:D5}";
-        var store = Get<AiClusterStore>();
-        var identity = Get<Encoding.Api.Infrastructure.ClusterPeerIdentityStore>();
+        var store = Get<AiCentralStore>();
+        var identity = Get<Encoding.Api.Infrastructure.CentralPeerIdentityStore>();
         string? sessionId = null;
         if (store is not null)
         {
@@ -199,14 +199,14 @@ public sealed class RuntimeExecutionCoordinator(
 
     public async Task CleanupAiSubtitleSessionsAsync(Guid executionId, Guid? invocationId, CancellationToken ct)
     {
-        if (Get<AiClusterService>() is { } ai)
+        if (Get<AiCentralService>() is { } ai)
             await ai.CleanupRuntimeSubtitleSessionsAsync(executionId, invocationId, ct);
     }
 
     public Task<IReadOnlyList<RuntimeExecutionState>> GetExecutionStatesAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
         runtime.StatesAsync(ids.Distinct().ToArray(), ct);
 
-    public Task<NodeProcessingSettings?> GetNodeCapacityAsync(Guid nodeId, CancellationToken ct) =>
+    public Task<WorkerProcessingSettings?> GetNodeCapacityAsync(Guid nodeId, CancellationToken ct) =>
         libraryProcessing.NodeAsync(nodeId, ct);
 
     public Task<LibraryScanLease?> ClaimScanAsync(Guid nodeId, CancellationToken ct) =>
@@ -307,8 +307,6 @@ public sealed class RuntimeExecutionCoordinator(
     public Task<bool> ReportReplacementTaskAsync(Guid executionId, Guid nodeId, ReportReplacementTask request, CancellationToken ct) =>
         sourceReplacements.ReportAsync(executionId, nodeId, request, ct);
 
-    public Task<TaskOwnershipStatus?> GetTaskOwnershipAsync(Guid id, CancellationToken ct) =>
-        Get<TaskOwnershipRepository>() is { } repo ? repo.GetAsync(id, ct) : Task.FromResult<TaskOwnershipStatus?>(null);
 
     public Task<LibraryReplacementPolicy?> GetReplacementPolicyAsync(Guid library, CancellationToken ct) =>
         sourceReplacements.GetPolicyAsync(library, ct);

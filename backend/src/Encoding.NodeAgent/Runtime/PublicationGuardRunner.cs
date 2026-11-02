@@ -18,7 +18,7 @@ public interface IPublicationGuardInvoker
 }
 
 /// <summary>Invoque le composant du plugin dans son processus isolé, comme pour une étape de flow (architecture 0059).</summary>
-public sealed class PluginPublicationGuardInvoker(PluginProcessHost plugins, NodeAgentOptions options, WorkerIdentityStore identities) : IPublicationGuardInvoker
+public sealed class PluginPublicationGuardInvoker(PluginProcessHost plugins, WorkerAgentOptions options, WorkerIdentityStore identities) : IPublicationGuardInvoker
 {
     public async Task<string> InvokeAsync(RuntimeTransfer transfer, RuntimePublicationGuard guard, CancellationToken ct)
     {

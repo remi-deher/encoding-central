@@ -26,11 +26,11 @@ import { ExecutionTracking, INITIAL_EXECUTION_TRACKING } from '../services/execu
     <div class="page-system-actions" role="group" aria-label="État du système">
       <a
         class="system-pill cluster-pill"
-        routerLink="/nodes"
+        routerLink="/workers"
         [queryParams]="{ tab: 'cluster' }"
         [class.is-offline]="!clusterHealthy()"
-        [attr.aria-label]="'État du cluster : ' + clusterLabel()"
-        [matTooltip]="'État du cluster : ' + clusterLabel()"
+        [attr.aria-label]="'État du central : ' + clusterLabel()"
+        [matTooltip]="'État du central : ' + clusterLabel()"
       >
         <span class="cluster-dot" [class.is-offline]="!clusterHealthy()" aria-hidden="true"></span>
         <span class="cluster-label">{{ clusterLabel() }}</span>
@@ -194,7 +194,7 @@ export class PageSystemActionsComponent {
     const state = this.clusterState();
     if (state.status === 'loading') return 'Chargement…';
     if (state.status === 'error') return 'Données indisponibles';
-    if (state.snapshot?.identity.standalone) return 'Nœud autonome';
+    if (state.snapshot?.identity.standalone) return 'Worker autonome';
     const nodes = state.snapshot?.nodes ?? [];
     return (
       nodes.filter((node) => node.status === 'online').length + ' / ' + nodes.length + ' en ligne'

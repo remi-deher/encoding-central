@@ -16,7 +16,7 @@ export interface SetupNodeTool {
   readonly encoderChecks: readonly NodeEncoderCapability[];
 }
 
-/** Fiche du nœud local pour l'assistant de premier démarrage (`/api/v1/auth/setup/node`), sans secret ni identifiant de cluster. */
+/** Fiche du worker local pour l'assistant de premier démarrage (`/api/v1/auth/setup/worker`), sans secret ni identifiant de central. */
 export interface SetupNodeSheet {
   readonly name: string | null;
   readonly displayName: string | null;
@@ -50,7 +50,7 @@ export interface LocalNodeStatus {
   readonly maxConcurrentTasks: number;
   readonly automaticEnrollmentEnabled: boolean;
   readonly capabilities: readonly NodeToolCapability[];
-  /** Matériel lu par l'agent local : disponible même sans serveur local ni liste de nœuds. */
+  /** Matériel lu par l'agent local : disponible même sans serveur local ni liste de workers. */
   readonly inventory?: NodeInventory | null;
   readonly isEnrolled: boolean;
   readonly standalone?: boolean;

@@ -275,7 +275,7 @@ export class AiToolsService {
   }
 
   getCluster(): Observable<AiClusterView> {
-    return this.http.get<AiClusterView>('/api/v1/tools/ai/cluster');
+    return this.http.get<AiClusterView>('/api/v1/tools/ai/central');
   }
 
   submitAuthInput(toolId: string, input: string, attemptId?: string | null): Observable<{ readonly accepted: boolean }> {

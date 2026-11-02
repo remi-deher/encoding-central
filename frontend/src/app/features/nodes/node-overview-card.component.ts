@@ -158,7 +158,7 @@ export interface NodeOverviewHardware {
               @if (isMaster()) {
                 <span
                   class="node-overview-master-badge"
-                  title="Nœud Maître (Coordinateur actif du cluster)"
+                  title="Worker Maître (Coordinateur actif du central)"
                 >
                   <svg
                     class="node-overview-master-icon"
@@ -175,7 +175,7 @@ export interface NodeOverviewHardware {
               } @else {
                 <span
                   class="node-overview-worker-badge"
-                  title="Nœud Worker (Exécution des encodages)"
+                  title="Worker Worker (Exécution des encodages)"
                 >
                   <svg
                     class="node-overview-worker-icon"
@@ -194,7 +194,7 @@ export interface NodeOverviewHardware {
             </div>
 
             @if (roles().length) {
-              <div class="node-overview-roles-line" role="group" aria-label="Rôles du nœud">
+              <div class="node-overview-roles-line" role="group" aria-label="Rôles du worker">
                 @for (role of roles(); track role) {
                   <span class="node-overview-role-pill">{{ role }}</span>
                 }
@@ -423,7 +423,7 @@ export interface NodeOverviewHardware {
         <header class="node-overview-libraries-heading">
           <div>
             <h3>Bibliothèques et chemins configurés</h3>
-            <p>Chemins vus depuis ce nœud et mode d’accès associé.</p>
+            <p>Chemins vus depuis ce worker et mode d’accès associé.</p>
           </div>
           <span class="node-overview-library-count">
             {{ libraries().length }} autorisée{{ libraries().length > 1 ? 's' : '' }}
@@ -448,7 +448,7 @@ export interface NodeOverviewHardware {
                   <app-status-badge [label]="library.stateLabel" [tone]="library.stateTone" />
                 </header>
                 <div class="node-overview-path-block">
-                  <span>Chemin configuré sur ce nœud</span>
+                  <span>Chemin configuré sur ce worker</span>
                   <code>{{ library.path }}</code>
                 </div>
                 <footer class="node-overview-library-foot">
@@ -459,7 +459,7 @@ export interface NodeOverviewHardware {
             }
           </div>
         } @else {
-          <p class="node-overview-empty">Aucune bibliothèque configurée pour ce nœud.</p>
+          <p class="node-overview-empty">Aucune bibliothèque configurée pour ce worker.</p>
         }
       </section>
     </article>
@@ -467,7 +467,7 @@ export interface NodeOverviewHardware {
   styleUrls: ['./node-overview-card.component.scss', './node-overview-card.header.scss'],
 })
 export class NodeOverviewCardComponent {
-  readonly ariaLabel = input('Informations du nœud');
+  readonly ariaLabel = input('Informations du worker');
   readonly title = input.required<string>();
   readonly subtitle = input('');
   readonly isMaster = input(false);

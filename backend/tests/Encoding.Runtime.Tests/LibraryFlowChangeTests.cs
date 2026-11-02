@@ -36,7 +36,7 @@ public sealed class LibraryFlowChangeTests
             file.Parameters.AddWithValue("id", media[name]); file.Parameters.AddWithValue("library", library); file.Parameters.AddWithValue("path", name);
             file.Parameters.AddWithValue("modified", modified); file.Parameters.AddWithValue("scan", scan); await file.ExecuteNonQueryAsync();
         }
-        var workflow = new LibraryWorkflowRepository(db.Db, validator, new NodePresenceOptions(TimeSpan.FromHours(1)));
+        var workflow = new LibraryWorkflowRepository(db.Db, validator, new WorkerPresenceOptions(TimeSpan.FromHours(1)));
         Assert.True(await workflow.AssignAsync(library, new(first.Id, 1, 0), default));
         Assert.NotNull(await workflow.EnqueueAsync(library, [.. media.Values], 1, default));
         await Set("UPDATE executions SET state='succeeded' WHERE media='done.mkv'");

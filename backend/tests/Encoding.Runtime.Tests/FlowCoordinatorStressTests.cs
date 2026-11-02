@@ -92,7 +92,7 @@ public sealed class FlowCoordinatorStressTests
         await DatabaseMigrator.ApplyAsync(database.Db, Harness.RepositoryRoot(), CancellationToken.None);
 
         var flows = new FlowRepository(database.Db);
-        var nodes = new NodeRepository(database.Db);
+        var nodes = new WorkerRepository(database.Db);
         var blobStore = new ResourceBlobStore(new ConfigurationBuilder().Build());
         var resources = new ResourceRepository(database.Db, blobStore);
         var templates = new FlowTemplateRepository(database.Db, registry);
@@ -125,7 +125,7 @@ public sealed class FlowCoordinatorStressTests
         await DatabaseMigrator.ApplyAsync(database.Db, Harness.RepositoryRoot(), CancellationToken.None);
 
         var flows = new FlowRepository(database.Db);
-        var nodes = new NodeRepository(database.Db);
+        var nodes = new WorkerRepository(database.Db);
         var blobStore = new ResourceBlobStore(new ConfigurationBuilder().Build());
         var resources = new ResourceRepository(database.Db, blobStore);
         var templates = new FlowTemplateRepository(database.Db, registry);

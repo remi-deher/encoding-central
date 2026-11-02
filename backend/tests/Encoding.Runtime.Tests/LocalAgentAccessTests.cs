@@ -28,7 +28,7 @@ public sealed class LocalAgentAccessTests
         var clusterBuilder = WebApplication.CreateBuilder();
         clusterBuilder.WebHost.UseUrls("http://127.0.0.1:0");
         await using var cluster = clusterBuilder.Build();
-        cluster.MapGet("/api/v1/cluster", () => Results.Ok(new { id = clusterId, name = "Maison" }));
+        cluster.MapGet("/api/v1/central", () => Results.Ok(new { id = clusterId, name = "Maison" }));
         await cluster.StartAsync();
         await using var agent = Agent(fixture.Path);
         using var relay = new HttpClient(new LocalAgentAuthenticationHandler(fixture.Configuration)
@@ -36,7 +36,7 @@ public sealed class LocalAgentAccessTests
             InnerHandler = agent.Server.CreateHandler()
         }) { BaseAddress = new Uri("http://localhost/") };
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, "api/v1/worker/clusters")
+        using var request = new HttpRequestMessage(HttpMethod.Post, "api/v1/worker/centrals")
         {
             Content = JsonContent.Create(new { apiBaseUrl = cluster.Urls.Single() })
         };
@@ -44,7 +44,7 @@ public sealed class LocalAgentAccessTests
         using var response = await relay.SendAsync(request);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains(clusterId.ToString("D"), await response.Content.ReadAsStringAsync());
-        using var clusters = await relay.GetAsync("api/v1/worker/clusters");
+        using var clusters = await relay.GetAsync("api/v1/worker/centrals");
         Assert.Equal(HttpStatusCode.OK, clusters.StatusCode);
         Assert.Contains(clusterId.ToString("D"), await clusters.Content.ReadAsStringAsync());
     }
@@ -81,7 +81,7 @@ public sealed class LocalAgentAccessTests
     {
         await using var agent = Agent(null);
         using var client = agent.CreateClient();
-        using var response = await client.GetAsync("api/v1/worker/clusters");
+        using var response = await client.GetAsync("api/v1/worker/centrals");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -94,15 +94,15 @@ public sealed class LocalAgentAccessTests
         {
             InnerHandler = new CaptureHandler(sentSecrets)
         });
-        using var first = await client.GetAsync("http://127.0.0.1:8081/api/v1/worker/clusters");
+        using var first = await client.GetAsync("http://127.0.0.1:8081/api/v1/worker/centrals");
         LocalEnrollment.Create(fixture.Path);
-        using var second = await client.GetAsync("http://127.0.0.1:8081/api/v1/worker/clusters");
+        using var second = await client.GetAsync("http://127.0.0.1:8081/api/v1/worker/centrals");
         Assert.NotEqual(sentSecrets[0], sentSecrets[1]);
         Assert.Equal(LocalEnrollment.Read(fixture.Path), sentSecrets[1]);
 
-        await Assert.ThrowsAsync<HttpRequestException>(() => client.GetAsync("http://192.168.1.51:8081/api/v1/worker/clusters"));
+        await Assert.ThrowsAsync<HttpRequestException>(() => client.GetAsync("http://192.168.1.51:8081/api/v1/worker/centrals"));
         File.Delete(fixture.Path);
-        await Assert.ThrowsAsync<HttpRequestException>(() => client.GetAsync("http://127.0.0.1:8081/api/v1/worker/clusters"));
+        await Assert.ThrowsAsync<HttpRequestException>(() => client.GetAsync("http://127.0.0.1:8081/api/v1/worker/centrals"));
         Assert.Equal(2, sentSecrets.Count);
     }
 
@@ -119,16 +119,16 @@ public sealed class LocalAgentAccessTests
             {
                 builder.UseSetting(WebHostDefaults.ContentRootKey, AppContext.BaseDirectory);
                 builder.UseSetting("Logging:LogLevel:Default", "Error");
-                builder.UseSetting("ConnectionStrings:Cluster", $"Data Source={Path.Combine(root, "cluster.db")};Pooling=False");
+                builder.UseSetting("ConnectionStrings:Central", $"Data Source={Path.Combine(root, "cluster.db")};Pooling=False");
                 builder.UseSetting("Database:Provider", "sqlite");
-                builder.UseSetting("Node:DataDirectory", root);
+                builder.UseSetting("Worker:DataDirectory", root);
                 builder.UseSetting("Auth:Enabled", "false");
                 builder.UseSetting(LocalEnrollment.SecretFileSetting, fixture.Path);
                 builder.ConfigureServices(services =>
                 {
                     foreach (var descriptor in services.Where(item => item.ServiceType == typeof(IHostedService)).ToArray())
                         services.Remove(descriptor);
-                    services.AddHttpClient(LocalNodeEndpoints.HttpClientName, client =>
+                    services.AddHttpClient(LocalWorkerEndpoints.HttpClientName, client =>
                     {
                         client.BaseAddress = new Uri("http://127.0.0.1:8081/");
                     }).ConfigurePrimaryHttpMessageHandler(() => new LocalAgentAuthenticationHandler(fixture.Configuration)
@@ -140,7 +140,7 @@ public sealed class LocalAgentAccessTests
 
             using var client = server.CreateClient();
             client.DefaultRequestHeaders.Add(Encoding.Api.Auth.ManagementAccessHandler.CsrfHeader, "1");
-            using var leaveResponse = await client.PostAsync("/api/v1/local-node/leave", new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
+            using var leaveResponse = await client.PostAsync("/api/v1/local-worker/leave", new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
             Assert.Equal(HttpStatusCode.NoContent, leaveResponse.StatusCode);
             Assert.Empty(await leaveResponse.Content.ReadAsByteArrayAsync());
         }
@@ -168,16 +168,16 @@ public sealed class LocalAgentAccessTests
                 {
                     builder.UseSetting(WebHostDefaults.ContentRootKey, AppContext.BaseDirectory);
                     builder.UseSetting("Logging:LogLevel:Default", "Error");
-                    builder.UseSetting("ConnectionStrings:Cluster", $"Data Source={dbPath};Pooling=False");
+                    builder.UseSetting("ConnectionStrings:Central", $"Data Source={dbPath};Pooling=False");
                     builder.UseSetting("Database:Provider", "sqlite");
-                    builder.UseSetting("Node:DataDirectory", root);
+                    builder.UseSetting("Worker:DataDirectory", root);
                     builder.UseSetting("Auth:Enabled", "false");
                     builder.UseSetting(LocalEnrollment.SecretFileSetting, fixture.Path);
                     builder.ConfigureServices(services =>
                     {
                         foreach (var descriptor in services.Where(item => item.ServiceType == typeof(IHostedService)).ToArray())
                             services.Remove(descriptor);
-                        services.AddHttpClient(LocalNodeEndpoints.HttpClientName, client =>
+                        services.AddHttpClient(LocalWorkerEndpoints.HttpClientName, client =>
                         {
                             client.BaseAddress = new Uri("http://127.0.0.1:8081/");
                         }).ConfigurePrimaryHttpMessageHandler(() => new LocalAgentAuthenticationHandler(fixture.Configuration)
@@ -191,22 +191,23 @@ public sealed class LocalAgentAccessTests
             await using (var firstBoot = CreateServer())
             {
                 using var firstClient = firstBoot.CreateClient();
-                using var enrollMessage = new HttpRequestMessage(HttpMethod.Post, "/api/v1/nodes/enroll")
+                using var enrollMessage = new HttpRequestMessage(HttpMethod.Post, "/api/v1/workers/enroll")
                 {
-                    Content = JsonContent.Create(new Encoding.Contracts.Nodes.NodeEnrollmentRequest(
+                    Content = JsonContent.Create(new Encoding.Contracts.Nodes.WorkerEnrollmentRequest(
                         localNodeId,
                         "encoding-host",
                         [NodeRole.Server, NodeRole.Worker],
                         1,
                         [],
-                        localNodeToken))
+                        localNodeToken,
+                        Version: Encoding.Contracts.Nodes.AppVersion.Current))
                 };
                 enrollMessage.Headers.Add(LocalEnrollment.HeaderName, LocalEnrollment.Read(fixture.Path)!);
                 using var enrollResponse = await firstClient.SendAsync(enrollMessage);
                 Assert.Equal(HttpStatusCode.OK, enrollResponse.StatusCode);
             }
 
-            // 2. Second boot (simulating container restart before /setup, so LocalNodeRegistry in memory starts empty):
+            // 2. Second boot (simulating container restart before /setup, so LocalWorkerRegistry in memory starts empty):
             await using (var secondBoot = CreateServer())
             {
                 using var secondClient = secondBoot.CreateClient();
@@ -221,16 +222,16 @@ public sealed class LocalAgentAccessTests
                 Assert.Equal(HttpStatusCode.Created, setupResponse.StatusCode);
 
                 // Display name is saved on the already-enrolled local node in cluster_nodes:
-                var nodesJson = await secondClient.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/v1/nodes");
+                var nodesJson = await secondClient.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/v1/workers");
                 var updatedNode = Assert.Single(nodesJson.EnumerateArray(), n => n.GetProperty("id").GetGuid() == localNodeId);
                 Assert.Equal("Serveur Principal", updatedNode.GetProperty("displayName").GetString());
 
-                // And /api/v1/local-node/status also enriches displayName with the saved name:
-                var statusJson = await secondClient.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/v1/local-node/status");
+                // And /api/v1/local-worker/status also enriches displayName with the saved name:
+                var statusJson = await secondClient.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/v1/local-worker/status");
                 Assert.Equal("Serveur Principal", statusJson.GetProperty("displayName").GetString());
 
                 // And creating the cluster during setup names it:
-                var clusterIdentity = await secondBoot.Services.GetRequiredService<Encoding.Api.Infrastructure.ClusterIdentityRepository>().GetAsync(CancellationToken.None);
+                var clusterIdentity = await secondBoot.Services.GetRequiredService<Encoding.Api.Infrastructure.CentralIdentityRepository>().GetAsync(CancellationToken.None);
                 Assert.False(clusterIdentity.Standalone);
                 Assert.Equal("Cluster Salon", clusterIdentity.Name);
             }
@@ -241,13 +242,13 @@ public sealed class LocalAgentAccessTests
         }
     }
 
-    private static WebApplicationFactory<NodeAgentOptions> Agent(string? secretFile) =>
-        new WebApplicationFactory<NodeAgentOptions>().WithWebHostBuilder(builder =>
+    private static WebApplicationFactory<WorkerAgentOptions> Agent(string? secretFile) =>
+        new WebApplicationFactory<WorkerAgentOptions>().WithWebHostBuilder(builder =>
         {
             builder.UseSetting("Logging:LogLevel:Default", "Error");
             builder.UseSetting(LocalEnrollment.SecretFileSetting, secretFile ?? "");
             if (secretFile is not null)
-                builder.UseSetting("Node:DataDirectory", System.IO.Path.Combine(System.IO.Path.GetDirectoryName(secretFile)!, "node"));
+                builder.UseSetting("Worker:DataDirectory", System.IO.Path.Combine(System.IO.Path.GetDirectoryName(secretFile)!, "node"));
             builder.ConfigureServices(services =>
             {
                 foreach (var service in services.Where(item => item.ServiceType == typeof(IHostedService)).ToArray())

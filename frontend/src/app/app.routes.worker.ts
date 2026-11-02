@@ -19,7 +19,7 @@ const applicationRoutes: Routes = [
       },
     },
   },
-  { path: 'worker', pathMatch: 'full', redirectTo: 'nodes' },
+  { path: 'worker', pathMatch: 'full', redirectTo: 'workers' },
   {
     path: 'activity',
     loadComponent: () =>
@@ -40,21 +40,21 @@ const applicationRoutes: Routes = [
   },
   { path: 'tasks', pathMatch: 'full', redirectTo: 'activity' },
   {
-    path: 'nodes',
+    path: 'workers',
     loadComponent: () =>
       import('./features/nodes/node-catalog-page.component').then(
         (module) => module.NodeCatalogPageComponent,
       ),
     data: {
-      title: 'Nœuds',
+      title: 'Workers',
       navigation: {
         group: 'Infrastructure',
-        label: 'Nœuds',
+        label: 'Workers',
         glyph: '▣',
         order: 1,
         keywords: ['workers', 'serveurs'],
       },
-      description: 'Consultez les rôles, capacités et états des installations du cluster.',
+      description: 'Consultez les rôles, capacités et états des installations du central.',
     },
   },
   {

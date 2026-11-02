@@ -77,9 +77,9 @@ interface NodeAccessControls {
   template: `
     @if (!nodes().length) {
       <div class="access-empty" role="status">
-        <strong>Aucun nœud n’est encore enregistré</strong>
+        <strong>Aucun worker n’est encore enregistré</strong>
         <p>
-          Ajoutez un nœud au cluster avant de configurer l’accès aux médias de «
+          Ajoutez un worker au central avant de configurer l’accès aux médias de «
           {{ libraryName() }} ».
         </p>
         <button matButton="filled" type="button" (click)="cancelled.emit()">Fermer</button>
@@ -91,11 +91,11 @@ interface NodeAccessControls {
             setupMode() ? 'Configuration initiale' : 'Modification des accès'
           }}</span>
           <p>
-            Choisissez comment chaque nœud atteint les fichiers de « {{ libraryName() }} ». Le
+            Choisissez comment chaque worker atteint les fichiers de « {{ libraryName() }} ». Le
             chemin peut être différent sur chaque machine.
           </p>
           <p class="access-safety-note">
-            Un nœud sans accès ne recevra aucune tâche pour cette bibliothèque.
+            Un worker sans accès ne recevra aucune tâche pour cette bibliothèque.
           </p>
         </div>
 
@@ -103,7 +103,7 @@ interface NodeAccessControls {
           <form [formGroup]="form" (ngSubmit)="review()">
             @if (setupMode()) {
               <section class="node-selection" aria-labelledby="node-selection-title">
-                <h3 id="node-selection-title">Nœuds qui ont accès aux fichiers</h3>
+                <h3 id="node-selection-title">Workers qui ont accès aux fichiers</h3>
                 <mat-form-field appearance="outline">
                   <mat-label>Mode de sélection</mat-label>
                   <mat-select
@@ -111,18 +111,18 @@ interface NodeAccessControls {
                     (selectionChange)="selectionMode.set($event.value)"
                   >
                     <mat-option value="automatic">Automatique</mat-option>
-                    <mat-option value="nodes">Sélectionner des nœuds</mat-option>
-                    <mat-option value="groups">Sélectionner des groupes de nœuds</mat-option>
+                    <mat-option value="nodes">Sélectionner des workers</mat-option>
+                    <mat-option value="groups">Sélectionner des groupes de workers</mat-option>
                   </mat-select>
                 </mat-form-field>
                 @if (selectionMode() === 'automatic') {
                   <p class="mode-help">
-                    Les nœuds déjà configurés en accès direct à une autre bibliothèque sont
+                    Les workers déjà configurés en accès direct à une autre bibliothèque sont
                     sélectionnés automatiquement ({{ selectedNodes().length }}).
                   </p>
                 } @else if (selectionMode() === 'nodes') {
                   <mat-form-field appearance="outline">
-                    <mat-label>Nœuds sélectionnés</mat-label>
+                    <mat-label>Workers sélectionnés</mat-label>
                     <mat-select
                       multiple
                       [value]="selectedNodeIds()"
@@ -143,13 +143,13 @@ interface NodeAccessControls {
                     >
                       @for (group of groups(); track group.id) {
                         <mat-option [value]="group.id"
-                          >{{ group.name }} ({{ group.nodeIds.length }} nœud(s))</mat-option
+                          >{{ group.name }} ({{ group.nodeIds.length }} worker(s))</mat-option
                         >
                       }
                     </mat-select>
                     @if (!groups().length) {
                       <mat-hint
-                        >Aucun groupe n’est encore créé. Créez-en dans la section « Groupes de nœuds
+                        >Aucun groupe n’est encore créé. Créez-en dans la section « Groupes de workers
                         ».</mat-hint
                       >
                     }
@@ -174,7 +174,7 @@ interface NodeAccessControls {
                   </header>
 
                   @if (controls.controls.mode.value === 'unsupported') {
-                    <p class="mode-help">Aucun accès n’est configuré pour ce nœud.</p>
+                    <p class="mode-help">Aucun accès n’est configuré pour ce worker.</p>
                     <button
                       matButton="outlined"
                       type="button"
@@ -184,14 +184,14 @@ interface NodeAccessControls {
                     </button>
                   } @else {
                     <mat-form-field appearance="outline">
-                      <mat-label>Comment ce nœud accède-t-il aux fichiers ?</mat-label>
+                      <mat-label>Comment ce worker accède-t-il aux fichiers ?</mat-label>
                       <mat-select
                         formControlName="mode"
                         (selectionChange)="onModeChange(node.id, $event.value)"
                       >
-                        <mat-option value="direct">Le nœud a accès au fichier</mat-option>
+                        <mat-option value="direct">Le worker a accès au fichier</mat-option>
                         <mat-option value="transfer" [disabled]="!node.roles.includes('worker')"
-                          >Un autre nœud ou groupe lui transfère les copies</mat-option
+                          >Un autre worker ou groupe lui transfère les copies</mat-option
                         >
                       </mat-select>
                     </mat-form-field>
@@ -199,7 +199,7 @@ interface NodeAccessControls {
 
                   @if (controls.controls.mode.value !== 'unsupported') {
                     <mat-checkbox formControlName="isEnabled"
-                      >Autoriser ce nœud à recevoir des tâches</mat-checkbox
+                      >Autoriser ce worker à recevoir des tâches</mat-checkbox
                     >
                   }
 
@@ -214,7 +214,7 @@ interface NodeAccessControls {
                       />
                       <mat-hint
                         >Indiquez le chemin local ou le point de montage visible depuis ce
-                        nœud.</mat-hint
+                        worker.</mat-hint
                       >
                     </mat-form-field>
                     <button
@@ -226,7 +226,7 @@ interface NodeAccessControls {
                       Parcourir les dossiers sur {{ node.name }}
                     </button>
                     <p class="mode-help">
-                      Les dossiers affichés sont ceux visibles par le service Encoding sur ce nœud.
+                      Les dossiers affichés sont ceux visibles par le service Encoding sur ce worker.
                     </p>
                     @if (browserNodeId() === node.id) {
                       <section
@@ -235,7 +235,7 @@ interface NodeAccessControls {
                       >
                         <header class="directory-browser-header">
                           <div class="directory-browser-location">
-                            <strong>{{ browserPath() || 'Racine du nœud' }}</strong>
+                            <strong>{{ browserPath() || 'Racine du worker' }}</strong>
                             <span>{{ node.name }}</span>
                           </div>
                           <div class="directory-browser-actions">
@@ -246,7 +246,7 @@ interface NodeAccessControls {
                                 [disabled]="browserLoading()"
                                 (click)="browseDirectory(node.id, '')"
                               >
-                                Racine du nœud
+                                Racine du worker
                               </button>
                             }
                             @if (hasParentDirectory()) {
@@ -339,11 +339,11 @@ interface NodeAccessControls {
                       <p>
                         Si les droits par défaut ne suffisent pas, préparez sur l’hôte un montage ou
                         une ACL propre à cette bibliothèque, puis choisissez son chemin ci-dessus
-                        pour ce nœud. Le processus utilisera réellement ce point d’accès.
+                        pour ce worker. Le processus utilisera réellement ce point d’accès.
                       </p>
                       <p>
                         Les cases Lecture et Écriture déclarent les besoins ; elles n’accordent
-                        aucun droit système. Avant traitement, le nœud vérifie les droits effectifs
+                        aucun droit système. Avant traitement, le worker vérifie les droits effectifs
                         dans un dossier temporaire dédié.
                       </p>
                       <p>
@@ -354,11 +354,11 @@ interface NodeAccessControls {
                     </mat-expansion-panel>
                   } @else if (controls.controls.mode.value === 'transfer') {
                     <p class="mode-help">
-                      Le worker encode une copie locale temporaire. Le nœud source conserve le
+                      Le worker encode une copie locale temporaire. Le worker source conserve le
                       fichier original et reçoit le résultat.
                     </p>
                     <mat-form-field appearance="outline">
-                      <mat-label>Nœud qui a accès aux fichiers</mat-label>
+                      <mat-label>Worker qui a accès aux fichiers</mat-label>
                       <mat-select formControlName="transferSourceNodeId">
                         @for (source of transferSources(node.id); track source.id) {
                           <mat-option [value]="source.id">{{ source.name }}</mat-option>
@@ -366,14 +366,14 @@ interface NodeAccessControls {
                       </mat-select>
                       @if (!transferSources(node.id).length) {
                         <mat-hint
-                          >Choisissez d’abord un autre nœud avec accès direct en lecture et en
+                          >Choisissez d’abord un autre worker avec accès direct en lecture et en
                           écriture.</mat-hint
                         >
                       }
                     </mat-form-field>
                   } @else {
                     <p class="mode-help">
-                      Ce nœud sera exclu de la distribution des tâches liées à cette bibliothèque.
+                      Ce worker sera exclu de la distribution des tâches liées à cette bibliothèque.
                     </p>
                   }
                 </section>
@@ -394,7 +394,7 @@ interface NodeAccessControls {
               <h3 id="access-review-title">Vérifier les accès avant l’enregistrement</h3>
               <p>
                 Comparez la configuration actuelle avec les choix proposés. Les modifications
-                s’appliqueront à tous les nœuds listés.
+                s’appliqueront à tous les workers listés.
               </p>
             </div>
             <div class="review-list">
@@ -717,7 +717,7 @@ export class LibraryNodeAccessFormComponent implements OnInit {
     try {
       const request = await firstValueFrom(
         this.http.post<{ id: string }>(
-          `/api/v1/nodes/${encodeURIComponent(nodeId)}/directory-browse`,
+          `/api/v1/workers/${encodeURIComponent(nodeId)}/directory-browse`,
           { path: path || null },
         ),
       );
@@ -726,7 +726,7 @@ export class LibraryNodeAccessFormComponent implements OnInit {
         .pipe(
           switchMap(() =>
             this.http.get<NodeDirectoryBrowserResponse>(
-              `/api/v1/nodes/${encodeURIComponent(nodeId)}/directory-browse/${encodeURIComponent(request.id)}`,
+              `/api/v1/workers/${encodeURIComponent(nodeId)}/directory-browse/${encodeURIComponent(request.id)}`,
             ),
           ),
           filter((result) => result.state === 'completed' || result.state === 'failed'),
@@ -748,14 +748,14 @@ export class LibraryNodeAccessFormComponent implements OnInit {
           error: () => {
             if (generation !== this.browserGeneration) return;
             this.browserError.set(
-              'Le nœud ne répond pas. Vérifiez qu’il est en ligne, puis réessayez.',
+              'Le worker ne répond pas. Vérifiez qu’il est en ligne, puis réessayez.',
             );
             this.browserLoading.set(false);
           },
         });
     } catch {
       if (generation !== this.browserGeneration) return;
-      this.browserError.set('La demande d’exploration n’a pas pu être envoyée au nœud.');
+      this.browserError.set('La demande d’exploration n’a pas pu être envoyée au worker.');
       this.browserLoading.set(false);
     }
   }

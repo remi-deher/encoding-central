@@ -28,7 +28,7 @@ type ModelFilter = 'all' | 'enabled' | 'disabled';
 interface ModelEntry {
   readonly model: AiDiscoveredModel;
   readonly enabled: boolean;
-  /** Détail des nœuds, seulement quand le modèle n'est pas partout. */
+  /** Détail des workers, seulement quand le modèle n'est pas partout. */
   readonly nodes: string;
 }
 interface ProviderGroup {
@@ -44,8 +44,8 @@ interface ProviderGroup {
 }
 
 /**
- * Modèles annoncés par les nœuds, regroupés par fournisseur : l'interrupteur est une règle
- * du cluster (fournisseur + modèle), il n'a donc pas lieu d'être répété par nœud.
+ * Modèles annoncés par les workers, regroupés par fournisseur : l'interrupteur est une règle
+ * du central (fournisseur + modèle), il n'a donc pas lieu d'être répété par worker.
  */
 @Component({
   selector: 'app-ai-model-catalog',
@@ -62,7 +62,7 @@ interface ProviderGroup {
   template: `
     <app-configuration-section
       title="Modèles disponibles"
-      description="Choisissez les modèles proposés à l’assistant et aux flows. Valable pour tout le cluster."
+      description="Choisissez les modèles proposés à l’assistant et aux flows. Valable pour tout le central."
       icon="pack"
     >
       @if (loading()) {
@@ -316,7 +316,7 @@ export class AiModelCatalogComponent implements OnDestroy {
       },
       error: () => {
         this.loading.set(false);
-        this.error.set('Impossible de lire les modèles annoncés par les nœuds.');
+        this.error.set('Impossible de lire les modèles annoncés par les workers.');
       },
     });
   }
@@ -420,7 +420,7 @@ export class AiModelCatalogComponent implements OnDestroy {
         stateTone: loading || unavailable ? 'muted' : partial ? 'warning' : 'ok',
         nodeSummary:
           nodeCount > 1 && !loading
-            ? `${entry.available.length} ${entry.available.length > 1 ? 'nœuds' : 'nœud'} sur ${nodeCount}`
+            ? `${entry.available.length} ${entry.available.length > 1 ? 'workers' : 'worker'} sur ${nodeCount}`
             : '',
         message: message || null,
         total: models.length,
