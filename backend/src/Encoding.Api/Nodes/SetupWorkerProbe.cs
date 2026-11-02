@@ -42,7 +42,7 @@ public static class SetupWorkerProbe
             // Agent arrêté (fonction worker désactivée) ou en cours de démarrage : matériel inconnu, pas une erreur.
         }
         return Build(agent, LocalNetworkAddresses.Current(), Urls(network.Current.PublicUrl,
-            configuration["Central:AdvertisedApiBaseUrl"], configuration["Central:Reconciliation:AdvertisedApiBaseUrl"]));
+            configuration["Central:AdvertisedApiBaseUrl"]));
     }
 
     /// <summary>Projette l'état de l'agent sur les seuls champs publiables ; null si la réponse est illisible.</summary>

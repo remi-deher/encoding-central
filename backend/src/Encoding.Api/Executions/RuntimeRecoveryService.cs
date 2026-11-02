@@ -159,7 +159,7 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
             (SELECT checkpoint::text FROM execution_steps s WHERE s.execution_id=e.id AND s.completed_at IS NOT NULL ORDER BY s.completed_revision DESC LIMIT 1),e.updated_at,w.placement_plan::text
           FROM executions e JOIN execution_work w ON w.execution_id=e.id
           WHERE w.worker_node_id IS NULL AND w.available_at<=clock_timestamp()
-            AND (w.handoff_selector IS NOT NULL AND w.handoff_selector->>'mode'<>'server'
+            AND (w.handoff_selector IS NOT NULL
                   AND ((e.state='running' AND w.handoff_pending) OR (e.state='queued' AND e.retry_of IS NOT NULL))
               OR w.handoff_selector IS NULL AND e.state='queued' AND e.retry_of IS NULL AND w.lease_until IS NULL
                   AND e.queued_at<clock_timestamp()-make_interval(secs=>@freshGrace))

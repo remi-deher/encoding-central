@@ -20,10 +20,9 @@ public sealed class CentralDiscoveryPublisher(
                 var configuredPort = configuration.GetValue("Central:DiscoveryPort", 8080);
                 if (configuredPort is < 1 or > 65535) throw new InvalidOperationException("Central:DiscoveryPort doit être compris entre 1 et 65535.");
                 var apiUrl = configuration["Central:AdvertisedApiBaseUrl"];
-                var reconciliationApiUrl = configuration["Central:Reconciliation:AdvertisedApiBaseUrl"];
                 var instanceName = configuration["Central:DiscoveryInstanceName"]?.Trim();
                 if (string.IsNullOrWhiteSpace(instanceName)) instanceName = Environment.MachineName;
-                var signature = $"{identity.Id:D}|{identity.Name}|{instanceName}|{configuredPort}|{apiUrl}|{reconciliationApiUrl}";
+                var signature = $"{identity.Id:D}|{identity.Name}|{instanceName}|{configuredPort}|{apiUrl}";
                 if (!string.Equals(signature, announcedIdentity, StringComparison.Ordinal))
                 {
                     advertiser?.Dispose();
@@ -34,7 +33,6 @@ public sealed class CentralDiscoveryPublisher(
                         ["roles"] = "server"
                     };
                     if (!string.IsNullOrWhiteSpace(apiUrl)) properties["apiUrl"] = apiUrl;
-                    if (!string.IsNullOrWhiteSpace(reconciliationApiUrl)) properties["reconciliationApiUrl"] = reconciliationApiUrl;
                     advertiser = new MdnsAdvertiser(new ServiceProfile(instanceName, "_encoding._tcp", (ushort)configuredPort, properties));
                     advertiser.Start();
                     announcedIdentity = signature;

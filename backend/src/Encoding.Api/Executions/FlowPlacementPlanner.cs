@@ -96,7 +96,7 @@ public sealed partial class FlowPlacementPlanner(FlowComponentRegistry registry)
         // Un relais explicite est une frontière d'exécution du flow. Les stratégies unifiées
         // ne doivent pas masquer cette frontière ni annoncer un nombre de transferts inférieur.
         var hasExplicitHandoff = paths.SelectMany(path => path.NodeIds)
-            .Select(id => flow.Nodes.First(node => node.Id == id)).Any(IsWorkerHandoff);
+            .Select(id => flow.Nodes.First(node => node.Id == id)).Any(RuntimeHandoffPolicy.IsHandoff);
 
         // 1. Workers d'accès direct en ligne
         var directAccessNodes = candidates
@@ -243,7 +243,7 @@ public sealed partial class FlowPlacementPlanner(FlowComponentRegistry registry)
                 .ThenBy(candidate=>candidate))
             {
                 if(parents.Any(edge => flow.Nodes.First(node => node.Id == edge.SourceNodeId) is { } source
-                    && IsWorkerHandoff(source)
+                    && RuntimeHandoffPolicy.IsHandoff(source)
                     && assignments.TryGetValue(edge.SourceNodeId,out var priorWorker) && priorWorker==worker)) continue;
                 var added=parents.Count(edge=>assignments.TryGetValue(edge.SourceNodeId,out var prior)&&prior!=worker);
                 if(cost+added>=bestCost) continue;
@@ -306,6 +306,4 @@ public sealed partial class FlowPlacementPlanner(FlowComponentRegistry registry)
         return true;
     }
 
-    private static bool IsWorkerHandoff(FlowNodeDefinition node) => RuntimeHandoffPolicy.IsHandoff(node)
-        && !(node.Configuration.TryGetValue("mode",out var mode) && mode.ValueKind==JsonValueKind.String && mode.GetString()=="server");
 }

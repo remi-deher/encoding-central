@@ -14,12 +14,12 @@ tags: [nœud, cluster, rattachement, jumelage, central, worker, deux-images, gro
 
 # Cluster et nœuds
 
-Un cluster est un ensemble de nœuds sans coordinateur permanent. Une installation seule est un **nœud autonome** ; un cluster n'existe que s'il est créé ou rejoint. Le stockage et la réplication sont dans [replication-storage.md](replication-storage.md).
+Il n'y a qu'un **central**, unique autorité, et des **workers** (le central embarque le sien) : plus de cluster maillé ni de nœud autonome ([ADR 0036](../adr/0036-separation-stricte-central-worker.md), [ADR 0040](../adr/0040-vocabulaire-central-worker.md)). Le central existe dès l'installation, avec un nom modifiable. Le stockage est dans [replication-storage.md](replication-storage.md). ⚠ Le reste de cette fiche garde l'ancien vocabulaire et sera réécrit.
 
 ## Vocabulaire (décidé par Rémi, 2026-10-15)
 
 - **Nœud** : une installation. *Serveur* et *worker* sont des rôles d'un nœud (un nœud peut avoir les deux), jamais des types de machine.
-- **Nœud autonome** : n'appartient à aucun cluster (`standalone`, vrai tant que le cluster n'est pas « établi » et qu'il y a au plus un nœud actif). **Cluster** : unité d'administration (état partagé, bibliothèques, utilisateurs).
+- **Central** : unité d'administration (état, bibliothèques, utilisateurs). Il n'y a plus d'état « autonome » ni de création du central.
 - **Groupe de nœuds** : classement à l'intérieur d'un cluster, sans effet sur la gestion.
 
 ## État courant
@@ -34,7 +34,7 @@ Un cluster est un ensemble de nœuds sans coordinateur permanent. Une installati
 ### Création, rattachement, départ
 - Le central est créé par l'assistant `/setup` : administrateur, noms du nœud et du cluster, puis « Initialiser le central ». `POST /api/v1/central` (nom obligatoire, 409 si déjà créé) renvoie un jeton API cluster par défaut ([auth-ops.md](auth-ops.md)). Un central ne rejoint jamais un autre cluster.
 - Un **worker** rejoint un central : toujours approuvé par le central. Voies : **enrôlement par compte administrateur** à son setup ([ADR 0034](../adr/0034-rattachement-par-compte-administrateur.md)), **enrôlement direct** (fenêtre ouverte par un admin, 1 à 60 min) ou **demande de jumelage** avec clé hexadécimale à usage unique (10 min) approuvée par un admin après comparaison d'un **code de vérification** à 6 caractères (calculé des deux côtés depuis l'identifiant du nœud et l'empreinte SHA-256 du jeton). Option admin « accepter la première liaison » (`PUT /api/v1/workers/first-link`, 1 à 60 min, consommée atomiquement, journalisée).
-- Changement de central en **deux phases** : l'ancienne identité reste en service jusqu'à la confirmation du nouveau ; retour arrière à l'identique si refus, injoignable ou échéance (12 min). Un rattachement qui n'aboutit pas est abandonné (`switchFailure` garde la raison).
+- Un worker n'a qu'un central : pour en changer, il le quitte puis rejoint l'autre avec une identité neuve. Un rattachement qui n'aboutit pas (refus, central injoignable, clé de jumelage expirée) est abandonné et `enrollmentFailure` garde la raison. Plus de changement en deux phases.
 - La découverte DNS-SD (`_encoding._tcp`) annonce le central pour que les workers le trouvent ; une adresse saisie à la main reste possible.
 - Quitter : `POST /api/v1/worker/leave` (agent) → `POST /api/v1/workers/{id}/leave` ; refusé (409) si un traitement est en cours. Une identité retirée ne se réactive jamais : heartbeat d'un identifiant retiré = 410, l'agent prend une identité neuve.
 - Retrait par un admin : `DELETE /api/v1/workers/{id}` révoque le jeton, supprime les accès directs, conserve l'historique, refuse (409) un nœud qui détient un bail valide. Le nœud du central lui-même ne se retire pas (409).

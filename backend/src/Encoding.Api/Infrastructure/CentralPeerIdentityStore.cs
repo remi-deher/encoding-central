@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.DataProtection;
 
 namespace Encoding.Api.Infrastructure;
 
-/// <summary>One persistent server identity per local API installation.</summary>
+/// <summary>Identité persistante du central (identifiant stable), protégée par le trousseau Data Protection local.</summary>
 public sealed class CentralPeerIdentityStore : IDisposable
 {
     private sealed record ProtectedIdentity(Guid PeerId, string PrivateKey);
@@ -51,36 +51,6 @@ public sealed class CentralPeerIdentityStore : IDisposable
     }
 
     public Guid PeerId { get; }
-    public string PublicKey => Convert.ToBase64String(privateKey.ExportSubjectPublicKeyInfo());
-
-    public byte[] Sign(ReadOnlySpan<byte> payload) => privateKey.SignData(payload, HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
-    public byte[] WrapDataKey(ReadOnlySpan<byte> dataKey) => privateKey.Encrypt(dataKey.ToArray(), RSAEncryptionPadding.OaepSHA256);
-    public byte[] UnwrapDataKey(ReadOnlySpan<byte> wrapped) => privateKey.Decrypt(wrapped.ToArray(), RSAEncryptionPadding.OaepSHA256);
-
-    public static bool Verify(string publicKey, ReadOnlySpan<byte> payload, ReadOnlySpan<byte> signature)
-    {
-        try
-        {
-            using var rsa = ImportPublicKey(publicKey);
-            return rsa.VerifyData(payload, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
-        }
-        catch (CryptographicException) { return false; }
-        catch (FormatException) { return false; }
-    }
-
-    public static RSA ImportPublicKey(string publicKey)
-    {
-        var encoded = Convert.FromBase64String(publicKey);
-        var rsa = RSA.Create();
-        try
-        {
-            rsa.ImportSubjectPublicKeyInfo(encoded, out var consumed);
-            if (consumed != encoded.Length || rsa.KeySize < 3072)
-                throw new CryptographicException("La clé publique doit être une clé RSA d’au moins 3072 bits.");
-            return rsa;
-        }
-        catch { rsa.Dispose(); throw; }
-    }
 
     private void Persist()
     {

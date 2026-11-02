@@ -155,7 +155,6 @@ public sealed partial class RuntimeRepository
             CASE WHEN w.wait_probe_due THEN (SELECT x.spec::text FROM execution_waits x WHERE x.execution_id=e.id AND x.state='waiting') END,e.queued_at,w.placement_plan::text,w.before_metadata::text
           FROM execution_work w JOIN executions e ON e.id=w.execution_id JOIN libraries l ON l.id=w.library_id
           WHERE (e.state='queued' OR e.state='running' AND w.worker_node_id IS NULL)
-          AND COALESCE(w.handoff_selector->>'mode','')<>'server'
           AND l.is_active AND w.available_at<=clock_timestamp()
           AND w.lease_until IS NULL
           {cursorPredicate}
@@ -367,7 +366,6 @@ public sealed partial class RuntimeRepository
                         await ReleaseAsync(item.Id,c,tx,ct); await tx.CommitAsync(ct); return new(null);
                     }
                     if(destination.Mode=="node" && destination.TargetNodeId==worker) returnsToSelf=true;
-                    if(destination.Mode=="server" && !capabilities.Any(c=>c.ToolId=="plugin/nodes" && Version.TryParse(c.Version,out var v) && v>=new Version(1,8,0))) returnsToSelf=true;
                 }
                 if(returnsToSelf) continue;
             }

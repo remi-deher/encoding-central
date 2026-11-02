@@ -81,9 +81,9 @@ public static class RuntimeHandoffPolicy
         }
         var mode = Read("mode") ?? "eligible";
         if (mode == "eligible") return new(mode);
-        if (mode is "node" or "server")
+        if (mode == "node")
         {
-            if (!Guid.TryParse(Read(mode=="server"?"targetServerPeerId":"targetNodeId"), out var target) || target == Guid.Empty)
+            if (!Guid.TryParse(Read("targetNodeId"), out var target) || target == Guid.Empty)
                 throw new ArgumentException("Le relais vers un worker précis nécessite un identifiant de worker valide.");
             return new(mode, target);
         }

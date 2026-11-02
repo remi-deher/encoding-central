@@ -240,7 +240,6 @@ public sealed partial class RuntimeRepository
             var snapshot=await settings.ExecuteScalarAsync(ct) as byte[];
             try { handoff=RuntimeHandoffPolicy.Resolve(node,snapshot is null?null:pluginConfigurations.ReadSnapshot(snapshot).GetValueOrDefault("nodes")); }
             catch(ArgumentException) { return false; }
-            if(handoff.Mode=="server") return false;
             if(cp.Handoff!=handoff || cp.PlacementHandoff || cp.NextNodeId is null || handoff.Mode=="node" && handoff.TargetNodeId==worker) return false;
         }
         else if(cp.Handoff is not null)
