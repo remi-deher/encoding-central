@@ -222,24 +222,6 @@ internal static class StoreTests
             await repositories.SetEnabledAsync(added.Id, false, CancellationToken.None);
             Check((await Fails(() => repositories.InstallAsync(added.Id, "acme.tools", null, CancellationToken.None))).Contains("désactivé"), "A disabled repository cannot install.");
             Check(await repositories.RemoveAsync(added.Id, CancellationToken.None) && repositories.List().Count == 0, "A repository can be removed.");
-
-            var officialConfiguration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["PluginStore:Directory"] = Path.Combine(directory, "official"),
-                ["ToolStore:Directory"] = Path.Combine(directory, "official-tools"),
-                ["PluginStore:OfficialRepositoryUrl"] = "https://github.com/remi-deher/encoding-store"
-            }).Build();
-            var officialStore = new PluginStoreService(officialConfiguration, registry, new ToolStoreService(officialConfiguration, NullLogger<ToolStoreService>.Instance), NullLogger<PluginStoreService>.Instance);
-            var officialRepositories = new PluginRepositoryService(officialConfiguration, new Factory(), officialStore, new ToolStoreService(officialConfiguration, NullLogger<ToolStoreService>.Instance), NullLogger<PluginRepositoryService>.Instance);
-            var official = officialRepositories.List().Single();
-            Check(official.IsOfficial && official.Enabled && official.Url == "https://github.com/remi-deher/encoding-store", "The official repository is present, active and fixed.");
-            Check(PluginRepositoryService.IndexAddress(official.Url).ToString() == "https://raw.githubusercontent.com/remi-deher/encoding-store/main/repository.json", "A GitHub repository address points at its index.");
-            Check((await Fails(() => officialRepositories.SetEnabledAsync(official.Id, false, CancellationToken.None))).Contains("reste actif"), "The official repository cannot be disabled.");
-            Check((await Fails(() => officialRepositories.RemoveAsync(official.Id, CancellationToken.None))).Contains("ne peut pas être supprimé"), "The official repository cannot be removed.");
-            Check(officialRepositories.List().Single().Enabled, "The official repository stays active.");
-            var extra = await officialRepositories.AddAsync(baseUrl + "/repository.json", CancellationToken.None);
-            await officialRepositories.SetEnabledAsync(extra.Id, false, CancellationToken.None);
-            Check(officialRepositories.List().Single(item => item.Id == extra.Id).Enabled == false && await officialRepositories.RemoveAsync(extra.Id, CancellationToken.None), "Another repository can be disabled and removed.");
         }
         finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
         Console.WriteLine("PASS: repositories (index validation, impersonation, SHA-256 check, install, disable, removal) against a local HTTP server.");

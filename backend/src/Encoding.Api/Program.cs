@@ -74,7 +74,6 @@ builder.Services.AddHttpClient("release-updates", client =>
     client.MaxResponseContentBufferSize = 2 * 1024 * 1024;
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Encoding-UpdateChecker/1.0");
 });
-builder.Services.AddSingleton<InterfaceLiveBroadcaster>();
 builder.Services.AddSingleton<ExecutionStreamBroadcaster>();
 builder.Services.AddSingleton<ExecutionRepository>();
 builder.Services.AddSingleton<FlowComponentRegistry>();
@@ -100,7 +99,6 @@ builder.Services.AddSingleton<WebhookAuthThrottle>();
 builder.Services.AddSingleton<ToolStoreService>();
 builder.Services.AddSingleton<PluginStoreService>();
 builder.Services.AddSingleton<PluginRepositoryService>();
-builder.Services.AddHostedService<PluginStoreStartup>();
 builder.Services.AddHttpClient(PluginRepositoryService.HttpClientName, client =>
 {
     client.Timeout = TimeSpan.FromSeconds(60);
@@ -262,7 +260,6 @@ app.MapSourceReplacementEndpoints();
 app.MapOperationsEndpoints();
 app.MapSystemLogEndpoints();
 
-app.MapInterfaceLiveEndpoints();
 app.MapLibraryWorkflowEndpoints();
 app.MapLibraryActivityEndpoints();
 app.MapLibraryEndpoints();

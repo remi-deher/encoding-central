@@ -16,7 +16,7 @@ tags: [plugins, outils-media, cluster, reconciliation]
 Les plugins et les outils média doivent pouvoir être désactivés depuis une préférence unique du cluster. Le Store garde cependant ses paquets sur chaque serveur, et le cluster converge sans coordinateur ni quorum. Il faut séparer la disponibilité souhaitée de l’installation locale et préserver les traitements engagés.
 
 ## Décision
-L’état activé/désactivé est enregistré dans les registres LWW existants du journal de réconciliation. L’absence de registre vaut inactif, sauf `base` et `nodes` une fois installés (ADR [0035](0035-depot-officiel-et-activation.md)). La désactivation d’un plugin interdit sa publication et son usage dans les nouveaux traitements. La désactivation d’un outil retire sa capacité des nouvelles attributions. Les exécutions déjà lancées, y compris leur reprise à checkpoint, continuent. `base` et `nodes` restent activés. La désactivation ne désinstalle aucun paquet ; l’installation du Store reste locale à chaque serveur.
+L’état activé/désactivé est enregistré dans les registres LWW existants du journal de réconciliation, avec activation par défaut. La désactivation d’un plugin interdit sa publication et son usage dans les nouveaux traitements. La désactivation d’un outil retire sa capacité des nouvelles attributions. Les exécutions déjà lancées, y compris leur reprise à checkpoint, continuent. `base` et `nodes` restent activés. La désactivation ne désinstalle aucun paquet ; l’installation du Store reste locale à chaque serveur.
 
 ## Alternatives écartées
 - Préférence locale au serveur : elle autoriserait des politiques différentes selon le serveur qui reçoit une tâche.

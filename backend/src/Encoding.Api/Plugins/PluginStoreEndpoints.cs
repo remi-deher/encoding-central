@@ -9,7 +9,7 @@ public static class PluginStoreEndpoints
 {
     public static void MapPluginStoreEndpoints(this WebApplication app)
     {
-        var store = app.MapGroup("/api/v1/store").WithTags("Store").NotifyLive("plugins");
+        var store = app.MapGroup("/api/v1/store").WithTags("Store");
 
         store.MapGet("/repositories", (PluginRepositoryService repositories) =>
             Results.Ok(repositories.List().Select(item => new
@@ -36,15 +36,7 @@ public static class PluginStoreEndpoints
             await repositories.SyncAsync(repositoryId, ct) is { } synced ? Results.Ok(Summary(synced)) : Results.NotFound()).WithName("SyncStoreRepository");
 
         store.MapPut("/repositories/{repositoryId}", async (string repositoryId, SetRepositoryEnabledRequest request, PluginRepositoryService repositories, CancellationToken ct) =>
-        {
-            try
-            {
-                return await repositories.SetEnabledAsync(repositoryId, request.Enabled, ct) is { } updated
-                    ? Results.Ok(Summary(updated))
-                    : Results.NotFound();
-            }
-            catch (PluginRepositoryException exception) { return Results.UnprocessableEntity(new { title = exception.Message }); }
-        }).WithName("SetStoreRepositoryEnabled");
+            await repositories.SetEnabledAsync(repositoryId, request.Enabled, ct) is { } updated ? Results.Ok(Summary(updated)) : Results.NotFound()).WithName("SetStoreRepositoryEnabled");
 
         store.MapDelete("/repositories/{repositoryId}", async (string repositoryId, PluginRepositoryService repositories, CancellationToken ct) =>
         {

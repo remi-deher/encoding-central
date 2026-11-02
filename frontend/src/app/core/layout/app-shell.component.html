@@ -104,7 +104,7 @@
       </main>
     </div>
   </div>
-  @if (!authMode() && !shell.worker()) {
+  @if (!authMode()) {
     <app-assistant-host
       #assistantHost
       [authMode]="authMode()"

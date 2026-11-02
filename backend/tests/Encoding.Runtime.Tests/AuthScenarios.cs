@@ -427,12 +427,6 @@ internal static class AuthScenarios
         Check(await anonymous.StatusAsync(post, "/api/v1/nodes/enroll", first, csrf: false) == HttpStatusCode.Forbidden, "Direct enrollment of a new identity is closed by default.");
         Check(await anonymous.StatusAsync(put, "/api/v1/nodes/enrollment-window", new OpenEnrollmentWindowRequest(5), csrf: false) == HttpStatusCode.Unauthorized, "Anonymous callers cannot open the window.");
         Check(await admin.StatusAsync(put, "/api/v1/nodes/enrollment-window", new OpenEnrollmentWindowRequest(0)) == HttpStatusCode.BadRequest, "The window duration is bounded.");
-        var admitted = NewNode(Guid.NewGuid(), NodeToken());
-        Check(await anonymous.StatusAsync(post, "/api/v1/nodes/enroll", admitted, csrf: false) == HttpStatusCode.Forbidden, "Anonymous enrollment stays closed without a time window.");
-        Check(await viewer.StatusAsync(post, "/api/v1/nodes/enroll", admitted) == HttpStatusCode.Forbidden, "A viewer session does not admit a worker.");
-        Check(await admin.StatusAsync(post, "/api/v1/nodes/enroll", admitted) == HttpStatusCode.OK, "An administrator session admits a worker without a time window.");
-        Check(factory.Services.GetService<Encoding.Api.Nodes.LocalNodeRegistry>()?.NodeId != admitted.Id, "An administrator session does not replace the local node.");
-        Check(await anonymous.StatusAsync(put, $"/api/v1/nodes/{admitted.Id}/heartbeat", new NodeHeartbeatRequest(admitted.Name, admitted.Roles, 1, admitted.Capabilities), csrf: false, nodeToken: admitted.NodeToken) == HttpStatusCode.OK, "The worker admitted by an administrator session heartbeats.");
         Check(await admin.StatusAsync(put, "/api/v1/nodes/enrollment-window", new OpenEnrollmentWindowRequest(5)) == HttpStatusCode.OK, "An administrator opens the window.");
         Check(await anonymous.StatusAsync(post, "/api/v1/nodes/enroll", first, csrf: false) == HttpStatusCode.OK, "A new identity enrolls while the window is open.");
         var stolen = first with { NodeToken = NodeToken() };

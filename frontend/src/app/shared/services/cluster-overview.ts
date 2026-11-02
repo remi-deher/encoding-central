@@ -11,9 +11,9 @@ import {
   switchMap,
   Subject,
   timeout,
+  timer,
 } from 'rxjs';
 import { ClusterApi } from './cluster-api';
-import { LiveUpdates } from './live-updates';
 import { LibraryResponse, NodeResponse } from '../models/cluster';
 import { ClusterIdentity } from '../models/local-node';
 import { LibraryNodeAccessResponse } from '../ui/library-node-access-types';
@@ -35,9 +35,8 @@ export const INITIAL_CLUSTER_OVERVIEW: ClusterOverviewState = { status: 'loading
 @Injectable({ providedIn: 'root' })
 export class ClusterOverview {
   private readonly api = inject(ClusterApi);
-  private readonly live = inject(LiveUpdates);
   private readonly refreshRequested = new Subject<void>();
-  readonly state$ = merge(this.live.drive(['nodes', 'libraries']), this.refreshRequested).pipe(
+  readonly state$ = merge(timer(0, 10000), this.refreshRequested).pipe(
     exhaustMap(() =>
       forkJoin({
         identity: this.api.identity(),

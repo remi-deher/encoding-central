@@ -16,22 +16,17 @@ public static class LeadershipEndpoints
         group.MapGet("/status", async (
             LeadershipRepository repository,
             NodePresenceOptions options,
-            IConfiguration configuration,
             CancellationToken ct) =>
         {
-            var status = await repository.GetStatusAsync(options.OfflineAfter, ct);
-            return Results.Ok(status with { FixedAuthority = Encoding.Api.Nodes.FixedServerPolicy.Enabled(configuration) });
+            return Results.Ok(await repository.GetStatusAsync(options.OfflineAfter, ct));
         }).AllowAnonymous().WithName("GetLeadershipStatus");
 
         // POST /api/v1/cluster/leadership/transfer
         group.MapPost("/transfer", async (
             LeadershipTransferRequest request,
             LeadershipHandoffService handoff,
-            IConfiguration configuration,
             CancellationToken ct) =>
         {
-            if (Encoding.Api.Nodes.FixedServerPolicy.Enabled(configuration))
-                return Results.Conflict(new LeadershipTransferResponse(false, Encoding.Api.Nodes.FixedServerPolicy.Refusal));
             var result = await handoff.InitiateTransferAsync(request.TargetNodeId, request.DrainTimeoutSeconds, request.TargetNodeUrl, ct);
             return result.Success ? Results.Ok(result) : Results.Conflict(result);
         }).RequireAuthorization(AuthExtensions.AdministratorPolicy).WithName("InitiateLeadershipTransfer");

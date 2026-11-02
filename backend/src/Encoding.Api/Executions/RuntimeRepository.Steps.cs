@@ -238,8 +238,7 @@ public sealed partial class RuntimeRepository
                 || inspected is null || !(DirectMediaInspection.Allows(inspected.Component.PluginId,inspected.Component.ComponentId,
                     FlowOperationConfiguration.Resolve(inspected.Component.ComponentId,inspected.Configuration),cp.Context.Plan.Count,
                     FfmpegBuilderPolicy.Active(cp.Context.Variables))
-                    || DirectMediaInspection.AllowsMetadataOnly(components.Resolve(inspected.Component))
-                    || DirectMediaInspection.AllowsUnchanged(inspected.Component.ComponentId))) return false;
+                    || DirectMediaInspection.AllowsMetadataOnly(components.Resolve(inspected.Component)))) return false;
             await using var direct=Sql.Command("SELECT EXISTS(SELECT 1 FROM execution_work WHERE execution_id=@id AND worker_node_id=@worker AND source_node_id=@worker AND NOT source_preparation_requested AND source_sha IS NULL)",
                 c,tx);
             direct.Parameters.AddWithValue("id",id); direct.Parameters.AddWithValue("worker",worker);
@@ -401,9 +400,8 @@ public sealed partial class RuntimeRepository
                 || profileValue.ValueKind!=JsonValueKind.Object) return false;
             var profile=profileValue.Deserialize<EncodingProfileSnapshot>(Json);
             var codec=node.Configuration.TryGetValue("videoCodec",out var codecValue)?codecValue.GetString():"hevc";
-            var retryWithCpu=node.Configuration.TryGetValue("retryWithCpu",out var retryFlag)&&retryFlag.ValueKind==JsonValueKind.True;
             var encoder=VideoEncoderCatalog.Find(resolution.EncoderId);
-            var target=profile is null||string.IsNullOrEmpty(codec)?null:MediaCodecPolicy.AcceptedEncodingTarget(profile,codec,resolution.EncoderId,retryWithCpu);
+            var target=profile?.Targets.SingleOrDefault(item=>item.EncoderId==resolution.EncoderId);
             var preset=encoder?.Presets.FirstOrDefault(item=>item.Id==target?.Preset)?.Value;
             if(profile is null || encoder is null || target is null || resolution.Codec!=codec || encoder.Codec!=codec
                 || resolution.ProfileId!=profile.Id || resolution.ProfileVersion!=profile.Version || resolution.ProfileName!=profile.Name

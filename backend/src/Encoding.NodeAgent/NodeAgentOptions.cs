@@ -10,8 +10,7 @@ public sealed record NodeAgentOptions(
     TimeSpan HeartbeatInterval,
     int LocalApiPort,
     string? LocalEnrollmentSecretFile = null,
-    string? DisplayName = null,
-    bool FixedWorker = false)
+    string? DisplayName = null)
 {
     public static NodeAgentOptions FromConfiguration(IConfiguration configuration)
     {
@@ -27,8 +26,6 @@ public sealed record NodeAgentOptions(
             .Distinct()
             .ToArray();
         if (roles.Length == 0) throw new InvalidOperationException("Node:Roles doit déclarer au moins un rôle.");
-        if (configuration.GetValue("Node:FixedWorker", false))
-            roles = [Encoding.Contracts.Nodes.NodeRole.Worker];
 
         var maxConcurrentTasks = configuration.GetValue("Node:MaxConcurrentTasks", 1);
         if (maxConcurrentTasks is < 0 or > 1024) throw new InvalidOperationException("Node:MaxConcurrentTasks doit être compris entre 0 et 1024.");
@@ -47,8 +44,7 @@ public sealed record NodeAgentOptions(
             TimeSpan.FromSeconds(intervalSeconds),
             localApiPort,
             string.IsNullOrWhiteSpace(configuration[Encoding.Core.Nodes.LocalEnrollment.SecretFileSetting]) ? null : configuration[Encoding.Core.Nodes.LocalEnrollment.SecretFileSetting],
-            string.IsNullOrWhiteSpace(configuration["Node:DisplayName"]) ? null : configuration["Node:DisplayName"]!.Trim(),
-            configuration.GetValue("Node:FixedWorker", false));
+            string.IsNullOrWhiteSpace(configuration["Node:DisplayName"]) ? null : configuration["Node:DisplayName"]!.Trim());
     }
 
     private static string? NormalizeOptionalUrl(string? value)

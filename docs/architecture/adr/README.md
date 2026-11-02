@@ -45,9 +45,3 @@ Une décision structurante : nouveau principe, changement d'un invariant des fic
 | [0027](0027-controle-integrite-optionnel.md) | Contrôle d'intégrité facultatif par bloc de flow | implemented | runtime, flows |
 | [0028](0028-publication-locale-et-journaux-operations.md) | Publication locale et journaux d'opérations | implemented | runtime |
 | [0029](0029-store-plugins-outils-hashes.md) | Store commun pour plugins et outils, identifiés par hash | accepted | plugins |
-| [0030](0030-migration-composants-et-plugins-historiques-au-store.md) | Migration des composants et plugins historiques vers le Store | accepted | plugins |
-| [0031](0031-frontieres-backend-verifiees-par-tests.md) | Frontières du backend vérifiées par des tests d'architecture | accepted | runtime |
-| [0032](0032-serveur-central-fixe.md) | Serveur central fixe et workers qui ne deviennent pas serveurs | implemented | cluster |
-| [0033](0033-images-central-et-worker.md) | Image centrale autonome et image worker sans base | implemented | cluster |
-| [0034](0034-rattachement-par-compte-administrateur.md) | Rattachement du worker par compte administrateur | implemented | cluster |
-| [0035](0035-depot-officiel-et-activation.md) | Dépôt officiel fixe et activation explicite | implemented | plugins |

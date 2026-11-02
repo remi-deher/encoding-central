@@ -1188,7 +1188,7 @@
             "id": "styleProfile",
             "label": "Profil de style",
             "type": "select",
-            "defaultValue": "none",
+            "defaultValue": "crunchyroll",
             "options": [
               {
                 "value": "crunchyroll",
@@ -1203,27 +1203,11 @@
                 "label": "Style personnalisé (instantané du flow)"
               }
             ],
-            "description": "Conservé pour les flows déjà publiés. Le moteur n’applique plus ce choix : citez une ressource de profil.",
+            "description": "Le profil intégré est un réglage initial en lecture seule. Les polices qu’il utilise (Trebuchet MS Gras, Arial Gras) s’ajoutent avec le bloc « Polices ».",
             "importance": "advanced",
             "section": "Sous-titres",
             "requiresPluginVersion": "1.2.0",
             "requiresPluginVersionValue": "custom",
-            "visibleWhenFieldId": "manageSubtitles",
-            "visibleWhenValue": "true",
-            "legacyOnly": true
-          },
-          {
-            "id": "profile",
-            "label": "Profil de sous-titres",
-            "type": "text",
-            "required": false,
-            "defaultValue": "",
-            "description": "Ressource du catalogue (identifiant:version). Vide : ne pas restyler. Les mesures du document sont celles du canevas de référence et sont mises à l’échelle du cadre affiché.",
-            "importance": "advanced",
-            "section": "Sous-titres",
-            "editor": "resource",
-            "resourceKind": "subtitle-profile",
-            "requiresPluginVersion": "1.10.3",
             "visibleWhenFieldId": "manageSubtitles",
             "visibleWhenValue": "true"
           },
@@ -1243,7 +1227,7 @@
             "label": "Mettre à niveau les ASS simples",
             "type": "boolean",
             "defaultValue": true,
-            "description": "Remplace l’en-tête et les styles du profil cité ; les événements sont conservés.",
+            "description": "Remplace l’en-tête et les quatre styles communs ; les événements sont conservés.",
             "importance": "advanced",
             "section": "Sous-titres",
             "visibleWhenFieldId": "manageSubtitles",
@@ -1301,8 +1285,7 @@
             "section": "Sous-titres",
             "defaultValue": "Trebuchet MS",
             "visibleWhenFieldId": "manageSubtitles",
-            "visibleWhenValue": "true",
-            "legacyOnly": true
+            "visibleWhenValue": "true"
           },
           {
             "id": "fontSize",
@@ -1314,8 +1297,7 @@
             "max": 80,
             "defaultValue": 23,
             "visibleWhenFieldId": "manageSubtitles",
-            "visibleWhenValue": "true",
-            "legacyOnly": true
+            "visibleWhenValue": "true"
           },
           {
             "id": "fontOutline",
@@ -1327,8 +1309,7 @@
             "max": 10,
             "defaultValue": 2.5,
             "visibleWhenFieldId": "manageSubtitles",
-            "visibleWhenValue": "true",
-            "legacyOnly": true
+            "visibleWhenValue": "true"
           },
           {
             "id": "fontMargin",
@@ -1340,8 +1321,7 @@
             "max": 100,
             "defaultValue": 20,
             "visibleWhenFieldId": "manageSubtitles",
-            "visibleWhenValue": "true",
-            "legacyOnly": true
+            "visibleWhenValue": "true"
           },
           {
             "id": "fontSet",

@@ -13,9 +13,6 @@ public sealed class ToolPackageSyncService(NodeAgentOptions options, WorkerIdent
     private sealed record Listed(string Id, string Version, string Platform, string ArchiveSha256);
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(60);
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromMinutes(3) };
-    public DateTimeOffset? LastAlignedAt { get; private set; }
-    public string? LastError { get; private set; }
-    public int DesiredCount { get; private set; }
     private string Root => configuration["Runtime:ManagedToolDirectory"] is { Length: > 0 } configured ? configured : ManagedToolCatalog.DefaultDirectory;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -27,10 +24,7 @@ public sealed class ToolPackageSyncService(NodeAgentOptions options, WorkerIdent
             try { await SyncOnceAsync(stoppingToken); }
             catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException or JsonException
                 && !stoppingToken.IsCancellationRequested)
-            {
-                LastError = exception.Message;
-                logger.LogWarning("La synchronisation des outils gérés a échoué : {Reason}", exception.Message);
-            }
+            { logger.LogWarning("La synchronisation des outils gérés a échoué : {Reason}", exception.Message); }
             await Task.Delay(Interval, stoppingToken);
         }
     }
@@ -69,9 +63,6 @@ public sealed class ToolPackageSyncService(NodeAgentOptions options, WorkerIdent
                     if (!desired.Any(item => (item.Id, item.Version, item.Platform) == tuple)) TryDelete(platformDirectory);
                 }
         if (changed) await capabilityProbe.InvalidateCacheAsync(ct);
-        DesiredCount = desired.Length;
-        LastAlignedAt = DateTimeOffset.UtcNow;
-        LastError = null;
     }
 
     private async Task InstallAsync(WorkerIdentityState identity, string server, Listed item, string target, CancellationToken ct)

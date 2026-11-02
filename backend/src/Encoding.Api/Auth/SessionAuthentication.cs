@@ -59,7 +59,6 @@ public sealed class SessionAuthenticationHandler(
                         new Claim(ClaimTypes.NameIdentifier, user.Id.ToString("D")),
                         new Claim(ClaimTypes.Name, user.Username),
                         new Claim(ClaimTypes.Role, UserRepository.RoleName(user.Role)),
-                        new Claim("auth_type", "session"),
                     ],
                     SessionAuthentication.Scheme);
                 return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SessionAuthentication.Scheme));

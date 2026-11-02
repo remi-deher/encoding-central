@@ -329,28 +329,39 @@ p[role='note'] {
 
 .enrollment-guide {
   display: grid;
-  gap: var(--space-4);
+  gap: 16px;
 }
 
 .enrollment-step {
+  padding: 14px;
   display: grid;
-  gap: var(--space-2);
-  padding: var(--space-4);
-  border-radius: var(--radius-lg);
-  background: var(--surface-container);
+  gap: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: var(--surface-muted);
+}
+
+.enrollment-step > span {
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .enrollment-step h3 {
   margin: 0;
   color: var(--text-primary);
-  font-size: var(--font-title-sm);
+  font-size: 14px;
 }
 
 .enrollment-step p,
+.enrollment-empty,
 .enrollment-empty {
-  margin: 0;
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
+  padding: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: var(--surface-muted);
 }
 
 .pairing-key-header {

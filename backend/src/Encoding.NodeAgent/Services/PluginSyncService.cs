@@ -16,9 +16,6 @@ public sealed class PluginSyncService(NodeAgentOptions options, WorkerIdentitySt
     private sealed record Listed(string Id, string Version, string Sha256);
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(60);
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromMinutes(2) };
-    public DateTimeOffset? LastAlignedAt { get; private set; }
-    public string? LastError { get; private set; }
-    public int DesiredCount { get; private set; }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -30,7 +27,6 @@ public sealed class PluginSyncService(NodeAgentOptions options, WorkerIdentitySt
             catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException or JsonException
                 && !stoppingToken.IsCancellationRequested)
             {
-                LastError = exception.Message;
                 logger.LogWarning("La synchronisation des plugins a échoué : {Reason}", exception.Message);
             }
             await Task.Delay(Interval, stoppingToken);
@@ -75,9 +71,6 @@ public sealed class PluginSyncService(NodeAgentOptions options, WorkerIdentitySt
                 if (!listed.Any(item => item.Id == Path.GetFileName(pluginDirectory) && item.Version == Path.GetFileName(versionDirectory)))
                 { TryDelete(versionDirectory); changed = true; }
         if (changed) await capabilityProbe.InvalidateCacheAsync(ct);
-        DesiredCount = listed.Count;
-        LastAlignedAt = DateTimeOffset.UtcNow;
-        LastError = null;
     }
 
     private async Task InstallAsync(WorkerIdentityState identity, string serverUrl, Listed plugin, string target, CancellationToken ct)

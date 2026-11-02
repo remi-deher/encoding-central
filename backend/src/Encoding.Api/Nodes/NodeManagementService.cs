@@ -60,8 +60,7 @@ public sealed class NodeManagementService(
     public async Task<NodeEnrollmentOutcome> EnrollAsync(
         NodeEnrollmentRequest request,
         bool isLocal,
-        CancellationToken ct,
-        bool admitNewNode = false)
+        CancellationToken ct)
     {
         var errors = NodeHeartbeatValidator.Validate(request);
         if (errors.Count > 0) return new(true, errors, false, null);
@@ -77,8 +76,7 @@ public sealed class NodeManagementService(
         }
 
         var window = Get<EnrollmentWindowRepository>();
-        // admitNewNode ouvre l'admission (session administrateur) sans déclarer ce nœud comme le nœud local du serveur.
-        var windowOpen = isLocal || admitNewNode || (window is null || (await window.GetAsync(ct)).IsOpen);
+        var windowOpen = isLocal || (window is null || (await window.GetAsync(ct)).IsOpen);
         var node = await repository.EnrollAsync(request, windowOpen, ct);
 
         if (node is not null && isLocal && Get<LocalNodeRegistry>() is { } localNode)
@@ -201,8 +199,7 @@ public sealed class NodeManagementService(
             var leadership = Get<Encoding.Api.Cluster.LeadershipRepository>();
             Encoding.Contracts.Cluster.LeadershipHandoffInstruction? handoff = null;
             var desiredRoles = node.DesiredRoles;
-            var fixedAuthority = FixedServerPolicy.Enabled(config);
-            if (leadership is not null && !fixedAuthority)
+            if (leadership is not null)
             {
                 var activeTransfer = await leadership.GetActiveTransferForNodeAsync(nodeId, ct);
                 if (activeTransfer is not null)
@@ -267,7 +264,7 @@ public sealed class NodeManagementService(
         bool worker,
         TimeSpan offlineAfter,
         CancellationToken ct) =>
-        repository.RequestModeAsync(nodeId, server, worker, offlineAfter, ct, fixedAuthority: FixedServerPolicy.Enabled(Get<IConfiguration>()));
+        repository.RequestModeAsync(nodeId, server, worker, offlineAfter, ct);
 
     public Task<bool> SetDrainingAsync(Guid nodeId, bool draining, CancellationToken ct) =>
         repository.SetDrainingAsync(nodeId, draining, ct);

@@ -2,7 +2,6 @@ import { LibraryProcessingSettings } from '../../shared/models/library-workflow'
 import { FlowValidation } from '../../shared/services/flow-validation';
 
 import { ClusterApi } from '../../shared/services/cluster-api';
-import { LiveUpdates } from '../../shared/services/live-updates';
 
 import { LibraryResponse, NodeGroupResponse } from '../../shared/models/cluster';
 
@@ -36,6 +35,7 @@ import {
   forkJoin,
   map,
   of,
+  timer,
   switchMap,
   exhaustMap,
   firstValueFrom,
@@ -204,7 +204,6 @@ export class LibraryCatalogPageComponent {
   private readonly http = inject(HttpClient);
 
   private readonly clusterApi = inject(ClusterApi);
-  private readonly live = inject(LiveUpdates);
 
   private readonly executionTracking = inject(ExecutionTracking);
 
@@ -243,7 +242,7 @@ export class LibraryCatalogPageComponent {
     ).pipe(
       switchMap(({ library }) =>
         library
-          ? this.live.drive(['libraries']).pipe(
+          ? timer(0, 5000).pipe(
               exhaustMap(() =>
                 this.clusterApi.libraryProcessing(library.id).pipe(catchError(() => of(null))),
               ),
@@ -428,7 +427,7 @@ export class LibraryCatalogPageComponent {
     toObservable(this.selectedProcessingExecutionId).pipe(
       switchMap((id) =>
         id
-          ? this.live.drive(['executions']).pipe(
+          ? timer(0, 3000).pipe(
               exhaustMap(() =>
                 this.executionTracking.pipeline(id).pipe(
                   map((steps) => ({ message: '', steps })),
@@ -586,7 +585,7 @@ export class LibraryCatalogPageComponent {
     ).pipe(
       switchMap(({ library }) =>
         library
-          ? this.live.drive(['libraries', 'executions'])
+          ? timer(0, 5000)
               .pipe(
                 exhaustMap(() =>
                   this.clusterApi.libraryWorkflow(library.id).pipe(

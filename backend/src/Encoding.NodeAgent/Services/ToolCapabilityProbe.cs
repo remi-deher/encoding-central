@@ -21,30 +21,6 @@ public sealed class ToolCapabilityProbe(
     private IReadOnlyList<NodeToolCapability>? cached;
     private DateTimeOffset refreshed;
     private string? lastHardwareSummary;
-    private int probing;
-
-    /// <summary>Cache encore valable, sans lancer de sonde. Null si rien n'est prêt.</summary>
-    public IReadOnlyList<NodeToolCapability>? TryGetFresh()
-    {
-        var snapshot = cached;
-        if (snapshot is null || refreshed <= DateTimeOffset.UtcNow - TimeSpan.FromMinutes(5))
-            return null;
-        return snapshot;
-    }
-
-    /// <summary>Lance une sonde si le cache est vide, sans l'attendre. Une seule sonde à la fois.</summary>
-    public void EnsureFresh()
-    {
-        if (TryGetFresh() is not null) return;
-        if (Interlocked.CompareExchange(ref probing, 1, 0) != 0) return;
-        _ = ProbeInBackground();
-    }
-
-    private async Task ProbeInBackground()
-    {
-        try { await DiscoverAsync(CancellationToken.None); }
-        finally { Interlocked.Exchange(ref probing, 0); }
-    }
 
     public async Task InvalidateCacheAsync(CancellationToken ct)
     {

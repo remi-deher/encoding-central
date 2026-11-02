@@ -16,8 +16,6 @@ import { NavigationEnd, Route, Router, RouterLink, RouterLinkActive } from '@ang
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { filter, map } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
-import { ShellConfig } from '../shell/shell-config';
-import { workerShellAllows } from '../../shared/models/worker-shell';
 import { AppearancePaletteComponent } from '../theme/appearance-palette.component';
 import { UserMenuComponent } from '../auth/user-menu.component';
 
@@ -147,7 +145,6 @@ export function getSearchableNavigationItems(routes: Route[]): readonly Navigati
 })
 export class PrimaryNavigationComponent {
   private readonly auth = inject(AuthService);
-  protected readonly shell = inject(ShellConfig);
   private readonly router = inject(Router);
   private readonly currentUrl = toSignal(
     this.router.events.pipe(
@@ -171,10 +168,7 @@ export class PrimaryNavigationComponent {
       .map((group) => ({
         ...group,
         items: group.items.filter(
-          (item) =>
-            item.visible !== false &&
-            (!item.adminOnly || this.auth.isAdmin()) &&
-            (!this.shell.worker() || workerShellAllows(item.path)),
+          (item) => item.visible !== false && (!item.adminOnly || this.auth.isAdmin()),
         ),
       }))
       .filter((group) => group.items.length > 0),

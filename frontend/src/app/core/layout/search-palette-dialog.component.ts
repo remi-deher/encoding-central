@@ -6,8 +6,6 @@ import {
   getSearchableNavigationItems,
   NavigationItem,
 } from '../navigation/primary-navigation.component';
-import { ShellConfig } from '../shell/shell-config';
-import { workerShellAllows } from '../../shared/models/worker-shell';
 
 @Component({
   selector: 'app-search-palette-dialog',
@@ -236,12 +234,9 @@ export class SearchPaletteDialogComponent {
   protected readonly query = signal('');
   protected readonly activeIndex = signal(0);
 
-  private readonly shell = inject(ShellConfig);
   private readonly allItems = () =>
     getSearchableNavigationItems(this.router.config).filter(
-      (item) =>
-        (!item.adminOnly || this.auth.isAdmin()) &&
-        (!this.shell.worker() || workerShellAllows(item.path)),
+      (item) => !item.adminOnly || this.auth.isAdmin(),
     );
 
   protected readonly results = () => {

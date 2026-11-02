@@ -44,14 +44,8 @@ public sealed partial class NodeRepository(DbDataSource dataSource,
         command.Parameters.AddWithValue("display_name", (object?)request.DisplayName ?? DBNull.Value);
         command.Parameters.AddWithValue("node_token_hash", SqlKind.Bytes, tokenHash);
         command.Parameters.AddWithValue("allow_new", allowNewNode);
-        NodeResponse? enrolled;
-        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
-            enrolled = await reader.ReadAsync(cancellationToken) ? ReadResponse(reader, true) : null;
-        if (enrolled is null) return null;
-        await using var clear = Sql.Command("DELETE FROM node_enrollment_requests WHERE node_id = @id", connection);
-        clear.Parameters.AddWithValue("id", request.Id);
-        await clear.ExecuteNonQueryAsync(cancellationToken);
-        return enrolled;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken) ? ReadResponse(reader, true) : null;
     }
 
     /// <summary>Authentifie un worker par son seul secret ; l’empreinte SHA-256 de ce secret aléatoire à 256 bits identifie le nœud.</summary>

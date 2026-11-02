@@ -7,7 +7,7 @@ var controlPort = configuration.GetValue("Launcher:ControlPort", 8082);
 builder.WebHost.ConfigureKestrel(kestrel => kestrel.ListenLocalhost(controlPort));
 
 var dataDirectory = Path.GetFullPath(configuration["Node:DataDirectory"] ?? "/var/lib/encoding-node");
-var store = new NodeModeStore(dataDirectory, configuration["Node:Roles"], configuration.GetValue("Node:FixedWorker", false));
+var store = new NodeModeStore(dataDirectory, configuration["Node:Roles"]);
 var controlUrl = $"http://127.0.0.1:{controlPort}/";
 var apiPort = configuration.GetValue("Launcher:ApiPort", 8080);
 var agentPort = configuration.GetValue("WorkerUi:Port", 8081);
@@ -46,8 +46,6 @@ IReadOnlyDictionary<string, string> AgentEnvironment(NodeMode mode)
     // Avec la fonction serveur locale, l’agent rejoint son propre serveur sauf si l’opérateur a désigné un autre cluster.
     if (mode.Server && string.IsNullOrWhiteSpace(configuration["Cluster:ApiBaseUrl"]))
         environment["Cluster__ApiBaseUrl"] = $"http://127.0.0.1:{apiPort}";
-    if (configuration.GetValue("Node:FixedWorker", false))
-        environment["Node__FixedWorker"] = "true";
     return environment;
 }
 
@@ -68,8 +66,7 @@ app.MapPut("/mode", (NodeMode requested, NodeModeStore modes, LauncherService la
     try { mode = NodeMode.Validate(requested); }
     catch (InvalidOperationException exception) { return Results.BadRequest(new { title = exception.Message }); }
     modes.Save(mode);
-    var applied = modes.Load();
-    launcher.ScheduleApply(applied);
-    return Results.Ok(applied);
+    launcher.ScheduleApply(mode);
+    return Results.Ok(mode);
 });
 await app.RunAsync();

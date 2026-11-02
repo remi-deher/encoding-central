@@ -159,21 +159,6 @@ test('store cards and repository actions stay accessible with populated content 
     route.fulfill({
       json: [
         {
-          id: 'video',
-          name: 'Vidéo',
-          kind: 'plugin',
-          category: 'video',
-          categoryLabel: 'Vidéo',
-          version: '1.3.2',
-          installedVersion: null,
-          hasUpdate: false,
-          author: 'Tests',
-          description: 'Composants vidéo.',
-          requiredTools: [],
-          repositoryId: 'repo',
-          icon: '◇',
-        },
-        {
           id: 'pkg',
           name: 'Outil de test',
           kind: 'tool',
@@ -192,14 +177,7 @@ test('store cards and repository actions stay accessible with populated content 
     }),
   );
   await page.goto('/plugins');
-  await expect(page.getByRole('button', { name: /Vidéo/ })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Vidéo', exact: true })).toBeVisible();
   await page.getByRole('tab', { name: /Store & Dépôts/ }).click();
-  await expect(page.getByText('Dépôt de test')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Outil de test' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Ajouter un dépôt', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Importer une archive', exact: true })).toHaveCount(0);
-  await page.getByRole('tab', { name: /Outils média/ }).click();
   await expect(page.getByRole('heading', { name: 'Outil de test' })).toBeVisible();
   const importAction = page.getByRole('button', { name: 'Importer une archive', exact: true });
   await expect(importAction).toBeVisible();

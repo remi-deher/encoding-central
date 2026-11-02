@@ -1,6 +1,6 @@
 services:
-  # Cible par défaut : central. L'image fige les fonctions (Cluster__FixedAuthority).
-  # Un déploiement central + worker séparé est dans docker-compose.central.yml.
+  # Image unique : le mode (serveur, worker ou les deux) se règle ici au premier démarrage, puis depuis l'interface
+  # (page Nœuds ou console du worker) sans redémarrer le conteneur. Le mode enregistré prévaut ensuite sur Node__Roles.
   encoding:
     build:
       context: ..

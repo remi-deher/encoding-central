@@ -73,7 +73,6 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
     }
     .access-stage_setup {
       background: var(--page-background);
-      place-items: start center;
     }
     .access-frame {
       position: relative;
@@ -89,10 +88,12 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
     }
     .access-frame_setup {
       overflow: visible;
-      width: min(100%, 720px);
+      width: min(100%, 1060px);
       display: grid;
-      grid-template-columns: minmax(0, 1fr);
-      gap: var(--space-5);
+      grid-template-columns: minmax(290px, 340px) minmax(0, 1fr);
+      grid-template-rows: auto auto auto;
+      column-gap: var(--space-5);
+      row-gap: var(--space-4);
       align-items: start;
       padding: 0;
       border-radius: 0;
@@ -103,18 +104,12 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
       grid-column: 1 / -1;
     }
     .access-frame_setup .access-heading,
-    .access-frame_setup .access-context-column,
-    .access-frame_setup .access-workbench {
+    .access-frame_setup .access-context-column {
       grid-column: 1;
-      grid-row: auto;
     }
-    .access-frame_setup .access-brand {
-      display: none;
-    }
-    .access-frame_setup .access-heading h1 {
-      font-size: var(--font-title-lg);
-      font-weight: 650;
-      letter-spacing: 0;
+    .access-frame_setup .access-workbench {
+      grid-column: 2;
+      grid-row: 2 / span 2;
     }
     .access-context-column {
       display: grid;
@@ -182,16 +177,34 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
       font-weight: 800;
       letter-spacing: -0.02em;
     }
+    .access-frame_setup .access-heading h1 {
+      font-size: var(--font-title-lg);
+    }
     .access-description {
       margin: 0;
       color: var(--text-secondary);
       font-size: var(--font-body);
       line-height: 1.6;
     }
+    @media (max-width: 900px) {
+      .access-frame_setup {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .access-frame_setup .access-alert-slot,
+      .access-frame_setup .access-heading,
+      .access-frame_setup .access-context-column,
+      .access-frame_setup .access-workbench {
+        grid-column: 1;
+        grid-row: auto;
+      }
+    }
     @media (max-width: 480px) {
       .access-frame:not(.access-frame_setup) {
         padding-inline: var(--space-4);
       }
+    }
+    :host-context([data-theme='dark']) .access-stage_setup {
+      background: radial-gradient(ellipse at 50% 0, var(--accent-soft), transparent 65%);
     }
   `,
 })

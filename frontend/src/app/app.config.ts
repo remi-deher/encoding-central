@@ -1,6 +1,5 @@
 import { MAT_TOOLTIP_DEFAULT_OPTIONS } from '@angular/material/tooltip';
-import { ApplicationConfig, inject, provideAppInitializer, provideBrowserGlobalErrorListeners } from '@angular/core';
-import { ShellConfig } from './core/shell/shell-config';
+import { ApplicationConfig, inject, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { authInterceptor } from './core/auth/auth.interceptor';
 import {
@@ -23,7 +22,6 @@ export const appConfig: ApplicationConfig = {
       },
     },
     provideBrowserGlobalErrorListeners(),
-    provideAppInitializer(() => inject(ShellConfig).load()),
     provideHttpClient(withInterceptors([authInterceptor])),
     provideRouter(
       routes,

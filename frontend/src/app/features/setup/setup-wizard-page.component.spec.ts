@@ -3,20 +3,11 @@ import { Router } from '@angular/router';
 import { signal } from '@angular/core';
 import { SetupWizardPageComponent } from './setup-wizard-page.component';
 import { AuthService } from '../../core/auth/auth.service';
-import { ShellConfig } from '../../core/shell/shell-config';
 import { LocalNodeController } from '../../shared/services/local-node-controller';
 import { NotificationService } from '../../shared/services/notification.service';
 import { LocalNodeStatus } from '../../shared/models/local-node';
 
 const VALID_PASSWORD = 'un-mot-de-passe-long';
-
-function clickButton(element: HTMLElement, name: string): void {
-  const button = Array.from(element.querySelectorAll('button')).find((candidate) =>
-    candidate.textContent?.includes(name),
-  );
-  if (!button) throw new Error(`Bouton introuvable : ${name}`);
-  button.click();
-}
 
 function fillAdmin(component: SetupWizardPageComponent): void {
   component['adminPassword'].set(VALID_PASSWORD);
@@ -27,10 +18,12 @@ describe('SetupWizardPageComponent', () => {
   let setupFn: ReturnType<typeof vi.fn>;
   let navigateFn: ReturnType<typeof vi.fn>;
   let statusSignal: ReturnType<typeof signal<LocalNodeStatus | null>>;
+  let pendingSignal: ReturnType<typeof signal<boolean>>;
 
   beforeEach(() => {
     setupFn = vi.fn().mockResolvedValue(undefined);
     navigateFn = vi.fn().mockResolvedValue(true);
+    pendingSignal = signal(false);
     statusSignal = signal<LocalNodeStatus | null>({
       nodeId: 'node-1',
       name: 'srv-transcode',
@@ -95,7 +88,7 @@ describe('SetupWizardPageComponent', () => {
               pairing: signal(null),
               busy: signal(false),
               canJoin: signal(true),
-              pending: signal(false),
+              pending: pendingSignal,
               joinIndex: signal(0),
               error: signal(''),
               refresh: vi.fn(),
@@ -212,68 +205,37 @@ describe('SetupWizardPageComponent', () => {
     expect(fixture.nativeElement.textContent).not.toContain('Locale uniquement');
   });
 
-  it('does not offer a role or cluster choice on the central image', () => {
+  it('renders the contextual panel dynamically when switching operation modes', () => {
     const fixture = TestBed.createComponent(SetupWizardPageComponent);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
 
-    expect(el.querySelector('[role="radio"]')).toBeNull();
-    expect(el.textContent).toContain('Nommer ce nœud');
-    expect(el.textContent).not.toContain('Rejoindre un cluster');
-    expect(el.textContent).not.toContain('Créer un cluster');
-    expect(el.textContent).not.toContain('Machine autonome');
-    fillAdmin(fixture.componentInstance);
+    expect(el.textContent).toContain('Prêt à démarrer en mode autonome');
+
+    const modeRadios = Array.from(el.querySelectorAll('[role="radio"]')) as HTMLButtonElement[];
+    expect(modeRadios.length).toBe(3);
+
+    modeRadios[1].click();
     fixture.detectChanges();
-    clickButton(el, 'Continuer');
+    expect(fixture.componentInstance['selectedMode']()).toBe('createCluster');
+    expect(el.textContent).toContain('Nommer votre nouveau cluster');
+
+    modeRadios[2].click();
     fixture.detectChanges();
-    clickButton(el, 'Continuer');
-    fixture.detectChanges();
-    expect(el.textContent).toContain('Prêt à ouvrir le central');
+    expect(fixture.componentInstance['selectedMode']()).toBe('joinCluster');
+    expect(el.textContent).toContain('Connexion au cluster d’accueil');
   });
 
-  it('reports that ffmpeg is absent when the sheet has no encoder probe', () => {
-    statusSignal.set(null);
-    const fixture = TestBed.createComponent(SetupWizardPageComponent);
-    fixture.componentInstance['setupSheet'].set({
-      name: 'encoding-worker',
-      displayName: null,
-      agentAvailable: true,
-      inventory: {
-        operatingSystem: 'Ubuntu',
-        architecture: 'X64',
-        processorCount: 4,
-        memoryMb: 8192,
-        processorModel: 'Intel Core i5',
-        gpus: [{ name: 'Intel Iris Xe Graphics', vendor: 'Intel', driver: 'i915', device: 'card0' }],
-      },
-      tools: [{ toolId: 'plugin/base', accelerationTypes: ['cpu'], encoderChecks: [] }],
-      addresses: [],
-      urls: [],
-    });
-    fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('FFmpeg non détecté');
-    expect(fixture.nativeElement.textContent).not.toContain('Aucune (CPU)');
-  });
-
-  it('on the worker image explains the fixed role and does not create an administrator', () => {
-    TestBed.inject(ShellConfig).shell.set('worker');
+  it('allows selecting operation modes', () => {
     const fixture = TestBed.createComponent(SetupWizardPageComponent);
     fixture.detectChanges();
-    const el = fixture.nativeElement as HTMLElement;
+    const component = fixture.componentInstance;
 
-    expect(el.textContent).toContain('Worker Encoding');
-    expect(el.textContent).toContain('Nommer ce nœud');
-    expect(el.textContent).toContain('Processeur');
-    expect(el.textContent).not.toContain('Image worker');
-    expect(el.querySelector('#admin-password-input')).toBeNull();
-    clickButton(el, 'Continuer');
-    fixture.detectChanges();
-    expect(el.textContent).toContain('Adresse du central');
-    expect(el.querySelector('#central-url-input')).not.toBeNull();
-    expect(el.querySelector('#central-password-input')).not.toBeNull();
-    expect(el.textContent).toContain('Compte administrateur');
-    expect(el.textContent).not.toContain('Code à comparer');
-    expect(el.querySelector('[role="radio"]')).toBeNull();
+    expect(component['selectedMode']()).toBe('standalone');
+    component['selectedMode'].set('createCluster');
+    expect(component['selectedMode']()).toBe('createCluster');
+    component['selectedMode'].set('joinCluster');
+    expect(component['selectedMode']()).toBe('joinCluster');
   });
 
   it('submits standalone mode and redirects to root', async () => {
@@ -293,6 +255,96 @@ describe('SetupWizardPageComponent', () => {
     expect(navigateFn).toHaveBeenCalledWith(['/']);
   });
 
+  it('submits createCluster mode with cluster name', async () => {
+    const fixture = TestBed.createComponent(SetupWizardPageComponent);
+    fixture.detectChanges();
+    const component = fixture.componentInstance;
+
+    fillAdmin(component);
+    component['selectedMode'].set('createCluster');
+    component['clusterName'].set('Mon Cluster Maison');
+    await component['submitCreateCluster']();
+
+    expect(setupFn).toHaveBeenCalledWith({
+      nodeDisplayName: 'Serveur Salon',
+      mode: 'createCluster',
+      clusterName: 'Mon Cluster Maison',
+      username: 'admin',
+      password: VALID_PASSWORD,
+    });
+    expect(navigateFn).toHaveBeenCalledWith(['/']);
+  });
+
+  it('creates the administrator before joining and does not submit setup again when finishing', async () => {
+    const fixture = TestBed.createComponent(SetupWizardPageComponent);
+    fixture.detectChanges();
+    const component = fixture.componentInstance;
+    const localController = fixture.debugElement.injector.get(LocalNodeController);
+
+    component['nodeName'].set('Worker Garage');
+    component['selectedMode'].set('joinCluster');
+    await component['requestClusterJoin']();
+    expect(localController.sendRequest).not.toHaveBeenCalled();
+
+    fillAdmin(component);
+    await component['prepareClusterJoin']();
+    expect(setupFn).toHaveBeenCalledWith({
+      nodeDisplayName: 'Worker Garage',
+      mode: 'joinCluster',
+      username: 'admin',
+      password: VALID_PASSWORD,
+    });
+    expect(navigateFn).not.toHaveBeenCalled();
+    expect(localController.refresh).toHaveBeenCalled();
+    expect(component['adminPassword']()).toBe('');
+    expect(component['adminErrors']()).toEqual({ username: '', password: '', confirm: '' });
+
+    await component['requestClusterJoin']();
+    expect(localController.sendRequest).toHaveBeenCalledWith('Worker Garage');
+    await component['submitJoinFinish']();
+    expect(navigateFn).not.toHaveBeenCalled();
+    localController.joinIndex.set(3);
+    await component['submitJoinFinish']();
+    expect(navigateFn).toHaveBeenCalledWith(['/']);
+    expect(setupFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps protected operations disabled when account validation or creation fails', async () => {
+    const fixture = TestBed.createComponent(SetupWizardPageComponent);
+    const component = fixture.componentInstance;
+    const local = fixture.debugElement.injector.get(LocalNodeController);
+    component['selectedMode'].set('joinCluster');
+    component['clusterAddress'].set('http://192.168.1.50:8090');
+    await component['verifyClusterAddress']();
+    await component['prepareClusterJoin']();
+    expect(local.verifyAddress).not.toHaveBeenCalled();
+    expect(setupFn).not.toHaveBeenCalled();
+    fillAdmin(component);
+    setupFn.mockRejectedValueOnce(new Error('unavailable'));
+    await component['prepareClusterJoin']();
+    expect(component['accountCreated']()).toBe(false);
+    expect(component['errorMessage']()).toContain('L’initialisation a échoué');
+    expect(component['adminPassword']()).toBe(VALID_PASSWORD);
+    await component['prepareClusterJoin']();
+    await component['verifyClusterAddress']();
+    expect(local.verifyAddress).toHaveBeenCalledWith({ address: 'http://192.168.1.50:8090' });
+  });
+
+  it('opens the existing request in Nodes without claiming approval or recreating the account', async () => {
+    const fixture = TestBed.createComponent(SetupWizardPageComponent);
+    const component = fixture.componentInstance;
+    const local = fixture.debugElement.injector.get(LocalNodeController);
+    fillAdmin(component);
+    component['selectedMode'].set('joinCluster');
+    await component['prepareClusterJoin']();
+    component['selectMode']('createCluster');
+    expect(component['selectedMode']()).toBe('joinCluster');
+    pendingSignal.set(true);
+    await component['submitJoinFinish']();
+    expect(navigateFn).toHaveBeenCalledWith(['/nodes']);
+    expect(setupFn).toHaveBeenCalledTimes(1);
+  });
+
   it('refuses to finish without a valid administrator account', async () => {
     const fixture = TestBed.createComponent(SetupWizardPageComponent);
     fixture.detectChanges();
@@ -300,7 +352,6 @@ describe('SetupWizardPageComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     await component['submitStandalone']();
-    component['stepIndex'].set(1);
     fixture.detectChanges();
     expect(setupFn).not.toHaveBeenCalled();
     expect(el.textContent).toContain('au moins 12 caractères');

@@ -59,25 +59,4 @@ public sealed class SqliteClusterTests
         Assert.Equal(NodeRepository.ModeRequestResult.Accepted,
             await repository.RequestModeAsync(worker, true, true, TimeSpan.FromMinutes(5), CancellationToken.None));
     }
-
-    [Fact]
-    public async Task FixedAuthorityRefusesGivingOrRemovingTheServerRole()
-    {
-        await using var database = await NewAsync();
-        var server = Guid.NewGuid();
-        var worker = Guid.NewGuid();
-        await InsertNodeAsync(database, server, "server,worker");
-        await InsertNodeAsync(database, worker, "worker");
-        var repository = new NodeRepository(database.Db);
-        Assert.Equal(NodeRepository.ModeRequestResult.FixedServer,
-            await repository.RequestModeAsync(worker, true, true, TimeSpan.FromMinutes(5), CancellationToken.None, fixedAuthority: true));
-        Assert.Equal(NodeRepository.ModeRequestResult.FixedServer,
-            await repository.RequestModeAsync(server, false, true, TimeSpan.FromMinutes(5), CancellationToken.None, fixedAuthority: true));
-        Assert.Equal(NodeRepository.ModeRequestResult.FixedServer,
-            await repository.RequestModeAsync(server, true, false, TimeSpan.FromMinutes(5), CancellationToken.None, fixedAuthority: true));
-        Assert.Equal(NodeRepository.ModeRequestResult.Accepted,
-            await repository.RequestModeAsync(server, true, true, TimeSpan.FromMinutes(5), CancellationToken.None, fixedAuthority: true));
-        Assert.Equal(NodeRepository.ModeRequestResult.Accepted,
-            await repository.RequestModeAsync(worker, false, true, TimeSpan.FromMinutes(5), CancellationToken.None, fixedAuthority: true));
-    }
 }

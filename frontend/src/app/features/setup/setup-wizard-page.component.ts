@@ -1,3 +1,4 @@
+import { JoinUserCollisionsComponent } from '../settings/tabs/join-user-collisions.component';
 import { IconComponent } from '../../shared/ui/icon.component';
 import {
   ChangeDetectionStrategy,
@@ -8,54 +9,42 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { catchError, exhaustMap, firstValueFrom, of, takeWhile, timeout, timer } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { catchError, exhaustMap, of, timeout, timer } from 'rxjs';
 import { SetupNodeSheet } from '../../shared/models/local-node';
 import { CommonModule, DOCUMENT } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { AuthService } from '../../core/auth/auth.service';
-import { ShellConfig } from '../../core/shell/shell-config';
 import { LocalNodeController } from '../../shared/services/local-node-controller';
 import { NotificationService } from '../../shared/services/notification.service';
 import { formatMemory } from '../../shared/models/node-hardware';
 import { AccessTemplateComponent } from '../../shared/templates/access-template.component';
 
-interface WorkerLinkStatus {
-  readonly enrolled: boolean;
-  readonly centralName: string | null;
-  readonly centralUrl: string | null;
-  readonly verificationCode: string | null;
-  readonly expiresAt: string | null;
-}
-
-function linkError(error: unknown): string {
-  if (error instanceof HttpErrorResponse) {
-    const title = error.error?.title;
-    if (typeof title === 'string' && title.trim()) return title;
-  }
-  return 'Le central n’a pas pu être contacté.';
-}
-
 const MINIMUM_PASSWORD_LENGTH = 12;
 const MAXIMUM_PASSWORD_LENGTH = 256;
 const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
+
+export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-setup-wizard-page',
   providers: [LocalNodeController],
-  imports: [IconComponent, CommonModule, FormsModule, MatButtonModule, AccessTemplateComponent],
+  imports: [
+    JoinUserCollisionsComponent,
+    IconComponent,
+    CommonModule,
+    FormsModule,
+    MatButtonModule,
+    AccessTemplateComponent,
+  ],
   template: `
     <app-access-template
       view="setup"
-      [title]="shell.worker() ? 'Worker Encoding' : 'Bienvenue sur Encoding'"
-      [description]="
-        shell.worker()
-          ? 'Nommez cette machine, puis reliez-la avec un compte administrateur du central.'
-          : 'Nommez cette machine, créez l’administrateur, puis ouvrez le central.'
-      "
+      title="Bienvenue sur Encoding"
+      description="Configurez cette machine en un coup d’œil et vérifiez les ressources matérielles détectées localement."
       [busy]="busy()"
       progressLabel="Action en cours"
     >
@@ -77,125 +66,98 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
         </div>
       }
 
-      <aside access-context class="machine-facts" aria-label="Identité et matériel détecté">
-        <div>
-          <span class="fact-label">Machine</span>
-          <span class="fact-value">{{ defaultNodeName() }}</span>
-          <span class="fact-hint">{{ hostPlatformLabel() }}</span>
-        </div>
-        <div>
-          <span class="fact-label">Accès au nœud</span>
-          @for (url of networkAccessUrls(); track url) {
-            <span class="fact-value fact-value--mono">{{ url }}</span>
-          }
-          <span class="fact-hint">{{ networkAccessSource() }}</span>
-        </div>
-        <div>
-          <span class="fact-label">Adresses des interfaces</span>
-          @if (setupSheet()?.addresses?.length) {
-            <ul class="network-addresses" aria-label="Adresses des interfaces">
-              @for (
-                item of setupSheet()!.addresses;
-                track item.interface + '/' + item.address
-              ) {
-                <li>{{ item.address }} ({{ item.interface }})</li>
+      <!-- Colonne gauche : Fiche d'identité live & télémétrie matérielle -->
+      <aside access-context class="setup-telemetry" aria-label="Identité et matériel détecté">
+        <div class="hardware-bento" role="region" aria-labelledby="hardware-card-title">
+          <div class="hardware-bento-header">
+            <span class="live-dot" aria-hidden="true"></span>
+            <div class="hardware-bento-title-group">
+              <span class="hardware-eyebrow">Nœud local détecté</span>
+              <h2 id="hardware-card-title" class="hardware-node-name">
+                {{ effectiveNodeName() }}
+              </h2>
+              <span class="hardware-host-meta">{{ hostPlatformLabel() }}</span>
+            </div>
+          </div>
+
+          <div class="hardware-tiles">
+            <div class="hardware-tile hardware-tile--wide">
+              <span class="tile-label">Accès au nœud</span>
+              @for (url of networkAccessUrls(); track url) {
+                <span class="tile-value tile-value--mono">{{ url }}</span>
               }
-            </ul>
-          } @else {
-            <span class="fact-value">{{
-              setupSheet() ? 'Aucune adresse détectée' : 'Détection en cours…'
-            }}</span>
-          }
+              <span class="tile-hint">{{ networkAccessSource() }}</span>
+            </div>
+            <div class="hardware-tile hardware-tile--wide">
+              <span class="tile-label">Adresses des interfaces</span>
+              @if (setupSheet()?.addresses?.length) {
+                <ul class="network-addresses" aria-label="Adresses des interfaces">
+                  @for (
+                    item of setupSheet()!.addresses;
+                    track item.interface + '/' + item.address
+                  ) {
+                    <li class="tile-value tile-value--mono">
+                      {{ item.address }} ({{ item.interface }})
+                    </li>
+                  }
+                </ul>
+              } @else {
+                <span class="tile-value">{{
+                  setupSheet() ? 'Aucune adresse détectée' : 'Détection en cours…'
+                }}</span>
+              }
+            </div>
+            <div class="hardware-tile">
+              <span class="tile-label">Processeur</span>
+              <span class="tile-value">{{ cpuInfo() }}</span>
+            </div>
+            <div class="hardware-tile">
+              <span class="tile-label">Mémoire</span>
+              <span class="tile-value">{{ memoryInfo() }}</span>
+            </div>
+            <div class="hardware-tile hardware-tile--wide">
+              <span class="tile-label">Graphique / GPU</span>
+              <span class="tile-value">{{ gpuInfo() }}</span>
+            </div>
+            <div class="hardware-tile hardware-tile--wide hardware-tile--accent">
+              <span class="tile-label">Accélération GPU</span>
+              <span class="tile-value">{{ gpuAccelerationInfo() }}</span>
+            </div>
+          </div>
         </div>
-        <div>
-          <span class="fact-label">Processeur</span>
-          <span class="fact-value">{{ cpuInfo() }}</span>
-        </div>
-        <div>
-          <span class="fact-label">Mémoire</span>
-          <span class="fact-value">{{ memoryInfo() }}</span>
-        </div>
-        <div>
-          <span class="fact-label">Graphique / GPU</span>
-          <span class="fact-value">{{ gpuInfo() }}</span>
-        </div>
-        <div>
-          <span class="fact-label">Accélération GPU</span>
-          <span class="fact-value">{{ gpuAccelerationInfo() }}</span>
-        </div>
+
+        <p class="telemetry-footnote">
+          <svg
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
+          <span>
+            Vous pourrez renommer ce nœud ou basculer entre autonome et cluster à chaud depuis la
+            page <strong>Nœuds</strong>.
+          </span>
+        </p>
       </aside>
 
       <!-- Colonne droite : Atelier de configuration directe -->
       <div access-content class="setup-workbench">
-        <nav class="setup-progress" aria-label="Étapes">
-          @for (step of steps(); track step.id; let index = $index; let last = $last) {
-            <span [class.is-current]="index === stepIndex()" [class.is-done]="index < stepIndex()">{{
-              step.label
-            }}</span>
-            @if (!last) {
-              <span aria-hidden="true">/</span>
-            }
-          }
-        </nav>
-
-        @if (currentStep().id === 'name') {
-        <section class="workbench-card" aria-labelledby="step-identity-heading">
-          <div class="section-heading">
-            <div>
-              <h2 id="step-identity-heading">Nommer ce nœud</h2>
-              <p>
-                {{
-                  shell.worker()
-                    ? 'Ce nom sera visible sur le central après le rattachement.'
-                    : 'Ce nom désigne le central, interface et encodage local compris.'
-                }}
-              </p>
-            </div>
-          </div>
-          <div class="form-group">
-            <label for="node-name-input" class="field-label">Nom de ce nœud</label>
-            <input
-              id="node-name-input"
-              [disabled]="busy()"
-              type="text"
-              class="text-input"
-              [placeholder]="defaultNodeName()"
-              [ngModel]="nodeName()"
-              (ngModelChange)="nodeName.set($event)"
-              maxlength="128"
-              autocomplete="off"
-            />
-            <div class="Quick-suggestions" aria-label="Suggestions de noms">
-              <span class="suggestions-label">Suggestions :</span>
-              @for (suggestion of nodeNameSuggestions(); track suggestion) {
-                <button
-                  type="button"
-                  class="suggestion-chip"
-                  [disabled]="busy()"
-                  [class.active]="nodeName() === suggestion"
-                  (click)="nodeName.set(suggestion)"
-                >
-                  {{ suggestion }}
-                </button>
-              }
-            </div>
-          </div>
-          <div class="workbench-actions">
-            <button matButton="filled" type="button" [disabled]="busy()" (click)="nextStep()">
-              Continuer
-            </button>
-          </div>
-        </section>
-        }
-
-        @if (currentStep().id === 'admin') {
+        <!-- Section 1 : Compte administrateur -->
         <section class="workbench-card" aria-labelledby="step-admin-heading">
           <div class="section-heading">
+            <span class="step-pill" aria-hidden="true">1</span>
             <div>
               <h2 id="step-admin-heading">
                 {{ accountCreated() ? 'Administrateur créé' : 'Créer l’administrateur' }}
               </h2>
-              <p>Ce compte protège l’accès au central. Vous pourrez en ajouter d’autres ensuite.</p>
+              <p>Ce compte protège l’accès au cluster. Vous pourrez en ajouter d’autres ensuite.</p>
             </div>
           </div>
 
@@ -280,119 +242,375 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
               }
             </div>
           }
-          <div class="workbench-actions">
-            <button matButton="outlined" type="button" [disabled]="busy()" (click)="previousStep()">
-              Retour
+        </section>
+
+        <!-- Section 2 : Identité -->
+        <section class="workbench-card" aria-labelledby="step-identity-heading">
+          <div class="section-heading">
+            <span class="step-pill" aria-hidden="true">2</span>
+            <div>
+              <h2 id="step-identity-heading">Identifier cette machine</h2>
+              <p>Donnez un nom convivial pour repérer facilement ce nœud sur votre réseau.</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="node-name-input" class="field-label">Nom de ce nœud</label>
+            <input
+              id="node-name-input"
+              [disabled]="busy() || accountCreated()"
+              type="text"
+              class="text-input"
+              [placeholder]="defaultNodeName()"
+              [ngModel]="nodeName()"
+              (ngModelChange)="nodeName.set($event)"
+              maxlength="128"
+              autocomplete="off"
+            />
+            <div class="Quick-suggestions" aria-label="Suggestions de noms">
+              <span class="suggestions-label">Suggestions :</span>
+              @for (suggestion of nodeNameSuggestions; track suggestion) {
+                <button
+                  type="button"
+                  class="suggestion-chip"
+                  [disabled]="busy() || accountCreated()"
+                  [class.active]="nodeName() === suggestion"
+                  (click)="nodeName.set(suggestion)"
+                >
+                  {{ suggestion }}
+                </button>
+              }
+            </div>
+          </div>
+        </section>
+
+        <!-- Section 3 : Choix de l'architecture -->
+        <section class="workbench-card" aria-labelledby="step-mode-heading">
+          <div class="section-heading">
+            <span class="step-pill" aria-hidden="true">3</span>
+            <div>
+              <h2 id="step-mode-heading">Comment souhaitez-vous utiliser cette machine ?</h2>
+              <p>Sélectionnez l’organisation initiale de votre installation.</p>
+            </div>
+          </div>
+
+          <div class="mode-grid" role="radiogroup" aria-labelledby="step-mode-heading">
+            <!-- Mode 1 : Autonome -->
+            <button
+              type="button"
+              class="mode-card"
+              [disabled]="busy() || accountCreated()"
+              [class.selected]="selectedMode() === 'standalone'"
+              (click)="selectMode('standalone')"
+              role="radio"
+              [attr.aria-checked]="selectedMode() === 'standalone'"
+            >
+              <div class="mode-card-top">
+                <span class="mode-icon" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="20"
+                    height="20"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                  </svg>
+                </span>
+                <span class="mode-badge primary">Recommandé</span>
+              </div>
+              <strong class="mode-title">Machine autonome</strong>
+              <p class="mode-description">
+                Serveur et worker réunis sur cette machine. Idéal pour démarrer immédiatement sans
+                cluster.
+              </p>
             </button>
-            <button matButton="filled" type="button" [disabled]="busy()" (click)="nextStep()">
-              Continuer
+
+            <!-- Mode 2 : Créer un cluster -->
+            <button
+              type="button"
+              class="mode-card"
+              [disabled]="busy() || accountCreated()"
+              [class.selected]="selectedMode() === 'createCluster'"
+              (click)="selectMode('createCluster')"
+              role="radio"
+              [attr.aria-checked]="selectedMode() === 'createCluster'"
+            >
+              <div class="mode-card-top">
+                <span class="mode-icon" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="20"
+                    height="20"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <circle cx="18" cy="5" r="3" />
+                    <circle cx="6" cy="12" r="3" />
+                    <circle cx="18" cy="19" r="3" />
+                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                  </svg>
+                </span>
+                <span class="mode-badge neutral">Multi-machines</span>
+              </div>
+              <strong class="mode-title">Créer un cluster</strong>
+              <p class="mode-description">
+                Initialise un nouveau maillage prêt à accueillir d’autres serveurs ou workers.
+              </p>
+            </button>
+
+            <!-- Mode 3 : Rejoindre un cluster -->
+            <button
+              type="button"
+              class="mode-card"
+              [disabled]="busy() || accountCreated()"
+              [class.selected]="selectedMode() === 'joinCluster'"
+              (click)="selectMode('joinCluster')"
+              role="radio"
+              [attr.aria-checked]="selectedMode() === 'joinCluster'"
+            >
+              <div class="mode-card-top">
+                <span class="mode-icon" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="20"
+                    height="20"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                  </svg>
+                </span>
+                <span class="mode-badge accent">Worker / Pair</span>
+              </div>
+              <strong class="mode-title">Rejoindre un cluster</strong>
+              <p class="mode-description">
+                Rattache cette machine à un cluster Encoding déjà actif sur votre réseau.
+              </p>
             </button>
           </div>
         </section>
-        }
 
-        @if (currentStep().id === 'central') {
-          <section class="workbench-card" aria-labelledby="worker-setup-heading">
-            <div class="section-heading">
-              <div>
-                <h2 id="worker-setup-heading">Relier ce worker au central</h2>
-                <p>
-                  Indiquez l’adresse du central et un compte administrateur de ce central. Le mot de
-                  passe autorise la liaison une seule fois, puis il est oublié.
-                </p>
+        <!-- Section 4 : Finalisation contextuelle selon le mode choisi -->
+        <section class="workbench-card workbench-card--Contextual" aria-live="polite">
+          @if (selectedMode() === 'standalone') {
+            <div class="contextual-summary">
+              <div class="contextual-summary-head">
+                <span class="status-check" aria-hidden="true">✓</span>
+                <div>
+                  <h3>Prêt à démarrer en mode autonome</h3>
+                  <p>
+                    <strong>{{ effectiveNodeName() }}</strong> assurera l’interface serveur et
+                    l’encodage local. Vous vous connecterez avec le compte administrateur créé
+                    ci-dessus.
+                  </p>
+                </div>
+              </div>
+              <div class="workbench-actions">
+                <button
+                  matButton="filled"
+                  type="button"
+                  [disabled]="busy()"
+                  (click)="submitStandalone()"
+                >
+                  Accéder au tableau de bord
+                  <app-icon name="forward" matButtonIcon iconPositionEnd />
+                </button>
               </div>
             </div>
+          }
+
+          @if (selectedMode() === 'createCluster') {
+            <div class="section-heading">
+              <span class="step-pill" aria-hidden="true">4</span>
+              <div>
+                <h3>Nommer votre nouveau cluster</h3>
+                <p>Ce nom sera affiché lors de l’ajout d’autres serveurs ou workers.</p>
+              </div>
+            </div>
+
             <div class="form-group">
-              <label for="central-url-input" class="field-label">Adresse du central</label>
+              <label for="cluster-name-input" class="field-label">Nom du cluster</label>
               <input
-                id="central-url-input"
-                [disabled]="busy()"
-                type="url"
+                id="cluster-name-input"
+                type="text"
                 class="text-input"
-                placeholder="http://192.168.1.50:5080"
-                [ngModel]="centralUrl()"
-                (ngModelChange)="centralUrl.set($event)"
+                [placeholder]="defaultClusterName()"
+                [ngModel]="clusterName()"
+                (ngModelChange)="clusterName.set($event)"
+                maxlength="128"
                 autocomplete="off"
               />
               <span class="field-hint">
-                Adresse utilisée dans le navigateur, avec le port. Depuis un conteneur sur la même
-                machine, 127.0.0.1 et l’adresse IP du PC sont rejoints par le réseau Docker.
+                Premier coordinateur et worker : <strong>{{ effectiveNodeName() }}</strong>
               </span>
             </div>
-            <div class="form-group">
-              <label for="central-username-input" class="field-label">Compte administrateur</label>
-              <input
-                id="central-username-input"
-                [disabled]="busy()"
-                class="text-input"
-                [ngModel]="centralUsername()"
-                (ngModelChange)="centralUsername.set($event)"
-                autocomplete="username"
-              />
-            </div>
-            <div class="form-group">
-              <label for="central-password-input" class="field-label">Mot de passe</label>
-              <input
-                id="central-password-input"
-                [disabled]="busy()"
-                type="password"
-                class="text-input"
-                [ngModel]="centralPassword()"
-                (ngModelChange)="centralPassword.set($event)"
-                autocomplete="current-password"
-              />
-            </div>
+
             <div class="workbench-actions">
-              <button matButton="outlined" type="button" [disabled]="busy()" (click)="previousStep()">
-                Retour
+              <button
+                matButton="filled"
+                type="button"
+                [disabled]="busy()"
+                (click)="submitCreateCluster()"
+              >
+                Créer le cluster et continuer <app-icon name="forward" />
               </button>
+            </div>
+          }
+
+          @if (selectedMode() === 'joinCluster') {
+            @if (!accountCreated()) {
+              <p>
+                Créez le compte administrateur de cette machine pour rechercher un cluster et
+                envoyer une demande. La jonction devra ensuite être approuvée sur le cluster
+                d’accueil.
+              </p>
+              <div class="workbench-actions">
+                <button
+                  matButton="filled"
+                  type="button"
+                  [disabled]="busy()"
+                  (click)="prepareClusterJoin()"
+                >
+                  Créer le compte et continuer
+                </button>
+              </div>
+            } @else {
+              <p role="status">
+                Compte administrateur local créé. Vous pouvez rejoindre un cluster.
+              </p>
+            }
+            <div class="section-heading">
+              <span class="step-pill" aria-hidden="true">4</span>
+              <div>
+                <h3>Connexion au cluster d’accueil</h3>
+                <p>
+                  Sélectionnez un cluster découvert sur le réseau local ou indiquez son adresse URL.
+                </p>
+              </div>
+            </div>
+
+            @if (availableClusters().length > 0) {
+              <div class="discovered-clusters">
+                <span class="list-label">Clusters détectés automatiquement (mDNS) :</span>
+                <div class="cluster-cards-list">
+                  @for (cluster of availableClusters(); track cluster.id) {
+                    <div class="cluster-card">
+                      <div class="cluster-info">
+                        <strong>{{ cluster.name }}</strong>
+                        <span class="cluster-address">{{ cluster.apiBaseUrl }}</span>
+                      </div>
+                      <button
+                        matButton="outlined"
+                        type="button"
+                        [disabled]="
+                          !accountCreated() || busy() || localController.pending() || joinApproved()
+                        "
+                        (click)="selectClusterAddress(cluster.apiBaseUrl)"
+                      >
+                        Sélectionner
+                      </button>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+
+            <div class="form-group">
+              <label for="cluster-address-input" class="field-label">
+                Adresse du cluster d’accueil
+              </label>
+              <div class="input-with-button">
+                <input
+                  id="cluster-address-input"
+                  [disabled]="
+                    !accountCreated() || busy() || localController.pending() || joinApproved()
+                  "
+                  type="url"
+                  class="text-input"
+                  placeholder="http://192.168.1.50:8090"
+                  [ngModel]="clusterAddress()"
+                  (ngModelChange)="clusterAddress.set($event)"
+                />
+                <button
+                  matButton="outlined"
+                  type="button"
+                  [disabled]="
+                    !accountCreated() ||
+                    !clusterAddress() ||
+                    busy() ||
+                    localController.pending() ||
+                    joinApproved()
+                  "
+                  (click)="verifyClusterAddress()"
+                >
+                  Vérifier
+                </button>
+              </div>
+              <span class="field-hint">
+                Adresse complète avec port (ex. http://192.168.1.50:8090).
+              </span>
+            </div>
+
+            @if (localController.target(); as target) {
+              <div class="target-confirmed-box">
+                <div class="target-badge">Cluster joignable</div>
+                <h4>{{ target.name }}</h4>
+                <p class="target-url">{{ target.apiBaseUrl }} ({{ target.id }})</p>
+
+                @if (joinApproved()) {
+                  <p role="status">Ce nœud a rejoint {{ target.name }}.</p>
+                } @else if (pairingCode(); as code) {
+                  <div class="hero-code-box">
+                    <span class="code-label">Code de confirmation à comparer</span>
+                    <div class="hero-digits">{{ code }}</div>
+                    <p class="code-helper">
+                      Un administrateur du cluster <strong>{{ target.name }}</strong> doit valider
+                      ce code depuis sa page Nœuds.
+                    </p>
+                  </div>
+                } @else if (localController.pending()) {
+                  <p role="status">
+                    Demande envoyée. En attente de confirmation du cluster d’accueil.
+                  </p>
+                } @else {
+                  <button
+                    matButton="outlined"
+                    type="button"
+                    [disabled]="busy() || !localController.canJoin()"
+                    (click)="requestClusterJoin()"
+                  >
+                    Envoyer la demande de rattachement
+                  </button>
+                }
+              </div>
+            }
+
+            @if (accountCreated()) {
+              <app-join-user-collisions />
+            }
+            <div class="workbench-actions">
               <button
                 matButton="filled"
                 type="button"
                 [disabled]="
-                  busy() ||
-                  !centralUrl().trim() ||
-                  !centralUsername().trim() ||
-                  !centralPassword()
+                  busy() || !accountCreated() || (!localController.pending() && !joinApproved())
                 "
-                (click)="linkCentral()"
+                (click)="submitJoinFinish()"
               >
-                Relier ce worker
-              </button>
-            </div>
-          </section>
-        }
-
-        @if (currentStep().id === 'ready') {
-        <section class="workbench-card" aria-live="polite">
-          <div class="contextual-summary">
-            <div class="section-heading">
-              <div>
-                <h3>Prêt à ouvrir le central</h3>
-                <p>
-                  <strong>{{ effectiveNodeName() }}</strong> sert l’interface et encode sur cette
-                  machine. Les autres workers se rattachent depuis leur assistant, avec un compte
-                  administrateur de ce central.
-                </p>
-              </div>
-            </div>
-            <div class="workbench-actions">
-              <button matButton="outlined" type="button" [disabled]="busy()" (click)="previousStep()">
-                Retour
-              </button>
-              <button
-                matButton="filled"
-                type="button"
-                [disabled]="busy()"
-                (click)="submitStandalone()"
-              >
-                Accéder au tableau de bord
+                {{ joinApproved() ? 'Ouvrir l’application' : 'Suivre la demande dans Nœuds' }}
                 <app-icon name="forward" matButtonIcon iconPositionEnd />
               </button>
             </div>
-          </div>
+          }
         </section>
-        }
       </div>
     </app-access-template>
   `,
@@ -418,101 +636,178 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
       color: var(--danger);
       font-size: var(--font-body);
     }
-    .setup-progress {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.4em;
-      margin: 0;
-      color: var(--text-muted);
-      font-size: var(--font-label);
-      font-weight: 650;
-    }
-    .setup-progress .is-current {
-      color: var(--text-primary);
-    }
-    .setup-progress .is-done {
-      color: var(--text-secondary);
-    }
-    .machine-facts {
+    .setup-telemetry,
+    .workbench-card {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: var(--space-4) var(--space-6);
-      margin: 0;
-      padding: var(--space-4);
-      border-radius: var(--radius-lg);
-      background: var(--surface-container-low);
+      gap: var(--space-4);
+      padding: var(--space-5);
+      border-radius: var(--radius-2xl);
+      background: var(--surface-container);
+      box-shadow: var(--elevation-2);
     }
-    .machine-facts > div {
+    .setup-telemetry {
+      position: sticky;
+      top: 76px;
+    }
+    .setup-workbench,
+    .hardware-bento {
       display: grid;
-      gap: 2px;
-      min-width: 0;
+      gap: var(--space-3);
     }
-    .fact-label,
-    .suggestions-label,
-    .code-label {
-      font-size: var(--font-label);
-      font-weight: 650;
-      color: var(--text-muted);
+    .mode-badge {
+      padding: 2px 8px;
+      border-radius: var(--radius-pill);
+      font-size: 12px;
+      font-weight: 700;
+      background: var(--accent-soft);
+      color: var(--accent);
     }
-    .fact-value,
-    .network-addresses {
-      margin: 0;
-      font-size: var(--font-body);
-      font-weight: 650;
-      color: var(--text-primary);
-    }
-    .fact-value--mono,
-    .network-addresses,
-    .hero-digits {
-      font-family: ui-monospace, monospace;
-      font-weight: 500;
-      word-break: break-all;
-    }
-    .fact-hint,
-    .field-hint,
-    .code-helper,
-    .section-heading p {
+    .section-heading p,
+    .contextual-summary-head p {
       margin: 0;
       font-size: var(--font-body);
       color: var(--text-secondary);
       line-height: 1.5;
     }
-    .fact-hint,
-    .field-hint,
-    .code-helper {
-      font-size: var(--font-label);
+    .hardware-bento {
+      padding: var(--space-4);
+      border-radius: var(--radius-lg);
+      background: var(--surface-container-low);
     }
-    .setup-workbench,
-    .workbench-card,
-    .form-group,
-    .contextual-summary {
+    .hardware-bento-header,
+    .section-heading,
+    .contextual-summary-head {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-3);
+    }
+    .live-dot {
+      width: 10px;
+      height: 10px;
+      margin-top: 5px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 20%, transparent);
+      flex-shrink: 0;
+    }
+    .hardware-bento-title-group {
       display: grid;
-      gap: var(--space-4);
+      gap: 2px;
+      min-width: 0;
     }
-    .form-group {
-      gap: 8px;
+    .hardware-eyebrow {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
     }
-    .section-heading {
-      display: grid;
-      gap: 4px;
-    }
-    .section-heading h2,
-    .section-heading h3 {
+    .hardware-node-name {
       margin: 0;
       font-size: var(--font-title-md);
-      font-weight: 650;
+      font-weight: 800;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
-    .field-label {
+    .hardware-host-meta,
+    .field-hint,
+    .cluster-address,
+    .target-url,
+    .code-helper {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin: 0;
+    }
+    .hardware-tiles {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-2);
+    }
+    .hardware-tile {
+      display: grid;
+      gap: 3px;
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      background: var(--surface-container-high);
+    }
+    .hardware-tile--wide {
+      grid-column: 1 / -1;
+    }
+    .hardware-tile--accent {
+      background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface-container-high));
+    }
+    .tile-label,
+    .suggestions-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .tile-value {
       font-size: 13px;
-      font-weight: 650;
+      font-weight: 700;
+    }
+    .tile-value--mono {
+      font-family: ui-monospace, monospace;
+      word-break: break-all;
+    }
+    .tile-hint {
+      font-size: 12px;
+      color: var(--text-secondary);
+      word-break: break-all;
+    }
+    .telemetry-footnote {
+      margin: 0;
+      display: flex;
+      gap: 8px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--text-secondary);
+    }
+    .workbench-card--Contextual {
+      background: color-mix(in srgb, var(--surface-container) 85%, var(--accent-soft));
+    }
+    .step-pill,
+    .status-check {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+    .status-check {
+      background: var(--success-soft);
+      color: var(--success);
+    }
+    .section-heading h2,
+    .section-heading h3,
+    .contextual-summary-head h3,
+    .target-confirmed-box h4 {
+      margin: 0 0 4px;
+      font-size: var(--font-title-md);
+      font-weight: 750;
+    }
+    .form-group,
+    .discovered-clusters,
+    .cluster-cards-list {
+      display: grid;
+      gap: 8px;
+    }
+    .field-label,
+    .list-label {
+      font-size: 13px;
+      font-weight: 700;
     }
     .text-input {
       min-height: 44px;
       padding: 10px 14px;
-      border-radius: var(--radius-md);
+      border-radius: 12px;
       border: 1px solid var(--border-strong);
-      background: var(--surface-container-lowest);
+      background: transparent;
       color: var(--text-primary);
       font-size: 16px;
       outline: none;
@@ -527,7 +822,7 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
     }
     .field-error {
       margin: 0;
-      font-size: var(--font-label);
+      font-size: 12px;
       color: var(--danger);
     }
     .Quick-suggestions {
@@ -537,20 +832,84 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
       gap: 6px;
     }
     .suggestion-chip {
-      min-height: 32px;
-      padding: 4px 12px;
-      border: 0;
+      padding: 4px 10px;
       border-radius: var(--radius-pill);
-      background: var(--surface-container-high);
+      border: 1px solid var(--border-subtle);
+      background: var(--surface-container);
       color: var(--text-secondary);
-      font-size: var(--font-label);
-      font-weight: 650;
+      font-size: 12px;
+      font-weight: 600;
       cursor: pointer;
     }
     .suggestion-chip:hover,
     .suggestion-chip.active {
-      background: var(--surface-container-highest);
-      color: var(--text-primary);
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .mode-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-3);
+    }
+    .mode-card {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+      text-align: left;
+      padding: var(--space-4);
+      border-radius: var(--radius-lg);
+      background: var(--surface-container-low);
+      border: 2px solid transparent;
+      color: inherit;
+      cursor: pointer;
+    }
+    .mode-card:focus-visible {
+      outline: 3px solid var(--tertiary);
+      outline-offset: 2px;
+    }
+    .mode-card.selected {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+    }
+    .mode-card-top,
+    .cluster-card {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+    }
+    .contextual-summary {
+      display: grid;
+      gap: var(--space-3);
+    }
+    .mode-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      background: var(--surface-container-high);
+      color: var(--accent);
+    }
+    .mode-badge.primary {
+      background: var(--success-soft);
+      color: var(--success);
+    }
+    .mode-badge.neutral {
+      background: var(--surface-container-high);
+      color: var(--text-secondary);
+    }
+    .mode-title {
+      font-size: var(--font-body);
+      font-weight: 750;
+    }
+    .mode-description {
+      margin: 0;
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.45;
     }
     .workbench-actions,
     .input-with-button {
@@ -566,9 +925,43 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
       min-height: var(--mat-button-filled-container-height, 40px);
       padding-block: var(--space-2);
     }
-    @media (max-width: 700px) {
-      .machine-facts {
+    .cluster-card,
+    .target-confirmed-box {
+      padding: var(--space-3) var(--space-4);
+      background: var(--surface-container-low);
+      border-radius: var(--radius-md);
+    }
+    .target-confirmed-box {
+      display: grid;
+      gap: 8px;
+      outline: 1px solid var(--accent);
+    }
+    .target-badge,
+    .code-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--success);
+    }
+    .hero-code-box {
+      text-align: center;
+      padding: var(--space-4);
+      border-radius: var(--radius-lg);
+      background: var(--accent-soft);
+    }
+    .hero-digits {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      margin: 8px 0;
+      font-family: ui-monospace, monospace;
+    }
+    @media (max-width: 900px) {
+      .mode-grid {
         grid-template-columns: 1fr;
+      }
+      .setup-telemetry {
+        position: static;
       }
     }
   `,
@@ -580,91 +973,46 @@ export class SetupWizardPageComponent {
   private readonly notifications = inject(NotificationService);
   private readonly http = inject(HttpClient, { optional: true });
   private readonly destroyRef = inject(DestroyRef);
-  protected readonly shell = inject(ShellConfig);
   protected readonly localController = inject(LocalNodeController);
   protected readonly setupSheet = signal<SetupNodeSheet | null>(null);
 
+  protected readonly currentStep = signal(0);
   protected readonly busy = signal(false);
   protected readonly errorMessage = signal('');
-  protected readonly stepIndex = signal(0);
-  protected readonly centralUrl = signal('');
-  protected readonly centralUsername = signal('admin');
-  protected readonly centralPassword = signal('');
-  protected readonly workerLink = signal<WorkerLinkStatus | null>(null);
-  protected readonly steps = computed(() =>
-    this.shell.worker()
-      ? [
-          { id: 'name', label: 'Nom' },
-          { id: 'central', label: 'Central' },
-        ]
-      : [
-          { id: 'name', label: 'Nom' },
-          { id: 'admin', label: 'Administrateur' },
-          { id: 'ready', label: 'Ouverture' },
-        ],
-  );
-  protected readonly currentStep = computed(
-    () => this.steps()[Math.min(this.stepIndex(), this.steps().length - 1)],
-  );
 
   protected readonly nodeName = signal('');
+  protected readonly selectedMode = signal<SetupOperationMode>('standalone');
+  protected readonly clusterName = signal('');
+  protected readonly clusterAddress = signal('');
   protected readonly adminUsername = signal('admin');
   protected readonly adminPassword = signal('');
   protected readonly adminConfirm = signal('');
   protected readonly passwordVisible = signal(false);
   protected readonly adminSubmitted = signal(false);
   protected readonly accountCreated = signal(false);
+  protected readonly joinApproved = computed(() => this.localController.joinIndex() === 3);
   protected readonly minimumPasswordLength = MINIMUM_PASSWORD_LENGTH;
 
   constructor() {
-    if (!this.http) return;
-    if (this.shell.worker()) {
-      timer(0, 3_000)
+    if (this.http) {
+      timer(0, 5_000)
         .pipe(
           exhaustMap(() =>
-            this.http!.get<SetupNodeSheet>('/api/v1/worker/link/machine').pipe(
-              timeout(8_000),
-              catchError(() => of(null)),
-            ),
+            this.accountCreated()
+              ? of(null)
+              : this.http!.get<SetupNodeSheet>('/api/v1/auth/setup/node').pipe(
+                  timeout(8_000),
+                  catchError(() => of(null)),
+                ),
           ),
-          takeWhile((sheet) => sheet?.tools == null, true),
           takeUntilDestroyed(this.destroyRef),
         )
         .subscribe((sheet) => {
-          if (sheet) this.setupSheet.set(sheet);
+          if (sheet) {
+            this.setupSheet.set(sheet);
+          }
         });
-      timer(0, 3_000)
-        .pipe(
-          exhaustMap(() =>
-            this.http!.get<WorkerLinkStatus>('/api/v1/worker/link').pipe(
-              timeout(8_000),
-              catchError(() => of(null)),
-            ),
-          ),
-          takeUntilDestroyed(this.destroyRef),
-        )
-        .subscribe((link) => {
-          if (!link) return;
-          this.workerLink.set(link);
-          if (link.enrolled) void this.openLogin();
-        });
-      return;
     }
-    timer(0, 5_000)
-      .pipe(
-        exhaustMap(() =>
-          this.accountCreated()
-            ? of(null)
-            : this.http!.get<SetupNodeSheet>('/api/v1/auth/setup/node').pipe(
-                timeout(8_000),
-                catchError(() => of(null)),
-              ),
-        ),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe((sheet) => {
-        if (sheet) this.setupSheet.set(sheet);
-      });
   }
   /** Mêmes règles que le serveur ; les erreurs apparaissent après saisie ou première validation. */
   protected readonly adminErrors = computed(() => {
@@ -692,11 +1040,7 @@ export class SetupWizardPageComponent {
     };
   });
 
-  protected readonly nodeNameSuggestions = computed(() =>
-    this.shell.worker()
-      ? (['Worker salon', 'Worker GPU', 'NAS Médias'] as const)
-      : (['Serveur Salon', 'Central média', 'NAS Médias'] as const),
-  );
+  protected readonly nodeNameSuggestions = ['Serveur Salon', 'Worker GPU', 'NAS Médias'] as const;
 
   protected readonly defaultNodeName = computed(() => {
     const status = this.localController.status();
@@ -734,6 +1078,10 @@ export class SetupWizardPageComponent {
     this.setupSheet()?.urls?.length ? 'Adresse annoncée' : 'Adresse utilisée par ce navigateur',
   );
 
+  protected readonly defaultClusterName = computed(() => {
+    return 'Cluster ' + this.effectiveNodeName();
+  });
+
   protected readonly cpuInfo = computed(() => {
     const inv = this.resolvedInventory();
     if (!inv) return 'Détection en cours…';
@@ -760,14 +1108,11 @@ export class SetupWizardPageComponent {
   protected readonly gpuAccelerationInfo = computed(() => {
     const status = this.localController.status();
     const sheet = this.setupSheet();
-    const caps = status?.capabilities ?? sheet?.tools;
-    if (caps == null) {
+    const caps = status?.capabilities ?? sheet?.tools ?? null;
+    if (!caps || caps.length === 0) {
       if (sheet && !sheet.agentAvailable) return 'Agent local indisponible';
       return 'Détection en cours…';
     }
-    if (caps.length === 0) return 'Aucune (CPU)';
-    const ffmpeg = caps.find((tool) => tool.toolId === 'ffmpeg');
-    if (!ffmpeg) return 'FFmpeg non détecté';
 
     const ACCEL_DISPLAY: Readonly<Record<string, string>> = {
       nvenc: 'NVENC',
@@ -807,49 +1152,73 @@ export class SetupWizardPageComponent {
     return ordered.map((id) => ACCEL_DISPLAY[id] ?? id.toUpperCase()).join(' · ');
   });
 
-  protected nextStep(): void {
-    if (this.currentStep().id === 'admin') {
-      this.adminSubmitted.set(true);
-      const errors = this.adminErrors();
-      if (errors.username || errors.password || errors.confirm) return;
-    }
-    this.stepIndex.update((index) => Math.min(index + 1, this.steps().length - 1));
-  }
+  protected readonly availableClusters = computed(() => this.localController.joinableClusters());
 
-  protected previousStep(): void {
+  protected readonly pairingCode = computed(
+    () =>
+      this.localController.pairing()?.verificationCode ||
+      this.localController.status()?.verificationCode ||
+      null,
+  );
+
+  protected selectMode(mode: SetupOperationMode): void {
+    if (this.busy() || this.accountCreated()) return;
     this.errorMessage.set('');
-    this.stepIndex.update((index) => Math.max(index - 1, 0));
+    this.selectedMode.set(mode);
   }
 
-  private async openLogin(): Promise<void> {
-    await this.auth.ensureLoaded(true);
-    await this.router.navigate(['/login']);
+  protected goToStep(index: number): void {
+    this.errorMessage.set('');
+    this.currentStep.set(index);
   }
 
-  protected async linkCentral(): Promise<void> {
-    if (!this.shell.worker() || this.busy() || !this.http) return;
-    const apiBaseUrl = this.centralUrl().trim();
-    const username = this.centralUsername().trim();
-    const password = this.centralPassword();
-    if (!apiBaseUrl || !username || !password) return;
+  protected selectClusterAddress(url: string): void {
+    this.clusterAddress.set(url);
+    const known = this.availableClusters().find((c) => c.apiBaseUrl === url);
+    if (known) {
+      this.localController.target.set(known);
+    }
+    void this.verifyClusterAddress();
+  }
+
+  protected async verifyClusterAddress(): Promise<void> {
+    if (
+      !this.accountCreated() ||
+      this.busy() ||
+      this.localController.pending() ||
+      this.joinApproved()
+    )
+      return;
+    const addr = this.clusterAddress().trim();
+    if (!addr) return;
     this.errorMessage.set('');
     this.busy.set(true);
     try {
-      const link = await firstValueFrom(
-        this.http.post<WorkerLinkStatus>('/api/v1/worker/link', {
-          apiBaseUrl,
-          displayName: this.effectiveNodeName(),
-          username,
-          password,
-        }),
+      await this.localController.verifyAddress({ address: addr });
+      if (this.localController.error()) {
+        this.errorMessage.set(this.localController.error());
+      }
+    } catch {
+      this.errorMessage.set(
+        'La vérification de l’adresse a échoué. Vérifiez que le serveur est allumé.',
       );
-      this.centralPassword.set('');
-      this.workerLink.set(link);
-      if (link.enrolled) await this.openLogin();
-    } catch (error) {
-      this.errorMessage.set(linkError(error));
     } finally {
-      this.centralPassword.set('');
+      this.busy.set(false);
+    }
+  }
+
+  protected async requestClusterJoin(): Promise<void> {
+    if (!this.accountCreated() || this.busy() || !this.localController.canJoin()) return;
+    this.errorMessage.set('');
+    this.busy.set(true);
+    try {
+      await this.localController.sendRequest(this.effectiveNodeName());
+      if (this.localController.error()) {
+        this.errorMessage.set(this.localController.error());
+      }
+    } catch {
+      this.errorMessage.set('L’envoi de la demande a échoué. Réessayez.');
+    } finally {
       this.busy.set(false);
     }
   }
@@ -861,10 +1230,39 @@ export class SetupWizardPageComponent {
     });
   }
 
+  protected async submitCreateCluster(): Promise<void> {
+    const name = this.clusterName().trim() || this.defaultClusterName();
+    await this.completeSetup({
+      nodeDisplayName: this.effectiveNodeName(),
+      mode: 'createCluster',
+      clusterName: name,
+    });
+  }
+
+  protected async prepareClusterJoin(): Promise<void> {
+    await this.completeSetup(
+      {
+        nodeDisplayName: this.effectiveNodeName(),
+        mode: 'joinCluster',
+      },
+      false,
+    );
+  }
+
+  protected async submitJoinFinish(): Promise<void> {
+    if (
+      this.busy() ||
+      !this.accountCreated() ||
+      (!this.localController.pending() && !this.joinApproved())
+    )
+      return;
+    await this.router.navigate([this.joinApproved() ? '/' : '/nodes']);
+  }
+
   private async completeSetup(
     payload: {
       nodeDisplayName: string;
-      mode: 'standalone';
+      mode: SetupOperationMode;
       clusterName?: string;
     },
     openApplication = true,

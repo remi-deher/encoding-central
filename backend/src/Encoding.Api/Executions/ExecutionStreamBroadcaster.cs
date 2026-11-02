@@ -6,7 +6,7 @@ namespace Encoding.Api.Executions;
 /// <summary>
 /// Diffuseur léger en mémoire pour notifier les abonnés SSE (<c>text/event-stream</c>) dès qu’une exécution évolue.
 /// </summary>
-public sealed class ExecutionStreamBroadcaster(Infrastructure.InterfaceLiveBroadcaster live)
+public sealed class ExecutionStreamBroadcaster
 {
     public static readonly JsonSerializerOptions SseJsonOptions = new(JsonSerializerDefaults.Web);
     private long _version;
@@ -25,7 +25,6 @@ public sealed class ExecutionStreamBroadcaster(Infrastructure.InterfaceLiveBroad
                 tcs.TrySetResult(next);
             }
         }
-        live.Publish("executions");
     }
 
     public async Task<long> WaitForChangeAsync(long knownVersion, TimeSpan heartbeat, CancellationToken ct)

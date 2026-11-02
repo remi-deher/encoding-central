@@ -1,6 +1,4 @@
-using System.Net;
 using System.Net.Http.Json;
-using Encoding.Contracts.Auth;
 using Encoding.Contracts.Nodes;
 using Encoding.Core.Nodes;
 using System.Runtime.InteropServices;
@@ -20,71 +18,7 @@ public sealed class WorkerEnrollmentService(
     /// <summary>Délai laissé au cluster d'accueil pour approuver un changement de cluster : la clé de jumelage vit 10 minutes, avec une marge.</summary>
     public static readonly TimeSpan SwitchTimeout = TimeSpan.FromMinutes(12);
 
-    /// <summary>
-    /// Admet ce worker avec le compte administrateur du central. Le mot de passe n'est ni journalisé ni enregistré :
-    /// il ouvre une session le temps de l'appel, puis cette session est fermée.
-    /// </summary>
-    public async Task<NodeResponse> EnrollWithAdministratorAsync(
-        Guid clusterId,
-        string username,
-        string password,
-        CancellationToken cancellationToken,
-        string? displayName = null)
-    {
-        var cluster = discovery.List().FirstOrDefault(candidate => candidate.Id == clusterId)
-            ?? throw new InvalidOperationException("Ce cluster n’est plus visible sur le réseau. Actualisez la découverte et réessayez.");
-        var cookies = new CookieContainer();
-        using var handler = new HttpClientHandler { CookieContainer = cookies, UseCookies = true };
-        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(15) };
-        var baseUri = new Uri(cluster.ApiBaseUrl);
-        var opened = false;
-        try
-        {
-            using var login = await client.PostAsJsonAsync(
-                new Uri(baseUri, "api/v1/auth/login"),
-                new LoginRequest(username, password),
-                AgentJson.Options,
-                cancellationToken);
-            if (login.StatusCode == HttpStatusCode.Unauthorized)
-                throw new WorkerLinkRejectedException(StatusCodes.Status401Unauthorized, "Identifiants invalides ou compte temporairement verrouillé.");
-            if (login.StatusCode == HttpStatusCode.TooManyRequests)
-                throw new WorkerLinkRejectedException(StatusCodes.Status429TooManyRequests, "Trop de tentatives. Réessayez dans un moment.");
-            if (!login.IsSuccessStatusCode)
-                throw new WorkerLinkRejectedException(StatusCodes.Status502BadGateway, "Le central n’a pas ouvert la session administrateur.");
-            opened = true;
-            var user = await login.Content.ReadFromJsonAsync<CurrentUserResponse>(AgentJson.Options, cancellationToken);
-            if (user is null || user.Role != UserRole.Admin)
-                throw new WorkerLinkRejectedException(StatusCodes.Status403Forbidden, "Ce compte ne peut pas autoriser le rattachement.");
-            return await EnrollAsync(clusterId, cancellationToken, displayName: displayName, httpClient: client, administratorSession: true);
-        }
-        finally
-        {
-            if (opened) await CloseAdministratorSessionAsync(client, baseUri);
-        }
-    }
-
-    private async Task CloseAdministratorSessionAsync(HttpClient client, Uri baseUri)
-    {
-        try
-        {
-            using var logout = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, "api/v1/auth/logout"));
-            logout.Headers.TryAddWithoutValidation("X-Encoding-Csrf", "1");
-            // La session est fermée même si l'appelant a déjà annulé le rattachement.
-            using var response = await client.SendAsync(logout, CancellationToken.None);
-        }
-        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
-        {
-            logger.LogWarning("La session administrateur ouverte pour le rattachement n’a pas pu être fermée.");
-        }
-    }
-
-    public async Task<NodeResponse> EnrollAsync(
-        Guid clusterId,
-        CancellationToken cancellationToken,
-        bool leaveCurrent = false,
-        string? displayName = null,
-        HttpClient? httpClient = null,
-        bool administratorSession = false)
+    public async Task<NodeResponse> EnrollAsync(Guid clusterId, CancellationToken cancellationToken, bool leaveCurrent = false, string? displayName = null)
     {
         var cluster = discovery.List().FirstOrDefault(candidate => candidate.Id == clusterId)
             ?? throw new InvalidOperationException("Ce cluster n’est plus visible sur le réseau. Actualisez la découverte et réessayez.");
@@ -115,55 +49,45 @@ public sealed class WorkerEnrollmentService(
             DisplayName: effectiveDisplayName,
             ClusterPeerReconciliationUrl: peerIdentity?.AdvertisedUrl);
 
-        var ownsClient = httpClient is null;
-        var client = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        using var message = new HttpRequestMessage(HttpMethod.Post, new Uri(new Uri(cluster.ApiBaseUrl), "api/v1/nodes/enroll"))
+        {
+            Content = JsonContent.Create(request, options: AgentJson.Options)
+        };
+        // Le secret du conteneur n'est présenté qu'au serveur local : jamais à un cluster distant.
+        if (IsLocalCluster(cluster) && LocalEnrollment.Read(options.LocalEnrollmentSecretFile) is { } secret)
+            message.Headers.Add(LocalEnrollment.HeaderName, secret);
+        HttpResponseMessage response;
         try
         {
-            using var message = new HttpRequestMessage(HttpMethod.Post, new Uri(new Uri(cluster.ApiBaseUrl), "api/v1/nodes/enroll"))
-            {
-                Content = JsonContent.Create(request, options: AgentJson.Options)
-            };
-            // Le secret du conteneur n'est présenté qu'au serveur local : jamais à un cluster distant.
-            if (IsLocalCluster(cluster) && LocalEnrollment.Read(options.LocalEnrollmentSecretFile) is { } secret)
-                message.Headers.Add(LocalEnrollment.HeaderName, secret);
-            HttpResponseMessage response;
-            try
-            {
-                response = await client.SendAsync(message, cancellationToken);
-            }
-            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or InvalidOperationException && !cancellationToken.IsCancellationRequested)
-            {
-                await identityStore.AbandonPendingAsync($"le cluster {cluster.Name} est injoignable", cancellationToken);
-                throw new HttpRequestException($"Le cluster {cluster.Name} est injoignable.", exception);
-            }
-            using var httpResponse = response;
-            if (!response.IsSuccessStatusCode)
-            {
-                logger.LogWarning("L’enrôlement auprès du cluster {ClusterId} a échoué avec HTTP {StatusCode}.", clusterId, (int)response.StatusCode);
-                await identityStore.AbandonPendingAsync($"le cluster {cluster.Name} a refusé l'enrôlement (HTTP {(int)response.StatusCode})", cancellationToken);
-                // 409 : l'identifiant appartient à un nœud retiré ou à un autre nœud ; réessayer avec lui échouerait indéfiniment (0017).
-                if (response.StatusCode == System.Net.HttpStatusCode.Conflict && !(await identityStore.GetAsync(cancellationToken)).IsSwitching)
-                    await identityStore.ResetAsync(cancellationToken);
-                throw new HttpRequestException(response.StatusCode == System.Net.HttpStatusCode.Forbidden
-                    ? administratorSession
-                        ? "Le central n’a pas accepté la session administrateur."
-                        : "L’enrôlement direct est fermé sur ce cluster. Demandez à un administrateur de l’ouvrir depuis la page Nœuds, ou générez une clé de jumelage."
-                    : $"Le serveur du cluster a refusé l’enrôlement (HTTP {(int)response.StatusCode}).");
-            }
-
-            var node = await response.Content.ReadFromJsonAsync<NodeResponse>(jsonOptions.Value.SerializerOptions, cancellationToken)
-                ?? throw new HttpRequestException("Le serveur n’a pas retourné la confirmation de l’enrôlement.");
-            if (!IsLocalCluster(cluster) && options.LocalEnrollmentSecretFile is not null)
-                await AdoptLocalClusterIdentityAsync(node.Id, cluster.Id, node.ClusterBootstrap, cluster.ApiBaseUrl, cancellationToken);
-            await identityStore.MarkEnrolledAsync(cancellationToken);
-            logger.LogInformation("Le worker {NodeId} a rejoint le cluster {ClusterId}.", node.Id, cluster.Id);
-            await CompleteSwitchAsync(cancellationToken);
-            return node with { ClusterBootstrap = null };
+            response = await client.SendAsync(message, cancellationToken);
         }
-        finally
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or InvalidOperationException && !cancellationToken.IsCancellationRequested)
         {
-            if (ownsClient) client.Dispose();
+            await identityStore.AbandonPendingAsync($"le cluster {cluster.Name} est injoignable", cancellationToken);
+            throw new HttpRequestException($"Le cluster {cluster.Name} est injoignable.", exception);
         }
+        using var httpResponse = response;
+        if (!response.IsSuccessStatusCode)
+        {
+            logger.LogWarning("L’enrôlement auprès du cluster {ClusterId} a échoué avec HTTP {StatusCode}.", clusterId, (int)response.StatusCode);
+            await identityStore.AbandonPendingAsync($"le cluster {cluster.Name} a refusé l'enrôlement (HTTP {(int)response.StatusCode})", cancellationToken);
+            // 409 : l'identifiant appartient à un nœud retiré ou à un autre nœud ; réessayer avec lui échouerait indéfiniment (0017).
+            if (response.StatusCode == System.Net.HttpStatusCode.Conflict && !(await identityStore.GetAsync(cancellationToken)).IsSwitching)
+                await identityStore.ResetAsync(cancellationToken);
+            throw new HttpRequestException(response.StatusCode == System.Net.HttpStatusCode.Forbidden
+                ? "L’enrôlement direct est fermé sur ce cluster. Demandez à un administrateur de l’ouvrir depuis la page Nœuds, ou générez une clé de jumelage."
+                : $"Le serveur du cluster a refusé l’enrôlement (HTTP {(int)response.StatusCode}).");
+        }
+
+        var node = await response.Content.ReadFromJsonAsync<NodeResponse>(jsonOptions.Value.SerializerOptions, cancellationToken)
+            ?? throw new HttpRequestException("Le serveur n’a pas retourné la confirmation de l’enrôlement.");
+        if (!IsLocalCluster(cluster) && options.LocalEnrollmentSecretFile is not null)
+            await AdoptLocalClusterIdentityAsync(node.Id, cluster.Id, node.ClusterBootstrap, cluster.ApiBaseUrl, cancellationToken);
+        await identityStore.MarkEnrolledAsync(cancellationToken);
+        logger.LogInformation("Le worker {NodeId} a rejoint le cluster {ClusterId}.", node.Id, cluster.Id);
+        await CompleteSwitchAsync(cancellationToken);
+        return node with { ClusterBootstrap = null };
     }
 
     /// <summary>
@@ -179,7 +103,7 @@ public sealed class WorkerEnrollmentService(
             return;
         }
         await ForgetClusterAsync(cancellationToken);
-        if (launcher is null || options.FixedWorker) return;
+        if (launcher is null) return;
         var current = await launcher.GetAsync(cancellationToken);
         if (current is { Server: false })
             await launcher.SetAsync(new NodeMode(true, current.Worker || options.Roles.Contains(NodeRole.Worker)), cancellationToken);
@@ -409,9 +333,3 @@ public sealed class WorkerEnrollmentService(
 }
 
 public sealed record WorkerPairingResponse(string PairingKey, DateTimeOffset ExpiresAt, string? VerificationCode = null);
-
-/// <summary>Refus du rattachement par compte, sans détail d'identifiant ni de mot de passe.</summary>
-public sealed class WorkerLinkRejectedException(int statusCode, string title) : Exception(title)
-{
-    public int StatusCode { get; } = statusCode;
-}

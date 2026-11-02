@@ -39,8 +39,6 @@ import {
       [detailTitle]="detailTitle()"
       [detailDescription]="detailDescription()"
       [detailContentInput]="detailContentProjection()"
-      [actionContentInput]="actionContentProjection()"
-      [actionFooterActionsInput]="actionFooterActionsProjection()"
       [actionOpen]="actionOpen()"
       [actionTitle]="actionTitle()"
       [actionDescription]="actionDescription()"
@@ -95,11 +93,6 @@ import {
 export class ClusterMaintenanceTemplateComponent {
   /** Les emplacements catalogue passent au gabarit comme templates explicites. */
   protected readonly detailContentProjection = contentChild('detailContent', {
-    read: TemplateRef,
-  });
-  /** Le renvoi par `ng-content` ne rend pas ces gabarits visibles au tiroir enfant. */
-  protected readonly actionContentProjection = contentChild('actionContent', { read: TemplateRef });
-  protected readonly actionFooterActionsProjection = contentChild('actionFooterActions', {
     read: TemplateRef,
   });
   protected readonly catalogueSummaryProjection = viewChild('catalogueSummarySlot', {

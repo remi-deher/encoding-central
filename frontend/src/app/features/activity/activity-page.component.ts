@@ -85,7 +85,7 @@ const ACTIVITY_STATUSES: readonly { value: LibraryActivityStatus; label: string 
   { value: 'disabled', label: 'Désactivés' },
 ];
 const PAGE_SIZE = 50;
-const PAGE_REFRESH_MS = 60_000;
+const PAGE_REFRESH_MS = 10000;
 interface ActivityPageState {
   readonly status: 'loading' | 'ready' | 'error';
   readonly data: LibraryActivityResponse | null;
@@ -281,9 +281,14 @@ export class ActivityPageComponent {
           catchError(() => of(null)),
         );
 
-        const poll$ = timer(PAGE_REFRESH_MS, PAGE_REFRESH_MS).pipe(
+        const realTimeEvents$ = this.tracking.state$.pipe(
+          filter((s) => s.status === 'ready'),
+          map(() => void 0),
+        );
+
+        const poll$ = merge(timer(0, PAGE_REFRESH_MS), realTimeEvents$).pipe(
           exhaustMap(() => {
-            if (!cached) this.isRefreshing.set(true);
+            this.isRefreshing.set(true);
             return this.activityApi.list(query).pipe(
               timeout(15000),
               tap((data) => {

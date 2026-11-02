@@ -19,8 +19,6 @@ import {
   NavigationItem,
 } from '../navigation/primary-navigation.component';
 import { PageShellContextService, PageShellSearchResult } from './page-shell-context';
-import { ShellConfig } from '../shell/shell-config';
-import { workerShellAllows } from '../../shared/models/worker-shell';
 import { Router } from '@angular/router';
 import { SearchFieldComponent } from '../../shared/ui/search-field.component';
 
@@ -196,7 +194,6 @@ interface SearchEntry {
 export class GlobalSearchBarComponent {
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
-  private readonly shell = inject(ShellConfig);
   private readonly pageShell = inject(PageShellContextService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly capsule = viewChild<ElementRef<HTMLDivElement>>('searchCapsule');
@@ -235,9 +232,7 @@ export class GlobalSearchBarComponent {
   protected readonly globalResults = computed<SearchEntry[]>(() => {
     const query = this.normalize(this.query().trim());
     const items = getSearchableNavigationItems(this.router.config).filter(
-      (item) =>
-        (!item.adminOnly || this.auth.isAdmin()) &&
-        (!this.shell.worker() || workerShellAllows(item.path)),
+      (item) => !item.adminOnly || this.auth.isAdmin(),
     );
     const matching = query
       ? items.filter((item) =>

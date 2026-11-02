@@ -8,9 +8,7 @@ import {
   signal,
 } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { skip } from 'rxjs';
-import { LiveUpdates } from '../../shared/services/live-updates';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
 import { MatTabsModule } from '@angular/material/tabs';
 import { ClusterMaintenanceTemplateComponent } from '../../shared/templates/cluster-maintenance-template.component';
@@ -49,20 +47,8 @@ import {
   PageShellContextService,
   PageShellSearchResult,
 } from '../../core/layout/page-shell-context';
-import { ShellConfig } from '../../core/shell/shell-config';
 
 type PluginFamily = 'base' | 'cluster' | 'media' | 'automation' | 'custom';
-
-interface PluginOffer {
-  readonly id: string;
-  readonly name: string;
-  readonly category: string;
-  readonly categoryLabel: string;
-  readonly version: string;
-  readonly description: string;
-  readonly record: PluginRecord | null;
-  readonly pack: StorePackage | null;
-}
 
 interface PluginRecord {
   readonly id: string;
@@ -276,6 +262,22 @@ const PLUGIN_RECORDS: readonly StaticPluginRecord[] = [
   },
 ];
 
+const PLUGIN_FAMILY_OPTIONS: readonly { readonly value: PluginFamily; readonly label: string }[] = [
+  { value: 'base', label: 'Noyau' },
+  { value: 'cluster', label: 'Cluster' },
+  { value: 'media', label: 'Média' },
+  { value: 'automation', label: 'Automatisation' },
+  { value: 'custom', label: 'Tiers' },
+];
+
+const PLUGIN_FAMILY_DESCRIPTIONS: Readonly<Record<PluginFamily, string>> = {
+  base: 'Composants natifs et logique des flows',
+  cluster: 'Répartition et circulation des traitements entre workers',
+  media: 'Traitement, lecture et analyse des médias',
+  automation: 'Intégrations avec les services de médiathèque',
+  custom: 'Extensions installées depuis le Store',
+};
+
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-plugin-catalog-page',
@@ -300,9 +302,7 @@ export class PluginCatalogPageComponent {
   private readonly flowValidation = inject(FlowValidation);
   private readonly configurationApi = inject(PluginConfigurationApi);
   private readonly extensionsService = inject(ClusterExtensionsService);
-  private readonly live = inject(LiveUpdates);
   private readonly notifications = inject(NotificationService);
-  protected readonly shell = inject(ShellConfig);
   private readonly route = inject(ActivatedRoute);
   private readonly routeData = toSignal(this.route.data, {
     initialValue: this.route.snapshot.data,
@@ -315,102 +315,54 @@ export class PluginCatalogPageComponent {
   protected readonly clusterTools = signal<readonly ClusterTool[]>([]);
   protected readonly storeRepositories = signal<readonly StoreRepository[]>([]);
   protected readonly storePackages = signal<readonly StorePackage[]>([]);
-  protected readonly selectedPluginCategory = signal('all');
+  protected readonly selectedStoreCategory = signal('all');
   protected readonly searchQuery = signal('');
 
-  protected readonly pluginOffers = computed<readonly PluginOffer[]>(() => {
-    const records = new Map(this.pluginRecords().map((record) => [record.id, record]));
-    const seen = new Set<string>();
-    const offers: PluginOffer[] = [];
-    for (const pack of this.storePackages()) {
-      if (pack.kind !== 'plugin' || seen.has(pack.id)) continue;
-      seen.add(pack.id);
-      const record = records.get(pack.id) ?? null;
-      offers.push({
-        id: pack.id,
-        name: record?.name ?? pack.name,
-        category: pack.category,
-        categoryLabel: pack.categoryLabel,
-        version: record?.version || pack.version,
-        description: record?.components || pack.description,
-        record,
-        pack,
-      });
-    }
-    for (const record of this.pluginRecords()) {
-      if (seen.has(record.id)) continue;
-      offers.push({
-        id: record.id,
-        name: record.name,
-        category: record.family,
-        categoryLabel: record.familyLabel,
-        version: record.version,
-        description: record.components,
-        record,
-        pack: null,
-      });
-    }
-    return offers;
-  });
+  protected readonly extensionTabs = computed<readonly CategoryTabOption[]>(() => [
+    { value: 'plugins', label: 'Plugins', count: this.pluginRecords().length },
+    { value: 'tools', label: 'Outils média', count: this.clusterTools().length },
+    { value: 'store', label: 'Store & Dépôts', count: this.storePackages().length },
+  ]);
 
-  protected readonly pluginCategoryOptions = computed<readonly CategoryTabOption[]>(() => {
+  protected readonly storeCategoryOptions = computed<readonly CategoryTabOption[]>(() => [
+    { value: 'all', label: 'Tous', count: this.storePackages().length },
+    {
+      value: 'subtitles',
+      label: 'Sous-titres',
+      count: this.storePackages().filter((p) => p.category === 'subtitles').length,
+    },
+    {
+      value: 'audio',
+      label: 'Audio',
+      count: this.storePackages().filter((p) => p.category === 'audio').length,
+    },
+    {
+      value: 'tools',
+      label: 'Outils Média',
+      count: this.storePackages().filter((p) => p.category === 'tools').length,
+    },
+  ]);
+
+  protected readonly filteredStorePackages = computed(() => {
+    const cat = this.selectedStoreCategory();
     const query = this.searchQuery().trim().toLocaleLowerCase('fr-FR');
-    const matching = this.pluginOffers().filter((offer) => this.offerMatches(offer, query));
-    const counts = new Map<string, { label: string; count: number }>();
-    for (const offer of matching) {
-      const current = counts.get(offer.category);
-      if (current) current.count += 1;
-      else counts.set(offer.category, { label: offer.categoryLabel, count: 1 });
-    }
-    const categories = [...counts.entries()]
-      .map(([value, item]) => ({ value, label: item.label, count: item.count }))
-      .sort((left, right) => left.label.localeCompare(right.label, 'fr'));
-    return [{ value: 'all', label: 'Tous', count: matching.length }, ...categories];
-  });
-
-  protected readonly filteredPluginOffers = computed(() => {
-    const query = this.searchQuery().trim().toLocaleLowerCase('fr-FR');
-    const available = this.pluginCategoryOptions().some(
-      (option) => option.value === this.selectedPluginCategory(),
+    const pkgs = this.storePackages();
+    return pkgs.filter(
+      (pkg) =>
+        (cat === 'all' || pkg.category === cat) &&
+        (!query ||
+          [
+            pkg.name,
+            pkg.id,
+            pkg.author,
+            pkg.description,
+            pkg.categoryLabel,
+            pkg.requiredTools.join(' '),
+          ]
+            .join(' ')
+            .toLocaleLowerCase('fr-FR')
+            .includes(query)),
     );
-    const category = available ? this.selectedPluginCategory() : 'all';
-    return this.pluginOffers().filter(
-      (offer) =>
-        (category === 'all' || offer.category === category) && this.offerMatches(offer, query),
-    );
-  });
-
-  protected readonly toolPackages = computed(() =>
-    this.storePackages().filter((pack) => pack.kind === 'tool'),
-  );
-
-  protected readonly filteredToolPackages = computed(() => {
-    const query = this.searchQuery().trim().toLocaleLowerCase('fr-FR');
-    return this.toolPackages().filter(
-      (pack) =>
-        !query ||
-        [pack.name, pack.id, pack.description, pack.version, pack.platform ?? '']
-          .join(' ')
-          .toLocaleLowerCase('fr-FR')
-          .includes(query),
-    );
-  });
-
-  protected readonly extensionTabs = computed<readonly CategoryTabOption[]>(() => {
-    const toolIds = new Set(this.clusterTools().map((tool) => tool.id));
-    const extraTools = this.toolPackages().filter((pack) => !toolIds.has(pack.id)).length;
-    const tabs: CategoryTabOption[] = [
-      { value: 'plugins', label: 'Plugins', count: this.pluginOffers().length },
-      { value: 'tools', label: 'Outils média', count: this.clusterTools().length + extraTools },
-    ];
-    if (!this.shell.worker()) {
-      tabs.push({
-        value: 'store',
-        label: 'Store & Dépôts',
-        count: this.storeRepositories().length,
-      });
-    }
-    return tabs;
   });
   protected readonly filteredTools = computed(() => {
     const query = this.searchQuery().trim().toLocaleLowerCase('fr-FR');
@@ -452,29 +404,37 @@ export class PluginCatalogPageComponent {
   protected readonly pluginRecords = computed<readonly PluginRecord[]>(() => {
     const catalog = this.pluginCatalog();
     const overrides = this.pluginEnabledOverrides();
-    return catalog.map((plugin) => {
-      const known = PLUGIN_RECORDS.find((record) => record.id === plugin.id);
-      const enabled = overrides[plugin.id] ?? plugin.enabled === true;
-      const components = plugin.components.map((component) => component.name).join(', ');
+    const known = PLUGIN_RECORDS.map((record) => {
+      const live = catalog.find((plugin) => plugin.id === record.id);
+      const enabled = overrides[record.id] ?? live?.enabled ?? true;
       return {
-        id: plugin.id,
-        name: known?.name ?? plugin.name,
-        family: known?.family ?? 'custom',
-        familyLabel: known?.familyLabel ?? 'Tiers',
-        category: known?.category ?? 'Plugin tiers',
-        version: plugin.version || known?.version || '',
-        components: components || known?.components || '',
-        runtime: known?.runtime ?? 'Processus isolé installé sur chaque worker',
-        configuration: known?.configuration
-          ?? (plugin.configurationSchema
-            ? `${plugin.configurationSchema.fields.length} champ(s) déclaré(s)`
-            : 'Aucune configuration globale'),
-        state: enabled ? 'Actif' : 'Désactivé',
-        iconUrl: known?.iconUrl ?? '/plugins/base.svg',
+        ...record,
+        ...(live ? { version: live.version } : {}),
         enabled,
-        canDisable: plugin.id !== 'base' && plugin.id !== 'nodes',
+        canDisable: record.id !== 'base' && record.id !== 'nodes',
+        state: enabled ? record.state : 'Désactivé',
       };
     });
+    const custom = catalog
+      .filter((plugin) => !PLUGIN_RECORDS.some((record) => record.id === plugin.id))
+      .map<PluginRecord>((plugin) => ({
+        id: plugin.id,
+        name: plugin.name,
+        family: 'custom',
+        familyLabel: 'Tiers',
+        category: 'Plugin tiers',
+        version: plugin.version,
+        components: plugin.components.map((component) => component.name).join(', '),
+        runtime: 'Processus isolé installé sur chaque worker',
+        configuration: plugin.configurationSchema
+          ? `${plugin.configurationSchema.fields.length} champ(s) déclaré(s)`
+          : 'Aucune configuration globale',
+        state: plugin.enabled === false ? 'Désactivé' : 'Actif',
+        iconUrl: '/plugins/base.svg',
+        enabled: overrides[plugin.id] ?? plugin.enabled ?? true,
+        canDisable: true,
+      }));
+    return [...known, ...custom];
   });
   protected readonly configurationValues = signal<FlowComponentConfiguration>({});
   protected readonly configuredSecrets = signal<readonly string[]>([]);
@@ -588,13 +548,44 @@ export class PluginCatalogPageComponent {
     };
   });
 
-  private offerMatches(offer: PluginOffer, query: string): boolean {
-    if (!query) return true;
-    return [offer.name, offer.id, offer.categoryLabel, offer.description, offer.version, offer.record?.state ?? '']
-      .join(' ')
-      .toLocaleLowerCase('fr-FR')
-      .includes(query);
-  }
+  protected readonly filteredPlugins = computed(() => {
+    const query = this.searchQuery().trim().toLocaleLowerCase('fr-FR');
+    return this.pluginRecords().filter(
+      (plugin) =>
+        !query ||
+        [
+          plugin.name,
+          plugin.familyLabel,
+          plugin.category,
+          plugin.components,
+          plugin.runtime,
+          plugin.configuration,
+          plugin.state,
+        ]
+          .join(' ')
+          .toLocaleLowerCase('fr-FR')
+          .includes(query),
+    );
+  });
+
+  protected readonly pluginGroups = computed(() => {
+    const plugins = this.filteredPlugins();
+    const groups = PLUGIN_FAMILY_OPTIONS.map((family) => ({
+      ...family,
+      description: PLUGIN_FAMILY_DESCRIPTIONS[family.value],
+      plugins: plugins.filter((plugin) => plugin.family === family.value),
+    }));
+    const hasQuery = !!this.searchQuery().trim();
+    if (plugins.length) {
+      const visible = groups.filter((group) => group.plugins.length > 0);
+      const customFamily = groups.find((group) => group.value === 'custom');
+      if (!hasQuery && customFamily?.plugins.length === 0) visible.push(customFamily);
+      return visible;
+    }
+    if (hasQuery) return [];
+    const customFamily = groups.find((group) => group.value === 'custom');
+    return customFamily ? [customFamily] : [];
+  });
 
   private pluginComponents(pluginId: string) {
     return this.pluginCatalog().find((plugin) => plugin.id === pluginId)?.components ?? [];
@@ -612,22 +603,15 @@ export class PluginCatalogPageComponent {
             id: 'add-repository',
             label: 'Ajouter un dépôt',
             icon: 'add',
-            visibleWhen: () => !this.shell.worker() && this.activeTab() === 'store',
+            visibleWhen: () => this.activeTab() === 'store',
             run: () => this.addRepositoryFromShell(),
           },
           {
             id: 'import-store-archive',
             label: 'Importer une archive',
             icon: 'upload',
-            visibleWhen: () =>
-              !this.shell.worker() &&
-              (this.activeTab() === 'plugins' || this.activeTab() === 'tools'),
-            run: () =>
-              document
-                .querySelector<HTMLInputElement>(
-                  this.activeTab() === 'tools' ? '.tool-archive-file' : '.plugin-archive-file',
-                )
-                ?.click(),
+            visibleWhen: () => this.activeTab() === 'store',
+            run: () => document.querySelector<HTMLInputElement>('.store-archive-file')?.click(),
           },
         ],
       }),
@@ -653,53 +637,23 @@ export class PluginCatalogPageComponent {
       .then((tools) => this.clusterTools.set(tools))
       .catch(() => {});
 
-    this.live
-      .drive(['plugins'])
-      .pipe(skip(1), takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => {
-        void this.flowValidation
-          .catalog()
-          .then((plugins) => this.pluginCatalog.set(plugins))
-          .catch(() => {});
-        void this.extensionsService
-          .listRejectedPlugins()
-          .then((rejected) => this.rejectedPlugins.set(rejected))
-          .catch(() => {});
-        void this.extensionsService
-          .listTools()
-          .then((tools) => this.clusterTools.set(tools))
-          .catch(() => {});
-        void this.extensionsService
-          .listPackages()
-          .then((packages) => this.storePackages.set(packages))
-          .catch(() => {});
-        if (!this.shell.worker()) {
-          void this.extensionsService
-            .listRepositories()
-            .then((repos) => this.storeRepositories.set(repos))
-            .catch(() => {});
-        }
-      });
+    void this.extensionsService
+      .listRepositories()
+      .then((repos) => this.storeRepositories.set(repos))
+      .catch(() => {});
 
     void this.extensionsService
       .listPackages()
       .then((pkgs) => this.storePackages.set(pkgs))
       .catch(() => {});
-
-    if (!this.shell.worker()) {
-      void this.extensionsService
-        .listRepositories()
-        .then((repos) => this.storeRepositories.set(repos))
-        .catch(() => {});
-    }
   }
 
   protected onExtensionTabChange(tab: string): void {
     this.activeTab.set(tab as ExtensionTab);
   }
 
-  protected onPluginCategoryChange(category: string): void {
-    this.selectedPluginCategory.set(category);
+  protected onStoreCategoryChange(cat: string): void {
+    this.selectedStoreCategory.set(cat);
   }
 
   protected isActivationBusy(kind: 'plugin' | 'tool', id: string): boolean {
@@ -708,7 +662,7 @@ export class PluginCatalogPageComponent {
 
   protected async setPluginEnabled(plugin: PluginRecord, enabled: boolean): Promise<void> {
     const busyKey = `plugin:${plugin.id}`;
-    if (this.shell.worker() || !plugin.canDisable || this.activationBusy().has(busyKey)) return;
+    if (!plugin.canDisable || this.activationBusy().has(busyKey)) return;
     this.setActivationBusy(busyKey, true);
     this.setPluginActivationView(plugin.id, enabled);
     try {
@@ -729,7 +683,7 @@ export class PluginCatalogPageComponent {
 
   protected async setToolEnabled(tool: ClusterTool, enabled: boolean): Promise<void> {
     const busyKey = `tool:${tool.id}`;
-    if (this.shell.worker() || this.activationBusy().has(busyKey)) return;
+    if (this.activationBusy().has(busyKey)) return;
     this.setActivationBusy(busyKey, true);
     this.setToolActivationView(tool.id, enabled);
     try {
@@ -781,18 +735,12 @@ export class PluginCatalogPageComponent {
   }
 
   private async refreshStore(): Promise<void> {
-    const [repositories, packages, tools] = await Promise.all([
-      this.shell.worker() ? Promise.resolve(this.storeRepositories()) : this.extensionsService.listRepositories(),
+    const [repositories, packages] = await Promise.all([
+      this.extensionsService.listRepositories(),
       this.extensionsService.listPackages(),
-      this.extensionsService.listTools(),
     ]);
     this.storeRepositories.set(repositories);
     this.storePackages.set(packages);
-    this.clusterTools.set(tools);
-    void this.flowValidation
-      .catalog()
-      .then((plugins) => this.pluginCatalog.set(plugins))
-      .catch(() => {});
   }
 
   private async runStoreAction(action: () => Promise<unknown>, success: string): Promise<void> {
@@ -860,16 +808,13 @@ export class PluginCatalogPageComponent {
     );
   }
 
-  protected onArchiveSelected(event: Event, kind: 'plugin' | 'tool'): void {
+  protected onArchiveSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
-    if (!file || this.shell.worker()) return;
+    if (!file) return;
     void this.runStoreAction(
-      () =>
-        kind === 'tool'
-          ? this.extensionsService.importToolArchive(file)
-          : this.extensionsService.importArchive(file),
+      () => this.extensionsService.importArchive(file),
       `Archive « ${file.name} » installée.`,
     );
   }
@@ -893,25 +838,29 @@ export class PluginCatalogPageComponent {
     const matches = (values: readonly string[]) =>
       !normalized || values.join(' ').toLocaleLowerCase('fr-FR').includes(normalized);
     if (this.activeTab() === 'plugins') {
-      return this.pluginOffers()
-        .filter((offer) =>
-          matches([offer.name, offer.categoryLabel, offer.description, offer.version]),
+      return this.pluginRecords()
+        .filter((plugin) =>
+          matches([
+            plugin.name,
+            plugin.familyLabel,
+            plugin.category,
+            plugin.components,
+            plugin.runtime,
+            plugin.state,
+          ]),
         )
         .slice(0, 8)
-        .map((offer) => ({
-          id: `plugin:${offer.id}`,
-          label: offer.name,
-          description: `${offer.categoryLabel} · v${offer.version}`,
+        .map((plugin) => ({
+          id: `plugin:${plugin.id}`,
+          label: plugin.name,
+          description: `${plugin.familyLabel} · ${plugin.category}`,
           group: 'Plugins',
           glyph: '◇',
-          run: () =>
-            offer.record
-              ? this.onPluginOpen(offer.id)
-              : document.getElementById(`plugin-${offer.id}`)?.scrollIntoView({ block: 'center' }),
+          run: () => this.onPluginOpen(plugin.id),
         }));
     }
     if (this.activeTab() === 'tools') {
-      const declared = this.clusterTools()
+      return this.clusterTools()
         .filter((tool) =>
           matches([
             tool.name,
@@ -922,7 +871,7 @@ export class PluginCatalogPageComponent {
             ...tool.mediaTypes,
           ]),
         )
-        .slice(0, 6)
+        .slice(0, 8)
         .map((tool) => ({
           id: `tool:${tool.id}`,
           label: tool.name,
@@ -932,23 +881,10 @@ export class PluginCatalogPageComponent {
           run: () =>
             document.getElementById(`cluster-tool-${tool.id}`)?.scrollIntoView({ block: 'center' }),
         }));
-      const published = this.toolPackages()
-        .filter((pack) => matches([pack.name, pack.id, pack.description, pack.version]))
-        .slice(0, 4)
-        .map((pack) => ({
-          id: `tool-package:${pack.id}`,
-          label: pack.name,
-          description: `v${pack.version}`,
-          group: 'Paquets d’outils',
-          glyph: '📦',
-          run: () =>
-            document.getElementById(`tool-package-${pack.id}`)?.scrollIntoView({ block: 'center' }),
-        }));
-      return [...published, ...declared].slice(0, 8);
     }
-    return this.storeRepositories()
+    const repositories = this.storeRepositories()
       .filter((repo) => matches([repo.name, repo.url, repo.description, repo.lastError ?? '']))
-      .slice(0, 8)
+      .slice(0, 4)
       .map<PageShellSearchResult>((repo) => ({
         id: `repository:${repo.id}`,
         label: repo.name,
@@ -960,6 +896,19 @@ export class PluginCatalogPageComponent {
             .getElementById(`store-repository-${repo.id}`)
             ?.scrollIntoView({ block: 'center' }),
       }));
+    const packages = this.storePackages()
+      .filter((pkg) => matches([pkg.name, pkg.id, pkg.author, pkg.description, pkg.categoryLabel]))
+      .slice(0, 4)
+      .map<PageShellSearchResult>((pkg) => ({
+        id: `package:${pkg.id}`,
+        label: pkg.name,
+        description: `${pkg.categoryLabel} · v${pkg.version}`,
+        group: 'Store',
+        glyph: pkg.icon,
+        run: () =>
+          document.getElementById(`store-package-${pkg.id}`)?.scrollIntoView({ block: 'center' }),
+      }));
+    return [...repositories, ...packages].slice(0, 8);
   }
 
   private addRepositoryFromShell(): void {

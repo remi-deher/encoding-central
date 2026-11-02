@@ -28,16 +28,6 @@ internal static class NodeModeTests
             Check.Throws<InvalidOperationException>(() => store.Load(), "Un fichier illisible est refusé au lieu d’être remplacé en silence.");
         }
         finally { Directory.Delete(directory, true); }
-
-        var locked = Directory.CreateTempSubdirectory("launcher-fixed-worker-").FullName;
-        try
-        {
-            var store = new NodeModeStore(locked, "server,worker", fixedWorker: true);
-            Check.That(store.Load() == new NodeMode(false, true), "Un worker fixe démarre worker même si la variable demande le serveur.");
-            store.Save(new NodeMode(true, true));
-            Check.That(new NodeModeStore(locked, "server", fixedWorker: true).Load() == new NodeMode(false, true), "Un worker fixe n’enregistre pas la fonction serveur.");
-        }
-        finally { Directory.Delete(locked, true); }
         return Task.CompletedTask;
     }
 }

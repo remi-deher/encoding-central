@@ -439,7 +439,7 @@ internal sealed partial class RuntimeFlowExecution
         // Ce worker est le nœud d'accès du fichier et le monte directement (accès par transfert : « non »).
         var direct = lease.SourceNodeId == client.NodeId && lease.SourceRoot is not null;
         if (direct && RuntimeHandoffPolicy.LibraryAccessNeedsEncoder(node))
-            direct = Encoding.Contracts.Flows.MediaCodecPolicy.ProfileTargetAvailable(lease.Flow, (await capabilities.DiscoverAsync(job.Token)).FirstOrDefault(c => c.ToolId == "ffmpeg"));
+            direct = Encoding.Contracts.Flows.MediaCodecPolicy.ProfileEncoderUsable(lease.Flow, (await capabilities.DiscoverAsync(job.Token)).FirstOrDefault(c => c.ToolId == "ffmpeg"));
         ctx.Output = direct ? "yes" : "no";
 
         return StepOutcome.Continue();

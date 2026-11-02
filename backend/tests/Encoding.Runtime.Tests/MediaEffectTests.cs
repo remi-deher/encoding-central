@@ -65,10 +65,6 @@ public sealed class MediaEffectTests : IDisposable
         Assert.False(DirectMediaInspection.AllowsMetadataOnly(component with { MediaEffect=MediaEffects.ReadOnly }));
         Assert.False(DirectMediaInspection.AllowsMetadataOnly(component with { RequiresMedia=false }));
         Assert.False(DirectMediaInspection.Allows("base","base-script"));
-        Assert.True(DirectMediaInspection.AllowsUnchanged("audio-rules"));
-        Assert.True(DirectMediaInspection.AllowsUnchanged("subtitles-manage"));
-        Assert.True(DirectMediaInspection.AllowsUnchanged("subtitles-default-subtitle"));
-        Assert.False(DirectMediaInspection.AllowsUnchanged("video-transcode"));
     }
 
     [Fact]

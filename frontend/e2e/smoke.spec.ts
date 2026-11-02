@@ -232,10 +232,8 @@ test('the first-run setup studio completes standalone onboarding and passes WCAG
   );
   expect(blocking.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([]);
 
-  await page.getByRole('button', { name: 'Continuer' }).click();
   await page.getByLabel('Mot de passe', { exact: true }).fill('un-mot-de-passe-long');
   await page.getByLabel('Confirmer le mot de passe', { exact: true }).fill('un-mot-de-passe-long');
-  await page.getByRole('button', { name: 'Continuer' }).click();
   const dashboardButton = page.getByRole('button', { name: /Accéder au tableau de bord/ });
   const viewport = page.viewportSize()!;
   for (const width of [viewport.width, 320]) {

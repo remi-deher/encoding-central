@@ -68,8 +68,7 @@ public sealed class RuntimeEligibility(
         if(entry is not null && placements?.TryGetValue(entry,out var assignedWorker)==true && assignedWorker!=workerId) return false;
         // « Bibliothèque sur ce nœud » avec « et encodeur du profil » : un worker sans encodeur utilisable répond « non » (voir le runner),
         // donc la branche « oui » ne lui est pas demandée.
-        // La branche « oui » exige une cible déclarée du profil. Le repli CPU reste disponible sur le bloc vidéo, sans faire encoder ici un nœud qui n'a pas cette cible.
-        var canEncode=MediaCodecPolicy.ProfileTargetAvailable(flow,capabilities.FirstOrDefault(capability=>capability.ToolId=="ffmpeg"));
+        var canEncode=MediaCodecPolicy.ProfileEncoderUsable(flow,capabilities.FirstOrDefault(capability=>capability.ToolId=="ffmpeg"));
         var nodesById=flow.Nodes.ToDictionary(node=>node.Id,StringComparer.Ordinal);
         bool Follow(FlowConnectionDefinition edge)=>canEncode || edge.SourceOutputId!="yes"
             || !(nodesById[edge.SourceNodeId] is { Component: { PluginId: "nodes", ComponentId: "nodes-library-access" } } access && RuntimeHandoffPolicy.LibraryAccessNeedsEncoder(access));
@@ -187,17 +186,17 @@ public sealed class RuntimeEligibility(
                     var selected=node.Configuration.TryGetValue("encoderId",out var encoderValue)?encoderValue.GetString():null;
                     var ffmpeg=capabilities.FirstOrDefault(capability=>capability.ToolId=="ffmpeg");
                     if(profile is null || ffmpeg is null) return false;
-                    var hardware=MediaCodecPolicy.ResolveVideoEncoder(codec,mode,selected,profile,ffmpeg.Encoders??[],ffmpeg.AccelerationTypes,ffmpeg.EncoderChecks) is not null;
-                    var cpuFallback=retryWithCpu && MediaCodecPolicy.ResolveCpuFallbackVideoEncoder(codec,profile,ffmpeg.Encoders??[],ffmpeg.AccelerationTypes,ffmpeg.EncoderChecks) is not null;
-                    if(!hardware && !cpuFallback) return false;
+                    var usable=retryWithCpu
+                        ?MediaCodecPolicy.ResolveCpuFallbackVideoEncoder(codec,profile,ffmpeg.Encoders??[],ffmpeg.AccelerationTypes,ffmpeg.EncoderChecks) is not null
+                        :MediaCodecPolicy.ResolveVideoEncoder(codec,mode,selected,profile,ffmpeg.Encoders??[],ffmpeg.AccelerationTypes,ffmpeg.EncoderChecks) is not null;
+                    if(!usable) return false;
                 }
                 else
                 {
                     var hardware=node.Configuration.TryGetValue("hardwareAcceleration",out var hw)?hw.GetString()!:"cpu";
                     if(retryWithCpu&&hardware!="cpu")
                     {
-                        if(MediaCodecPolicy.VideoEncoder(codec,hardware,encoders) is null
-                            && MediaCodecPolicy.VideoEncoder(codec,"cpu",encoders) is null) return false;
+                        if(MediaCodecPolicy.VideoEncoder(codec,"cpu",encoders) is null) return false;
                     }
                     else if(MediaCodecPolicy.VideoEncoder(codec,hardware,encoders) is null) return false;
                 }

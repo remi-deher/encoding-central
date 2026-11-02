@@ -181,7 +181,6 @@ export class ClusterApi {
       readonly isDraining: boolean;
       readonly lastBackupAt: string | null;
       readonly backupIntervalMinutes: number | null;
-      readonly fixedAuthority?: boolean;
     }>('/api/v1/cluster/leadership/status');
   }
   transferLeadership(targetNodeId: string, targetNodeUrl?: string, drainTimeoutSeconds = 30) {

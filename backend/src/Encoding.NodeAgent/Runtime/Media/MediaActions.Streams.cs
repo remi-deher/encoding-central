@@ -52,10 +52,34 @@ public sealed partial class MediaActions
         if(toRemove.Count==0) return new(null,[],JsonSerializer.SerializeToElement(new { filtered=false }));
 
         var file=Output(directory,node,Path.GetExtension(current));
-        if(IsMatroska(current))
-            await MergeKeptTracksAsync(streams,toRemove,current,file,directory,ct);
+        if(Path.GetExtension(current)==".mkv")
+        {
+            using var identification=JsonDocument.Parse(await tools.CheckedAsync("mkvmerge",["-J",current],directory,ct));
+            var tracks=identification.RootElement.GetProperty("tracks").EnumerateArray().ToArray();
+            var keptAudio=tracks.Where(t=>t.GetProperty("type").GetString()=="audio"&&!toRemove.Contains(t.GetProperty("id").GetInt32()))
+                .Select(t=>t.GetProperty("id").GetInt32()).ToArray();
+            var keptSub=tracks.Where(t=>t.GetProperty("type").GetString()=="subtitles"&&!toRemove.Contains(t.GetProperty("id").GetInt32()))
+                .Select(t=>t.GetProperty("id").GetInt32()).ToArray();
+
+            var mergeArgs=new List<string> { "-o",file };
+            if(keptAudio.Length>0) mergeArgs.AddRange(["--audio-tracks",string.Join(',',keptAudio)]);
+            else mergeArgs.Add("--no-audio");
+            if(keptSub.Length>0) mergeArgs.AddRange(["--subtitle-tracks",string.Join(',',keptSub)]);
+            else mergeArgs.Add("--no-subtitles");
+            mergeArgs.Add(current);
+            await tools.CheckedAsync("mkvmerge",mergeArgs,directory,ct);
+        }
         else
-            await CopyKeptStreamsAsync(streams,toRemove,current,file,directory,ct);
+        {
+            var args=new List<string> { "-nostdin","-y","-v","error","-i",current,"-map","0:v" };
+            foreach(var s in streams.EnumerateArray())
+            {
+                var idx=s.GetProperty("index").GetInt32();
+                if(!toRemove.Contains(idx)) args.AddRange(["-map","0:"+idx]);
+            }
+            args.AddRange(["-c","copy",file]);
+            await tools.CheckedAsync("ffmpeg",args,directory,ct);
+        }
 
         return new(file,[],JsonSerializer.SerializeToElement(new { filtered=true,removedTracks=toRemove.ToArray() }));
     }
@@ -71,59 +95,34 @@ public sealed partial class MediaActions
         if(toRemove.Count==0) return new(null,[],JsonSerializer.SerializeToElement(new { removed=false }));
 
         var file=Output(directory,node,Path.GetExtension(current));
-        if(IsMatroska(current))
-            await MergeKeptTracksAsync(streams,toRemove,current,file,directory,ct);
+        if(Path.GetExtension(current)==".mkv")
+        {
+            using var identification=JsonDocument.Parse(await tools.CheckedAsync("mkvmerge",["-J",current],directory,ct));
+            var tracks=identification.RootElement.GetProperty("tracks").EnumerateArray().ToArray();
+            var keptAudio=tracks.Where(t=>t.GetProperty("type").GetString()=="audio"&&!toRemove.Contains(t.GetProperty("id").GetInt32()))
+                .Select(t=>t.GetProperty("id").GetInt32()).ToArray();
+            var keptSub=tracks.Where(t=>t.GetProperty("type").GetString()=="subtitles"&&!toRemove.Contains(t.GetProperty("id").GetInt32()))
+                .Select(t=>t.GetProperty("id").GetInt32()).ToArray();
+
+            var mergeArgs=new List<string> { "-o",file };
+            if(keptAudio.Length>0) mergeArgs.AddRange(["--audio-tracks",string.Join(',',keptAudio)]);
+            if(keptSub.Length>0) mergeArgs.AddRange(["--subtitle-tracks",string.Join(',',keptSub)]);
+            mergeArgs.Add(current);
+            await tools.CheckedAsync("mkvmerge",mergeArgs,directory,ct);
+        }
         else
-            await CopyKeptStreamsAsync(streams,toRemove,current,file,directory,ct);
+        {
+            var args=new List<string> { "-nostdin","-y","-v","error","-i",current,"-map","0:v" };
+            foreach(var s in streams.EnumerateArray())
+            {
+                var idx=s.GetProperty("index").GetInt32();
+                if(!toRemove.Contains(idx)) args.AddRange(["-map","0:"+idx]);
+            }
+            args.AddRange(["-c","copy",file]);
+            await tools.CheckedAsync("ffmpeg",args,directory,ct);
+        }
 
         return new(file,[],JsonSerializer.SerializeToElement(new { removed=true,removedTracks=toRemove.ToArray() }));
-    }
-
-    private async Task MergeKeptTracksAsync(JsonElement streams, HashSet<int> toRemove, string current, string file, string directory, CancellationToken ct)
-    {
-        using var identification = JsonDocument.Parse(await tools.CheckedAsync("mkvmerge", ["-J", current], directory, ct));
-        var keptAudio = KeptMkvTrackIds(identification.RootElement, streams, toRemove, "audio");
-        var keptSub = KeptMkvTrackIds(identification.RootElement, streams, toRemove, "subtitles");
-        var mergeArgs = new List<string> { "-o", file };
-        if (keptAudio.Length > 0) mergeArgs.AddRange(["--audio-tracks", string.Join(',', keptAudio)]);
-        else mergeArgs.Add("--no-audio");
-        if (keptSub.Length > 0) mergeArgs.AddRange(["--subtitle-tracks", string.Join(',', keptSub)]);
-        else mergeArgs.Add("--no-subtitles");
-        mergeArgs.Add(current);
-        await tools.CheckedAsync("mkvmerge", mergeArgs, directory, ct);
-    }
-
-    private async Task CopyKeptStreamsAsync(JsonElement streams, HashSet<int> toRemove, string current, string file, string directory, CancellationToken ct)
-    {
-        var args = new List<string> { "-nostdin", "-y", "-v", "error", "-i", current, "-map_metadata", "0", "-map_chapters", "0" };
-        var mapped = 0;
-        foreach (var stream in streams.EnumerateArray())
-        {
-            var index = stream.GetProperty("index").GetInt32();
-            if (toRemove.Contains(index)) continue;
-            args.AddRange(["-map", "0:" + index]);
-            mapped++;
-        }
-        if (mapped == 0) throw new MediaToolException("sélection de pistes", 1);
-        args.AddRange(["-c", "copy", file]);
-        await tools.CheckedAsync("ffmpeg", args, directory, ct);
-    }
-
-    private static int[] KeptMkvTrackIds(JsonElement identification, JsonElement streams, HashSet<int> toRemove, string mkvType)
-    {
-        var probeType = mkvType == "subtitles" ? "subtitle" : mkvType;
-        var probeIndexes = streams.EnumerateArray()
-            .Where(stream => stream.TryGetProperty("codec_type", out var type) && type.GetString() == probeType)
-            .Select(stream => stream.GetProperty("index").GetInt32()).ToArray();
-        var mkvIds = identification.GetProperty("tracks").EnumerateArray()
-            .Where(track => track.GetProperty("type").GetString() == mkvType)
-            .Select(track => track.GetProperty("id").GetInt32()).ToArray();
-        if (probeIndexes.Length != mkvIds.Length)
-            throw new IOException("Les pistes " + mkvType + " de FFprobe et de MKVToolNix ne correspondent pas : fichier laissé intact.");
-        var kept = new List<int>();
-        for (var i = 0; i < probeIndexes.Length; i++)
-            if (!toRemove.Contains(probeIndexes[i])) kept.Add(mkvIds[i]);
-        return kept.ToArray();
     }
 
     public async Task<JsonElement> ValidateOutputAsync(string current, string original, JsonElement before, JsonElement after,

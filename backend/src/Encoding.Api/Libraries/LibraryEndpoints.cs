@@ -8,7 +8,7 @@ public static class LibraryEndpoints
 {
     public static void MapLibraryEndpoints(this WebApplication app)
     {
-        var libraries = app.MapGroup("/api/v1/libraries").WithTags("Libraries").NotifyLive("libraries");
+        var libraries = app.MapGroup("/api/v1/libraries").WithTags("Libraries");
         libraries.MapGet("", async (LibraryRepository repository, CancellationToken cancellationToken) =>
             Results.Ok(await repository.ListAsync(cancellationToken)))
             .WithName("ListLibraries");

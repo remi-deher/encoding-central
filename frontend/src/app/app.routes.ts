@@ -1,7 +1,6 @@
 import { unsavedChangesGuard } from './shared/guards/unsaved-changes-guard';
 import { Routes } from '@angular/router';
 import { authGuard, guestGuard } from './core/auth/auth.guard';
-import { workerShellGuard } from './core/shell/shell-config';
 
 const applicationRoutes: Routes = [
   {
@@ -343,14 +342,11 @@ const publicRoutes: Routes = [
 
 /** Toute route de gestion exige une session ; l'ancienne console redirige vers la page Nœuds protégée. */
 export const routes: Routes = [
-  ...publicRoutes.map((route) => ({
-    ...route,
-    canActivate: [workerShellGuard, ...(route.canActivate ?? [])],
-  })),
+  ...publicRoutes,
   ...applicationRoutes.map((route) =>
     route.redirectTo !== undefined
       ? route
-      : { ...route, canActivate: [workerShellGuard, authGuard, ...(route.canActivate ?? [])] },
+      : { ...route, canActivate: [authGuard, ...(route.canActivate ?? [])] },
   ),
   { path: '**', redirectTo: '' },
 ];

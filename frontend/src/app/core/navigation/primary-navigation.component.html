@@ -132,7 +132,6 @@
           </button>
         </header>
 
-        @if (!shell.worker()) {
         <button class="mobile-assistant-shortcut" type="button" (click)="openQuickAssistant()">
           <span class="mobile-assistant-shortcut-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24">
@@ -144,7 +143,6 @@
             <small>Poser une question sans quitter cette page</small>
           </span>
         </button>
-        }
 
         <nav class="mobile-navigation-menu" aria-label="Toutes les destinations">
           @for (group of groups(); track group.label) {

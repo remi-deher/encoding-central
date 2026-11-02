@@ -1,7 +1,6 @@
 import { NodeResponse } from './cluster';
 import {
   detectOsFamily,
-  mediaEngineLabel,
   nodeAcceleratorBadges,
   nodeAcceleratorChips,
   nodeHardwareLabel,
@@ -29,45 +28,6 @@ const ffmpeg = (checks: [string, 'usable' | 'detected'][], acceleration: string[
   mediaTypes: ['video'],
   accelerationTypes: acceleration,
   encoderChecks: checks.map(([encoderId, status]) => ({ encoderId, status })),
-});
-
-describe('mediaEngineLabel', () => {
-  const plugin = {
-    toolId: 'plugin/base',
-    encoderChecks: [{ encoderId: 'hevc_nvenc', status: 'usable' as const }],
-  };
-
-  it('declares nothing when the worker has no ffmpeg probe', () => {
-    expect(mediaEngineLabel([plugin])).toBe('Non déclarée');
-    expect(mediaEngineLabel([])).toBe('Non déclarée');
-  });
-
-  it('stays on CPU when ffmpeg has no verified hardware encoder', () => {
-    expect(
-      mediaEngineLabel([
-        ffmpeg(
-          [
-            ['libx264', 'usable'],
-            ['hevc_nvenc', 'detected'],
-          ],
-          ['nvenc'],
-        ),
-      ]),
-    ).toBe('CPU');
-  });
-
-  it('names only hardware encoders verified by a test encode', () => {
-    expect(
-      mediaEngineLabel([
-        plugin,
-        ffmpeg([
-          ['hevc_nvenc', 'usable'],
-          ['h264_vaapi', 'usable'],
-          ['hevc_qsv', 'detected'],
-        ]),
-      ]),
-    ).toBe('NVENC · VAAPI');
-  });
 });
 
 describe('nodeAcceleratorBadges', () => {

@@ -31,17 +31,6 @@ public static class DirectMediaInspection
         _ => false
     };
 
-    /// <summary>
-    /// Opérations qui peuvent rester sur la source directe quand elles ne produisent aucun changement
-    /// (audio déjà conforme, sous-titres ou noms déjà conformes). Le plan est alors vide.
-    /// </summary>
-    public static bool AllowsUnchanged(string component) =>
-        component is "base-audio-rules" or "audio-rules" or "audio-convert-by-rules"
-            or "base-subtitle-manage" or "subtitles-manage"
-            or "subtitles-convert-ass" or "subtitles-style-ass" or "subtitles-remove-duplicates" or "subtitles-detect-forced"
-            or "subtitles-default-subtitle"
-            or "base-track-names" or "subtitles-track-names";
-
     private static bool IsPlanned(IReadOnlyDictionary<string,JsonElement>? configuration) =>
         configuration?.TryGetValue("processingMode",out var mode)!=true || mode.ValueKind==JsonValueKind.String && mode.GetString()=="plan";
 }

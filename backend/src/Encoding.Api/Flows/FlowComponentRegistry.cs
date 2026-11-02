@@ -347,6 +347,7 @@ public sealed class FlowComponentRegistry
         ["base-remove-commentary"] = ("audio", "audio-remove-commentary"),
         // Subtitles plugin
         ["base-extract-subtitles"] = ("subtitles", "subtitles-extract"),
+        ["base-subtitle-manage"] = ("subtitles", "subtitles-manage"),
         ["base-add-fonts"] = ("subtitles", "subtitles-add-fonts"),
         ["base-add-subtitle-track"] = ("subtitles", "subtitles-add-track"),
         ["base-track-names"] = ("subtitles", "subtitles-track-names"),

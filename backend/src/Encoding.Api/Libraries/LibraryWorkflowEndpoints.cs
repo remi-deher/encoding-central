@@ -8,7 +8,7 @@ public static class LibraryWorkflowEndpoints
 {
     public static void MapLibraryWorkflowEndpoints(this WebApplication app)
     {
-        var libraries = app.MapGroup("/api/v1/libraries/{library:guid}").WithTags("Libraries").NotifyLive("libraries");
+        var libraries = app.MapGroup("/api/v1/libraries/{library:guid}").WithTags("Libraries");
 
         libraries.MapGet("/processing", async (Guid library, LibraryProcessingRepository repository, CancellationToken ct) =>
             Results.Ok(await repository.GetAsync(library, ct)))

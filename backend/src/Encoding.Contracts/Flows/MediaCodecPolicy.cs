@@ -4,27 +4,8 @@ namespace Encoding.Contracts.Flows;
 
 public static class MediaCodecPolicy
 {
-    /// <summary>Le worker a-t-il un encodeur utilisable du profil, repli CPU compris si le bloc l'autorise ? Faux sans bloc vidéo à profil.</summary>
-    public static bool ProfileEncoderUsable(FlowDefinition flow, Encoding.Contracts.Nodes.NodeToolCapability? ffmpeg) =>
-        ProfileEncodersMatch(flow, ffmpeg, allowCpuFallback: true);
-
-    /// <summary>Le worker a-t-il une cible déclarée du profil ? Le repli CPU ne compte pas : il ne fait pas répondre « oui » à un nœud qui n'a que le logiciel.</summary>
-    public static bool ProfileTargetAvailable(FlowDefinition flow, Encoding.Contracts.Nodes.NodeToolCapability? ffmpeg) =>
-        ProfileEncodersMatch(flow, ffmpeg, allowCpuFallback: false);
-
-    /// <summary>Cible à laquelle une résolution doit correspondre. Hors profil, le repli CPU n'est accepté que s'il reproduit la cible catalogue synthétique.</summary>
-    public static EncodingProfileTarget? AcceptedEncodingTarget(EncodingProfileSnapshot profile, string codec, string encoderId, bool retryWithCpu)
-    {
-        var declared = profile.Targets.SingleOrDefault(item => item.EncoderId == encoderId);
-        if (declared is not null || !retryWithCpu) return declared;
-        var descriptor = VideoEncoderCatalog.Find(encoderId);
-        if (descriptor is null || descriptor.Codec != codec || descriptor.Acceleration != "cpu") return null;
-        var fallback = ResolveCpuFallbackVideoEncoder(codec, profile, [encoderId], [descriptor.Acceleration],
-            [new Encoding.Contracts.Nodes.NodeEncoderCapability(encoderId, "usable")]);
-        return fallback?.Encoder.Id == encoderId ? fallback.Value.Target : null;
-    }
-
-    private static bool ProfileEncodersMatch(FlowDefinition flow, Encoding.Contracts.Nodes.NodeToolCapability? ffmpeg, bool allowCpuFallback)
+    /// <summary>Le worker (ffmpeg annoncé) a-t-il un encodeur utilisable du profil de chaque bloc vidéo du flow ? Faux sans bloc vidéo à profil.</summary>
+    public static bool ProfileEncoderUsable(FlowDefinition flow, Encoding.Contracts.Nodes.NodeToolCapability? ffmpeg)
     {
         var videoNodes = flow.Nodes.Where(node => node.Component.ComponentId is "base-transcode-video" or "video-transcode"
             && node.Configuration.TryGetValue("encodingProfile", out var profile) && profile.ValueKind == JsonValueKind.Object).ToList();
@@ -38,7 +19,7 @@ public static class MediaCodecPolicy
             var retryWithCpu = node.Configuration.TryGetValue("retryWithCpu", out var retry) && retry.ValueKind == JsonValueKind.True;
             var encoders = ffmpeg.Encoders ?? [];
             var usable = ResolveVideoEncoder(codec, "automatic", null, profile, encoders, ffmpeg.AccelerationTypes, ffmpeg.EncoderChecks) is not null
-                || allowCpuFallback && retryWithCpu && ResolveCpuFallbackVideoEncoder(codec, profile, encoders, ffmpeg.AccelerationTypes, ffmpeg.EncoderChecks) is not null;
+                || retryWithCpu && ResolveCpuFallbackVideoEncoder(codec, profile, encoders, ffmpeg.AccelerationTypes, ffmpeg.EncoderChecks) is not null;
             if (!usable) return false;
         }
         return true;

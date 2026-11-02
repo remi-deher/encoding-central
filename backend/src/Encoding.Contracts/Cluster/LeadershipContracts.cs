@@ -10,8 +10,7 @@ public sealed record LeadershipStatusResponse(
     string? MasterUrl,
     bool IsDraining,
     DateTimeOffset? LastBackupAt,
-    int? BackupIntervalMinutes,
-    bool FixedAuthority = false);
+    int? BackupIntervalMinutes);
 
 /// <summary>
 /// Demande d'un administrateur pour transférer le rôle de Maître vers un Worker cible (Cas A : Passation planifiée).

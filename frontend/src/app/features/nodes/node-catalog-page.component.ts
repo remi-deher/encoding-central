@@ -2,7 +2,6 @@ import { IconComponent } from '../../shared/ui/icon.component';
 import type { SummaryTile } from '../../shared/ui/summary-tiles.component';
 import {
   formatMemory,
-  mediaEngineLabel,
   nodeAcceleratorBadges,
   nodeHardwareLabel,
   tidyProcessorName,
@@ -19,7 +18,6 @@ import {
   ClusterReconciliationHealthStatus,
   ClusterTaskStatus,
 } from '../../shared/services/cluster-api';
-import { LiveUpdates } from '../../shared/services/live-updates';
 import { EnrollmentWindow, FirstLinkAcceptance } from '../../shared/models/auth';
 import {
   formatNodeLabel,
@@ -95,6 +93,7 @@ import {
   map,
   of,
   switchMap,
+  timer,
   startWith,
   exhaustMap,
   Observable,
@@ -157,7 +156,6 @@ interface PendingNodeEnrollmentResponse {
   readonly capabilities: readonly NodeToolCapability[];
   readonly createdAt: string;
   readonly expiresAt: string;
-  readonly inventory?: NodeInventory | null;
   readonly verificationCode?: string | null;
   readonly displayName?: string | null;
 }
@@ -165,9 +163,9 @@ interface PendingNodeEnrollmentResponse {
 interface PendingNodeEnrollmentRecord extends DataTableRow {
   readonly id: string;
   readonly name: string;
-  readonly configuration: string;
-  readonly mediaCapacity: string;
   readonly verificationCode: string;
+  readonly rolesLabel: string;
+  readonly capabilitiesLabel: string;
   readonly expiresAtLabel: string;
 }
 
@@ -254,7 +252,6 @@ export class NodeCatalogPageComponent {
   private readonly pageShellContext = inject(PageShellContextService);
   private readonly http = inject(HttpClient);
   private readonly clusterApi = inject(ClusterApi);
-  private readonly live = inject(LiveUpdates);
   private readonly dialog = inject(MatDialog);
   private readonly notifications = inject(NotificationService);
   private readonly nodeMode = inject(NodeModeController);
@@ -265,10 +262,7 @@ export class NodeCatalogPageComponent {
   protected readonly reconciliationStatus = signal<ClusterReconciliationHealthStatus | null>(null);
   protected readonly taskStatus = signal<ClusterTaskStatus | null>(null);
   protected readonly masterNodeId = signal<string | null>(null);
-  protected readonly fixedAuthority = signal(false);
   private readonly pendingEnrollments = signal<readonly PendingNodeEnrollmentResponse[]>([]);
-  /** Horloge de l’expiration des demandes, à la seconde, tant qu’une demande est affichée. */
-  private readonly enrollmentClock = signal(Date.now());
   private readonly allLibraries = signal<readonly LibraryResponse[]>([]);
   private readonly nodeAccessByLibrary = signal<
     ReadonlyMap<string, readonly LibraryNodeAccessResponse[]>
@@ -323,7 +317,7 @@ export class NodeCatalogPageComponent {
     toObservable(computed(() => this.localNode()?.id ?? null)).pipe(
       switchMap((id) =>
         id
-          ? this.live.drive(['executions']).pipe(
+          ? timer(0, 5000).pipe(
               exhaustMap(() =>
                 this.http
                   .get<NodeActivityResponse>('/api/v1/nodes/' + id + '/activity')
@@ -419,15 +413,12 @@ export class NodeCatalogPageComponent {
         this.local.busy() ||
         this.local.modeBusy() ||
         this.local.agentUnavailable() ||
-        this.fixedAuthority() ||
         (current(role) && !current(role === 'server' ? 'worker' : 'server')),
     }));
   });
   protected readonly localRoleControlNote = computed(() => {
     if (!this.isAdmin()) return '';
     if (this.local.modeUnavailable()) return 'État des fonctions indisponible.';
-    if (this.fixedAuthority())
-      return 'Fonctions fixées par l’image. Le central reste serveur et worker. Un worker s’ajoute par l’enrôlement.';
     return this.local.mode()?.managed === false
       ? 'Fonctions gérées par la configuration du déploiement.'
       : '';
@@ -601,7 +592,7 @@ export class NodeCatalogPageComponent {
   protected readonly createFormData: RecordFormData = {
     title: 'Ajouter un nœud',
     description:
-      'Saisissez la clé affichée sur le worker. Elle expire au bout de 10 minutes.',
+      'Examinez les demandes des nœuds avant de les accepter. Si un nœud n’apparaît pas, générez une clé depuis sa page Nœuds (« Cluster puis Rejoindre un cluster ») et saisissez-la ici ; elle expire au bout de 10 minutes.',
     submitLabel: 'Accepter le nœud',
     reviewTitle: 'Vérifier le jumelage',
     fields: [
@@ -674,7 +665,7 @@ export class NodeCatalogPageComponent {
     toObservable(computed(() => this.selectedNode()?.id ?? null)).pipe(
       switchMap((id) =>
         id
-          ? this.live.drive(['executions']).pipe(
+          ? timer(0, 5000).pipe(
               exhaustMap(() =>
                 this.http
                   .get<NodeActivityResponse>('/api/v1/nodes/' + id + '/activity')
@@ -866,7 +857,7 @@ export class NodeCatalogPageComponent {
     toObservable(computed(() => this.selectedNode()?.id ?? null)).pipe(
       switchMap((id) =>
         id
-          ? this.live.drive(['nodes']).pipe(
+          ? timer(0, 5000).pipe(
               exhaustMap(() => this.clusterApi.nodeProcessing(id).pipe(catchError(() => of(null)))),
               startWith(null),
             )
@@ -1177,41 +1168,24 @@ export class NodeCatalogPageComponent {
         if (confirmed) this.onNodeAction({ actionId: 'delete', row });
       });
   }
-  protected readonly actionTitle = computed(() => {
-    if (this.actionType() === 'identity') return 'Nom et étiquettes du nœud';
-    if (this.actionType() === 'library-access') {
-      return `Accès à ${this.selectedNodeLibrary()?.name ?? 'la bibliothèque'}`;
-    }
-    if (this.actionType() === 'create-library') return 'Déclarer une bibliothèque';
-    if (this.actionType() === 'enrollment' && this.enrollmentView() === 'review') {
-      return 'Examiner la demande';
-    }
-    if (this.actionType() === 'enrollment' && this.enrollmentView() === 'key') {
-      return 'Clé de jumelage';
-    }
-    return this.createFormData.title;
-  });
-  protected readonly actionDescription = computed(() => {
-    if (this.actionType() === 'identity') {
-      return 'Le nom affiché est distinct du nom envoyé par heartbeat. Les étiquettes locales remplacent celles des groupes.';
-    }
-    if (this.actionType() === 'library-access') {
-      return 'Renseignez le chemin local de cette bibliothèque pour ce nœud.';
-    }
-    if (this.actionType() === 'create-library') {
-      return 'Le serveur crée la définition partagée. Vous pourrez ensuite autoriser les nœuds et configurer leurs chemins.';
-    }
-    if (this.actionType() === 'enrollment' && this.enrollmentView() === 'key') {
-      return 'Saisissez la clé affichée sur le worker. Elle expire au bout de 10 minutes.';
-    }
-    if (this.actionType() === 'enrollment' && this.enrollmentView() === 'review') {
-      return 'Comparez le code avec celui du worker, puis approuvez le rattachement.';
-    }
-    if (this.actionType() === 'enrollment') {
-      return 'Comparez le code affiché sur le worker avant de l’approuver. Chaque demande expire au bout de 10 minutes.';
-    }
-    return this.createFormData.description;
-  });
+  protected readonly actionTitle = computed(() =>
+    this.actionType() === 'identity'
+      ? 'Nom et étiquettes du nœud'
+      : this.actionType() === 'library-access'
+        ? `Accès à ${this.selectedNodeLibrary()?.name ?? 'la bibliothèque'}`
+        : this.actionType() === 'create-library'
+          ? 'Déclarer une bibliothèque'
+          : this.createFormData.title,
+  );
+  protected readonly actionDescription = computed(() =>
+    this.actionType() === 'identity'
+      ? 'Le nom affiché est distinct du nom envoyé par heartbeat. Les étiquettes locales remplacent celles des groupes.'
+      : this.actionType() === 'library-access'
+        ? 'Renseignez le chemin local de cette bibliothèque pour ce nœud.'
+        : this.actionType() === 'create-library'
+          ? 'Le serveur crée la définition partagée. Vous pourrez ensuite autoriser les nœuds et configurer leurs chemins.'
+          : this.createFormData.description,
+  );
   protected readonly createLibraryFormData: RecordFormData = {
     title: 'Déclarer une bibliothèque',
     description:
@@ -1534,7 +1508,6 @@ export class NodeCatalogPageComponent {
         !!node.desiredRoles && node.desiredRoles.includes(role) !== node.roles.includes(role),
       disabled:
         this.modeBusy().has(node.id) ||
-        this.fixedAuthority() ||
         (roleEnabled(role) && !roleEnabled(role === 'server' ? 'worker' : 'server')),
     }));
   }
@@ -1647,7 +1620,7 @@ export class NodeCatalogPageComponent {
     this.isAdmin()
       ? [
           { id: 'identity', label: 'Nom et étiquettes' },
-          ...(this.fixedAuthority() ? [] : [{ id: 'promote', label: 'Promouvoir en Maître' }]),
+          { id: 'promote', label: 'Promouvoir en Maître' },
           ...(this.removalBusy()
             ? []
             : [{ id: 'delete', label: 'Supprimer', tone: 'danger' as const }]),
@@ -1782,11 +1755,11 @@ export class NodeCatalogPageComponent {
   }
 
   protected readonly enrollmentColumns: readonly DataTableColumn[] = [
-    { key: 'name', label: 'Nom du nœud', sortable: false },
-    { key: 'configuration', label: 'Configuration', sortable: false },
-    { key: 'mediaCapacity', label: 'Décodage et encodage', sortable: false },
-    { key: 'verificationCode', label: 'Code', sortable: false },
-    { key: 'expiresAtLabel', label: 'Expiration', sortable: false },
+    { key: 'name', label: 'Nœud détecté', sortable: true },
+    { key: 'verificationCode', label: 'Code à comparer', sortable: false },
+    { key: 'rolesLabel', label: 'Rôle annoncé', sortable: true },
+    { key: 'capabilitiesLabel', label: 'Capacités', sortable: true },
+    { key: 'expiresAtLabel', label: 'Expiration', sortable: true },
   ];
   protected readonly enrollmentLayoutOptions: readonly DataTableLayoutOption[] = [
     { value: 'resources', label: 'Cartes' },
@@ -1806,15 +1779,23 @@ export class NodeCatalogPageComponent {
       tags: request.roles.map((role) => ({ label: NODE_ROLE_LABELS[role], tone: 'accent' })),
       sections: [
         {
-          title: 'Demande',
+          title: 'Configuration annoncée',
           items: [
-            { label: 'Nom du nœud', description: cardTitle },
-            { label: 'Configuration', description: this.configurationLabel(request) },
+            ...(request.displayName && request.name && request.displayName !== request.name
+              ? [{ label: 'Nom d’hôte', description: request.name }]
+              : []),
             {
-              label: 'Décodage et encodage',
-              description: mediaEngineLabel(request.capabilities),
+              label: 'Capacités',
+              description: this.capabilitiesLabel(request.capabilities),
             },
-            { label: 'Expiration', description: this.formatCountdown(request.expiresAt) },
+            {
+              label: 'Exécution simultanée',
+              description: `${request.maxConcurrentTasks} tâche(s)`,
+            },
+            {
+              label: 'Demande valable jusqu’au',
+              description: this.formatExpiryTime(request.expiresAt),
+            },
           ],
         },
       ],
@@ -1841,7 +1822,7 @@ export class NodeCatalogPageComponent {
       {
         id: 'request',
         label: 'Demande',
-        description: 'Vérifiez le nom, la configuration et le moteur mesuré avant de comparer le code.',
+        description: 'Vérifiez le nœud et les fonctions qu’il annonce au cluster.',
         cards: [card],
         actions: [
           { id: 'cancel', label: 'Annuler' },
@@ -1882,7 +1863,7 @@ export class NodeCatalogPageComponent {
       {
         id: 'approval',
         label: 'Approbation',
-        description: `Le nœud rejoindra ${this.clusterName()} une fois le code confirmé. Les traitements viennent ensuite du central.`,
+        description: `Le nœud rejoindra le cluster ${this.clusterName()} avec les rôles et capacités annoncés.`,
         cards: [card],
         note: 'Après approbation, le nœud apparaît parmi les membres dès qu’il confirme sa connexion.',
         actions: [
@@ -1892,23 +1873,20 @@ export class NodeCatalogPageComponent {
       },
     ];
   });
-  protected readonly enrollmentRows = computed<readonly PendingNodeEnrollmentRecord[]>(() => {
-    this.enrollmentClock();
-    return this.pendingEnrollments().map((request) => ({
+  protected readonly enrollmentRows = computed<readonly PendingNodeEnrollmentRecord[]>(() =>
+    this.pendingEnrollments().map((request) => ({
       id: request.id,
       name: formatNodeLabel(request.name, request.displayName),
-      configuration: this.configurationLabel(request),
-      mediaCapacity: mediaEngineLabel(request.capabilities),
       verificationCode: request.verificationCode ?? '—',
-      expiresAtLabel: this.formatCountdown(request.expiresAt),
-    }));
-  });
+      rolesLabel: request.roles.map((role) => NODE_ROLE_LABELS[role]).join(' · '),
+      capabilitiesLabel: request.capabilities.length
+        ? request.capabilities.map((item) => `${item.toolId} ${item.version}`).join(' · ')
+        : 'Aucun outil déclaré',
+      expiresAtLabel: this.formatExpiry(request.expiresAt),
+    })),
+  );
 
   constructor() {
-    const enrollmentTimer = window.setInterval(() => {
-      if (this.pendingEnrollments().length > 0) this.enrollmentClock.set(Date.now());
-    }, 1000);
-    this.destroyRef.onDestroy(() => window.clearInterval(enrollmentTimer));
     this.destroyRef.onDestroy(
       this.pageShellContext.register({
         searchPlaceholder: 'Rechercher dans les nœuds…',
@@ -1935,8 +1913,7 @@ export class NodeCatalogPageComponent {
     void this.loadGroups();
     this.installProcessingSettingsEffect();
     this.loadLibraryAccessSummary();
-    this.live
-      .drive(['nodes', 'executions'])
+    timer(0, 10_000)
       .pipe(
         switchMap(() =>
           forkJoin({
@@ -1967,7 +1944,6 @@ export class NodeCatalogPageComponent {
         if (leadership?.masterNodeId) {
           this.masterNodeId.set(leadership.masterNodeId);
         }
-        this.fixedAuthority.set(leadership?.fixedAuthority === true);
         this.nodes.set(nodes);
         this.reconciliationStatus.set(reconciliation);
         this.taskStatus.set(tasks);
@@ -2247,41 +2223,22 @@ export class NodeCatalogPageComponent {
       });
   }
 
-  protected configurationLabel(request: PendingNodeEnrollmentResponse): string {
-    const roles =
-      request.roles.map((role) => NODE_ROLE_LABELS[role]).join(' · ') || 'Rôle non annoncé';
-    const tasks =
-      request.maxConcurrentTasks <= 1
-        ? '1 tâche à la fois'
-        : `${request.maxConcurrentTasks} tâches à la fois`;
-    const inventory = request.inventory;
-    if (!inventory) return `${roles} · ${tasks}`;
-    const cpu = tidyProcessorName(inventory.processorModel?.trim() || 'Processeur');
-    const gpu = inventory.gpus?.length
-      ? inventory.gpus.map((item) => item.name).join(', ')
-      : null;
-    return [
-      roles,
-      tasks,
-      `${cpu} · ${inventory.processorCount} cœurs`,
-      formatMemory(inventory.memoryMb),
-      gpu,
-    ]
-      .filter((part): part is string => !!part)
-      .join(' · ');
+  protected formatExpiry(value: string): string {
+    const seconds = Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 1000));
+    if (seconds < 60) return `Dans ${seconds} s`;
+    return `Dans ${Math.ceil(seconds / 60)} min`;
   }
 
-  protected formatCountdown(value: string): string {
-    const remainingMs = new Date(value).getTime() - this.enrollmentClock();
-    if (!Number.isFinite(remainingMs) || remainingMs <= 0) return 'Expirée';
-    const totalSeconds = Math.ceil(remainingMs / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    if (minutes >= 60) {
-      const hours = Math.floor(minutes / 60);
-      return `${hours} h ${(minutes % 60).toString().padStart(2, '0')} min`;
-    }
-    return `${minutes} min ${seconds.toString().padStart(2, '0')} s`;
+  protected formatExpiryTime(value: string): string {
+    return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(
+      new Date(value),
+    );
+  }
+
+  protected capabilitiesLabel(capabilities: readonly NodeToolCapability[]): string {
+    return capabilities.length
+      ? capabilities.map((item) => `${item.toolId} ${item.version}`).join(' · ')
+      : 'Aucun outil détecté';
   }
 
   protected onNodeOpen(row: DataTableRow): void {

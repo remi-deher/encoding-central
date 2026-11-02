@@ -68,12 +68,12 @@ public sealed partial class FlowPlacementPlanner
                 }
                 else if (candidates is not null && node.Component.PluginId == "nodes" && node.Component.ComponentId == "nodes-library-access" && RuntimeHandoffPolicy.LibraryAccessNeedsEncoder(node))
                 {
-                    // Si aucun nœud à accès direct ne possède une cible déclarée du profil,
-                    // la branche « oui » ne sera jamais empruntée : le repli CPU ne la rend pas vraie.
+                    // Si aucun nœud à accès direct ne possède d'encodeur matériel compatible avec le profil du flow,
+                    // la branche « oui » ne sera jamais empruntée par le nœud source direct : ne pas l'imposer.
                     var anyDirectCanEncode = candidates.Any(c =>
                         c.IsOnline && c.IsWorker
                         && c.Access is { IsEnabled: true, Mode: "direct", CanRead: true, LocalPath: not null }
-                        && MediaCodecPolicy.ProfileTargetAvailable(flow, c.Capabilities.FirstOrDefault(cap => cap.ToolId == "ffmpeg")));
+                        && MediaCodecPolicy.ProfileEncoderUsable(flow, c.Capabilities.FirstOrDefault(cap => cap.ToolId == "ffmpeg")));
                     if (!anyDirectCanEncode) filterOutput = "no";
                 }
 

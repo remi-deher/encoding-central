@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadModel } from './model-loader.mjs';
 const {
-  mediaEngineLabel,
   nodeAcceleratorBadges,
   nodeHardwareLabel,
   nodeUnvalidatedAccelerators,
@@ -16,42 +15,6 @@ const ffmpeg = (checks, accelerationTypes = []) => ({
   mediaTypes: ['video'],
   accelerationTypes,
   encoderChecks: checks.map(([encoderId, status]) => ({ encoderId, status })),
-});
-
-test('sans sonde FFmpeg, le décodage et l’encodage ne sont pas déclarés', () => {
-  assert.equal(mediaEngineLabel([]), 'Non déclarée');
-  assert.equal(
-    mediaEngineLabel([{ toolId: 'plugin/base', encoderChecks: [{ encoderId: 'hevc_nvenc', status: 'usable' }] }]),
-    'Non déclarée',
-  );
-});
-
-test('un encodeur seulement détecté ne devient pas une capacité matérielle', () => {
-  assert.equal(
-    mediaEngineLabel([
-      ffmpeg(
-        [
-          ['libx264', 'usable'],
-          ['hevc_nvenc', 'detected'],
-        ],
-        ['nvenc'],
-      ),
-    ]),
-    'CPU',
-  );
-});
-
-test('seuls les encodeurs matériels vérifiés sont nommés', () => {
-  assert.equal(
-    mediaEngineLabel([
-      ffmpeg([
-        ['hevc_nvenc', 'usable'],
-        ['h264_vaapi', 'usable'],
-        ['hevc_qsv', 'detected'],
-      ]),
-    ]),
-    'NVENC · VAAPI',
-  );
 });
 
 test('un nœud sans worker n’a pas d’accélérateur applicable', () => {

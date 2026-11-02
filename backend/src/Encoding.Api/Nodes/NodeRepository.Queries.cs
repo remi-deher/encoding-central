@@ -87,13 +87,13 @@ public sealed partial class NodeRepository
         if(ownership is not null) await ownership.PrepareClaimsAsync(ct);
         return await coordination.CheckAsync(ct) is null;
     }
-    public enum ModeRequestResult { Accepted, NotFound, LastServer, CoordinationUnavailable, FixedServer }
+    public enum ModeRequestResult { Accepted, NotFound, LastServer, CoordinationUnavailable }
 
     /// <summary>
     /// Enregistre le mode voulu d'un nœud ; le nœud l'applique à son prochain signal de présence. Refuse de retirer la fonction
     /// serveur du dernier nœud serveur en ligne (les transactions SQLite sérialisent les changements de mode).
     /// </summary>
-    public async Task<ModeRequestResult> RequestModeAsync(Guid nodeId, bool server, bool worker, TimeSpan offlineAfter, CancellationToken ct,bool persist=true, bool fixedAuthority=false)
+    public async Task<ModeRequestResult> RequestModeAsync(Guid nodeId, bool server, bool worker, TimeSpan offlineAfter, CancellationToken ct,bool persist=true)
     {
         await using(var exists=dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM cluster_nodes WHERE id=@id AND deleted_at IS NULL)")) {exists.Parameters.AddWithValue("id",
             nodeId);if(!await exists.ScalarBoolAsync(ct)) return ModeRequestResult.NotFound;}
@@ -107,8 +107,6 @@ public sealed partial class NodeRepository
             if (Sql.ToStringArray(await select.ExecuteScalarAsync(ct)) is not { } current) return ModeRequestResult.NotFound;
             roles = current;
         }
-
-        if (fixedAuthority && (roles.Contains("server") != server || roles.Contains("worker") != worker)) return ModeRequestResult.FixedServer;
 
         if (roles.Contains("server") && !server)
         {

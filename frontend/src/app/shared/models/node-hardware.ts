@@ -1,5 +1,5 @@
 import { joinBadges } from './media-badges';
-import { NodeResponse, NodeToolCapability } from './cluster';
+import { NodeResponse } from './cluster';
 import type {
   ResourceCardChip,
   ResourceCardSection,
@@ -115,38 +115,6 @@ export function nodeHardwareLabel(node: NodeResponse): string {
     `${formatMemory(inventory.memoryMb)} de RAM`,
     ...(gpus.length ? [`GPU : ${gpus.join(', ')}`] : []),
   ].join(' · ');
-}
-
-const MEDIA_ENGINE_ORDER = ['nvenc', 'qsv', 'vaapi', 'amf', 'videotoolbox'] as const;
-const MEDIA_ENGINE_LABELS: Readonly<Record<string, string>> = {
-  nvenc: 'NVENC',
-  qsv: 'Quick Sync',
-  vaapi: 'VAAPI',
-  amf: 'AMF',
-  videotoolbox: 'VideoToolbox',
-};
-
-/**
- * Décodage et encodage d'une demande de rattachement.
- * Seul un encodeur FFmpeg dont la mire a réussi est affiché. Les outils et plugins
- * remontés par l'agent ne comptent pas : le central définit ces capacités.
- * Sans binaire FFmpeg, rien n'est déclaré.
- */
-export function mediaEngineLabel(
-  capabilities: readonly Pick<NodeToolCapability, 'toolId' | 'encoderChecks'>[],
-): string {
-  const ffmpeg = capabilities.find((tool) => tool.toolId === 'ffmpeg');
-  if (!ffmpeg) return 'Non déclarée';
-  const usable = new Set<string>();
-  for (const check of ffmpeg.encoderChecks ?? []) {
-    if (check.status !== 'usable') continue;
-    const suffix = check.encoderId.split('_').pop()?.toLowerCase() ?? '';
-    if (MEDIA_ENGINE_LABELS[suffix]) usable.add(suffix);
-  }
-  const labels = MEDIA_ENGINE_ORDER.filter((id) => usable.has(id)).map(
-    (id) => MEDIA_ENGINE_LABELS[id],
-  );
-  return labels.length ? labels.join(' · ') : 'CPU';
 }
 
 export const nodeAcceleratorValue = (node: NodeResponse): string =>

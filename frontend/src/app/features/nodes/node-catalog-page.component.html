@@ -184,16 +184,6 @@
         <p>Rattachement annulé : {{ failure }}</p>
       </div>
     }
-    @if (pageTab() === 'cluster' && fixedAuthority()) {
-      <div class="node-alert-banner node-alert-banner_warning" role="status">
-        <span class="node-alert-icon" aria-hidden="true">!</span>
-        <p>
-          Fonctions fixées par l’image. Ce central traite aussi en local. Les workers sont une image
-          séparée : ils n’ont pas de base et reçoivent plugins et outils depuis ici. Ouvrez
-          l’enrôlement pour en ajouter un.
-        </p>
-      </div>
-    }
     @if (pageTab() === 'cluster' && !local.standalone() && clusterIdentity()) {
       <section class="node-cluster-summary" aria-label="Synthèse du cluster">
         <div class="node-cluster-identity">
@@ -323,23 +313,6 @@
         (admissionChange)="setLocalAdmission($event)"
       />
     } @else if (local.standalone()) {
-      @if (isAdmin() && enrollmentRows().length) {
-        <section id="node-enrollment-requests" class="node-enrollment-requests">
-          <header class="node-enrollment-heading">
-            <h2>Demandes de rattachement</h2>
-            <p>Comparez le code affiché sur le worker avant de l’approuver.</p>
-          </header>
-          <app-data-table
-            [columns]="enrollmentColumns"
-            [rows]="enrollmentRows()"
-            layout="resources"
-            [layoutOptions]="enrollmentLayoutOptions"
-            [rowOpenable]="true"
-            rowOpenLabel="Examiner la demande"
-            (rowOpen)="onEnrollmentOpen($event)"
-          />
-        </section>
-      }
       <app-detail-card-grid
         ariaLabel="Fonctionnement autonome"
         [cards]="autonomousCards"
@@ -728,7 +701,16 @@
         (cancelled)="closeCreateNode()"
       />
     } @else if (enrollmentView() === 'requests') {
-      <section class="enrollment-guide" aria-label="Demandes de rattachement">
+      <section class="enrollment-guide" aria-label="Demandes de jumelage">
+        <div class="enrollment-step">
+          <span>Étape 1 sur 2</span>
+          <h3>Repérer le nœud</h3>
+          <p>
+            Sur le nœud à ajouter, ouvrez la page Nœuds puis « Cluster
+            <app-icon name="forward" /> Rejoindre un cluster » : ajoutez l’adresse de ce cluster
+            puis choisissez « Demander à rejoindre ». La demande apparaîtra ici pour vérification.
+          </p>
+        </div>
         @if (enrollmentRows().length) {
           <app-data-table
             [columns]="enrollmentColumns"
@@ -738,13 +720,13 @@
             [rowOpenable]="true"
             rowOpenLabel="Examiner"
             (rowOpen)="onEnrollmentOpen($event)"
-            emptyMessage="Aucune demande de rattachement en attente."
+            emptyMessage="Aucune demande de jumelage en attente."
           />
         } @else {
           <p class="enrollment-empty" role="status">
-            Aucune demande en attente. Un worker se rattache depuis son assistant avec un compte
-            administrateur de ce central. Une demande déjà publiée reste affichée ici jusqu’à son
-            expiration.
+            Aucune demande en attente. Depuis le nœud à ajouter, ouvrez Nœuds
+            <app-icon name="forward" /> Cluster <app-icon name="forward" /> Rejoindre un cluster.
+            Les demandes et leurs clés expirent après 10 minutes.
           </p>
         }
         <button matButton="text" type="button" (click)="showPairingKey()">

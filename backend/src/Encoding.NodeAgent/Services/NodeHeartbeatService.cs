@@ -147,9 +147,7 @@ public sealed class NodeHeartbeatService(
     private async Task ApplyDesiredModeAsync(IReadOnlyList<NodeRole>? desiredRoles, CancellationToken cancellationToken)
     {
         if (desiredRoles is not { Count: > 0 }) return;
-        var desired = new NodeMode(desiredRoles.Contains(NodeRole.Server) && !options.FixedWorker, desiredRoles.Contains(NodeRole.Worker) || options.FixedWorker);
-        if (options.FixedWorker && desiredRoles.Contains(NodeRole.Server))
-            logger.LogInformation("Ce worker est fixe : la fonction serveur demandée par le cluster est ignorée.");
+        var desired = new NodeMode(desiredRoles.Contains(NodeRole.Server), desiredRoles.Contains(NodeRole.Worker));
         if (desired == new NodeMode(options.Roles.Contains(NodeRole.Server), options.Roles.Contains(NodeRole.Worker))) return;
         if (launcher is null)
         {

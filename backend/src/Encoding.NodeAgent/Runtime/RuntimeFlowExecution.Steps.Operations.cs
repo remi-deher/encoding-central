@@ -110,25 +110,14 @@ internal sealed partial class RuntimeFlowExecution
         string? resourceFolder = null;
         if ((id != "base-assemble-media" || MediaActions.Flag(c, "addFonts")) && MediaActions.Text(c, "resource") is { Length: > 0 } resourceText)
         {
-            if (!Encoding.Contracts.Flows.ResourceReference.TryParseList(resourceText, out var references) || references.Count == 0)
-                throw new SubtitleException("Référence de ressource de polices invalide.");
-            resourceFolder = Path.Combine(directory, "resources", "fonts");
-            var missing = new List<string>();
-            foreach (var reference in references)
+            if (!Encoding.Contracts.Flows.ResourceReference.TryParse(resourceText, out var resourceReference)) throw new SubtitleException("Référence de ressource de polices invalide.");
+            try
             {
-                Encoding.Contracts.Flows.ResourceVersionInfo? info = null;
-                try
-                {
-                    info = await client.ResourceVersionAsync(reference, job.Token);
-                    await client.EnsureResourceAsync(info, ResourceCache.Root(options), resourceFolder, job.Token);
-                }
-                catch (Exception exception) when (exception is HttpRequestException or IOException)
-                {
-                    var names = info is null ? "" : string.Join(", ", info.Files.Select(file => file.Name));
-                    missing.Add(names.Length == 0 ? $"{reference} : {exception.Message}" : $"{names} ({reference}) : {exception.Message}");
-                }
+                var info = await client.ResourceVersionAsync(resourceReference, job.Token);
+                resourceFolder = Path.Combine(directory, "resources", resourceReference.Id.ToString("N") + "-" + resourceReference.Version);
+                await client.EnsureResourceAsync(info, ResourceCache.Root(options), resourceFolder, job.Token);
             }
-            if (missing.Count > 0) throw new SubtitleException("Ressource de polices indisponible : " + string.Join(" ; ", missing));
+            catch (Exception exception) when (exception is HttpRequestException or IOException) { throw new SubtitleException("Ressource de polices indisponible : " + exception.Message); }
         }
         var outcome = id == "base-assemble-media"
             ? await actions.AssembleAsync(c, state.Context.CurrentMetadata!.Value, state.Variables.TryGetValue("tracks.origin", out var origin) ? origin : null, state.Current,

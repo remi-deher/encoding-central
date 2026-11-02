@@ -104,14 +104,6 @@ export class ClusterExtensionsService {
     );
   }
 
-  importToolArchive(archive: File): Promise<unknown> {
-    return firstValueFrom(
-      this.http.post('/api/v1/store/tools/import', archive, {
-        headers: { 'Content-Type': 'application/zip' },
-      }),
-    );
-  }
-
   removePackage(id: string): Promise<void> {
     return firstValueFrom(
       this.http.delete<void>(`/api/v1/store/packages/${encodeURIComponent(id)}`),

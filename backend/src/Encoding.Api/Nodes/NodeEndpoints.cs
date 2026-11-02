@@ -9,7 +9,7 @@ public static class NodeEndpoints
 {
     public static void MapNodeEndpoints(this WebApplication app)
     {
-        var nodes = app.MapGroup("/api/v1/nodes").WithTags("Nodes").NotifyLive("nodes");
+        var nodes = app.MapGroup("/api/v1/nodes").WithTags("Nodes");
         nodes.MapNodeDirectoryBrowseEndpoints();
         nodes.MapNodeEnrollmentEndpoints();
         nodes.MapNodeHeartbeatEndpoints();
@@ -47,18 +47,7 @@ public static class NodeEndpoints
         {
             var isLocal = LocalEnrollment.Matches(configuration[LocalEnrollment.SecretFileSetting],
                 httpContext.Request.Headers[LocalEnrollment.HeaderName].ToString());
-            // Seule une session de compte administrateur admet un worker. Un jeton API, ou l'identité
-            // synthétique quand l'authentification est désactivée, ne suffit pas.
-            var administratorSession = httpContext.User.IsInRole("admin")
-                && httpContext.User.FindFirst("auth_type")?.Value == "session";
-            var outcome = await service.EnrollAsync(request, isLocal, cancellationToken, administratorSession);
-            if (outcome.Node is not null && administratorSession)
-            {
-                var logger = httpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Encoding.Nodes.Enrollment");
-                logger.LogInformation(
-                    "Le nœud {NodeId} ({NodeName}) a été admis par le compte administrateur {Administrator}.",
-                    outcome.Node.Id, outcome.Node.Name, httpContext.User.Identity?.Name);
-            }
+            var outcome = await service.EnrollAsync(request, isLocal, cancellationToken);
             if (outcome.HasValidationErrors) return (IResult)Results.ValidationProblem(outcome.ValidationErrors!);
             if (outcome.Node is not null) return Results.Ok(outcome.Node);
 
@@ -215,7 +204,6 @@ public static class NodeEndpoints
                 {
                     title = "Ce nœud est le dernier serveur en ligne : sa fonction serveur ne peut pas être retirée."
                 }),
-                NodeRepository.ModeRequestResult.FixedServer => Results.Conflict(new { title = FixedServerPolicy.Refusal }),
                 _ => Results.Accepted()
             };
         }).WithName("RequestNodeMode");

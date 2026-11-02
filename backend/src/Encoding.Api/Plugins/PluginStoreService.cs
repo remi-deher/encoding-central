@@ -157,24 +157,12 @@ public sealed class PluginStoreService(IConfiguration configuration, FlowCompone
 }
 
 /// <summary>Recharge les plugins installés avant que l'API accepte des requêtes.</summary>
-public sealed class PluginStoreStartup(PluginStoreService store, PluginRepositoryService repositories) : IHostedService
+public sealed class PluginStoreStartup(PluginStoreService store) : IHostedService
 {
     public Task StartAsync(CancellationToken cancellationToken)
     {
         store.LoadInstalled();
-        _ = SyncOfficialAsync(cancellationToken);
         return Task.CompletedTask;
-    }
-
-    private async Task SyncOfficialAsync(CancellationToken cancellationToken)
-    {
-        var official = repositories.List().FirstOrDefault(item => item.IsOfficial);
-        if (official is null) return;
-        try { await repositories.SyncAsync(official.Id, cancellationToken); }
-        catch (Exception)
-        {
-            // Une erreur de lecture du dépôt est enregistrée sur la fiche. Le démarrage continue.
-        }
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

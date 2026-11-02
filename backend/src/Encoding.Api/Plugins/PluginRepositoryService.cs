@@ -45,26 +45,7 @@ public sealed partial class PluginRepositoryService(IConfiguration configuration
         var saved = Read();
         if (OfficialUrl is { } official && saved.All(item => !item.IsOfficial))
             saved.Insert(0, new PluginRepository("official", "Dépôt officiel", official, "", true, true, null, null, [], []));
-        return saved.Select(item => item.IsOfficial
-            ? item with { Enabled = true, Url = OfficialUrl ?? item.Url }
-            : item).ToList();
-    }
-
-    /// <summary>Une adresse de dépôt GitHub désigne l’index <c>repository.json</c> de sa branche principale.</summary>
-    public static Uri IndexAddress(string url)
-    {
-        var uri = ValidateUrl(url);
-        if (!uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)) return uri;
-        var parts = uri.AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 2)
-            return new Uri($"https://raw.githubusercontent.com/{parts[0]}/{parts[1]}/main/repository.json");
-        if (parts.Length >= 5 && parts[2] is "blob" or "tree")
-        {
-            var tail = string.Join('/', parts.Skip(3));
-            if (parts[2] == "tree") tail += "/repository.json";
-            return new Uri($"https://raw.githubusercontent.com/{parts[0]}/{parts[1]}/{tail}");
-        }
-        return uri;
+        return saved;
     }
 
     private List<PluginRepository> Read()
@@ -136,8 +117,6 @@ public sealed partial class PluginRepositoryService(IConfiguration configuration
             var all = List().ToList();
             var index = all.FindIndex(item => item.Id == id);
             if (index < 0) return null;
-            if (all[index].IsOfficial && !enabled)
-                throw new PluginRepositoryException("Le dépôt officiel reste actif. Il ne peut pas être désactivé.");
             all[index] = all[index] with { Enabled = enabled };
             Write(all);
             return all[index];
@@ -153,7 +132,7 @@ public sealed partial class PluginRepositoryService(IConfiguration configuration
             var all = List().ToList();
             var target = all.SingleOrDefault(item => item.Id == id);
             if (target is null) return false;
-            if (target.IsOfficial) throw new PluginRepositoryException("Le dépôt officiel ne peut pas être supprimé.");
+            if (target.IsOfficial) throw new PluginRepositoryException("Le dépôt officiel est verrouillé : désactivez-le plutôt que de le supprimer.");
             all.Remove(target);
             Write(all);
             return true;
@@ -166,7 +145,7 @@ public sealed partial class PluginRepositoryService(IConfiguration configuration
         string body;
         try
         {
-            using var response = await clients.CreateClient(HttpClientName).GetAsync(IndexAddress(repository.Url), HttpCompletionOption.ResponseHeadersRead, ct);
+            using var response = await clients.CreateClient(HttpClientName).GetAsync(repository.Url, HttpCompletionOption.ResponseHeadersRead, ct);
             if (!response.IsSuccessStatusCode) throw new PluginRepositoryException($"Le dépôt a répondu avec le statut HTTP {(int)response.StatusCode}.");
             body = System.Text.Encoding.UTF8.GetString(await ReadLimitedAsync(response, MaxIndexBytes, "L'index du dépôt dépasse 4 Mo.", ct));
         }

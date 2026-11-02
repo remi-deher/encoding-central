@@ -24,7 +24,6 @@ import { PageSystemActionsComponent } from '../../shared/ui/page-system-actions.
 import { GlobalSearchBarComponent } from './global-search-bar.component';
 import { UserMenuComponent } from '../auth/user-menu.component';
 import { PageShellContextService } from './page-shell-context';
-import { ShellConfig } from '../shell/shell-config';
 
 @Component({
   selector: 'app-shell',
@@ -52,7 +51,6 @@ export class AppShellComponent {
     this.mobileNavigation()?.focusMoreButton();
   }
   private readonly router = inject(Router);
-  protected readonly shell = inject(ShellConfig);
   private readonly pageShellContext = inject(PageShellContextService);
   protected readonly globalSearch = viewChild(GlobalSearchBarComponent);
   protected readonly hasSearchControls = computed(() => {

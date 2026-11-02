@@ -1,7 +1,6 @@
 # syntax=docker/dockerfile:1
-# Deux images (ADR 0033). Contexte de construction : racine du dépôt.
-# Cible central (défaut) : API, interface, worker local et lanceur. Un déploiement seul est autonome.
-# Cible worker : agent et page légère, sans API ni base d'autorité.
+# Image unique : serveur (API et interface web), worker et lanceur. Contexte de construction : racine du dépôt.
+# Le lanceur démarre et arrête le serveur et l'agent selon le mode du nœud (architecture 0036).
 ARG DOTNET_VERSION=10.0
 
 FROM node:24-bookworm-slim AS ai-cli-build
@@ -50,7 +49,7 @@ RUN dotnet publish ./src/Encoding.Api/Encoding.Api.csproj --configuration Releas
  && dotnet publish ./src/Encoding.NodeAgent/Encoding.NodeAgent.csproj --configuration Release --output /app/agent --no-restore \
  && dotnet publish ./src/Encoding.Launcher/Encoding.Launcher.csproj --configuration Release --output /app/launcher --no-restore
 
-FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime-base
+FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime
 COPY --from=ai-cli-build /opt/encoding/ai-cli /opt/encoding/ai-cli
 ENV PATH="/opt/encoding/ai-cli/node_modules/.bin:${PATH}"
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -88,33 +87,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # Plugins et outils du Store téléchargés par les workers, hors du dossier privé de données du nœud.
 RUN mkdir -p /opt/encoding/custom-plugins /opt/encoding/managed-tools /var/lib/encoding-node /var/lib/encoding/flow-backups /var/lib/encoding/runtime-artifacts /var/lib/encoding/plugin-keys \
  && chown -R $APP_UID:$APP_UID /opt/encoding/custom-plugins /opt/encoding/managed-tools /var/lib/encoding-node /var/lib/encoding
-
-# Worker : pas d'API, pas de lanceur, pas de cluster.db. La page écoute sur 8080.
-FROM runtime-base AS worker
-WORKDIR /app/agent
-COPY --from=build /app/agent ./
-COPY --from=frontend-build /frontend/dist/frontend/browser/ ./wwwroot/
-RUN printf '%s\n' '{"shell":"worker"}' > ./wwwroot/ui-config.json \
- && chown -R "$APP_UID:$APP_UID" ./wwwroot
-ENV NVIDIA_VISIBLE_DEVICES=all \
-    NVIDIA_DRIVER_CAPABILITIES=compute,video,utility \
-    Node__Roles=worker \
-    Node__FixedWorker=true \
-    Node__DataDirectory=/var/lib/encoding-node \
-    Node__LocalEnrollmentSecretFile=/var/lib/encoding-node/local-enrollment.secret \
-    WorkerUi__Port=8080 \
-    WorkerUi__Public=true \
-    Runtime__CustomPluginDirectory=/opt/encoding/custom-plugins \
-    Runtime__ManagedToolDirectory=/opt/encoding/managed-tools \
-    Logging__Console__FormatterName=json \
-    Logging__Console__FormatterOptions__UseUtcTimestamp=true \
-    Logging__Console__FormatterOptions__IncludeScopes=true
-EXPOSE 8080
-USER $APP_UID
-ENTRYPOINT ["dotnet", "Encoding.NodeAgent.dll"]
-
-# Central : serveur, interface complète et worker local.
-FROM runtime-base AS central
 WORKDIR /app
 COPY --from=build /app/api ./api
 COPY --from=build /app/agent ./agent
@@ -127,7 +99,6 @@ COPY --from=frontend-build /frontend/dist/frontend/browser ./api/wwwroot
 ENV NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
 ENV Node__Roles=server,worker \
-    Cluster__FixedAuthority=true \
     ConnectionStrings__Cluster="Data Source=/var/lib/encoding-node/cluster.db" \
     Node__DataDirectory=/var/lib/encoding-node \
     PluginSettings__KeyDirectory=/var/lib/encoding-node/plugin-keys \
@@ -135,7 +106,7 @@ ENV Node__Roles=server,worker \
     Runtime__ArtifactDirectory=/var/lib/encoding-node/runtime-artifacts \
     Runtime__CustomPluginDirectory=/opt/encoding/custom-plugins \
     PluginStore__Directory=/var/lib/encoding-node/plugin-store \
-    PluginStore__OfficialRepositoryUrl=https://github.com/remi-deher/encoding-store \
+    PluginStore__OfficialRepositoryUrl=https://raw.githubusercontent.com/remi-deher/encoding-store/main/repository.json \
     Logging__Console__FormatterName=json \
     Logging__Console__FormatterOptions__UseUtcTimestamp=true \
     Logging__Console__FormatterOptions__IncludeScopes=true

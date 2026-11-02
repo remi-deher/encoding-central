@@ -227,6 +227,14 @@ public static class StandardFlowTemplateSeeder
                 new("input", "base", "base-input-video", new { }),
                 new("extract", "subtitles", "subtitles-extract", new { trackIds = "" }),
                 new("done", "base", "base-complete-flow", new { result = "success", message = "Extraction des sous-titres terminée." })));
+        Add("Uniformiser les sous-titres d’une vidéo", "Applique les règles intégrées aux sous-titres de la copie de travail et conserve les autres pistes.",
+            Make("Uniformiser les sous-titres d’une vidéo", "video",
+                new("input", "base", "base-input-video", new { }),
+                new("manage", "subtitles", "subtitles-manage", new { styleProfile = "crunchyroll", convertSrt = true, upgradeAss = true,
+                    removeDuplicates = true, inferForced = true, setTitles = true, frenchDefault = true, fontFamily = "Trebuchet MS", fontSize = 23,
+                    fontOutline = 2.5, fontMargin = 20 }),
+                new("done", "base", "base-complete-flow", new { result = "success", message = "Uniformisation des sous-titres terminée." })));
+
         Add("Actualiser le film dans Radarr", "Actualise les informations du film après le traitement. Requiert une configuration Radarr.",
             IntegrationFlow(registry, "Actualiser le film dans Radarr", "radarr", "radarr-refresh-movie"));
         Add("Actualiser la série dans Sonarr", "Actualise les informations de la série après le traitement. Requiert une configuration Sonarr.",
