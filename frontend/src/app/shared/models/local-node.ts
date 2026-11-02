@@ -30,7 +30,6 @@ export interface SetupNodeSheet {
 export interface ClusterIdentity {
   readonly id: string;
   readonly name: string;
-  readonly standalone: boolean;
 }
 
 export interface DiscoveredCluster {
@@ -53,17 +52,12 @@ export interface LocalNodeStatus {
   /** Matériel lu par l'agent local : disponible même sans serveur local ni liste de workers. */
   readonly inventory?: NodeInventory | null;
   readonly isEnrolled: boolean;
-  readonly standalone?: boolean;
   readonly pairingKey: string | null;
   readonly pairingExpiresAt: string | null;
   readonly clusterId: string | null;
   readonly clusterName: string | null;
   readonly verificationCode: string | null;
-  readonly switching: {
-    readonly previousClusterName: string | null;
-    readonly deadline: string | null;
-  } | null;
-  readonly switchFailure: string | null;
+  readonly enrollmentFailure: string | null;
 }
 
 export interface LocalNodePairing {

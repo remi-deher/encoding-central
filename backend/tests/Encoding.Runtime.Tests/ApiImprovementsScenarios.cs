@@ -222,15 +222,14 @@ internal static class ApiImprovementsScenarios
             Console.WriteLine("PASS: HeavyOperationsPolicy rate limiting.");
 
             // 6. Cluster API Tokens, suppression/clonage de flow, et vue d'ensemble bibliothèques
-            // A. Création du central et génération du token cluster
+            // A. Nom du central et jeton d'accès créé par l'administrateur
             string clusterToken;
-            using (var createClusterResp = await admin.SendAsync(HttpMethod.Post, "/api/v1/central", new { name = "Cluster Test IA" }))
+            Check(await admin.StatusAsync(HttpMethod.Put, "/api/v1/central", new { name = "Central Test IA" }) == HttpStatusCode.OK, "The central can be renamed.");
+            using (var createClusterResp = await admin.SendAsync(HttpMethod.Post, "/api/v1/tokens", new CreateApiTokenRequest("Jeton central", "admin", CurrentPassword: AdminPassword)))
             {
-                Check(createClusterResp.StatusCode == HttpStatusCode.OK, "Cluster creation succeeds.");
-                var clusterDoc = await createClusterResp.Content.ReadFromJsonAsync<JsonElement>(Json);
-                Check(clusterDoc.GetProperty("name").GetString() == "Cluster Test IA", "Cluster name is set.");
-                clusterToken = clusterDoc.GetProperty("clusterToken").GetString()!;
-                Check(!string.IsNullOrWhiteSpace(clusterToken) && clusterToken.StartsWith("enc_pat_"), "Cluster creation generates and returns clusterToken.");
+                Check(createClusterResp.StatusCode == HttpStatusCode.Created, "An administrator creates an access token.");
+                clusterToken = (await createClusterResp.Content.ReadFromJsonAsync<CreatedApiTokenResponse>(Json))!.Token;
+                Check(!string.IsNullOrWhiteSpace(clusterToken) && clusterToken.StartsWith("enc_pat_"), "The token starts with enc_pat_.");
             }
 
             // B. Client IA utilisant Bearer token (sans cookie et sans en-tête CSRF)
@@ -244,7 +243,7 @@ internal static class ApiImprovementsScenarios
             {
                 Check(clusterGetResp.StatusCode == HttpStatusCode.OK, "AI client can query cluster status with Bearer token.");
                 var clusterGetDoc = await clusterGetResp.Content.ReadFromJsonAsync<JsonElement>(Json);
-                Check(clusterGetDoc.GetProperty("hasClusterToken").GetBoolean(), "hasClusterToken is true.");
+                Check(clusterGetDoc.GetProperty("name").GetString() == "Central Test IA", "The central reports its name.");
             }
 
             // C. Gestion des tokens API : création, listage et révocation

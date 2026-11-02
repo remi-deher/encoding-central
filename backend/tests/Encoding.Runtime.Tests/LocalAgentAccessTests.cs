@@ -232,7 +232,6 @@ public sealed class LocalAgentAccessTests
 
                 // And creating the cluster during setup names it:
                 var clusterIdentity = await secondBoot.Services.GetRequiredService<Encoding.Api.Infrastructure.CentralIdentityRepository>().GetAsync(CancellationToken.None);
-                Assert.False(clusterIdentity.Standalone);
                 Assert.Equal("Cluster Salon", clusterIdentity.Name);
             }
         }

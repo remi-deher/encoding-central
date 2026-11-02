@@ -47,7 +47,6 @@ public sealed partial class ArchitectureTests
         "Encoding.Api/Libraries/LibraryEndpoints.cs",
         "Encoding.Api/Libraries/LibraryWorkflowEndpoints.cs",
         "Encoding.Api/Logging/SystemLogEndpoints.cs",
-        "Encoding.Api/Nodes/LocalWorkerEndpoints.cs",
         "Encoding.Api/Nodes/WorkerGroupEndpoints.cs",
         "Encoding.Api/Plugins/ArrWebhookEndpoints.cs",
         "Encoding.Api/Plugins/PluginConfigurationEndpoints.cs",

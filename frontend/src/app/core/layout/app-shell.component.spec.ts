@@ -31,7 +31,7 @@ describe('AppShellComponent', () => {
               ...INITIAL_CLUSTER_OVERVIEW,
               status: 'ready',
               snapshot: {
-                identity: { clusterId: 'c-1', clusterName: 'Cluster Test', standalone: false },
+                identity: { clusterId: 'c-1', clusterName: 'Cluster Test' },
                 nodes: [
                   { id: 'n-1', name: 'srv-1', status: 'online' },
                   { id: 'n-2', name: 'srv-2', status: 'online' },

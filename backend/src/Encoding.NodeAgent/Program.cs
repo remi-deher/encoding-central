@@ -149,10 +149,7 @@ app.MapGet("/api/v1/worker/status", async (WorkerAgentOptions agentOptions, Work
         clusterName = identity.ClusterName,
         displayName = identity.DisplayName ?? agentOptions.DisplayName,
         verificationCode = identity.HasCredentials ? WorkerVerificationCode.FromToken(identity.Id, identity.NodeToken!) : null,
-        switching = identity.IsSwitching
-            ? new { previousClusterName = identity.Previous!.ClusterName, deadline = identity.SwitchDeadline }
-            : null,
-        switchFailure = identity.SwitchFailure
+        enrollmentFailure = identity.EnrollmentFailure
     });
 });
 app.MapGet("/api/v1/worker/logs", (
@@ -181,7 +178,7 @@ app.MapPost("/api/v1/worker/enroll", async (
     {
         // Session du compte administrateur du central, transmise par le relais de l'interface (ADR 0034).
         var centralSession = http.Request.Headers[Encoding.Contracts.Auth.SessionCookie.RelayHeader].ToString();
-        return (IResult)Results.Ok(await enrollment.EnrollAsync(request.ClusterId, cancellationToken, request.LeaveCurrent, request.DisplayName, centralSession));
+        return (IResult)Results.Ok(await enrollment.EnrollAsync(request.ClusterId, cancellationToken, request.DisplayName, centralSession));
     }
     catch (InvalidOperationException exception)
     {
@@ -200,7 +197,7 @@ app.MapPost("/api/v1/worker/pairing-key", async (
 {
     try
     {
-        return (IResult)Results.Ok(await enrollment.CreatePairingKeyAsync(request.ClusterId, cancellationToken, request.LeaveCurrent, request.DisplayName));
+        return (IResult)Results.Ok(await enrollment.CreatePairingKeyAsync(request.ClusterId, cancellationToken, request.DisplayName));
     }
     catch (InvalidOperationException exception)
     {
@@ -235,4 +232,4 @@ await app.RunAsync();
 
 public sealed record WorkerCentralAddress(string ApiBaseUrl);
 
-public sealed record JoinCentralRequest(Guid ClusterId, bool LeaveCurrent = false, string? DisplayName = null);
+public sealed record JoinCentralRequest(Guid ClusterId, string? DisplayName = null);

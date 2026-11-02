@@ -135,7 +135,7 @@ test.beforeEach(async ({ page }) => {
     }),
   );
   await page.route('**/api/v1/central', (route) =>
-    route.fulfill({ json: { id: 'cluster', name: 'Maison', standalone: true } }),
+    route.fulfill({ json: { id: 'cluster', name: 'Maison' } }),
   );
   await page.route('**/api/v1/activity/stream**', (route) => route.abort());
   await page.route('**/api/v1/activity/files**', (route) => {

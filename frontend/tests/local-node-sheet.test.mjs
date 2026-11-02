@@ -23,7 +23,7 @@ const status = {
     },
   ],
   clusterName: 'Maison',
-  switchFailure: null,
+  enrollmentFailure: null,
 };
 const node = {
   id: 'n1',
@@ -41,7 +41,6 @@ const node = {
 const base = {
   status,
   node,
-  standalone: false,
   clusterName: 'Maison',
   agentUnavailable: false,
   activeTasks: 1,
@@ -101,9 +100,9 @@ test('an old agent without GPU data says so instead of claiming none', () => {
   assert.equal(gpu.value, 'Non déclaré');
 });
 
-test('a standalone node names no cluster and an invalid date stays unknown', () => {
-  const sheet = localNodeSheet({ ...base, standalone: true, clusterName: null });
-  assert.equal(sheet.subtitle, 'Worker autonome');
+test('an invalid date stays unknown and a missing central name falls back to the agent', () => {
+  const sheet = localNodeSheet({ ...base, clusterName: null, status: { ...status, clusterName: null } });
+  assert.equal(sheet.subtitle, 'Membre de son central');
   assert.equal(formatLastSignal('n’importe quoi'), null);
 });
 

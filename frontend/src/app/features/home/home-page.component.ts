@@ -400,9 +400,6 @@ export class HomePageComponent {
     };
     return labels[status] ?? status;
   }
-  protected readonly standalone = computed(
-    () => this.state().snapshot?.identity.standalone ?? false,
-  );
   protected readonly observedAt = computed(() => this.state().snapshot?.observedAt ?? null);
   protected readonly metrics = computed(() => {
     const data = this.executionState().data;
@@ -460,7 +457,6 @@ export class HomePageComponent {
           snapshot.nodes,
           snapshot.libraries,
           snapshot.accesses,
-          snapshot.identity.standalone,
         )
       : null;
   });

@@ -36,7 +36,6 @@ export function assessClusterHealth(
   nodes: readonly NodeResponse[],
   libraries: readonly LibraryResponse[],
   accesses: readonly LibraryNodeAccessResponse[],
-  standalone = false,
 ): ClusterHealth {
   const issues: string[] = [];
   const states = nodes.map((node) => ({ node, state: nodeLifecycle(node) }));
@@ -72,7 +71,7 @@ export function assessClusterHealth(
   if (!issues.length)
     return {
       tone: 'success',
-      title: standalone ? 'Le worker fonctionne normalement.' : 'Le central fonctionne normalement.',
+      title: 'Le central fonctionne normalement.',
       issues,
     };
   return {

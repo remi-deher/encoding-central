@@ -14,7 +14,7 @@ describe('SystemTabComponent', () => {
     fixture.detectChanges();
     http
       .expectOne('/api/v1/central')
-      .flush({ id: 'abc-123', name: 'Maison', standalone: true, hasClusterToken: false });
+      .flush({ id: 'abc-123', name: 'Maison' });
     http.expectOne('/health/details').flush({
       status: 'degraded',
       totalDurationMs: 40,

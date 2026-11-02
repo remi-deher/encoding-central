@@ -16,18 +16,14 @@
         : 'Nouveau groupe de workers'
       : local.flow() === 'join'
         ? 'Rejoindre un central'
-        : local.flow() === 'create'
-          ? 'Créer un central'
-          : actionTitle()
+        : actionTitle()
   "
   [actionDescription]="
     pageTab() === 'groups'
       ? 'Configurez les membres manuels ou les critères dynamiques et étiquettes partagées.'
       : local.flow() === 'join'
         ? 'Rattacher ce worker à un central existant.'
-        : local.flow() === 'create'
-          ? 'Ce worker devient le premier membre du nouveau central.'
-          : actionDescription()
+        : actionDescription()
   "
   [detailTitle]="
     pageTab() === 'groups' ? (selectedGroupForDetail()?.name ?? 'Détails du groupe') : detailTitle()
@@ -45,7 +41,7 @@
   (detailClosed)="pageTab() === 'groups' ? closeGroupDetail() : onDetailClosed()"
   (actionClosed)="pageTab() === 'groups' ? closeGroupForm() : closeCreateNode()"
   [showToolbar]="
-    pageTab() === 'cluster' && !local.standalone() && clusterIdentity() !== null && filtersOpen()
+    pageTab() === 'cluster' && clusterIdentity() !== null && filtersOpen()
   "
   filterLabel="Membres du central actuel"
   searchLayout="end"
@@ -59,7 +55,7 @@
       @if (isAdmin()) {
         <button matButton="filled" type="button" (click)="createGroup()">Créer un groupe</button>
       }
-    } @else if (pageTab() === 'cluster' && !local.standalone() && clusterIdentity()) {
+    } @else if (pageTab() === 'cluster' && clusterIdentity()) {
       @if (isAdmin()) {
         <button matButton="filled" type="button" (click)="addNode()">Ajouter un worker</button>
       }
@@ -68,8 +64,8 @@
   @if (pageTab() !== 'node') {
     <div subnav-info class="node-subnav-context">
       @if (pageTab() === 'cluster') {
-        <span>{{ local.standalone() ? 'État' : 'Central actuel' }}</span>
-        <strong>{{ local.standalone() ? 'Autonome' : clusterName() }}</strong>
+        <span>Central actuel</span>
+        <strong>{{ clusterName() }}</strong>
       } @else {
         <span>Organisation</span>
         <strong>{{ filteredGroups().length }} groupe(s)</strong>
@@ -78,51 +74,29 @@
   }
   @if (pageTab() === 'cluster' && isAdmin()) {
     <div subnav-actions class="node-subnav-actions">
-      @if (local.standalone()) {
-        <button
-          matButton="outlined"
-          type="button"
-          [disabled]="local.busy() || local.identityUnavailable()"
-          (click)="local.openCreate()"
-        >
-          Créer un central
+      @if (local.pending()) {
+        <button matButton="outlined" type="button" (click)="local.openJoin()">
+          Suivre la demande
         </button>
-        <button
-          matButton="filled"
-          type="button"
-          [disabled]="!local.canJoin()"
-          (click)="local.openJoin()"
-        >
-          Rejoindre un central
-        </button>
-      } @else {
-        @if (local.pending()) {
-          <button matButton="outlined" type="button" (click)="local.openJoin()">
-            Suivre la demande
+      }
+      @if (clusterIdentity()) {
+        @if (enrollmentRows().length > 0) {
+          <button matButton="outlined" type="button" (click)="focusEnrollmentRequests()">
+            Demandes <span class="node-action-count">{{ enrollmentRows().length }}</span>
           </button>
         }
-        @if (clusterIdentity()) {
-          @if (enrollmentRows().length > 0) {
-            <button matButton="outlined" type="button" (click)="focusEnrollmentRequests()">
-              Demandes <span class="node-action-count">{{ enrollmentRows().length }}</span>
-            </button>
-          }
-          <button matButton="outlined" type="button" [matMenuTriggerFor]="clusterActions">
-            Actions du central
+        <button matButton="outlined" type="button" [matMenuTriggerFor]="clusterActions">
+          Actions du central
+        </button>
+        <mat-menu #clusterActions="matMenu">
+          <button
+            mat-menu-item
+            [disabled]="local.busy() || local.agentUnavailable() || !local.status()?.clusterId"
+            (click)="local.leave()"
+          >
+            {{ local.pending() ? 'Annuler la demande' : 'Quitter le central avec ce worker' }}
           </button>
-          <mat-menu #clusterActions="matMenu">
-            <button mat-menu-item [disabled]="!local.canJoin()" (click)="local.openJoin()">
-              Changer de central pour ce worker
-            </button>
-            <button
-              mat-menu-item
-              [disabled]="local.busy() || local.agentUnavailable() || !local.status()?.clusterId"
-              (click)="local.leave()"
-            >
-              {{ local.pending() ? 'Annuler la demande' : 'Quitter le central avec ce worker' }}
-            </button>
-          </mat-menu>
-        }
+        </mat-menu>
       }
     </div>
   }
@@ -131,8 +105,7 @@
       <div class="node-alert-banner node-alert-banner_warning" role="status">
         <span class="node-alert-icon" aria-hidden="true">!</span>
         <p>
-          <strong>Rattachement en attente</strong> vers {{ local.targetName() }}. Le central
-          précédent reste actif jusque-là.
+          <strong>Rattachement en attente</strong> vers {{ local.targetName() }}.
         </p>
       </div>
     }
@@ -154,13 +127,13 @@
         </p>
       </div>
     }
-    @if (pageTab() === 'cluster' && local.status()?.switchFailure; as failure) {
+    @if (pageTab() === 'cluster' && local.status()?.enrollmentFailure; as failure) {
       <div class="node-alert-banner node-alert-banner_danger" role="alert">
         <span class="node-alert-icon" aria-hidden="true">✕</span>
         <p>Rattachement annulé : {{ failure }}</p>
       </div>
     }
-    @if (pageTab() === 'cluster' && !local.standalone() && clusterIdentity()) {
+    @if (pageTab() === 'cluster' && clusterIdentity()) {
       <section class="node-cluster-summary" aria-label="Synthèse du central">
         <div class="node-cluster-identity">
           <span class="node-cluster-icon" aria-hidden="true">
@@ -284,12 +257,6 @@
         [libraryAccessState]="libraryAccessState()"
         (actionSelected)="onLocalSheetAction($event)"
         (admissionChange)="setLocalAdmission($event)"
-      />
-    } @else if (local.standalone()) {
-      <app-detail-card-grid
-        ariaLabel="Fonctionnement autonome"
-        [cards]="autonomousCards"
-        [collapsible]="false"
       />
     } @else {
       @if (isAdmin() && enrollmentRows().length) {
@@ -598,17 +565,6 @@
         [busy]="groupBusy()"
         (saved)="saveNodeGroup($event)"
         (cancelled)="closeGroupForm()"
-      />
-    } @else if (local.flow() === 'create') {
-      @if (local.error()) {
-        <p role="alert">{{ local.error() }}</p>
-      }
-      <app-record-form
-        [embedded]="true"
-        [data]="createClusterForm"
-        [busy]="local.busy()"
-        (submitted)="local.create($event)"
-        (cancelled)="local.closeFlow()"
       />
     } @else if (local.flow() === 'join') {
       <app-guided-setup

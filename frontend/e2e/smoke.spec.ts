@@ -194,8 +194,7 @@ test('the first-run setup studio completes standalone onboarding and passes WCAG
         clusterId: null,
         clusterName: null,
         verificationCode: null,
-        switching: null,
-        switchFailure: null,
+        enrollmentFailure: null,
       }),
     }),
   );

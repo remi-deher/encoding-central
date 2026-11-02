@@ -194,7 +194,6 @@ export class PageSystemActionsComponent {
     const state = this.clusterState();
     if (state.status === 'loading') return 'Chargement…';
     if (state.status === 'error') return 'Données indisponibles';
-    if (state.snapshot?.identity.standalone) return 'Worker autonome';
     const nodes = state.snapshot?.nodes ?? [];
     return (
       nodes.filter((node) => node.status === 'online').length + ' / ' + nodes.length + ' en ligne'

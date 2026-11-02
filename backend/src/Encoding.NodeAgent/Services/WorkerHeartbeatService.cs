@@ -26,10 +26,8 @@ public sealed class WorkerHeartbeatService(
         {
             try
             {
-                await enrollment.RollbackExpiredSwitchAsync(stoppingToken);
+                await enrollment.AbandonExpiredPairingAsync(stoppingToken);
                 identity = await identityStore.GetAsync(stoppingToken);
-                // Pendant un changement de central, l'ancien rattachement reste vivant : le worker y garde ses baux et sa présence.
-                if (identity.Previous is { HasCredentials: true } previous) await BeatPreviousAsync(previous, stoppingToken);
                 if (identity.HasCredentials)
                 {
                     var capabilities = await capabilityProbe.DiscoverAsync(stoppingToken);
@@ -68,7 +66,6 @@ public sealed class WorkerHeartbeatService(
                                 {
                                     await identityStore.MarkEnrolledAsync(stoppingToken);
                                     logger.LogInformation("L’enrôlement en attente du worker {NodeId} a été confirmé par le central.", identity.Id);
-                                    await enrollment.CompleteSwitchAsync(stoppingToken);
                                 }
                                 if (!string.IsNullOrWhiteSpace(node?.MasterUrl))
                                     await identityStore.UpdateMasterUrlAsync(node.MasterUrl, stoppingToken);
@@ -110,25 +107,6 @@ public sealed class WorkerHeartbeatService(
             logger.LogInformation("Le central considère ce worker comme {Lifecycle}.", lifecycle);
         else
             logger.LogWarning("Le central ne confie plus de tâche à ce worker ({Lifecycle}) : {Reason}", lifecycle, node.LifecycleReason);
-    }
-
-    private async Task BeatPreviousAsync(WorkerIdentityState previous, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var capabilities = await capabilityProbe.DiscoverAsync(cancellationToken);
-            var inventory = HardwareInventory.Current();
-            using var request = new HttpRequestMessage(HttpMethod.Put, new Uri(new Uri(previous.ApiBaseUrl!), $"api/v1/workers/{previous.Id:D}/heartbeat"))
-            {
-                Content = JsonContent.Create(new WorkerHeartbeatRequest(options.Name, options.Roles, options.MaxConcurrentTasks, capabilities, inventory), options: AgentJson.Options)
-            };
-            request.Headers.Add("X-Node-Token", previous.NodeToken);
-            using var response = await httpClient.SendAsync(request, cancellationToken);
-        }
-        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
-        {
-            logger.LogDebug(exception, "L'ancien central ne répond pas pendant le changement de central.");
-        }
     }
 
     public override void Dispose()

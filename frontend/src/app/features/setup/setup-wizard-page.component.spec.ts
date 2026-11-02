@@ -53,8 +53,7 @@ describe('SetupWizardPageComponent', () => {
       clusterId: null,
       clusterName: null,
       verificationCode: null,
-      switching: null,
-      switchFailure: null,
+      enrollmentFailure: null,
     });
 
     TestBed.configureTestingModule({

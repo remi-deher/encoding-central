@@ -33,7 +33,7 @@ test.beforeEach(async ({ page }) => {
     }),
   );
   await page.route('**/api/v1/central', (route) =>
-    route.fulfill({ json: { id: 'cluster-one', name: 'Maison', standalone: false } }),
+    route.fulfill({ json: { id: 'cluster-one', name: 'Maison' } }),
   );
   await page.route('**/health/details', (route) =>
     route.fulfill({

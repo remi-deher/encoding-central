@@ -72,7 +72,7 @@ public sealed class WorkerPendingJoinTests
         var identity = await store.GetAsync(CancellationToken.None);
         Assert.False(identity.HasCredentials);
         Assert.Null(identity.ClusterId);
-        Assert.Contains("refusé", identity.SwitchFailure);
+        Assert.Contains("refusé", identity.EnrollmentFailure);
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public sealed class WorkerPendingJoinTests
         await store.SavePairingAsync(Guid.NewGuid().ToString("D"), "Maison", "http://127.0.0.1:1/", CancellationToken.None);
         await store.MarkPairingPublishedAsync(CancellationToken.None);
         var (live, _, _) = Build(directory);
-        Assert.False(await live.RollbackExpiredSwitchAsync(CancellationToken.None));
+        Assert.False(await live.AbandonExpiredPairingAsync(CancellationToken.None));
 
         // Le processus redémarre après l'échéance de la clé : l'état relu depuis le disque est périmé.
         var path = Path.Combine(directory, "node-identity.json");
@@ -134,10 +134,10 @@ public sealed class WorkerPendingJoinTests
         await File.WriteAllTextAsync(path, edited);
         var (restarted, restartedStore, _) = Build(directory);
 
-        Assert.True(await restarted.RollbackExpiredSwitchAsync(CancellationToken.None));
+        Assert.True(await restarted.AbandonExpiredPairingAsync(CancellationToken.None));
         var identity = await restartedStore.GetAsync(CancellationToken.None);
         Assert.False(identity.HasCredentials);
-        Assert.Contains("à temps", identity.SwitchFailure);
+        Assert.Contains("à temps", identity.EnrollmentFailure);
     }
 
     [Fact]
@@ -156,39 +156,32 @@ public sealed class WorkerPendingJoinTests
     }
 
     [Fact]
-    public async Task BeginSwitchAndAbandonPreserveDisplayName()
+    public async Task AbandonPreservesDisplayName()
     {
         var (_, store, _) = Build(NewDirectory());
         await store.SaveEnrollmentAsync(Guid.NewGuid().ToString("D"), "Maison", "http://127.0.0.1:1/", CancellationToken.None, displayName: "Serveur Salon");
-        await store.MarkEnrolledAsync(CancellationToken.None);
 
-        var enrolled = await store.GetAsync(CancellationToken.None);
-        Assert.Equal("Serveur Salon", enrolled.DisplayName);
-
-        await store.BeginSwitchAsync(TimeSpan.FromMinutes(10), CancellationToken.None);
-        var switching = await store.GetAsync(CancellationToken.None);
-        Assert.True(switching.IsSwitching);
-        Assert.Equal("Serveur Salon", switching.DisplayName);
+        var pending = await store.GetAsync(CancellationToken.None);
+        Assert.Equal("Serveur Salon", pending.DisplayName);
 
         await store.AbandonPendingAsync("cluster injoignable", CancellationToken.None);
         var abandoned = await store.GetAsync(CancellationToken.None);
         Assert.Equal("Serveur Salon", abandoned.DisplayName);
-        Assert.Equal("cluster injoignable", abandoned.SwitchFailure);
+        Assert.Equal("cluster injoignable", abandoned.EnrollmentFailure);
     }
 
     [Fact]
     public async Task CreatePairingKeyReturnsVerificationCodeAndPreservesDisplayName()
     {
         var (enrollment, store, discovery) = Build(NewDirectory());
-        // Set an existing enrolled identity with a display name
+        // Une identité locale avec un nom d'affichage, pas encore rattachée à un central
         await store.SaveEnrollmentAsync(Guid.NewGuid().ToString("D"), "Maison", "http://127.0.0.1:1/", CancellationToken.None, displayName: "Mon Worker 50");
-        await store.MarkEnrolledAsync(CancellationToken.None);
 
         var (listener, url, id, _) = Cluster(HttpStatusCode.Accepted);
         using var _ = listener;
         await discovery.AddByAddressAsync(url, CancellationToken.None);
 
-        var response = await enrollment.CreatePairingKeyAsync(id, CancellationToken.None, leaveCurrent: true);
+        var response = await enrollment.CreatePairingKeyAsync(id, CancellationToken.None);
 
         Assert.NotNull(response.PairingKey);
         Assert.NotNull(response.VerificationCode);

@@ -44,7 +44,7 @@
     <app-summary-tiles
       monitor-summary
       [hidden]="overviewView() !== 'general'"
-      [label]="standalone() ? 'Indicateurs de ce worker' : 'Indicateurs du central'"
+      label="Indicateurs du central"
       [tiles]="metrics()"
     />
 
@@ -103,10 +103,11 @@
       @if (overviewView() !== 'activity') {
         <div class="panel-heading">
           <div>
-            <h2 id="nodes-heading">{{ standalone() ? 'Ce worker' : 'Workers du central' }}</h2>
+            <h2 id="nodes-heading">Workers du central</h2>
           </div>
           <a class="subtle-link" routerLink="/workers"
-            >{{ standalone() ? 'Gérer ce worker' : 'Voir les workers' }}
+            
+            >Voir les workers
             <span aria-hidden="true"><app-icon name="forward" /></span
           ></a>
         </div>
@@ -146,11 +147,7 @@
           } @empty {
             @if (state().status === 'ready') {
               <p class="empty-panel-message">
-                {{
-                  standalone()
-                    ? 'Aucune information sur ce worker.'
-                    : 'Aucun worker enregistré dans le central.'
-                }}
+                Aucun worker enregistré dans le central.
               </p>
             }
           }
@@ -239,11 +236,7 @@
           <div>
             <h2 id="matrix-heading">Accès aux bibliothèques</h2>
             <p>
-              {{
-                standalone()
-                  ? 'Comment ce worker atteint chaque bibliothèque.'
-                  : 'Comment chaque worker atteint chaque bibliothèque.'
-              }}
+              Comment chaque worker atteint chaque bibliothèque.
             </p>
           </div>
           <a class="subtle-link" routerLink="/libraries"
@@ -251,11 +244,7 @@
           ></a>
         </div>
         <app-matrix-table
-          [caption]="
-            standalone()
-              ? 'Accès de ce worker à chaque bibliothèque'
-              : 'Accès de chaque worker à chaque bibliothèque'
-          "
+          caption="Accès de chaque worker à chaque bibliothèque"
           cornerLabel="Worker"
           [rows]="matrixRows()"
           [columns]="matrixColumns()"

@@ -37,8 +37,6 @@ interface HealthDetailsResponse {
 interface ClusterIdentityResponse {
   readonly id: string;
   readonly name: string;
-  readonly standalone: boolean;
-  readonly hasClusterToken: boolean;
 }
 
 const STATUS_ORDER = { unhealthy: 0, degraded: 1, healthy: 2 } as const;
@@ -103,10 +101,7 @@ const STATUS_ORDER = { unhealthy: 0, degraded: 1, healthy: 2 } as const;
       @if (cluster(); as value) {
         <app-setting-group>
           <app-setting-row label="Nom du central">
-            <span>{{ value.name || 'Worker autonome' }}</span>
-          </app-setting-row>
-          <app-setting-row label="Mode">
-            <span>{{ value.standalone ? 'Autonome' : 'Central avec workers' }}</span>
+            <span>{{ value.name }}</span>
           </app-setting-row>
           <app-setting-row label="Identifiant">
             <code>{{ value.id }}</code>

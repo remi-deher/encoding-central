@@ -57,8 +57,6 @@ import {
 } from '../../shared/ui/resource-sheet.component';
 import { StatusTone } from '../../shared/ui/status-badge.component';
 import {
-  AUTONOMOUS_CARDS,
-  CREATE_CLUSTER_FORM,
   NODE_MANAGEMENT_TABS,
   clusterAddressForm,
   clusterJoinSteps,
@@ -283,8 +281,6 @@ export class NodeCatalogPageComponent {
   protected readonly groupBusy = signal(false);
   private readonly groupEditing = signal<NodeGroupResponse | null>(null);
 
-  protected readonly createClusterForm = CREATE_CLUSTER_FORM;
-  protected readonly autonomousCards = AUTONOMOUS_CARDS;
   protected readonly localNode = computed(
     () => this.nodes().find((node) => node.id === this.local.status()?.nodeId) ?? null,
   );
@@ -347,8 +343,7 @@ export class NodeCatalogPageComponent {
     localNodeSheet({
       status: this.local.status(),
       node: this.localNode(),
-      standalone: this.local.standalone(),
-      clusterName: this.local.standalone() ? null : this.clusterName(),
+      clusterName: this.clusterName(),
       agentUnavailable: this.local.agentUnavailable(),
       activeTasks: this.localActivity()?.active ?? null,
     }),
@@ -428,7 +423,7 @@ export class NodeCatalogPageComponent {
     if (this.pageTab() === 'groups') return this.groupState();
     if (this.local.loading()) return 'loading';
     if (this.pageTab() === 'cluster' && !this.clusterIdentity()) return 'error';
-    return this.pageTab() === 'cluster' && !this.local.standalone() ? this.loadState() : 'ready';
+    return this.pageTab() === 'cluster' ? this.loadState() : 'ready';
   });
   protected onManagementTabChange(tab: string): void {
     if (this.local.busy()) return;
@@ -561,7 +556,7 @@ export class NodeCatalogPageComponent {
       return 'Groupes de workers';
     }
     if (this.pageTab() === 'cluster') {
-      return !this.local.standalone() && this.clusterIdentity()
+      return this.clusterIdentity()
         ? this.clusterName()
         : ((this.routeData()['title'] as string) ?? 'Workers');
     }
@@ -1765,7 +1760,7 @@ export class NodeCatalogPageComponent {
         searchResults: (query) => this.pageSearchResults(query),
         filter: {
           label: 'Filtres',
-          visibleWhen: () => this.pageTab() === 'cluster' && !this.local.standalone(),
+          visibleWhen: () => this.pageTab() === 'cluster',
           activeCount: () => this.activeFilters().length,
           toggle: () => this.filtersOpen.update((open) => !open),
         },

@@ -15,15 +15,10 @@ public sealed record WorkerIdentityState(
     string? PairingKey = null,
     DateTimeOffset? PairingExpiresAt = null,
     bool PairingPublished = false,
-    WorkerIdentityState? Previous = null,
-    DateTimeOffset? SwitchDeadline = null,
-    string? SwitchFailure = null,
+    string? EnrollmentFailure = null,
     string? DisplayName = null,
     IReadOnlyList<string>? KnownServerUrls = null)
 {
-    /// <summary>Vrai tant qu'un changement de central attend la confirmation du central d'accueil : l'ancien rattachement reste intact (0040).</summary>
-    public bool IsSwitching => Previous is not null;
-
     public bool HasCredentials =>
         !string.IsNullOrWhiteSpace(ClusterId)
         && Uri.TryCreate(ApiBaseUrl, UriKind.Absolute, out _)
@@ -105,7 +100,7 @@ public sealed class WorkerIdentityStore(WorkerAgentOptions options)
             var token = state?.NodeToken ?? Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
             var effectiveDisplayName = displayName ?? state?.DisplayName;
             state = new WorkerIdentityState(state?.Id ?? Guid.NewGuid(), clusterId, clusterName, apiBaseUrl, token, false,
-                Previous: state?.Previous, SwitchDeadline: state?.SwitchDeadline, DisplayName: effectiveDisplayName);
+                DisplayName: effectiveDisplayName);
             await SaveAsync(state, cancellationToken);
             return state;
         }
@@ -142,7 +137,7 @@ public sealed class WorkerIdentityStore(WorkerAgentOptions options)
             var expiresAt = DateTimeOffset.UtcNow.AddMinutes(10);
             var effectiveDisplayName = displayName ?? state?.DisplayName;
             state = new WorkerIdentityState(state?.Id ?? Guid.NewGuid(), clusterId, clusterName, apiBaseUrl, token, false, pairingKey, expiresAt,
-                Previous: state?.Previous, SwitchDeadline: state?.SwitchDeadline, DisplayName: effectiveDisplayName);
+                DisplayName: effectiveDisplayName);
             await SaveAsync(state, cancellationToken);
             return state;
         }
@@ -186,51 +181,8 @@ public sealed class WorkerIdentityStore(WorkerAgentOptions options)
     }
 
     /// <summary>
-    /// Première phase d'un changement de central (0040) : l'identité actuelle est mise de côté, intacte, et une identité neuve attend
-    /// l'accueil du nouveau central. Sans confirmation avant l'échéance, <see cref="RollbackSwitchAsync"/> rétablit l'ancienne.
-    /// </summary>
-    public async Task BeginSwitchAsync(TimeSpan timeout, CancellationToken cancellationToken)
-    {
-        await gate.WaitAsync(cancellationToken);
-        try
-        {
-            var current = await LoadAsync(cancellationToken);
-            if (!current.IsEnrolled) throw new InvalidOperationException("Ce worker n'est rattaché à aucun central.");
-            if (current.IsSwitching) throw new InvalidOperationException("Un changement de central est déjà en cours.");
-            state = new WorkerIdentityState(Guid.NewGuid(), null, null, null, null, false,
-                Previous: current with { Previous = null, SwitchDeadline = null, SwitchFailure = null },
-                SwitchDeadline: DateTimeOffset.UtcNow.Add(timeout),
-                DisplayName: current.DisplayName);
-            await SaveAsync(state, cancellationToken);
-        }
-        finally
-        {
-            gate.Release();
-        }
-    }
-
-    /// <summary>Rétablit l'ancien rattachement, conservé tel quel, et retient la raison pour l'afficher.</summary>
-    public async Task<bool> RollbackSwitchAsync(string reason, CancellationToken cancellationToken)
-    {
-        await gate.WaitAsync(cancellationToken);
-        try
-        {
-            var current = await LoadAsync(cancellationToken);
-            if (current.Previous is null) return false;
-            state = current.Previous with { SwitchFailure = reason };
-            await SaveAsync(state, cancellationToken);
-            return true;
-        }
-        finally
-        {
-            gate.Release();
-        }
-    }
-
-    /// <summary>
-    /// Abandonne un rattachement qui n'a pas abouti (refus, cluster injoignable, clé expirée). Pendant un changement de central, l'ancien rattachement est rétabli
-    /// (<see cref="RollbackSwitchAsync"/>) ; pour un worker autonome, l'identité en attente est effacée pour qu'il redevienne autonome au lieu de rester bloqué
-    /// sur un central qui ne l'a jamais accepté. L'identifiant du worker est conservé : le central ne l'a jamais enregistré.
+    /// Abandonne un rattachement qui n'a pas abouti (refus, central injoignable, clé expirée) : l'identité en attente est effacée pour que le worker
+    /// ne reste pas bloqué sur un central qui ne l'a jamais accepté. L'identifiant du worker est conservé : le central ne l'a jamais enregistré.
     /// </summary>
     public async Task<bool> AbandonPendingAsync(string reason, CancellationToken cancellationToken)
     {
@@ -238,29 +190,10 @@ public sealed class WorkerIdentityStore(WorkerAgentOptions options)
         try
         {
             var current = await LoadAsync(cancellationToken);
-            if (current.Previous is not null) state = current.Previous with { SwitchFailure = reason };
-            else if (current.IsEnrolled || !current.HasCredentials) return false;
-            else state = new WorkerIdentityState(current.Id, null, null, null, null, false, SwitchFailure: reason, DisplayName: current.DisplayName);
+            if (current.IsEnrolled || !current.HasCredentials) return false;
+            state = new WorkerIdentityState(current.Id, null, null, null, null, false, EnrollmentFailure: reason, DisplayName: current.DisplayName);
             await SaveAsync(state, cancellationToken);
             return true;
-        }
-        finally
-        {
-            gate.Release();
-        }
-    }
-
-    /// <summary>Seconde phase : le nouveau central a répondu. Retourne l'ancien rattachement pour que l'appelant prévienne son central, puis l'oublie.</summary>
-    public async Task<WorkerIdentityState?> CommitSwitchAsync(CancellationToken cancellationToken)
-    {
-        await gate.WaitAsync(cancellationToken);
-        try
-        {
-            var current = await LoadAsync(cancellationToken);
-            var previous = current.Previous;
-            state = current with { Previous = null, SwitchDeadline = null, SwitchFailure = null };
-            await SaveAsync(state, cancellationToken);
-            return previous;
         }
         finally
         {
@@ -286,7 +219,7 @@ public sealed class WorkerIdentityStore(WorkerAgentOptions options)
         try
         {
             if (state is null) throw new InvalidOperationException("L’identité locale du worker est absente.");
-            state = state with { Enrolled = true, PairingKey = null, PairingExpiresAt = null, PairingPublished = false, SwitchFailure = null };
+            state = state with { Enrolled = true, PairingKey = null, PairingExpiresAt = null, PairingPublished = false, EnrollmentFailure = null };
             await SaveAsync(state, cancellationToken);
         }
         finally

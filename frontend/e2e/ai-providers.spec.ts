@@ -181,7 +181,6 @@ test('settings navigation and system health use shared components in both themes
       json: {
         id: '00000000-0000-0000-0000-000000000001',
         name: 'Central de test',
-        standalone: false,
       },
     }),
   );

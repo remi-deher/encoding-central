@@ -301,19 +301,14 @@ internal static class AuthScenarios
         Check(await viewer.StatusAsync(get, "/api/v1/tools/ai/quotas") == HttpStatusCode.Forbidden, "A viewer cannot read account subscription quotas.");
         Check(await viewer.StatusAsync(get, "/api/v1/tools/ai/sessions") == HttpStatusCode.Forbidden, "A viewer cannot list private AI sessions.");
         Check(await viewer.StatusAsync(get, "/api/v1/users") == HttpStatusCode.Forbidden, "A viewer cannot list users.");
-        // Worker autonome (0045) : seul et sans cluster créé, il n'est pas dans un central ; le nommer en crée un.
+        // Le central existe dès l'installation : il a un nom, qu'un administrateur peut changer ; il n'y a plus de création.
         using (var identity = await anonymous.SendAsync(get, "/api/v1/central"))
-            Check((await identity.Content.ReadFromJsonAsync<JsonElement>(Json)).GetProperty("standalone").GetBoolean(), "A node alone and without a created cluster is standalone.");
-        Check(await viewer.StatusAsync(post, "/api/v1/central", new { name = "Maison" }) == HttpStatusCode.Forbidden, "A viewer cannot create a cluster.");
-        Check(await admin.StatusAsync(put, "/api/v1/central", new { name = "Maison" }) == HttpStatusCode.Conflict, "A standalone node has no cluster to rename.");
-        Check(await admin.StatusAsync(post, "/api/v1/central", new { name = "  " }) == HttpStatusCode.BadRequest, "A cluster needs a name.");
-        using (var created = await admin.SendAsync(post, "/api/v1/central", new { name = "Maison" }))
-        {
-            var body = await created.Content.ReadFromJsonAsync<JsonElement>(Json);
-            Check(created.StatusCode == HttpStatusCode.OK && !body.GetProperty("standalone").GetBoolean() && body.GetProperty("name").GetString() == "Maison", "Naming a standalone node creates its cluster.");
-        }
-        Check(await admin.StatusAsync(post, "/api/v1/central", new { name = "Autre" }) == HttpStatusCode.Conflict, "A cluster cannot be created twice.");
-        Check(await admin.StatusAsync(put, "/api/v1/central", new { name = "Atelier" }) == HttpStatusCode.OK, "A cluster can be renamed.");
+            Check((await identity.Content.ReadFromJsonAsync<JsonElement>(Json)).TryGetProperty("name", out _), "The central always has a name.");
+        Check(await viewer.StatusAsync(put, "/api/v1/central", new { name = "Maison" }) == HttpStatusCode.Forbidden, "A viewer cannot rename the central.");
+        Check(await admin.StatusAsync(put, "/api/v1/central", new { name = "  " }) == HttpStatusCode.BadRequest, "The central needs a name.");
+        Check(await admin.StatusAsync(put, "/api/v1/central", new { name = "Atelier" }) == HttpStatusCode.OK, "The central can be renamed.");
+        var creation = await admin.StatusAsync(post, "/api/v1/central", new { name = "Autre" });
+        Check(creation is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed, "There is no route to create a central: " + creation);
         // Le central ne rejoint jamais un autre central : plus de route d'adoption d'identité.
         var adoption = await admin.StatusAsync(post, "/api/v1/central/join", new { clusterId = Guid.NewGuid() });
         Check(adoption is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed, "The cluster-join route no longer exists: " + adoption);

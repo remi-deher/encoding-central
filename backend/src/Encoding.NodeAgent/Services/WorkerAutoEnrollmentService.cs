@@ -29,7 +29,7 @@ public sealed class WorkerAutoEnrollmentService(
                 var identity = await identityStore.GetAsync(stoppingToken);
                 var hasActivePairing = identity.PairingExpiresAt > DateTimeOffset.UtcNow
                     && !string.IsNullOrWhiteSpace(identity.PairingKey);
-                if (identity.IsSwitching || hasActivePairing)
+                if (hasActivePairing)
                 {
                     await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
                     continue;

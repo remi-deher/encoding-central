@@ -42,7 +42,7 @@ public static class AuthEndpoints
             if (!string.IsNullOrWhiteSpace(request.ClusterName))
             {
                 var clusterRepo = http.RequestServices.GetRequiredService<Encoding.Api.Infrastructure.CentralIdentityRepository>();
-                await clusterRepo.CreateAsync(request.ClusterName, ct);
+                if (Encoding.Api.Infrastructure.CentralIdentityRepository.IsValidName(request.ClusterName)) await clusterRepo.RenameAsync(request.ClusterName, ct);
             }
             var effectiveUsername = string.IsNullOrWhiteSpace(request.Username) ? "admin" : request.Username.Trim();
             var effectivePassword = service.LastCreatedPassword ?? request.Password ?? "admin";

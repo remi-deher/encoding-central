@@ -22,8 +22,8 @@ public static class LocalWorkerEndpoints
     {
         var local = app.MapGroup("/api/v1/local-worker").WithTags("Local node");
         // Lecture : le rôle lecture voit l'état, mais ni la clé de jumelage ni le code de vérification.
-        local.MapGet("/status", (HttpContext http, IHttpClientFactory clients, Infrastructure.CentralIdentityRepository cluster, LocalWorkerRegistry registry, CancellationToken ct) =>
-            RelayAsync(http, clients, HttpMethod.Get, "status", ct, hideSecrets: !http.User.IsInRole("admin"), cluster, registry)).WithName("GetLocalNodeStatus");
+        local.MapGet("/status", (HttpContext http, IHttpClientFactory clients, LocalWorkerRegistry registry, CancellationToken ct) =>
+            RelayAsync(http, clients, HttpMethod.Get, "status", ct, hideSecrets: !http.User.IsInRole("admin"), registry)).WithName("GetLocalNodeStatus");
         local.MapGet("/centrals", (HttpContext http, IHttpClientFactory clients, CancellationToken ct) =>
             RelayAsync(http, clients, HttpMethod.Get, "clusters", ct)).WithName("ListLocalNodeClusters");
         local.MapPost("/centrals", (HttpContext http, IHttpClientFactory clients, CancellationToken ct) =>
@@ -49,13 +49,10 @@ public static class LocalWorkerEndpoints
         return status.ToJsonString();
     }
 
-    /// <summary>Ajoute <c>standalone</c> à l'état du worker et synchronise son identifiant et son nom d'affichage avec le registre local.</summary>
-    private static async Task<string> MarkStandaloneAsync(string statusJson, Infrastructure.CentralIdentityRepository cluster, LocalWorkerRegistry? registry, CancellationToken cancellationToken)
+    /// <summary>Synchronise l'identifiant et le nom d'affichage du worker avec le registre local.</summary>
+    private static async Task<string> SyncLocalWorkerAsync(string statusJson, LocalWorkerRegistry? registry, CancellationToken cancellationToken)
     {
         if (JsonNode.Parse(statusJson) is not JsonObject status) return statusJson;
-        var identity = await cluster.GetAsync(cancellationToken);
-        var attachedTo = status["clusterId"]?.GetValue<string>();
-        status["standalone"] = identity.Standalone && Guid.TryParse(attachedTo, out var id) && id == identity.Id;
         if (registry is not null)
         {
             if (Guid.TryParse(status["nodeId"]?.GetValue<string>(), out var nodeId) && nodeId != Guid.Empty)
@@ -109,8 +106,7 @@ public static class LocalWorkerEndpoints
     }
 
     private static async Task<IResult> RelayAsync(HttpContext http, IHttpClientFactory clients, HttpMethod method, string path,
-        CancellationToken cancellationToken, bool hideSecrets = false, Infrastructure.CentralIdentityRepository? cluster = null,
-        LocalWorkerRegistry? registry = null)
+        CancellationToken cancellationToken, bool hideSecrets = false, LocalWorkerRegistry? registry = null)
     {
         using var request = new HttpRequestMessage(method, "api/v1/worker/" + path);
         if (method != HttpMethod.Get)
@@ -124,7 +120,7 @@ public static class LocalWorkerEndpoints
             if (response.StatusCode == HttpStatusCode.NoContent) return Results.NoContent();
             var text = await response.Content.ReadAsStringAsync(cancellationToken);
             if (hideSecrets && response.IsSuccessStatusCode) text = HideSecrets(text);
-            if (cluster is not null && response.IsSuccessStatusCode) text = await MarkStandaloneAsync(text, cluster, registry, cancellationToken);
+            if (registry is not null && response.IsSuccessStatusCode) text = await SyncLocalWorkerAsync(text, registry, cancellationToken);
             return Results.Content(text, "application/json", statusCode: (int)response.StatusCode);
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or JsonException)

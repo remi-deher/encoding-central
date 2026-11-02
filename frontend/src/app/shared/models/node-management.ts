@@ -17,23 +17,6 @@ export const NODE_MANAGEMENT_TABS = [
   { value: 'cluster', label: 'Central' },
   { value: 'groups', label: 'Groupes de workers' },
 ];
-export const CREATE_CLUSTER_FORM: RecordFormData = {
-  title: 'Créer un central',
-  description: 'Ce worker devient le premier membre du nouveau central.',
-  submitLabel: 'Créer le central',
-  reviewTitle: 'Créer ce central ?',
-  fields: [
-    {
-      id: 'name',
-      label: 'Nom du central',
-      type: 'text',
-      required: true,
-      maxLength: 128,
-      hint: 'Un nom reconnaissable pour toutes vos installations.',
-    },
-  ],
-};
-
 function informationCard(
   id: string,
   title: string,
@@ -207,7 +190,6 @@ export function memberNodeOverviewSections(
 export interface LocalNodeSheetInput {
   readonly status: LocalNodeStatus | null;
   readonly node: NodeResponse | null;
-  readonly standalone: boolean;
   readonly clusterName: string | null;
   readonly agentUnavailable: boolean;
   /** Tâches actives observées ; `null` tant que la source n'a pas répondu. */
@@ -225,7 +207,7 @@ export function localNodeSheet(input: LocalNodeSheetInput): {
   readonly notices: readonly ResourceSheetNotice[];
   readonly sections: readonly ResourceSheetSection[];
 } {
-  const { status, node, standalone, agentUnavailable } = input;
+  const { status, node, agentUnavailable } = input;
   const roles = status
     ? { server: status.roles.includes('server'), worker: status.roles.includes('worker') }
     : null;
@@ -281,11 +263,11 @@ export function localNodeSheet(input: LocalNodeSheetInput): {
       description:
         'Les informations ci-dessous sont les dernières connues ; elles peuvent ne plus être exactes.',
     });
-  if (status?.switchFailure)
+  if (status?.enrollmentFailure)
     notices.push({
       tone: 'danger',
       title: 'Rattachement annulé',
-      description: status.switchFailure,
+      description: status.enrollmentFailure,
     });
   const sections: ResourceSheetSection[] = [
     {
@@ -448,45 +430,18 @@ export function localNodeSheet(input: LocalNodeSheetInput): {
         { label: 'Identifiant du worker', value: status?.nodeId ?? 'Indisponible', mono: true },
         {
           label: 'Central',
-          value: standalone
-            ? 'Aucun (worker autonome)'
-            : (input.clusterName ?? status?.clusterName ?? 'Central'),
+          value: input.clusterName ?? status?.clusterName ?? 'Central',
         },
       ],
     },
   ];
   return {
     title: node?.displayName?.trim() || status?.name || 'Ce worker',
-    subtitle: standalone
-      ? 'Worker autonome'
-      : `Membre de ${input.clusterName ?? status?.clusterName ?? 'son central'}`,
+    subtitle: `Membre de ${input.clusterName ?? status?.clusterName ?? 'son central'}`,
     notices,
     sections,
   };
 }
-
-export const AUTONOMOUS_CARDS: readonly DetailCard[] = [
-  {
-    ...informationCard(
-      'autonomous-node',
-      'Votre installation reste utilisable',
-      'Aucun rattachement obligatoire',
-      [
-        {
-          label: 'Un worker autonome',
-          description:
-            'Gérez les fonctions et les capacités de cette installation depuis l’onglet Ce worker.',
-        },
-        {
-          label: 'Une configuration partagée quand vous le souhaitez',
-          description:
-            'Un central permet de gérer plusieurs workers et de leur répartir les traitements.',
-        },
-      ],
-    ),
-    icon: 'system',
-  },
-];
 
 export function clusterAddressForm(address: string): RecordFormData {
   return {
@@ -520,7 +475,7 @@ interface JoinPresentation {
 export function clusterJoinSteps(data: JoinPresentation): readonly GuidedStep[] {
   const name = data.target?.name ?? data.status?.clusterName ?? 'le central d’accueil';
   const expires =
-    data.pairing?.expiresAt ?? data.status?.pairingExpiresAt ?? data.status?.switching?.deadline;
+    data.pairing?.expiresAt ?? data.status?.pairingExpiresAt;
   const expiry = expires
     ? new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short', timeStyle: 'short' }).format(
         new Date(expires),

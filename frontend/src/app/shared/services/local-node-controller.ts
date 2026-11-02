@@ -45,7 +45,7 @@ export class LocalNodeController {
   readonly identityUnavailable = signal(false);
   readonly agentUnavailable = signal(false);
   readonly busy = signal(false);
-  readonly flow = signal<'create' | 'join' | null>(null);
+  readonly flow = signal<'join' | null>(null);
   readonly joinIndex = signal(0);
   readonly address = signal('');
   readonly error = signal('');
@@ -53,24 +53,10 @@ export class LocalNodeController {
   readonly submittedTargetId = signal<string | null>(null);
   readonly pairing = signal<LocalNodePairing | null>(null);
   private observedPending = false;
-  readonly externalCluster = computed(() => {
-    const status = this.status();
-    return !!(
-      status?.isEnrolled &&
-      !status.switching &&
-      status.clusterId &&
-      this.identity() &&
-      status.clusterId.toLowerCase() !== this.identity()!.id.toLowerCase()
-    );
-  });
-  readonly standalone = computed(
-    () => !this.externalCluster() && this.identity()?.standalone === true,
-  );
   readonly pending = computed(() => {
     const status = this.status();
     return !!(
       this.submittedTargetId() ||
-      status?.switching ||
       (status?.clusterId && !status.isEnrolled)
     );
   });
@@ -163,8 +149,7 @@ export class LocalNodeController {
             clusterId: null,
             clusterName: null,
             verificationCode: null,
-            switching: null,
-            switchFailure: null,
+            enrollmentFailure: null,
           });
         }
         if (agent) {
@@ -195,12 +180,6 @@ export class LocalNodeController {
     this.refreshRequested.next();
   }
 
-  openCreate(): void {
-    if (!this.isAdmin() || !this.standalone() || this.identityUnavailable() || this.busy()) return;
-    this.error.set('');
-    this.flow.set('create');
-  }
-
   openJoin(): void {
     if (!this.isAdmin() || this.busy()) return;
     this.error.set('');
@@ -211,27 +190,6 @@ export class LocalNodeController {
 
   closeFlow(): void {
     if (!this.busy()) this.flow.set(null);
-  }
-
-  async create(values: Record<string, string>): Promise<void> {
-    const name = values['name']?.trim();
-    if (!name || name.length > 128) {
-      this.error.set('Le nom du central est obligatoire et limité à 128 caractères.');
-      return;
-    }
-    if (!this.standalone() || this.identityUnavailable()) return;
-    await this.run(
-      this.http.post<ClusterIdentity>('/api/v1/central', { name }),
-      (identity) => {
-        this.identity.set(identity);
-        this.flow.set(null);
-        this.notifications.show(
-          `Le central ${identity.name} est créé. Ce worker en est le premier membre.`,
-        );
-        this.refresh();
-      },
-      'La création du central a échoué. Votre saisie est conservée.',
-    );
   }
 
   async verifyAddress(values: Record<string, string>): Promise<void> {
@@ -290,7 +248,6 @@ export class LocalNodeController {
     await this.run(
       this.http.post<LocalNodePairing>('/api/v1/local-worker/pairing-key', {
         clusterId: target.id,
-        leaveCurrent: !!this.status()?.clusterId,
         displayName: effectiveDisplayName,
       }),
       (pairing) => {
@@ -312,7 +269,6 @@ export class LocalNodeController {
     await this.run(
       this.http.post<unknown>('/api/v1/local-worker/enroll', {
         clusterId: target.id,
-        leaveCurrent: !!this.status()?.clusterId,
         displayName: displayName?.trim() || this.status()?.displayName?.trim() || undefined,
       }),
       () => {
@@ -336,8 +292,8 @@ export class LocalNodeController {
           data: {
             title: pending ? 'Annuler cette demande ?' : 'Quitter ce central ?',
             message: pending
-              ? 'La demande sera abandonnée. Le rattachement précédent est conservé s’il existe.'
-              : 'Ce worker redevient autonome. Ses bibliothèques locales et son historique restent intacts. Un traitement actif peut empêcher le départ.',
+              ? 'La demande de rattachement sera abandonnée.'
+              : 'Ce worker n’est plus rattaché à aucun central. Ses bibliothèques locales et son historique restent intacts. Un traitement actif peut empêcher le départ.',
             confirmLabel: pending ? 'Annuler la demande' : 'Quitter le central',
           },
         })
@@ -393,7 +349,7 @@ export class LocalNodeController {
 
   private observeStatus(next: LocalNodeStatus): void {
     let targetId = this.submittedTargetId();
-    if (!targetId && next.clusterId && (!next.isEnrolled || next.switching)) {
+    if (!targetId && next.clusterId && !next.isEnrolled) {
       targetId = next.clusterId;
       this.submittedTargetId.set(targetId);
       this.observedPending = true;
@@ -412,13 +368,13 @@ export class LocalNodeController {
     }
     if (!targetId) return;
     const sameTarget = next.clusterId?.toLowerCase() === targetId.toLowerCase();
-    if (sameTarget && next.isEnrolled && !next.switching) {
+    if (sameTarget && next.isEnrolled) {
       this.submittedTargetId.set(null);
       this.pairing.set(null);
       this.observedPending = false;
       this.joinIndex.set(3);
       this.notifications.show(`Ce worker a rejoint ${next.clusterName ?? this.targetName()}.`);
-    } else if (sameTarget && (!next.isEnrolled || next.switching)) {
+    } else if (sameTarget && !next.isEnrolled) {
       this.observedPending = true;
     } else if (this.observedPending) {
       this.submittedTargetId.set(null);
@@ -426,8 +382,8 @@ export class LocalNodeController {
       this.observedPending = false;
       this.joinIndex.set(0);
       this.error.set(
-        next.switchFailure
-          ? `Rattachement annulé : ${next.switchFailure}`
+        next.enrollmentFailure
+          ? `Rattachement annulé : ${next.enrollmentFailure}`
           : 'La demande a expiré ou a été annulée. Le worker a conservé son état précédent.',
       );
       this.notifications.show(this.error());
