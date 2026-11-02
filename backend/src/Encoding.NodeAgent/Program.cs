@@ -19,7 +19,13 @@ var builder = WebApplication.CreateBuilder(args);
 var options = NodeAgentOptions.FromConfiguration(builder.Configuration);
 Environment.SetEnvironmentVariable(ManagedToolCatalog.DirectoryEnvironmentVariable,
     builder.Configuration["Runtime:ManagedToolDirectory"] is { Length: > 0 } managedToolDirectory ? managedToolDirectory : ManagedToolCatalog.DefaultDirectory);
-builder.WebHost.ConfigureKestrel(server => server.ListenLocalhost(options.LocalApiPort));
+builder.WebHost.ConfigureKestrel(server =>
+{
+    if (builder.Configuration.GetValue("WorkerUi:Expose", false))
+        server.ListenAnyIP(options.LocalApiPort);
+    else
+        server.ListenLocalhost(options.LocalApiPort);
+});
 builder.Services.AddSingleton(options);
 builder.Services.AddSingleton<WorkerIdentityStore>();
 builder.Services.AddSingleton<ISystemLogNodeContext>(sp =>
