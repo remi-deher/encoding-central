@@ -15,7 +15,11 @@ if (args.FirstOrDefault() == "--isolated-process")
     Environment.Exit(ProcessSandbox.Run(args));
     return;
 }
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    WebRootPath = Path.GetFullPath("../api/wwwroot", AppContext.BaseDirectory)
+});
 var options = NodeAgentOptions.FromConfiguration(builder.Configuration);
 Environment.SetEnvironmentVariable(ManagedToolCatalog.DirectoryEnvironmentVariable,
     builder.Configuration["Runtime:ManagedToolDirectory"] is { Length: > 0 } managedToolDirectory ? managedToolDirectory : ManagedToolCatalog.DefaultDirectory);
@@ -70,6 +74,18 @@ builder.Services.ConfigureHttpJsonOptions(json =>
     json.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
 
 var app = builder.Build();
+CentralUiProxy.Use(
+    app,
+    async context =>
+    {
+        var identity = await context.RequestServices.GetRequiredService<WorkerIdentityStore>()
+            .GetAsync(context.RequestAborted);
+        return identity.ApiBaseUrl ?? options.ClusterApiBaseUrl;
+    },
+    options.LocalApiPort,
+    options.LocalEnrollmentSecretFile);
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.Use(async (context, next) =>
 {
     // Canal interne du nœud : aucune dépendance aux en-têtes d'un navigateur.
@@ -225,6 +241,8 @@ app.MapPost("/api/v1/worker/emergency-promote", async (
     var response = await leadershipReceiver.EmergencyPromoteAsync(request?.Force ?? false, cancellationToken);
     return response.Success ? Results.Ok(response) : Results.Conflict(response);
 }).WithName("EmergencyPromoteWorker");
+
+app.MapFallbackToFile("index.html");
 
 await app.RunAsync();
 
