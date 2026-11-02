@@ -101,8 +101,9 @@ describe('SetupWizardPageComponent', () => {
     });
   });
 
-  it('renders step 1 with detected node info and hardware', () => {
+  it('shows the detected node info and hardware on the review step', () => {
     const fixture = TestBed.createComponent(SetupWizardPageComponent);
+    fixture.componentInstance['currentStep'].set(2);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
 
@@ -117,6 +118,7 @@ describe('SetupWizardPageComponent', () => {
   it('displays anonymous setup node sheet with IP address, announced URL and hardware when session is not yet created', () => {
     statusSignal.set(null);
     const fixture = TestBed.createComponent(SetupWizardPageComponent);
+    fixture.componentInstance['currentStep'].set(2);
     fixture.componentInstance['setupSheet'].set({
       name: 'encoding-host',
       displayName: 'Nœud Salon',
@@ -172,6 +174,7 @@ describe('SetupWizardPageComponent', () => {
 
   it('keeps the browser host and published port as access fallback in bridge mode', () => {
     const fixture = TestBed.createComponent(SetupWizardPageComponent);
+    fixture.componentInstance['currentStep'].set(2);
     fixture.componentInstance['setupSheet'].set({
       name: 'container',
       displayName: null,
@@ -190,6 +193,7 @@ describe('SetupWizardPageComponent', () => {
   it('shows browser access even when no interface address can be detected', () => {
     statusSignal.set(null);
     const fixture = TestBed.createComponent(SetupWizardPageComponent);
+    fixture.componentInstance['currentStep'].set(2);
     fixture.componentInstance['setupSheet'].set({
       name: null,
       displayName: null,

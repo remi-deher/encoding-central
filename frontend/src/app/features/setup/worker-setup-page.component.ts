@@ -24,18 +24,7 @@ import { AccessTemplateComponent } from '../../shared/templates/access-template.
       progressLabel="Configuration du worker"
     >
       <div access-content class="worker-setup">
-        <nav class="steps" aria-label="Étapes de configuration">
-          @for (label of ['Central', 'Connexion', 'Rattachement']; track label; let index = $index) {
-            <span
-              class="step"
-              [class.current]="step() === index"
-              [class.complete]="step() > index"
-              [attr.aria-current]="step() === index ? 'step' : null"
-            >
-              <span>{{ index + 1 }}</span>{{ label }}
-            </span>
-          }
-        </nav>
+        <p class="progress" aria-live="polite">Étape {{ step() + 1 }} sur 3</p>
 
         @if (errorMessage() || local.error()) {
           <p class="error" role="alert">{{ errorMessage() || local.error() }}</p>
@@ -44,7 +33,6 @@ import { AccessTemplateComponent } from '../../shared/templates/access-template.
         @if (step() === 0) {
           <section class="card" aria-labelledby="central-address-heading">
             <div class="heading">
-              <span class="number" aria-hidden="true">1</span>
               <div>
                 <h2 id="central-address-heading">Choisir le central</h2>
                 <p>L’adresse est enregistrée localement et utilisée pour tous les échanges.</p>
@@ -71,7 +59,6 @@ import { AccessTemplateComponent } from '../../shared/templates/access-template.
         @if (step() === 1) {
           <section class="card" aria-labelledby="worker-login-heading">
             <div class="heading">
-              <span class="number" aria-hidden="true">2</span>
               <div>
                 <h2 id="worker-login-heading">Se connecter au central</h2>
                 <p>Utilisez un compte administrateur du central sélectionné.</p>
@@ -107,7 +94,6 @@ import { AccessTemplateComponent } from '../../shared/templates/access-template.
         @if (step() === 2) {
           <section class="card" aria-labelledby="worker-enrollment-heading">
             <div class="heading">
-              <span class="number" aria-hidden="true">3</span>
               <div>
                 <h2 id="worker-enrollment-heading">Rattacher le worker</h2>
                 <p>Envoyez la demande d’adhésion, puis autorisez-la depuis le central.</p>
@@ -204,6 +190,11 @@ import { AccessTemplateComponent } from '../../shared/templates/access-template.
     </app-access-template>
   `,
   styles: `
+    .progress {
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: var(--font-label);
+    }
     .worker-setup,
     .card {
       display: grid;
@@ -261,44 +252,11 @@ import { AccessTemplateComponent } from '../../shared/templates/access-template.
       font-weight: 700;
       overflow-wrap: anywhere;
     }
-    .steps {
-      display: flex;
-      gap: var(--space-2);
-      padding: var(--space-2);
-      border-radius: var(--radius-pill);
-      background: var(--surface-container-low);
-    }
-    .step {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-2);
-      padding: var(--space-2) var(--space-3);
-      border-radius: var(--radius-pill);
-      color: var(--text-secondary);
-      font-size: var(--font-label);
-      font-weight: 700;
-    }
+
     .step > span,
-    .number {
-      display: grid;
-      place-items: center;
-      width: 24px;
-      height: 24px;
-      flex: 0 0 auto;
-      border-radius: 50%;
-      background: var(--surface-container-highest);
-      color: var(--text-primary);
-      font-size: 12px;
-      font-weight: 800;
-    }
-    .step.current {
-      background: var(--accent-soft);
-      color: var(--accent);
-    }
-    .step.complete > span {
-      background: var(--success-soft);
-      color: var(--success);
-    }
+
+
+
     .card {
       padding: var(--space-5);
       border-radius: var(--radius-xl);

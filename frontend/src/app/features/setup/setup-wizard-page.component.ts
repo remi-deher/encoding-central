@@ -1,4 +1,3 @@
-import { IconComponent } from '../../shared/ui/icon.component';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -30,7 +29,6 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
   selector: 'app-setup-wizard-page',
   providers: [LocalNodeController],
   imports: [
-    IconComponent,
     CommonModule,
     FormsModule,
     MatButtonModule,
@@ -39,314 +37,226 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
   template: `
     <app-access-template
       view="setup"
-      layout="stacked"
+      layout="single"
       title="Configurer le central"
-      description="Sécurisez le central, nommez le cluster, puis vérifiez les informations avant son démarrage."
+      description="Sécurisez le central et nommez-le. Les workers s’y rattacheront ensuite."
       [busy]="busy()"
       progressLabel="Action en cours"
     >
-      @if (errorMessage() || localController.error()) {
-        <div access-alert role="alert" class="setup-error">
-          <svg
-            viewBox="0 0 24 24"
-            width="20"
-            height="20"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            aria-hidden="true"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <path d="M12 8v4m0 4h.01" stroke-linecap="round" />
-          </svg>
-          <span>{{ errorMessage() || localController.error() }}</span>
-        </div>
-      }
+      <div access-content class="wizard">
+        <p class="progress" aria-live="polite">Étape {{ currentStep() + 1 }} sur 3</p>
 
-      <aside access-context class="setup-telemetry" aria-label="Identité et matériel détecté">
-        <div class="hardware-bento" role="region" aria-labelledby="hardware-card-title">
-          <div class="hardware-bento-header">
-            <span class="live-dot" aria-hidden="true"></span>
-            <div class="hardware-bento-title-group">
-              <h2 id="hardware-card-title" class="hardware-node-name">
-                Configuration détectée
-              </h2>
-              <span class="hardware-host-meta">{{ hostPlatformLabel() }}</span>
-            </div>
-          </div>
+        @if (errorMessage() || localController.error()) {
+          <p class="setup-error" role="alert">{{ errorMessage() || localController.error() }}</p>
+        }
 
-          <dl class="hardware-summary">
-            <div>
-              <dt>Système</dt>
-              <dd>{{ hostPlatformLabel() }}</dd>
-            </div>
-            <div>
-              <dt>CPU</dt>
-              <dd>{{ cpuInfo() }}</dd>
-            </div>
-            <div>
-              <dt>RAM</dt>
-              <dd>{{ memoryInfo() }}</dd>
-            </div>
-            <div>
-              <dt>GPU</dt>
-              <dd>{{ gpuInfo() }}</dd>
-            </div>
-            <div>
-              <dt>Encodage GPU</dt>
-              <dd>{{ gpuAccelerationInfo() }}</dd>
-            </div>
-            <div>
-              <dt>Adresse IP / accès</dt>
-              <dd>
-                @for (url of networkAccessUrls(); track url; let last = $last) {
-                  {{ url }}{{ last ? '' : ' · ' }}
-                }
-              </dd>
-            </div>
-          </dl>
-          <details class="hardware-details">
-            <summary>Détails du réseau</summary>
-            <div class="hardware-tiles">
-            <div class="hardware-tile hardware-tile--wide">
-              <span class="tile-label">Adresses des interfaces</span>
-              @if (setupSheet()?.addresses?.length) {
-                <ul class="network-addresses" aria-label="Adresses des interfaces">
-                  @for (
-                    item of setupSheet()!.addresses;
-                    track item.interface + '/' + item.address
-                  ) {
-                    <li class="tile-value tile-value--mono">
-                      {{ item.address }} ({{ item.interface }})
-                    </li>
-                  }
-                </ul>
-              } @else {
-                <span class="tile-value">{{
-                  setupSheet() ? 'Aucune adresse détectée' : 'Détection en cours…'
-                }}</span>
-              }
-            </div>
-            </div>
-          </details>
-        </div>
-      </aside>
+        @switch (currentStep()) {
+          @case (0) {
+            <section aria-labelledby="step-admin-heading">
+              <h2 id="step-admin-heading">Créer l’administrateur</h2>
+              <p class="lead">Ce compte protège l’accès au central. Vous pourrez en ajouter d’autres.</p>
 
-      <div access-content class="setup-workbench">
-        <nav class="setup-steps" aria-label="Étapes de l’initialisation">
-          @for (label of ['Administrateur', 'Central', 'Finaliser']; track label; let index = $index) {
-            <span
-              class="setup-step"
-              [class.current]="currentStep() === index"
-              [class.complete]="currentStep() > index"
-              [attr.aria-current]="currentStep() === index ? 'step' : null"
-            >
-              <span>{{ index + 1 }}</span>{{ label }}
-            </span>
-          }
-        </nav>
-
-        @if (currentStep() === 0) {
-        <!-- Section 1 : Compte administrateur -->
-        <section class="workbench-card" aria-labelledby="step-admin-heading">
-          <div class="section-heading">
-            <span class="step-pill" aria-hidden="true">1</span>
-            <div>
-              <h2 id="step-admin-heading">
-                {{ accountCreated() ? 'Administrateur créé' : 'Créer l’administrateur' }}
-              </h2>
-              <p>Ce compte protège l’accès au cluster. Vous pourrez en ajouter d’autres ensuite.</p>
-            </div>
-          </div>
-
-          @if (accountCreated()) {
-            <p>
-              Connecté avec le compte <strong>{{ adminUsername() }}</strong
-              >.
-            </p>
-          } @else {
-            <div class="form-group">
-              <label for="admin-username-input" class="field-label">Nom d’utilisateur</label>
-              <input
-                id="admin-username-input"
-                [disabled]="busy() || accountCreated()"
-                type="text"
-                class="text-input"
-                [class.invalid]="adminErrors().username"
-                [ngModel]="adminUsername()"
-                (ngModelChange)="adminUsername.set($event)"
-                maxlength="64"
-                autocomplete="username"
-                [attr.aria-invalid]="adminErrors().username ? 'true' : null"
-                aria-describedby="admin-username-error"
-              />
-              @if (adminErrors().username) {
-                <span id="admin-username-error" class="field-error">{{
-                  adminErrors().username
-                }}</span>
-              }
-            </div>
-
-            <div class="form-group">
-              <label for="admin-password-input" class="field-label">Mot de passe</label>
-              <div class="input-with-button">
+              <div class="form-group">
+                <label for="admin-username-input" class="field-label">Nom d’utilisateur</label>
                 <input
-                  id="admin-password-input"
+                  id="admin-username-input"
+                  [disabled]="busy() || accountCreated()"
+                  type="text"
+                  class="text-input"
+                  [class.invalid]="adminErrors().username"
+                  [ngModel]="adminUsername()"
+                  (ngModelChange)="adminUsername.set($event)"
+                  maxlength="64"
+                  autocomplete="username"
+                  [attr.aria-invalid]="adminErrors().username ? 'true' : null"
+                  aria-describedby="admin-username-error"
+                />
+                @if (adminErrors().username) {
+                  <span id="admin-username-error" class="field-error">{{ adminErrors().username }}</span>
+                }
+              </div>
+
+              <div class="form-group">
+                <label for="admin-password-input" class="field-label">Mot de passe</label>
+                <div class="input-with-button">
+                  <input
+                    id="admin-password-input"
+                    [disabled]="busy() || accountCreated()"
+                    class="text-input"
+                    [class.invalid]="adminErrors().password"
+                    [type]="passwordVisible() ? 'text' : 'password'"
+                    [ngModel]="adminPassword()"
+                    (ngModelChange)="adminPassword.set($event)"
+                    autocomplete="new-password"
+                    [attr.aria-invalid]="adminErrors().password ? 'true' : null"
+                    aria-describedby="admin-password-hint"
+                  />
+                  <button
+                    matButton="text"
+                    type="button"
+                    [attr.aria-pressed]="passwordVisible()"
+                    (click)="passwordVisible.set(!passwordVisible())"
+                  >
+                    {{ passwordVisible() ? 'Masquer' : 'Afficher' }}
+                  </button>
+                </div>
+                <span
+                  id="admin-password-hint"
+                  [class]="adminErrors().password ? 'field-error' : 'field-hint'"
+                >
+                  {{ adminErrors().password || minimumPasswordLength + ' caractères minimum.' }}
+                </span>
+              </div>
+
+              <div class="form-group">
+                <label for="admin-confirm-input" class="field-label">Confirmer le mot de passe</label>
+                <input
+                  id="admin-confirm-input"
                   [disabled]="busy() || accountCreated()"
                   class="text-input"
-                  [class.invalid]="adminErrors().password"
+                  [class.invalid]="adminErrors().confirm"
                   [type]="passwordVisible() ? 'text' : 'password'"
-                  [ngModel]="adminPassword()"
-                  (ngModelChange)="adminPassword.set($event)"
+                  [ngModel]="adminConfirm()"
+                  (ngModelChange)="adminConfirm.set($event)"
                   autocomplete="new-password"
-                  [attr.aria-invalid]="adminErrors().password ? 'true' : null"
-                  aria-describedby="admin-password-hint"
+                  [attr.aria-invalid]="adminErrors().confirm ? 'true' : null"
+                  aria-describedby="admin-confirm-error"
                 />
-                <button
-                  matButton="outlined"
-                  type="button"
-                  [attr.aria-pressed]="passwordVisible()"
-                  (click)="passwordVisible.set(!passwordVisible())"
-                >
-                  {{ passwordVisible() ? 'Masquer' : 'Afficher' }}
+                @if (adminErrors().confirm) {
+                  <span id="admin-confirm-error" class="field-error">{{ adminErrors().confirm }}</span>
+                }
+              </div>
+
+              <div class="workbench-actions">
+                <button matButton="filled" type="button" [disabled]="busy()" (click)="nextFromAccount()">
+                  Continuer
                 </button>
               </div>
-              <span
-                id="admin-password-hint"
-                [class]="adminErrors().password ? 'field-error' : 'field-hint'"
-              >
-                {{ adminErrors().password || minimumPasswordLength + ' caractères minimum.' }}
-              </span>
-            </div>
-
-            <div class="form-group">
-              <label for="admin-confirm-input" class="field-label">Confirmer le mot de passe</label>
-              <input
-                id="admin-confirm-input"
-                [disabled]="busy() || accountCreated()"
-                class="text-input"
-                [class.invalid]="adminErrors().confirm"
-                [type]="passwordVisible() ? 'text' : 'password'"
-                [ngModel]="adminConfirm()"
-                (ngModelChange)="adminConfirm.set($event)"
-                autocomplete="new-password"
-                [attr.aria-invalid]="adminErrors().confirm ? 'true' : null"
-                aria-describedby="admin-confirm-error"
-              />
-              @if (adminErrors().confirm) {
-                <span id="admin-confirm-error" class="field-error">{{
-                  adminErrors().confirm
-                }}</span>
-              }
-            </div>
+            </section>
           }
-          <div class="workbench-actions">
-            <button matButton="filled" type="button" [disabled]="busy()" (click)="nextFromAccount()">
-              Continuer
-              <app-icon name="forward" matButtonIcon iconPositionEnd />
-            </button>
-          </div>
-        </section>
-        }
 
-        @if (currentStep() === 1) {
-        <!-- Section 2 : Identité -->
-        <section class="workbench-card" aria-labelledby="step-identity-heading">
-          <div class="section-heading">
-            <span class="step-pill" aria-hidden="true">2</span>
-            <div>
-              <h2 id="step-identity-heading">Identifier le central</h2>
-              <p>Donnez un nom au central et au cluster qu’il hébergera.</p>
-            </div>
-          </div>
+          @case (1) {
+            <section aria-labelledby="step-identity-heading">
+              <h2 id="step-identity-heading">Nommer le central</h2>
+              <p class="lead">Ces noms s’affichent dans l’interface et chez les workers.</p>
 
-          <div class="form-group">
-            <label for="node-name-input" class="field-label">Nom de ce nœud</label>
-            <input
-              id="node-name-input"
-              [disabled]="busy() || accountCreated()"
-              type="text"
-              class="text-input"
-              [placeholder]="defaultNodeName()"
-              [ngModel]="nodeName()"
-              (ngModelChange)="nodeName.set($event)"
-              maxlength="128"
-              autocomplete="off"
-            />
-            <div class="Quick-suggestions" aria-label="Suggestions de noms">
-              <span class="suggestions-label">Suggestions :</span>
-              @for (suggestion of nodeNameSuggestions; track suggestion) {
-                <button
-                  type="button"
-                  class="suggestion-chip"
+              <div class="form-group">
+                <label for="node-name-input" class="field-label">Nom du central</label>
+                <input
+                  id="node-name-input"
                   [disabled]="busy() || accountCreated()"
-                  [class.active]="nodeName() === suggestion"
-                  (click)="nodeName.set(suggestion)"
-                >
-                  {{ suggestion }}
-                </button>
-              }
-            </div>
-          </div>
-          <div class="form-group">
-            <label for="cluster-name-input" class="field-label">Nom du cluster</label>
-            <input
-              id="cluster-name-input"
-              type="text"
-              class="text-input"
-              [placeholder]="defaultClusterName()"
-              [ngModel]="clusterName()"
-              (ngModelChange)="clusterName.set($event)"
-              maxlength="128"
-              autocomplete="off"
-            />
-            <span class="field-hint">Les workers se rattacheront à ce central.</span>
-          </div>
-        </section>
-
-        <div class="workbench-actions">
-          <button matButton="outlined" type="button" [disabled]="busy()" (click)="previousStep()">
-            Retour
-          </button>
-          <button matButton="filled" type="button" [disabled]="busy()" (click)="advanceToReview()">
-            Continuer
-            <app-icon name="forward" matButtonIcon iconPositionEnd />
-          </button>
-        </div>
-        }
-
-        @if (currentStep() === 2) {
-        <!-- Section 3 : Vérification et initialisation du central -->
-        <section class="workbench-card workbench-card--Contextual" aria-live="polite">
-          <div class="workbench-actions workbench-actions--start">
-            <button matButton="outlined" type="button" [disabled]="busy()" (click)="previousStep()">
-              Retour
-            </button>
-          </div>
-            <div class="section-heading">
-              <span class="step-pill" aria-hidden="true">3</span>
-              <div>
-                <h3>Vérifier le central</h3>
-                <p>Le central sera prêt à accueillir des workers après son initialisation.</p>
+                  type="text"
+                  class="text-input"
+                  [placeholder]="defaultNodeName()"
+                  [ngModel]="nodeName()"
+                  (ngModelChange)="nodeName.set($event)"
+                  maxlength="128"
+                  autocomplete="off"
+                />
               </div>
-            </div>
 
-            <p class="field-hint">
-              Central : <strong>{{ effectiveNodeName() }}</strong> · Cluster :
-              <strong>{{ clusterName().trim() || defaultClusterName() }}</strong>
-            </p>
+              <div class="form-group">
+                <label for="cluster-name-input" class="field-label">Nom du cluster</label>
+                <input
+                  id="cluster-name-input"
+                  type="text"
+                  class="text-input"
+                  [placeholder]="defaultClusterName()"
+                  [ngModel]="clusterName()"
+                  (ngModelChange)="clusterName.set($event)"
+                  maxlength="128"
+                  autocomplete="off"
+                />
+              </div>
 
-            <div class="workbench-actions">
-              <button
-                matButton="filled"
-                type="button"
-                [disabled]="busy()"
-                (click)="submitCreateCluster()"
-              >
-                Initialiser le central <app-icon name="forward" />
-              </button>
-            </div>
-        </section>
+              <div class="workbench-actions">
+                <button matButton="text" type="button" [disabled]="busy()" (click)="previousStep()">
+                  Retour
+                </button>
+                <button matButton="filled" type="button" [disabled]="busy()" (click)="advanceToReview()">
+                  Continuer
+                </button>
+              </div>
+            </section>
+          }
+
+          @case (2) {
+            <section aria-labelledby="step-review-heading" aria-live="polite">
+              <h2 id="step-review-heading">Vérifier le central</h2>
+              <dl class="summary">
+                <div>
+                  <dt>Central</dt>
+                  <dd>{{ effectiveNodeName() }}</dd>
+                </div>
+                <div>
+                  <dt>Cluster</dt>
+                  <dd>{{ clusterName().trim() || defaultClusterName() }}</dd>
+                </div>
+                <div>
+                  <dt>Administrateur</dt>
+                  <dd>{{ adminUsername().trim() }}</dd>
+                </div>
+                <div>
+                  <dt>{{ announcedUrls().length ? 'Adresse annoncée' : 'Adresse utilisée par ce navigateur' }}</dt>
+                  <dd>
+                    @for (url of networkAccessUrls(); track url; let last = $last) {
+                      {{ url }}{{ last ? '' : ' · ' }}
+                    }
+                  </dd>
+                </div>
+              </dl>
+
+              <details class="hardware">
+                <summary>Matériel détecté · {{ hostPlatformLabel() }}</summary>
+                <dl class="summary">
+                  <div>
+                    <dt>CPU</dt>
+                    <dd>{{ cpuInfo() }}</dd>
+                  </div>
+                  <div>
+                    <dt>RAM</dt>
+                    <dd>{{ memoryInfo() }}</dd>
+                  </div>
+                  <div>
+                    <dt>GPU</dt>
+                    <dd>{{ gpuInfo() }}</dd>
+                  </div>
+                  <div>
+                    <dt>Accélération GPU</dt>
+                    <dd>{{ gpuAccelerationInfo() }}</dd>
+                  </div>
+                  <div>
+                    <dt>Interfaces</dt>
+                    <dd>
+                      @if (setupSheet()?.addresses?.length) {
+                        <ul class="network-addresses" aria-label="Adresses des interfaces">
+                          @for (item of setupSheet()!.addresses; track item.interface + '/' + item.address) {
+                            <li class="mono">{{ item.address }} ({{ item.interface }})</li>
+                          }
+                        </ul>
+                      } @else {
+                        {{ setupSheet() ? 'Aucune adresse détectée' : 'Détection en cours…' }}
+                      }
+                    </dd>
+                  </div>
+                </dl>
+              </details>
+
+              <div class="workbench-actions">
+                <button matButton="text" type="button" [disabled]="busy()" (click)="previousStep()">
+                  Retour
+                </button>
+                <button
+                  matButton="filled"
+                  type="button"
+                  [disabled]="busy()"
+                  (click)="submitCreateCluster()"
+                >
+                  Initialiser le central
+                </button>
+              </div>
+            </section>
+          }
         }
       </div>
     </app-access-template>
@@ -356,255 +266,108 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
       display: block;
       min-height: 100%;
     }
-    .network-addresses {
-      display: grid;
-      gap: var(--space-2);
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    .setup-error {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px 16px;
-      border-radius: var(--radius-md);
-      background: var(--danger-soft);
-      color: var(--danger);
-      font-size: var(--font-body);
-    }
-    .setup-telemetry,
-    .workbench-card {
+    .wizard {
       display: grid;
       gap: var(--space-4);
-      padding: var(--space-5);
-      border-radius: var(--radius-2xl);
-      background: var(--surface-container);
-      box-shadow: var(--elevation-2);
+      width: min(100%, 460px);
+      margin-inline: auto;
     }
-    .setup-telemetry {
-      padding: 0;
-      background: transparent;
-      box-shadow: none;
-    }
-    .setup-workbench,
-    .hardware-bento {
-      display: grid;
-      gap: var(--space-3);
-    }
-    .setup-steps {
-      display: flex;
-      gap: var(--space-2);
-      padding: var(--space-2);
-      border-radius: var(--radius-pill);
-      background: var(--surface-container-low);
-    }
-    .setup-step {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-2);
-      min-width: 0;
-      padding: var(--space-2) var(--space-3);
-      border-radius: var(--radius-pill);
+    .progress {
+      margin: 0;
       color: var(--text-secondary);
       font-size: var(--font-label);
-      font-weight: 700;
     }
-    .setup-step > span {
-      display: grid;
-      place-items: center;
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      background: var(--surface-container-highest);
-      color: var(--text-primary);
-      font-size: 11px;
-    }
-    .setup-step.current {
-      background: var(--accent-soft);
-      color: var(--accent);
-    }
-    .setup-step.complete > span {
-      background: var(--success-soft);
-      color: var(--success);
-    }
-    .hardware-bento {
-      padding: var(--space-4);
-      border-radius: var(--radius-lg);
-      background: var(--surface-container-low);
-    }
-    .hardware-summary {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: var(--space-2);
+    h2 {
       margin: 0;
+      font-size: var(--font-title-lg);
     }
-    .hardware-summary > div {
+    .lead {
+      margin: var(--space-1) 0 var(--space-4);
+      color: var(--text-secondary);
+    }
+    .form-group {
       display: grid;
-      gap: 2px;
-      padding: var(--space-3);
-      border-radius: var(--radius-md);
-      background: var(--surface-container-high);
+      gap: var(--space-1);
+      margin-bottom: var(--space-4);
     }
-    .hardware-summary dt {
-      color: var(--text-muted);
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-    }
-    .hardware-summary dd {
-      margin: 0;
-      color: var(--text-primary);
-      font-size: var(--font-body);
-      font-weight: 700;
-      overflow-wrap: anywhere;
-    }
-    .hardware-details {
-      display: grid;
-      gap: var(--space-3);
-    }
-    .hardware-details > summary {
-      color: var(--accent);
-      cursor: pointer;
-      font-size: var(--font-label);
-      font-weight: 700;
-    }
-    .live-dot {
-      width: 10px;
-      height: 10px;
-      margin-top: 5px;
-      border-radius: 50%;
-      background: var(--success);
-      box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 20%, transparent);
-      flex-shrink: 0;
-    }
-    .hardware-bento-title-group {
-      display: grid;
-      gap: 2px;
-      min-width: 0;
-    }
-    .hardware-node-name {
-      margin: 0;
-      font-size: var(--font-title-md);
-      font-weight: 800;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .hardware-tiles {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: var(--space-2);
-    }
-    .hardware-tile {
-      display: grid;
-      gap: 3px;
-      padding: 10px 12px;
-      border-radius: var(--radius-md);
-      background: var(--surface-container-high);
-    }
-    .hardware-tile--wide {
-      grid-column: 1 / -1;
-    }
-    .hardware-tile--accent {
-      background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface-container-high));
-    }
-    .tile-label,
-    .suggestions-label {
-      font-size: 12px;
+    .field-label {
       font-weight: 600;
-      color: var(--text-muted);
-    }
-    .tile-value {
-      font-size: 13px;
-      font-weight: 700;
-    }
-    .tile-value--mono {
-      font-family: ui-monospace, monospace;
-      word-break: break-all;
-    }
-    .tile-hint {
-      font-size: 12px;
-      color: var(--text-secondary);
-      word-break: break-all;
     }
     .text-input {
+      width: 100%;
       min-height: 44px;
-      padding: 10px 14px;
-      border-radius: 12px;
-      border: 1px solid var(--border-strong);
-      background: transparent;
-      color: var(--text-primary);
-      font-size: 16px;
-      outline: none;
-    }
-    .text-input:focus {
-      border-color: var(--accent);
-      box-shadow: inset 0 0 0 1px var(--accent);
+      padding: 0 var(--space-3);
+      border: 1px solid var(--outline);
+      border-radius: var(--radius-md);
+      background: var(--surface-container-lowest);
+      color: inherit;
+      font: inherit;
     }
     .text-input.invalid {
       border-color: var(--danger);
-      box-shadow: inset 0 0 0 1px var(--danger);
     }
-    .field-error {
-      margin: 0;
-      font-size: 12px;
-      color: var(--danger);
-    }
-    .Quick-suggestions {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-    .suggestion-chip {
-      padding: 4px 10px;
-      border-radius: var(--radius-pill);
-      border: 1px solid var(--border-subtle);
-      background: var(--surface-container);
-      color: var(--text-secondary);
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .suggestion-chip:hover,
-    .suggestion-chip.active {
-      background: var(--accent-soft);
-      color: var(--accent);
-    }
-    .workbench-actions,
     .input-with-button {
       display: flex;
-      justify-content: flex-end;
       gap: var(--space-2);
-    }
-    .workbench-actions--start {
-      justify-content: flex-start;
+      align-items: center;
     }
     .input-with-button .text-input {
       flex: 1;
     }
-    .workbench-actions button {
-      height: auto;
-      min-height: var(--mat-button-filled-container-height, 40px);
-      padding-block: var(--space-2);
+    .field-hint {
+      color: var(--text-secondary);
+      font-size: var(--font-label);
     }
-    @media (max-width: 900px) {
-      .hardware-summary {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
+    .field-error,
+    .setup-error {
+      color: var(--danger);
+      font-size: var(--font-label);
     }
-    @media (max-width: 600px) {
-      .setup-steps {
-        justify-content: space-between;
-      }
-      .setup-step {
-        padding-inline: var(--space-2);
-      }
-      .hardware-summary {
-        grid-template-columns: minmax(0, 1fr);
-      }
+    .setup-error {
+      margin: 0;
+      padding: var(--space-3);
+      border-radius: var(--radius-md);
+      background: var(--danger-soft);
+    }
+    .summary {
+      display: grid;
+      gap: var(--space-3);
+      margin: var(--space-4) 0;
+    }
+    .summary > div {
+      display: grid;
+      grid-template-columns: 9rem 1fr;
+      gap: var(--space-3);
+    }
+    .summary dt {
+      color: var(--text-secondary);
+    }
+    .summary dd {
+      margin: 0;
+      overflow-wrap: anywhere;
+    }
+    .hardware {
+      margin-bottom: var(--space-4);
+      color: var(--text-secondary);
+    }
+    .hardware summary {
+      cursor: pointer;
+    }
+    .network-addresses {
+      display: grid;
+      gap: var(--space-1);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .mono {
+      display: block;
+      font-family: ui-monospace, 'JetBrains Mono', Consolas, monospace;
+    }
+    .workbench-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: var(--space-2);
     }
   `,
 })
@@ -694,8 +457,6 @@ export class SetupWizardPageComponent {
     this.currentStep.set(2);
   }
 
-  protected readonly nodeNameSuggestions = ['Serveur Salon', 'Worker GPU', 'NAS Médias'] as const;
-
   protected readonly defaultNodeName = computed(() => {
     const status = this.localController.status();
     const sheet = this.setupSheet();
@@ -723,6 +484,8 @@ export class SetupWizardPageComponent {
 
   // The browser retains the Docker host and published port, unlike the container's
   // interfaces or default gateway. Configured public/advertised URLs take precedence.
+  protected readonly announcedUrls = computed(() => this.setupSheet()?.urls ?? []);
+
   protected readonly networkAccessUrls = computed(() => {
     const urls = this.setupSheet()?.urls ?? [];
     return urls.length ? urls : [this.document.location.origin];

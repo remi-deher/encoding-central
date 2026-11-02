@@ -140,13 +140,7 @@
       <div class="node-alert-banner node-alert-banner_warning" role="status">
         <span class="node-alert-icon" aria-hidden="true">!</span>
         <p>
-          <strong>
-            {{
-              local.mode()?.worker === false
-                ? 'La fonction worker est désactivée'
-                : 'La fonction worker ne répond pas'
-            }}.
-          </strong>
+          <strong>L’agent de ce nœud ne répond pas.</strong>
           Le suivi du rattachement est indisponible tant que l’agent ne répond pas.
         </p>
       </div>
