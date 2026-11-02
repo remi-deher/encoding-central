@@ -7,11 +7,11 @@ namespace Encoding.Api.Plugins;
 
 /// <summary>
 /// Cluster-wide activation preferences for flow plugins and media-tool roles.
-/// The existing reconciliation register is the shared source; changes converge eventually on every server.
+/// Les registres locaux du central sont la source.
 /// </summary>
 public sealed class ClusterExtensionActivationState(
     DbDataSource database,
-    ClusterReconciliationRepository journal,
+    ClusterRegisterRepository journal,
     FlowComponentRegistry registry,
     ILogger<ClusterExtensionActivationState> logger) : BackgroundService
 {
@@ -40,7 +40,7 @@ public sealed class ClusterExtensionActivationState(
         if (!enabled && !CanDisablePlugin(pluginId))
             throw new InvalidOperationException("Ce plugin essentiel ne peut pas être désactivé.");
 
-        await journal.SetRegisterAsync(PluginRegister(pluginId), JsonSerializer.Serialize(enabled), ct);
+        await journal.SetAsync(PluginRegister(pluginId), JsonSerializer.Serialize(enabled), ct);
         SetLocal(pluginId, enabled, isPlugin: true);
     }
 
@@ -48,7 +48,7 @@ public sealed class ClusterExtensionActivationState(
     {
         if (!IsKnownTool(toolId)) throw new KeyNotFoundException("Outil média inconnu.");
 
-        await journal.SetRegisterAsync(ToolRegister(toolId), JsonSerializer.Serialize(enabled), ct);
+        await journal.SetAsync(ToolRegister(toolId), JsonSerializer.Serialize(enabled), ct);
         SetLocal(toolId, enabled, isPlugin: false);
     }
 

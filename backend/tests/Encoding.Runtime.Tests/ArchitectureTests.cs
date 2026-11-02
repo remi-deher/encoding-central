@@ -43,8 +43,6 @@ public sealed partial class ArchitectureTests
         "Encoding.Api/Flows/FlowScriptEndpoints.cs",
         "Encoding.Api/Flows/FlowTemplateEndpoints.cs",
         "Encoding.Api/Infrastructure/ClusterEndpoints.cs",
-        "Encoding.Api/Infrastructure/ClusterReconciliationEndpoints.cs",
-        "Encoding.Api/Infrastructure/ClusterTaskEndpoints.cs",
         "Encoding.Api/Libraries/LibraryActivityEndpoints.cs",
         "Encoding.Api/Libraries/LibraryEndpoints.cs",
         "Encoding.Api/Libraries/LibraryWorkflowEndpoints.cs",

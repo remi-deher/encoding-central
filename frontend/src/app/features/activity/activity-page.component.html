@@ -271,19 +271,6 @@
         <span>Remettre en file</span>
       </button>
     }
-    @if (canForceSourceRetry()) {
-      <button
-        matButton="text"
-        type="button"
-        class="header-action-btn"
-        [disabled]="actionBusy()"
-        (click)="forceSourceRetrySelected()"
-        title="Neutraliser le propriétaire arrêté et relancer depuis la source"
-      >
-        <app-icon name="refresh" />
-        <span>Forcer depuis la source</span>
-      </button>
-    }
   }
 </ng-template>
 
@@ -408,16 +395,6 @@
   @if (canResume()) {
     <button matButton="filled" type="button" [disabled]="actionBusy()" (click)="resumeSelected()">
       Remettre en file depuis la source
-    </button>
-  }
-  @if (canForceSourceRetry()) {
-    <button
-      matButton="filled"
-      type="button"
-      [disabled]="actionBusy()"
-      (click)="forceSourceRetrySelected()"
-    >
-      Neutraliser et remettre en file depuis la source
     </button>
   }
   @if (canCancel()) {

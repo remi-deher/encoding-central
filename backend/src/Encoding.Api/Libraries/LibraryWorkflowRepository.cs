@@ -268,28 +268,12 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
     }
 
     /// <summary>
-    /// Un serveur ne met en file automatiquement que ce qu'il peut servir : si au moins un nœud serveur monte la bibliothèque en direct,
-    /// le nœud de ce serveur doit en faire partie. Sinon l'exécution naîtrait chez un propriétaire sans accès à la source et resterait
-    /// en file, alors qu'un autre serveur, qui détient l'accès direct, la met déjà en file. Sans accès direct nulle part, tout serveur peut le faire.
+    /// Le central ne met en file automatiquement que ce qu'il peut servir : si au moins un nœud serveur monte la bibliothèque en direct,
+    /// le nœud du central doit en faire partie. Sans accès direct nulle part, le central peut le faire.
     /// </summary>
     private async Task<bool> ServesLibraryAutomaticallyAsync(Guid library,DbConnection c,DbTransaction tx,CancellationToken ct)
     {
         var node=localNode?.NodeId;
-        if(node is null)
-        {
-            await using var cmd=Sql.Command("SELECT a.node_id FROM cluster_peer_admissions a JOIN task_server_identity s ON s.peer_id=a.peer_id WHERE a.revoked_at IS NULL AND a.node_id IS NOT NULL LIMIT 1",
-                c,tx);
-            node=await cmd.ScalarGuidAsync(ct);
-        }
-        if(node is null)
-        {
-            await using var cmd=Sql.Command("SELECT n.id FROM cluster_nodes n WHERE n.deleted_at IS NULL AND 'server'=ANY(n.roles) AND NOT EXISTS(SELECT 1 FROM cluster_peer_admissions a JOIN task_server_identity s ON s.peer_id<>a.peer_id WHERE a.node_id=n.id AND a.revoked_at IS NULL) ORDER BY n.created_at LIMIT 2",
-                c,tx);
-            var candidates=new List<Guid>();
-            await using var cr=await cmd.ExecuteReaderAsync(ct);
-            while(await cr.ReadAsync(ct)) candidates.Add(cr.GetGuid(0));
-            if(candidates.Count==1) node=candidates[0];
-        }
         if(node is not {} resolvedNode) return true;
         if(localNode?.NodeId is null) await localNode!.RegisterAsync(resolvedNode,ct);
         await using var access=Sql.Command("""

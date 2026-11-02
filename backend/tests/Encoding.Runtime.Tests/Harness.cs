@@ -235,8 +235,7 @@ internal static partial class Harness
         private ExecutionRepository executions = null!;
         private readonly bool sourceWriteGuards;
         private ClusterPeerIdentityStore? sourceWriteIdentity;
-        private ClusterReconciliationHealth? sourceWriteHealth;
-        private ClusterSourceWriteBarrier? sourceWriteBarrier;
+        private SourceWriteGuard? sourceWriteBarrier;
         private int rejectNextCheckpoint;
         private int rejectNextFinish;
         private readonly Guid a = Guid.NewGuid(), b = Guid.NewGuid(), c = Guid.NewGuid();
@@ -257,7 +256,7 @@ internal static partial class Harness
             await DatabaseMigrator.ApplyAsync(db,RepositoryRoot(),CancellationToken.None);
             var extensionActivation = new ClusterExtensionActivationState(
                 db,
-                new ClusterReconciliationRepository(db),
+                new ClusterRegisterRepository(db),
                 registry,
                 NullLogger<ClusterExtensionActivationState>.Instance);
             await extensionActivation.InitializeAsync(CancellationToken.None);
@@ -267,8 +266,8 @@ internal static partial class Harness
             if(sourceWriteGuards)
             {
                 var keyConfig=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{["PluginSettings:KeyDirectory"]=Path.Combine(directory,"source-write-keys")}).Build();
-                sourceWriteIdentity=new(keyConfig,new EphemeralDataProtectionProvider());sourceWriteHealth=new();sourceWriteHealth.Enable();sourceWriteBarrier=new(db,sourceWriteHealth,sourceWriteIdentity);
-                ownership=new(db,sourceWriteIdentity,sourceWriteHealth);await ownership.InitializeAsync(default);
+                sourceWriteIdentity=new(keyConfig,new EphemeralDataProtectionProvider());sourceWriteBarrier=new(db);
+                ownership=new(db,sourceWriteIdentity);await ownership.InitializeAsync(default);
             }
             runtime=new(db,eligibility,registry,new NodePresenceOptions(TimeSpan.FromHours(1)),configurations,new NodeGroupRepository(db),sourceWriteBarrier,ownership);
             artifacts=new(db,config); executions=new(db,ownership:ownership);
@@ -301,7 +300,6 @@ internal static partial class Harness
             // Les routes des ressources du runtime ont besoin de ces services déclarés ; ces scénarios ne les appellent pas.
             builder.Services.AddSingleton(_ => new Encoding.Api.Resources.ResourceBlobStore(config));
             builder.Services.AddSingleton(provider => new Encoding.Api.Resources.ResourceRepository(db, provider.GetRequiredService<Encoding.Api.Resources.ResourceBlobStore>()));
-            builder.Services.AddSingleton<Encoding.Api.Resources.ResourceBlobFetcher>(_ => throw new NotSupportedException("Récupération par un pair non utilisée dans ce scénario."));
             builder.Services.AddSingleton<Encoding.Api.Executions.RuntimeExecutionCoordinator>();
             builder.Services.AddSingleton<Encoding.Api.Nodes.NodeManagementService>();
             builder.Services.AddSingleton<Encoding.Api.Flows.FlowCoordinatorService>();

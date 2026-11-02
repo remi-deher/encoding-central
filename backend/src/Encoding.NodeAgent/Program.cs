@@ -144,9 +144,6 @@ app.MapGet("/api/v1/worker/status", async (NodeAgentOptions agentOptions, Worker
 {
     var identity = await identityStore.GetAsync(cancellationToken);
     var capabilities = await capabilityProbe.DiscoverAsync(cancellationToken);
-    Encoding.Contracts.Cluster.ClusterPeerPublicIdentity? peerIdentity = null;
-    try { peerIdentity = await enrollment.GetLocalPeerIdentityAsync(cancellationToken); }
-    catch (HttpRequestException) { }
     return Results.Ok(new
     {
         nodeId = identity.Id,
@@ -162,7 +159,7 @@ app.MapGet("/api/v1/worker/status", async (NodeAgentOptions agentOptions, Worker
         clusterId = identity.ClusterId,
         clusterName = identity.ClusterName,
         displayName = identity.DisplayName ?? agentOptions.DisplayName,
-        verificationCode = identity.HasCredentials ? NodeVerificationCode.FromToken(identity.Id, identity.NodeToken!, peerIdentity?.PublicKey) : null,
+        verificationCode = identity.HasCredentials ? NodeVerificationCode.FromToken(identity.Id, identity.NodeToken!) : null,
         switching = identity.IsSwitching
             ? new { previousClusterName = identity.Previous!.ClusterName, deadline = identity.SwitchDeadline }
             : null,

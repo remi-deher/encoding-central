@@ -314,18 +314,9 @@ internal static class AuthScenarios
         }
         Check(await admin.StatusAsync(post, "/api/v1/cluster", new { name = "Autre" }) == HttpStatusCode.Conflict, "A cluster cannot be created twice.");
         Check(await admin.StatusAsync(put, "/api/v1/cluster", new { name = "Atelier" }) == HttpStatusCode.OK, "A cluster can be renamed.");
-        var joinedClusterId = Guid.NewGuid();
-        var joinedNodeId = Guid.NewGuid();
-        var joinedClusterName = "Cluster d'accueil";
-        var bootstrap = await CreateClusterBootstrapAsync(factory, joinedClusterId, joinedClusterName, joinedNodeId);
-        var localClusterJoin = new { clusterId = joinedClusterId, clusterName = joinedClusterName, nodeId = joinedNodeId, bootstrap };
-        Check(await anonymous.StatusAsync(post, "/api/v1/cluster/join", localClusterJoin, csrf: false) == HttpStatusCode.Unauthorized,
-            "The local server cannot adopt a cluster identity without its container secret.");
-        Check(await anonymous.StatusAsync(post, "/api/v1/cluster/join", localClusterJoin, csrf: false, localSecret: LocalSecret) == HttpStatusCode.OK,
-            "The local agent aligns the server identity after an approved join.");
-        using (var joined = await anonymous.SendAsync(get, "/api/v1/cluster"))
-            Check((await joined.Content.ReadFromJsonAsync<JsonElement>(Json)).GetProperty("id").GetGuid() == joinedClusterId,
-                "The local API publishes the adopted cluster identity.");
+        // Le central ne rejoint jamais un autre cluster : plus de route d'adoption d'identité.
+        var adoption = await admin.StatusAsync(post, "/api/v1/cluster/join", new { clusterId = Guid.NewGuid() });
+        Check(adoption is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed, "The cluster-join route no longer exists: " + adoption);
         Check(await viewer.StatusAsync(post, "/api/v1/local-node/leave") == HttpStatusCode.Forbidden, "A viewer cannot make this node leave its cluster.");
         Check(await viewer.StatusAsync(post, "/api/v1/local-node/enroll", new { clusterId = Guid.NewGuid() }) == HttpStatusCode.Forbidden, "A viewer cannot enroll this node elsewhere.");
         Check(await admin.StatusAsync(post, "/api/v1/local-node/leave") == HttpStatusCode.ServiceUnavailable, "Without a local worker function, the relay answers with a clear refusal.");
@@ -383,37 +374,6 @@ internal static class AuthScenarios
         await PairingAsync(factory, anonymous, admin, viewer);
     }
 
-    private static async Task<Encoding.Contracts.Cluster.ClusterJoinBootstrap> CreateClusterBootstrapAsync(
-        WebApplicationFactory<ApiAssembly> factory, Guid clusterId, string clusterName, Guid nodeId)
-    {
-        var keyDirectory = Path.Combine(Path.GetTempPath(), "auth-bootstrap-keys-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(keyDirectory);
-        try
-        {
-            await using var source = await TestDatabase.CreateSqliteAsync("auth-cluster-bootstrap");
-            await DatabaseMigrator.ApplyAsync(source.Db, Harness.RepositoryRoot(), CancellationToken.None);
-            var identityRepository = new Encoding.Api.Infrastructure.ClusterIdentityRepository(source.Db);
-            await identityRepository.AdoptAsync(clusterId, clusterName, CancellationToken.None);
-
-            var configuration = new ConfigurationBuilder()
-                .AddInMemoryCollection(new Dictionary<string, string?> { ["PluginSettings:KeyDirectory"] = keyDirectory })
-                .Build();
-            using var rootIdentity = new Encoding.Api.Infrastructure.ClusterPeerIdentityStore(configuration, new EphemeralDataProtectionProvider());
-            using var clusterDataKey = new Encoding.Api.Infrastructure.ClusterDataKeyStore(clusterId, RandomNumberGenerator.GetBytes(32));
-            var admissions = new Encoding.Api.Infrastructure.ClusterPeerAdmissionRepository(source.Db, identityRepository, rootIdentity, clusterDataKey);
-            await admissions.EnsureRootAdmissionAsync(clusterId, CancellationToken.None);
-
-            var joiningIdentity = factory.Services.GetRequiredService<Encoding.Api.Infrastructure.ClusterPeerIdentityStore>();
-            await admissions.CreateDirectApprovalGrantAsync(nodeId, joiningIdentity.PeerId, joiningIdentity.PublicKey, CancellationToken.None);
-            return await admissions.GetBootstrapForNodeAsync(nodeId, CancellationToken.None)
-                ?? throw new InvalidOperationException("A signed cluster bootstrap should be available for an approved peer.");
-        }
-        finally
-        {
-            if (Directory.Exists(keyDirectory)) Directory.Delete(keyDirectory, recursive: true);
-        }
-    }
-
     private static async Task PairingAsync(WebApplicationFactory<ApiAssembly> factory, Client anonymous, Client admin, Client viewer)
     {
         var get = HttpMethod.Get; var post = HttpMethod.Post; var put = HttpMethod.Put; var delete = HttpMethod.Delete;
@@ -453,14 +413,6 @@ internal static class AuthScenarios
         Check(await anonymous.StatusAsync(post, "/api/v1/nodes/enroll", reborn, csrf: false, localSecret: LocalSecret) == HttpStatusCode.OK, "The same node re-enrolls under a fresh identity.");
         Check(await anonymous.StatusAsync(put, $"/api/v1/nodes/{Guid.NewGuid()}/heartbeat", localBeat, csrf: false, nodeToken: NodeToken()) == HttpStatusCode.Unauthorized, "An unknown identity is still a plain 401.");
 
-        Check(await anonymous.StatusAsync(post,"/api/v1/cluster/tasks/coordinate",new {},csrf:false)==HttpStatusCode.Unauthorized,"Task coordination requires an admitted identity and signed request.");
-        foreach(var action in new[]{"/api/v1/cluster/tasks/"+Guid.NewGuid()+"/move","/api/v1/cluster/tasks/"+Guid.NewGuid()+"/recover","/api/v1/cluster/tasks/peers/"+Guid.NewGuid()+"/neutralize","/api/v1/cluster/tasks/peers/"+Guid.NewGuid()+"/readmit"})
-        {
-            Check(await anonymous.StatusAsync(post,action,new {},csrf:false)==HttpStatusCode.Unauthorized,"Task ownership writes require authentication.");
-            Check(await viewer.StatusAsync(post,action,new {})==HttpStatusCode.Forbidden,"Viewers cannot change task ownership or neutralize a server.");
-        }
-        Check(await viewer.StatusAsync(get,"/api/v1/cluster/tasks/status")==HttpStatusCode.OK,"Viewers can inspect task coordination status.");
-        Check(await anonymous.StatusAsync(post,"/api/v1/cluster/tasks/status",new {},csrf:false)==HttpStatusCode.Unauthorized,"Task-peer status requires an admitted identity and a signed request.");
         // Les workers gardent leur propre authentification, sans session.
         var token = first.NodeToken;
         var heartbeat = new NodeHeartbeatRequest(first.Name, first.Roles, 1, first.Capabilities);
@@ -572,22 +524,14 @@ internal static class AuthScenarios
             "GET /api/v1/auth/status",
             "GET /api/v1/auth/setup/node",
             "GET /api/v1/cluster",
-            "GET /api/v1/cluster/reconciliation/local-identity",
-            "GET /api/v1/cluster/resources/blobs/{digest}",
             "GET /health/live",
             "* /health/ready",
             "POST /api/v1/auth/login",
             "POST /api/v1/auth/setup",
-            "POST /api/v1/cluster/join",
-            "POST /api/v1/cluster/reconciliation/exchange",
-            "POST /api/v1/cluster/tasks/status",
-            "POST /api/v1/cluster/tasks/coordinate",
-            "POST /api/v1/cluster/ai/exchange",
             "POST /api/v1/integrations/{pluginId}/webhook",
             "POST /api/v1/nodes/enroll",
             "POST /api/v1/nodes/enrollment-requests",
             "POST /api/v1/nodes/{nodeId:guid}/leave",
-            "GET /api/v1/nodes/{nodeId:guid}/cluster-bootstrap",
             "PUT /api/v1/nodes/{nodeId:guid}/heartbeat",
         };
         var runtime = anonymous.Where(item => item.Contains("/api/v1/runtime/nodes/{nodeId:guid}")).ToArray();

@@ -95,9 +95,6 @@ public sealed class RuntimeScenarioTests(RuntimeFixture database)
     public Task PublicationRequestedBeforeWorkerLossIsAdoptedNotRepeated() => Scenarios.PublicationRequestedBeforeWorkerLossIsAdoptedNotRepeatedAsync();
 
     [DatabaseFact]
-    public Task ReplicatedExecutionCannotBeClaimedOnAnotherServer() => Scenarios.ReplicatedExecutionCannotBeClaimedOnAnotherServerAsync();
-
-    [DatabaseFact]
     public Task ResumeOnAnotherDirectWorkerWhenTheDeadWorkerWasTheAccessNode() => Scenarios.ResumeOnAnotherDirectWorkerWhenTheDeadWorkerWasTheAccessNodeAsync();
 
     [DatabaseFact]

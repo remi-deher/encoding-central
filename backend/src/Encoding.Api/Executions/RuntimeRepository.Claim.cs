@@ -263,10 +263,7 @@ public sealed partial class RuntimeRepository
             {
                 waiting.Parameters.AddWithValue("id",item.Id);
                 sourceEditResume=await waiting.ScalarBoolAsync(ct);
-                if(sourceEditResume && sourceWrites is not null && await sourceWrites.CheckAsync(c,tx,ct) is not null) continue;
             }
-            if(sourceWrites is not null && item.Flow.Nodes.Any(n=>n.Component.ComponentId=="mkv-edit-in-place")
-                && !capabilities.Any(cap=>cap.ToolId==SourceWriteProtocol.Capability) && await sourceWrites.IsClusteredAsync(c,tx,ct)) continue;
             // Library row serializes claims from all workers before counting active leases.
             await using(var limits=Sql.Command("""
               SELECT p.max_concurrent_tasks,(SELECT max_concurrent_tasks FROM library_node_processing_limits WHERE library_id=l.id AND node_id=@worker)
@@ -429,7 +426,6 @@ public sealed partial class RuntimeRepository
                 prepare.Parameters.AddWithValue("id",item.Id); prepare.Parameters.AddWithValue("requested",!directRead);
                 await prepare.ExecuteNonQueryAsync(ct);
             }
-            if(ownership is not null) await ownership.SaveCheckpointAsync(item.Id,c,tx,ct);
             await tx.CommitAsync(ct); return new(new(item.Id,item.Attempt,item.Revision+1,epoch,expires,source,root,item.Path,sourceSha,item.Flow,checkpoint,
                 item.Flow.Nodes.Single(node=>components.Resolve(node.Component)?.Kind=="input").Id,pluginSettings,item.Library,item.Probe,DirectRead:directRead,
                 SourceWriteGuardsSupported:sourceWrites is not null,VerifyPublicationAccess:needsWrite,VerifyReplacementAccess:replacementAccess,

@@ -90,8 +90,6 @@ builder.Services.AddSingleton<FlowComponentPackRepository>();
 builder.Services.AddSingleton<EncodingProfileRepository>();
 builder.Services.AddSingleton<Encoding.Api.Resources.ResourceBlobStore>();
 builder.Services.AddSingleton<Encoding.Api.Resources.ResourceRepository>();
-builder.Services.AddSingleton<Encoding.Api.Resources.ResourceBlobFetcher>();
-builder.Services.AddHostedService<Encoding.Api.Resources.ResourcePrefetchService>();
 builder.Services.AddSingleton<PluginConfigurationRepository>();
 builder.Services.AddSingleton<WebhookAuthThrottle>();
 builder.Services.AddSingleton<ToolStoreService>();
@@ -155,17 +153,8 @@ builder.Services.AddHttpClient("MetadataSources", client => client.Timeout = Tim
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddSingleton<AiMetadataEnrichmentService>();
 builder.Services.AddSingleton<RuntimeEligibility>();
-builder.Services.AddSingleton<ClusterSourceWriteBarrier>();
 builder.Services.AddSingleton<TaskOwnershipRepository>();
-builder.Services.AddSingleton<TaskCheckpointRepository>();
-builder.Services.AddSingleton<TaskCoordinationProjection>();
-builder.Services.AddSingleton<ClusterTaskTransport>();
-builder.Services.AddSingleton<ClusterTaskCoordinator>();
-builder.Services.AddSingleton<ClusterTaskPeerHandler>();
-builder.Services.AddSingleton<ClusterTaskMaintenance>();
-builder.Services.AddHostedService(services=>services.GetRequiredService<ClusterTaskMaintenance>());
-builder.Services.AddHttpClient("ClusterTaskTransfer",client=>client.Timeout=TimeSpan.FromMinutes(30)).ConfigurePrimaryHttpMessageHandler(()=>new HttpClientHandler{AllowAutoRedirect=false});
-builder.Services.AddHostedService<TaskOwnershipService>();
+builder.Services.AddSingleton<SourceWriteGuard>();
 builder.Services.AddSingleton<PendingSourceWriteRepository>();
 builder.Services.AddSingleton<FlowPlacementPlanner>();
 builder.Services.AddSingleton<RuntimeRepository>();
@@ -186,20 +175,12 @@ builder.Services.AddHostedService<LibraryMonitoringService>();
 builder.Services.AddSingleton<LibraryNodeAccessRepository>();
 builder.Services.AddSingleton<ClusterIdentityRepository>();
 builder.Services.AddSingleton<ClusterPeerIdentityStore>();
+builder.Services.AddSingleton<ClusterRegisterRepository>();
 builder.Services.AddSingleton<ClusterDataKeyStore>();
-builder.Services.AddSingleton<ClusterPeerAdmissionRepository>();
-builder.Services.AddSingleton<ClusterJoinCollisionRepository>();
-builder.Services.AddSingleton<ClusterReconciliationRepository>();
-builder.Services.AddSingleton<ClusterEntityReconciliation>();
 builder.Services.AddHostedService<ClusterDiscoveryPublisher>();
 builder.Services.AddSingleton<RuntimeExecutionCoordinator>();
 builder.Services.AddSingleton<NodeManagementService>();
 builder.Services.AddSingleton<FlowCoordinatorService>();
-builder.Services.AddHttpClient("ClusterReconciliation", client => client.Timeout = TimeSpan.FromSeconds(10))
-    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
-builder.Services.AddSingleton<IClusterTaskPeerClient,ClusterTaskPeerClient>();
-builder.Services.AddSingleton<ClusterReconciliationService>();
-builder.Services.AddHostedService<ClusterReconciliationService>(services => services.GetRequiredService<ClusterReconciliationService>());
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
@@ -257,14 +238,11 @@ app.MapLibraryWorkflowEndpoints();
 app.MapLibraryActivityEndpoints();
 app.MapLibraryEndpoints();
 app.MapClusterEndpoints();
-app.MapClusterReconciliationEndpoints();
-app.MapClusterTaskEndpoints();
 app.MapNodeEndpoints();
 app.MapNodeGroupEndpoints();
 app.MapLocalNodeEndpoints();
 app.MapExecutionEndpoints();
 app.MapTaskOwnershipEndpoints();
-app.MapClusterTaskCoordinationEndpoints();
 app.MapGet("/api/v1/system/version", (Encoding.Api.Updates.ReleaseService releases) =>
     Results.Ok(new { version = releases.Installed.Version, commit = releases.Installed.Commit }));
 app.MapGet("/api/v1/system/updates", (Encoding.Api.Updates.ReleaseService releases, CancellationToken ct) =>

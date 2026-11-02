@@ -1,7 +1,6 @@
 using Encoding.Api.Infrastructure;
 using Encoding.Api.Libraries;
 using Encoding.Contracts.Auth;
-using Encoding.Contracts.Cluster;
 using Encoding.Contracts.Nodes;
 using Encoding.Core.Nodes;
 using Microsoft.Extensions.Logging;
@@ -65,16 +64,6 @@ public sealed class NodeManagementService(
         var errors = NodeHeartbeatValidator.Validate(request);
         if (errors.Count > 0) return new(true, errors, false, null);
 
-        var identityRepo = Get<ClusterIdentityRepository>();
-        var dataKeyStore = Get<ClusterDataKeyStore>();
-        var peerAdmissions = Get<ClusterPeerAdmissionRepository>();
-        if (request.ClusterPeerId is not null && identityRepo is not null && dataKeyStore is not null && peerAdmissions is not null)
-        {
-            var identity = await identityRepo.GetAsync(ct);
-            if (!dataKeyStore.HasKey(identity.Id))
-                await peerAdmissions.EnsureRootAdmissionAsync(identity.Id, ct);
-        }
-
         var window = Get<EnrollmentWindowRepository>();
         var windowOpen = isLocal || (window is null || (await window.GetAsync(ct)).IsOpen);
         var node = await repository.EnrollAsync(request, windowOpen, ct);
@@ -84,20 +73,7 @@ public sealed class NodeManagementService(
 
         if (node is not null)
         {
-            if (request.ClusterPeerId is { } peerId && request.ClusterPeerPublicKey is { } publicKey && peerAdmissions is not null)
-                await peerAdmissions.CreateDirectApprovalGrantAsync(node.Id, peerId, publicKey, ct);
-
-            if (request.ClusterPeerId is not null && request.ClusterPeerPublicKey is not null
-                && !string.IsNullOrWhiteSpace(request.ClusterPeerReconciliationUrl)
-                && Get<ClusterReconciliationRepository>() is { } reconciliation)
-            {
-                await reconciliation.AddPeerEndpointAsync(request.ClusterPeerReconciliationUrl, "enroll", ct);
-            }
-
-            var bootstrap = peerAdmissions is not null
-                ? await peerAdmissions.GetBootstrapForNodeAsync(node.Id, ct)
-                : null;
-            return new(false, null, windowOpen, node with { ClusterBootstrap = bootstrap });
+            return new(false, null, windowOpen, node);
         }
 
         return new(false, null, windowOpen, null);
@@ -110,16 +86,6 @@ public sealed class NodeManagementService(
     {
         var errors = NodeHeartbeatValidator.Validate(request);
         if (errors.Count > 0) return new(CreatePairingOutcome.ValidationProblem, errors);
-
-        var identityRepo = Get<ClusterIdentityRepository>();
-        var dataKeyStore = Get<ClusterDataKeyStore>();
-        var peerAdmissions = Get<ClusterPeerAdmissionRepository>();
-        if (request.Node.ClusterPeerId is not null && identityRepo is not null && dataKeyStore is not null && peerAdmissions is not null)
-        {
-            var identity = await identityRepo.GetAsync(ct);
-            if (!dataKeyStore.HasKey(identity.Id))
-                await peerAdmissions.EnsureRootAdmissionAsync(identity.Id, ct);
-        }
 
         var result = await repository.CreatePairingRequestAsync(request, maxPendingPairingRequests, ct);
         if (result == PairingRequestResult.Created)
@@ -148,11 +114,6 @@ public sealed class NodeManagementService(
     public async Task<bool> AuthenticateTokenAsync(Guid nodeId, string token, CancellationToken ct) =>
         !string.IsNullOrWhiteSpace(token) && await repository.AuthenticateTokenAsync(nodeId, token, ct);
 
-    public async Task<ClusterJoinBootstrap?> GetClusterBootstrapAsync(Guid nodeId, CancellationToken ct) =>
-        Get<ClusterPeerAdmissionRepository>() is { } peerAdmissions
-            ? await peerAdmissions.GetBootstrapForNodeAsync(nodeId, ct)
-            : null;
-
     public Task<NodeResponse?> ApprovePairingRequestAsync(Guid nodeId, CancellationToken ct) =>
         repository.ApprovePairingRequestAsync(nodeId, ct);
 
@@ -180,27 +141,10 @@ public sealed class NodeManagementService(
                 await localNode.RegisterAsync(node.Id, ct);
 
             var config = Get<IConfiguration>();
-            var serverUrls = new List<string>();
-            if (config is not null
-                && ClusterReconciliationRepository.TryNormalizePeerUrl(config["Cluster:Reconciliation:AdvertisedApiBaseUrl"]) is { } advertised)
-            {
-                serverUrls.Add(advertised);
-            }
-
-            if (Get<ClusterReconciliationRepository>() is { } reconciliation)
-            {
-                foreach (var peerUrl in await reconciliation.GetPeerEndpointsAsync(ct))
-                {
-                    if (!serverUrls.Contains(peerUrl, StringComparer.OrdinalIgnoreCase))
-                        serverUrls.Add(peerUrl);
-                }
-            }
-
             var masterUrl = config?["Cluster:AdvertisedApiBaseUrl"];
 
             return new(HeartbeatOutcomeKind.Ok, null, node with
             {
-                ClusterServerUrls = serverUrls,
                 MasterUrl = masterUrl
             });
         }

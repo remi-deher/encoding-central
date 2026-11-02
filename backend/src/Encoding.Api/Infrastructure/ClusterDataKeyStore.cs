@@ -2,7 +2,6 @@ using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Encoding.Contracts.Cluster;
 using Encoding.Api.Infrastructure.Data;
 using Microsoft.AspNetCore.DataProtection;
 

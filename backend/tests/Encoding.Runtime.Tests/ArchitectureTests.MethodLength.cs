@@ -13,7 +13,6 @@ public sealed partial class ArchitectureTests
     {
         ["Encoding.Api/Executions/RuntimeRepository.Claim.cs::ClaimAvailableAsync(Guid,ClaimCursor?,CancellationToken)"] = 312,
         ["Encoding.Api/Flows/FlowDefinitionValidator.cs::Validate(FlowDefinition,bool,bool)"] = 257,
-        ["Encoding.Api/Infrastructure/ClusterEntityReconciliation.cs::CaptureLocalChangesAsync(CancellationToken)"] = 214,
         ["Encoding.Api/Tools/AiAssistantEndpoints.cs::MapAiAssistantEndpoints(WebApplication)"] = 197,
         ["Encoding.NodeAgent/Runtime/RuntimeTransferService.cs::TransferAsync(RuntimeTransfer,RuntimeClient,CancellationToken)"] = 166,
         ["Encoding.Api/Flows/FlowSimulator.cs::Simulate(FlowSimulationRequest,IReadOnlyDictionary<string, JsonElement>?)"] = 162,
@@ -24,7 +23,6 @@ public sealed partial class ArchitectureTests
         ["Encoding.Contracts/Flows/SubtitleManagement.cs::Plan(IReadOnlyList<SubtitleTrack>,bool?,(int Width, int Height),SubtitleOptions)"] = 143,
         ["Encoding.Api/Executions/FlowPlacementPlanner.Requirements.cs::BuildRequirements(List<FlowNodeDefinition>,JsonElement?)"] = 141,
         ["Encoding.Api/Executions/ExecutionEndpoints.cs::MapExecutionEndpoints(WebApplication)"] = 137,
-        ["Encoding.Api/Infrastructure/ClusterEntityReconciliation.Apply.cs::ApplyOneAsync(PendingChange,CancellationToken)"] = 131,
         ["Encoding.Api/Infrastructure/OpenApiEndpoints.cs::BuildSpecification(EndpointDataSource)"] = 128,
         ["Encoding.Api/Flows/FlowAiEndpoints.cs::MapFlowAiEndpoints(WebApplication)"] = 126,
         ["Encoding.Api/Flows/StandardFlowTemplateSeeder.cs::EnsureOneAsync(DbDataSource,Guid,Template,CancellationToken)"] = 121,

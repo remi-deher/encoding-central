@@ -66,13 +66,10 @@ public sealed class NodeHeartbeatService(
                                 var node = await response.Content.ReadFromJsonAsync<NodeResponse>(AgentJson.Options, stoppingToken);
                                 if (!identity.IsEnrolled)
                                 {
-                                    await enrollment.AdoptApprovedClusterAsync(identity, identity.Id, stoppingToken);
                                     await identityStore.MarkEnrolledAsync(stoppingToken);
                                     logger.LogInformation("L’enrôlement en attente du worker {NodeId} a été confirmé par le cluster.", identity.Id);
                                     await enrollment.CompleteSwitchAsync(stoppingToken);
                                 }
-                                if (node?.ClusterServerUrls is { Count: > 0 })
-                                    await identityStore.UpdateKnownServersAsync(node.ClusterServerUrls, stoppingToken);
                                 if (!string.IsNullOrWhiteSpace(node?.MasterUrl))
                                     await identityStore.UpdateMasterUrlAsync(node.MasterUrl, stoppingToken);
 

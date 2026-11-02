@@ -6,19 +6,6 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Encoding.Api.Infrastructure.Operations;
 
-public sealed class ClusterReconciliationHealthCheck(ClusterReconciliationHealth health) : IHealthCheck
-{
-    public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
-    {
-        var status = health.GetStatus();
-        return Task.FromResult(!status.Enabled
-            ? HealthCheckResult.Degraded(status.DisabledReason ?? "Le service de réconciliation n’est pas encore actif.")
-            : status.Peers.Any(peer => (peer.Configured || peer.Discovered) && peer.LastError is not null)
-                ? HealthCheckResult.Degraded("Un échange de réconciliation a échoué ; une nouvelle tentative est prévue.")
-                : HealthCheckResult.Healthy("Le service de réconciliation est actif."));
-    }
-}
-
 public sealed class DatabaseHealthCheck(DbDataSource dataSource) : IHealthCheck
 {
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)

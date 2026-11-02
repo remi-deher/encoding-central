@@ -127,24 +127,6 @@
     </div>
   }
   <ng-container catalogue-summary>
-    @if (
-      pageTab() === 'cluster' &&
-      !local.standalone() &&
-      clusterIdentity() &&
-      loadState() === 'ready' &&
-      reconciliationBanner().isAlert
-    ) {
-      <div
-        class="node-alert-banner node-alert-banner_warning node-alert-banner_unframed"
-        role="status"
-      >
-        <span class="node-alert-icon" aria-hidden="true">!</span>
-        <p>
-          <strong>{{ reconciliationBanner().title }}</strong>
-          {{ reconciliationBanner().description }}
-        </p>
-      </div>
-    }
     @if (pageTab() === 'cluster' && local.pending()) {
       <div class="node-alert-banner node-alert-banner_warning" role="status">
         <span class="node-alert-icon" aria-hidden="true">!</span>

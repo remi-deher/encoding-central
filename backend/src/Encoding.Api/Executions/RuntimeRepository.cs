@@ -12,7 +12,7 @@ using Encoding.Contracts.Nodes;
 namespace Encoding.Api.Executions;
 
 public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEligibility eligibility,FlowComponentRegistry components,
-    NodePresenceOptions presence,PluginConfigurationRepository pluginConfigurations,NodeGroupRepository nodeGroups,ClusterSourceWriteBarrier? sourceWrites=null,
+    NodePresenceOptions presence,PluginConfigurationRepository pluginConfigurations,NodeGroupRepository nodeGroups,SourceWriteGuard? sourceWrites=null,
     TaskOwnershipRepository? ownership=null,FlowPlacementPlanner? placementPlanner=null,ILogger<RuntimeRepository>? logger=null)
 {
     private readonly FlowPlacementPlanner planner = placementPlanner ?? new FlowPlacementPlanner(components);

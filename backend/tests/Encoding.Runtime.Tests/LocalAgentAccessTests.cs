@@ -151,7 +151,7 @@ public sealed class LocalAgentAccessTests
     }
 
     [Fact]
-    public async Task SetupAppliesDisplayNameWhenLocalNodeEnrolledBeforeRestartAndInitializesRootKeyOnCreateCluster()
+    public async Task SetupAppliesDisplayNameWhenLocalNodeEnrolledBeforeRestartAndCreatesTheCluster()
     {
         using var fixture = new SecretFile();
         await using var agent = Agent(fixture.Path);
@@ -229,12 +229,10 @@ public sealed class LocalAgentAccessTests
                 var statusJson = await secondClient.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/v1/local-node/status");
                 Assert.Equal("Serveur Principal", statusJson.GetProperty("displayName").GetString());
 
-                // And creating the cluster during setup initialized the root admission and cluster data key:
-                var keyStore = secondBoot.Services.GetRequiredService<Encoding.Api.Infrastructure.ClusterDataKeyStore>();
+                // And creating the cluster during setup names it:
                 var clusterIdentity = await secondBoot.Services.GetRequiredService<Encoding.Api.Infrastructure.ClusterIdentityRepository>().GetAsync(CancellationToken.None);
                 Assert.False(clusterIdentity.Standalone);
                 Assert.Equal("Cluster Salon", clusterIdentity.Name);
-                Assert.True(keyStore.HasKey(clusterIdentity.Id));
             }
         }
         finally

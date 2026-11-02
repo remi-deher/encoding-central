@@ -6,7 +6,7 @@ using Encoding.Contracts.Libraries;
 namespace Encoding.Api.Executions;
 
 /// <summary>Politique de remplacement des sources et registre durable des remplacements (voir l'architecture 0029).</summary>
-public sealed class SourceReplacementRepository(DbDataSource dataSource,ClusterSourceWriteBarrier? sourceWrites=null)
+public sealed class SourceReplacementRepository(DbDataSource dataSource,SourceWriteGuard? sourceWrites=null)
 {
     public static readonly TimeSpan RollbackReservation=TimeSpan.FromMinutes(15);
     public async Task<LibraryReplacementPolicy?> GetPolicyAsync(Guid library,CancellationToken ct)
@@ -117,7 +117,7 @@ public sealed class SourceReplacementRepository(DbDataSource dataSource,ClusterS
         if(sourceWrites is not null)
         {
             await using var connection=await dataSource.OpenConnectionAsync(ct);
-            if(await sourceWrites.CheckAsync(connection,null,ct) is not null || !await sourceWrites.SupportsGuardAsync(node,connection,null,ct)) return [];
+            if(!await sourceWrites.NodeCanWriteAsync(node,connection,null,ct)) return [];
         }
 
         await using var cmd=dataSource.CreateCommand($"""
@@ -141,9 +141,8 @@ public sealed class SourceReplacementRepository(DbDataSource dataSource,ClusterS
         cmd.Parameters.AddWithValue("id",execution);cmd.Parameters.AddWithValue("node",node);cmd.Parameters.AddWithValue("root",root);if(!await cmd.ScalarBoolAsync(ct)) return false;
         if(sourceWrites is not null)
         {
-            if(!await sourceWrites.VerifyAsync(ct)) return false;
             await using var connection=await dataSource.OpenConnectionAsync(ct);
-            if(await sourceWrites.CheckAsync(connection,null,ct) is not null || !await sourceWrites.SupportsGuardAsync(node,connection,null,ct)) return false;
+            if(!await sourceWrites.NodeCanWriteAsync(node,connection,null,ct)) return false;
         }
         return await cmd.ScalarBoolAsync(ct);
     }

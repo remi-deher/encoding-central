@@ -295,37 +295,6 @@ public sealed class WorkerIdentityStore(NodeAgentOptions options)
         }
     }
 
-    public async Task UpdateKnownServersAsync(IReadOnlyList<string>? serverUrls, CancellationToken cancellationToken)
-    {
-        if (serverUrls is not { Count: > 0 }) return;
-        await gate.WaitAsync(cancellationToken);
-        try
-        {
-            var current = await LoadAsync(cancellationToken);
-            if (!current.IsEnrolled) return;
-            var merged = new List<string>();
-            void Add(string? url)
-            {
-                if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url, UriKind.Absolute, out var uri)) return;
-                var normalized = uri.GetLeftPart(UriPartial.Path).TrimEnd('/') + "/";
-                if (!merged.Contains(normalized, StringComparer.OrdinalIgnoreCase)) merged.Add(normalized);
-            }
-            if (current.KnownServerUrls is not null)
-                foreach (var url in current.KnownServerUrls) Add(url);
-            foreach (var url in serverUrls) Add(url);
-            var unchanged = current.KnownServerUrls is not null
-                && current.KnownServerUrls.Count == merged.Count
-                && current.KnownServerUrls.SequenceEqual(merged, StringComparer.OrdinalIgnoreCase);
-            if (unchanged) return;
-            state = current with { KnownServerUrls = merged };
-            await SaveAsync(state, cancellationToken);
-        }
-        finally
-        {
-            gate.Release();
-        }
-    }
-
     public async Task UpdateMasterUrlAsync(string newMasterUrl, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(newMasterUrl) || !Uri.TryCreate(newMasterUrl, UriKind.Absolute, out var uri)) return;

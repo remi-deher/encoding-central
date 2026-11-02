@@ -60,51 +60,6 @@ internal static partial class Harness
             Console.WriteLine("PASS: a publication requested before a worker loss is adopted by the resumed worker, exactly once.");
         }
 
-        /// <summary>Une exécution répliquée vers un autre serveur y reste visible dans l'historique mais n'y est jamais attribuable : baux et réservations restent locaux.</summary>
-        public async Task ReplicatedExecutionCannotBeClaimedOnAnotherServerAsync()
-        {
-            var flow=Chain(Node(registry,"entry","base-input-file"),Node(registry,"end","base-complete-flow"));
-            var(id,first,context)=await EnqueueAsync(flow);
-            await CompleteAsync(id,a,first,"entry",context);
-
-            var clusterId=Guid.NewGuid(); var key=RandomNumberGenerator.GetBytes(32);
-            await new ClusterIdentityRepository(db).AdoptAsync(clusterId,"Media",CancellationToken.None);
-            await using var other=await TestDatabase.CreateSqliteAsync("second-server");
-            await DatabaseMigrator.ApplyAsync(other.Db,RepositoryRoot(),CancellationToken.None);
-            await new ClusterIdentityRepository(other.Db).AdoptAsync(clusterId,"Media",CancellationToken.None);
-            var protection=new EphemeralDataProtectionProvider();
-            var firstEntities=new ClusterEntityReconciliation(db,new ClusterDataKeyStore(clusterId,key),DataProtectionProvider.Create(new DirectoryInfo(Path.Combine(directory,"keys"))),NullLogger<ClusterEntityReconciliation>.Instance);
-            var otherEntities=new ClusterEntityReconciliation(other.Db,new ClusterDataKeyStore(clusterId,key),protection,NullLogger<ClusterEntityReconciliation>.Instance);
-            var sender=new ClusterReconciliationRepository(db); var receiver=new ClusterReconciliationRepository(other.Db);
-            await firstEntities.CaptureLocalChangesAsync(CancellationToken.None);
-            while(true)
-            {
-                var events=await sender.GetEventsAfterAsync(clusterId,await receiver.GetVectorAsync(CancellationToken.None),ClusterReconciliationRepository.MaximumBatchSize,CancellationToken.None);
-                if(events.Count==0) break;
-                await receiver.ApplyIncomingAsync(events,CancellationToken.None);
-            }
-            await otherEntities.ApplyPendingAsync(CancellationToken.None);
-
-            async Task<long> OnOtherAsync(string sql){ await using var command=other.Db.CreateCommand(sql); return Convert.ToInt64(await command.ExecuteScalarAsync()); }
-            Check(await OnOtherAsync($"SELECT count(*) FROM executions WHERE id='{id}'")==1,"The second server sees the execution in the replicated history.");
-            Check(await OnOtherAsync("SELECT count(*) FROM execution_work")==0,"Assignment data (leases, work) is not replicated.");
-            Check(await OnOtherAsync("SELECT count(*) FROM media_reservations")==0,"Media reservations are not replicated.");
-
-            // Un worker de l'autre serveur ne peut ni réclamer ni reprendre cette exécution, même après expiration du bail d'origine.
-            await ExpireAsync(id);
-            var presence=new NodePresenceOptions(TimeSpan.FromHours(1));
-            var otherRuntime=new RuntimeRepository(other.Db,eligibility,registry,presence,new PluginConfigurationRepository(other.Db,protection),new NodeGroupRepository(other.Db));
-            foreach(var worker in new[]{a,b,c}) Check(await otherRuntime.ClaimAsync(worker,CancellationToken.None) is null,"The second server never assigns a replicated execution.");
-            Check(await otherRuntime.RenewAsync(id,a,first.Epoch,CancellationToken.None) is null,"A replicated execution has no lease on the second server.");
-
-            // Le serveur d'origine garde la main : sa récupération reste la seule source de reprise.
-            await FullRecovery().ProcessOnceAsync(CancellationToken.None);
-            var resumed=await runtime.ClaimAsync(b,CancellationToken.None)??throw new InvalidOperationException("The owning server resumes it.");
-            Check(resumed.ExecutionId==id,"Only the assigning server resumes the execution.");
-            Check(await executions.CancelAsync(id,CancellationToken.None),"Clean up.");await ExpireAsync(id);await RecoverCancellationAsync(id);
-            Console.WriteLine("PASS: a replicated execution is visible but unassignable on another server; leases stay local.");
-        }
-
         /// <summary>Stockage partagé : chaque worker a un accès direct. Si le worker qui détenait le média est perdu, un autre worker en accès direct reprend (plus de « nœud source » épinglé sur le worker mort).</summary>
         public async Task ResumeOnAnotherDirectWorkerWhenTheDeadWorkerWasTheAccessNodeAsync()
         {

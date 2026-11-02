@@ -8,7 +8,7 @@ namespace Encoding.Api.Executions;
 
 /// <summary>Persistent lifecycle journal. Does not assign work or publish media.</summary>
 public sealed class ExecutionRepository(DbDataSource dataSource, FlowComponentRegistry? components = null,
-    ExecutionStreamBroadcaster? broadcaster = null,TaskOwnershipRepository? ownership=null,ClusterTaskCoordinator? coordinator=null)
+    ExecutionStreamBroadcaster? broadcaster = null,TaskOwnershipRepository? ownership=null)
 {
     private static readonly JsonSerializerOptions Json=new(JsonSerializerDefaults.Web);
     // Le bail vit dans la base du propriétaire : sans preuve locale et non expirée, l'état répliqué ne suffit pas.
@@ -240,21 +240,8 @@ public sealed class ExecutionRepository(DbDataSource dataSource, FlowComponentRe
         if (inserted) await AddEvent(c, tx, request.Id, Guid.NewGuid(), 0, "queued", "En attente du moteur d’exécution.", ct);
         return inserted;
     }
-    private async Task<bool> IsPeerNeutralizedAsync(Guid peer, CancellationToken ct)
-    {
-        await using var cmd = dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM task_neutralizations WHERE peer_id=@peer AND released_at IS NULL)");
-        cmd.Parameters.AddWithValue("peer", peer);
-        return await cmd.ScalarBoolAsync(ct);
-    }
-
     public async Task<bool> CancelAsync(Guid id, CancellationToken ct, int? expectedRevision = null)
     {
-        if(coordinator is not null && ownership is not null && await ownership.GetAsync(id,ct) is {} owner && !ownership.IsLocalPeer(owner.OwnerPeerId))
-        {
-            var result = await coordinator.ControlAsync(owner.OwnerPeerId,"cancel",id,expectedRevision,ct);
-            if(result.Success) return true;
-            if(!await IsPeerNeutralizedAsync(owner.OwnerPeerId,ct)) return false;
-        }
         await using var c = await dataSource.OpenConnectionAsync(ct); await using var tx = await c.BeginTransactionAsync(ct);
         await using var cmd = Sql.Command($"""
    UPDATE executions SET state=CASE WHEN state='queued' THEN 'cancelled' ELSE 'cancelling' END,
@@ -275,12 +262,6 @@ public sealed class ExecutionRepository(DbDataSource dataSource, FlowComponentRe
     }
     public async Task<Guid?> RetryAsync(Guid id, CancellationToken ct)
     {
-        if(coordinator is not null && ownership is not null && await ownership.GetAsync(id,ct) is {} owner && !ownership.IsLocalPeer(owner.OwnerPeerId))
-        {
-            var result=await coordinator.ControlAsync(owner.OwnerPeerId,"retry",id,null,ct);
-            if(result.Success&&Guid.TryParse(result.Payload,out var remoteCreated)) return remoteCreated;
-            if(!await IsPeerNeutralizedAsync(owner.OwnerPeerId,ct)) return null;
-        }
         await using var c = await dataSource.OpenConnectionAsync(ct); await using var tx = await c.BeginTransactionAsync(ct);
         var created=await RetryInTransactionAsync(id,null,null,"Nouvelle tentative demandée.",c,tx,ct,ownership);
         if(created is null) return null;
@@ -292,12 +273,6 @@ public sealed class ExecutionRepository(DbDataSource dataSource, FlowComponentRe
     /// <summary>Creates a fresh attempt from the original source for a cancelled execution.</summary>
     public async Task<Guid?> ResumeAsync(Guid id, CancellationToken ct)
     {
-        if(coordinator is not null && ownership is not null && await ownership.GetAsync(id,ct) is {} owner && !ownership.IsLocalPeer(owner.OwnerPeerId))
-        {
-            var result=await coordinator.ControlAsync(owner.OwnerPeerId,"resume",id,null,ct);
-            if(result.Success&&Guid.TryParse(result.Payload,out var remoteCreated)) return remoteCreated;
-            if(!await IsPeerNeutralizedAsync(owner.OwnerPeerId,ct)) return null;
-        }
         await using var c = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await c.BeginTransactionAsync(ct);
         var next = Guid.NewGuid();

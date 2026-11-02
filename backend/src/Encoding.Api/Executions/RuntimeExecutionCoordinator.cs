@@ -368,10 +368,9 @@ public sealed class RuntimeExecutionCoordinator(
     public async Task<bool> EnsureBlobAsync(string digest, CancellationToken ct)
     {
         var res = Get<ResourceRepository>();
-        var fetcher = Get<ResourceBlobFetcher>();
-        if (res is null || fetcher is null) return false;
-        if (await res.FindFileAsync(digest, ct) is not { } known) return false;
-        return await fetcher.EnsureAsync(digest, known.Bytes, ct);
+        var blobs = Get<ResourceBlobStore>();
+        if (res is null || blobs is null) return false;
+        return await res.FindFileAsync(digest, ct) is not null && blobs.Exists(digest);
     }
 
     private static Guid DeriveBatchRequestId(Guid executionId, Guid invocationId, string nodeId, int batchIndex)

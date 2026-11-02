@@ -85,21 +85,6 @@ public static class NodeEndpoints
             Results.Ok(await service.ListPendingPairingRequestsAsync(cancellationToken)))
             .WithName("ListPendingNodeEnrollmentRequests");
 
-        nodes.MapGet("/{nodeId:guid}/cluster-bootstrap", async (
-            Guid nodeId,
-            NodeManagementService service,
-            HttpContext httpContext,
-            CancellationToken cancellationToken) =>
-        {
-            var token = httpContext.Request.Headers["X-Node-Token"].ToString();
-            if (!await service.AuthenticateTokenAsync(nodeId, token, cancellationToken))
-                return (IResult)Results.Unauthorized();
-            var bootstrap = await service.GetClusterBootstrapAsync(nodeId, cancellationToken);
-            return bootstrap is null
-                ? Results.NotFound(new { title = "Aucune admission de serveur n’est disponible pour ce nœud." })
-                : Results.Ok(bootstrap);
-        }).AllowAnonymous().RequireRateLimiting(AuthExtensions.AnonymousPolicy).WithName("GetClusterBootstrapForNode");
-
         nodes.MapPost("/enrollment-requests/{nodeId:guid}/approve", async (
             Guid nodeId,
             NodeManagementService service,
@@ -164,7 +149,7 @@ public static class NodeEndpoints
                 "deleted" => Results.NoContent(),
                 "coordination" => Results.Conflict(new
                 {
-                    title = "Départ du serveur différé : réconcilier les pairs et déplacer ou terminer ses tâches."
+                    title = "Le central ne peut pas quitter le cluster : il en est l'unique serveur."
                 }),
                 "busy" => Results.Conflict(new
                 {
@@ -204,7 +189,7 @@ public static class NodeEndpoints
             return await service.DeleteAsync(nodeId, ct) switch
             {
                 "deleted" => (IResult)Results.NoContent(),
-                "coordination" => Results.Conflict(new { title = "Retrait différé : réconcilier les serveurs du cluster." }),
+                "coordination" => Results.Conflict(new { title = "Le central ne peut pas être retiré : il est l'unique serveur du cluster." }),
                 "busy" => Results.Conflict(new
                 {
                     title = "Ce nœud participe à un traitement ou une découverte. Attendez sa fin ou annulez les tâches avant de le supprimer."

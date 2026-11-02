@@ -15,8 +15,6 @@ import {
 import { firstValueFrom } from 'rxjs';
 import {
   ClusterApi,
-  ClusterReconciliationHealthStatus,
-  ClusterTaskStatus,
 } from '../../shared/services/cluster-api';
 import { EnrollmentWindow, FirstLinkAcceptance } from '../../shared/models/auth';
 import {
@@ -67,7 +65,6 @@ import {
   formatLastSignal,
   localNodeSheet,
   memberNodeOverviewSections,
-  reconciliationBannerPresentation,
   runtimeEnvironmentLabel,
 } from '../../shared/models/node-management';
 import { NodeOverviewCardComponent } from './node-overview-card.component';
@@ -254,8 +251,6 @@ export class NodeCatalogPageComponent {
     initialValue: this.route.snapshot.data,
   });
   private readonly nodes = signal<readonly NodeResponse[]>([]);
-  protected readonly reconciliationStatus = signal<ClusterReconciliationHealthStatus | null>(null);
-  protected readonly taskStatus = signal<ClusterTaskStatus | null>(null);
   private readonly pendingEnrollments = signal<readonly PendingNodeEnrollmentResponse[]>([]);
   private readonly allLibraries = signal<readonly LibraryResponse[]>([]);
   private readonly nodeAccessByLibrary = signal<
@@ -577,15 +572,6 @@ export class NodeCatalogPageComponent {
     return this.loadState() === 'error'
       ? 'Impossible de joindre l’API du cluster. Vérifiez que le serveur et sa base de données sont disponibles.'
       : 'Chargement des nœuds du cluster…';
-  });
-  protected readonly reconciliationBanner = computed(() => {
-    const serversCount = this.nodes().filter((node) => node.roles.includes('server')).length;
-    return reconciliationBannerPresentation(
-      this.reconciliationStatus(),
-      serversCount,
-      this.loadState() === 'ready',
-      this.taskStatus(),
-    );
   });
   protected readonly detailTitle = computed(() => {
     const raw = this.rawNode();
@@ -1799,8 +1785,6 @@ export class NodeCatalogPageComponent {
         switchMap(() =>
           forkJoin({
             nodes: this.clusterApi.listNodes(),
-            reconciliation: this.clusterApi.reconciliationStatus().pipe(catchError(() => of(null))),
-            tasks: this.clusterApi.taskStatus().pipe(catchError(() => of(null))),
             pending: this.http.get<readonly PendingNodeEnrollmentResponse[]>(
               '/api/v1/nodes/enrollment-requests',
             ),
@@ -1816,14 +1800,12 @@ export class NodeCatalogPageComponent {
         ),
         takeUntilDestroyed(),
       )
-      .subscribe(({ nodes, reconciliation, tasks, pending, activity }) => {
+      .subscribe(({ nodes, pending, activity }) => {
         if (activity) {
           this.activeTasks.set(activity);
           this.activityLoaded.set(true);
         }
         this.nodes.set(nodes);
-        this.reconciliationStatus.set(reconciliation);
-        this.taskStatus.set(tasks);
         this.pendingEnrollments.set(pending);
         this.loadState.set('ready');
       });

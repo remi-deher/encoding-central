@@ -5,7 +5,7 @@ using System.Data.Common;
 namespace Encoding.Api.Executions;
 
 /// <summary>Local durable policy writes. A published result is never lost while the source write is waiting.</summary>
-public sealed class PendingSourceWriteRepository(DbDataSource db,ClusterSourceWriteBarrier barrier)
+public sealed class PendingSourceWriteRepository(DbDataSource db,SourceWriteGuard guard)
 {
     internal static async Task EnqueueAsync(Guid id,Guid source,Guid library,string original,string published,string sourceSha,string resultSha,
         string extension,int hours,DbConnection c,DbTransaction tx,CancellationToken ct)
@@ -23,7 +23,7 @@ public sealed class PendingSourceWriteRepository(DbDataSource db,ClusterSourceWr
     public async Task<PendingSourceWrite?> ClaimAsync(Guid node,CancellationToken ct)
     {
         await using var c=await db.OpenConnectionAsync(ct);await using var tx=await c.BeginTransactionAsync(ct);
-        if(await barrier.CheckAsync(c,tx,ct) is not null || !await barrier.SupportsGuardAsync(node,c,tx,ct)) return null;
+        if(!await guard.NodeCanWriteAsync(node,c,tx,ct)) return null;
         await using var read=Sql.Command($"""
           SELECT p.execution_id,a.local_path,p.original_path,p.published_path,p.source_sha,p.result_sha,p.result_extension,p.grace_hours,p.library_id
           FROM pending_source_writes p JOIN library_node_accesses a ON a.library_id=p.library_id AND a.node_id=p.source_node_id
@@ -50,9 +50,8 @@ public sealed class PendingSourceWriteRepository(DbDataSource db,ClusterSourceWr
             check.Parameters.AddWithValue("id",id);check.Parameters.AddWithValue("node",node);check.Parameters.AddWithValue("claim",claim);
             if(!await check.ScalarBoolAsync(ct)) return false;
         }
-        if(!await barrier.VerifyAsync(ct)) return false;
         await using var c=await db.OpenConnectionAsync(ct);await using var tx=await c.BeginTransactionAsync(ct);
-        if(await barrier.CheckAsync(c,tx,ct) is not null || !await barrier.SupportsGuardAsync(node,c,tx,ct)) return false;
+        if(!await guard.NodeCanWriteAsync(node,c,tx,ct)) return false;
         await using var update=Sql.Command($"""
           UPDATE pending_source_writes SET claim_until=clock_timestamp()+interval '5 minutes'
           WHERE {TaskOwnershipRepository.ActiveSql("pending_source_writes.execution_id")} AND execution_id=@id AND source_node_id=@node AND state='claimed' AND claim_id=@claim AND claim_until>clock_timestamp()
