@@ -32,8 +32,7 @@ jobs:
           dotnet-version: 10.0.x
       - name: Compose files stay valid
         run: |
-          docker compose -f backend/docker-compose.yml config -q
-          docker compose -f backend/docker-compose.yml -f backend/docker-compose.gpu.yml config -q
+          docker compose -f backend/docker-compose.central.yml config -q
       - name: No NuGet package with a known vulnerability
         run: |
           dotnet restore backend/Encoding.sln

@@ -106,7 +106,7 @@ describe('SetupWizardPageComponent', () => {
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
 
-    expect(el.textContent).toContain('Bienvenue sur Encoding');
+    expect(el.textContent).toContain('Configurer le central');
     expect(el.textContent).toContain('AMD Ryzen 7 5800X');
     expect(el.textContent).toContain('32 Go');
     expect(el.textContent).toContain('NVIDIA GeForce RTX 3080');
@@ -205,37 +205,39 @@ describe('SetupWizardPageComponent', () => {
     expect(fixture.nativeElement.textContent).not.toContain('Locale uniquement');
   });
 
-  it('renders the contextual panel dynamically when switching operation modes', () => {
+  it('renders the central review step', () => {
     const fixture = TestBed.createComponent(SetupWizardPageComponent);
+    fixture.componentInstance['currentStep'].set(2);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
 
-    expect(el.textContent).toContain('Prêt à démarrer en mode autonome');
-
-    const modeRadios = Array.from(el.querySelectorAll('[role="radio"]')) as HTMLButtonElement[];
-    expect(modeRadios.length).toBe(3);
-
-    modeRadios[1].click();
-    fixture.detectChanges();
-    expect(fixture.componentInstance['selectedMode']()).toBe('createCluster');
-    expect(el.textContent).toContain('Nommer votre nouveau cluster');
-
-    modeRadios[2].click();
-    fixture.detectChanges();
-    expect(fixture.componentInstance['selectedMode']()).toBe('joinCluster');
-    expect(el.textContent).toContain('Connexion au cluster d’accueil');
+    expect(el.textContent).toContain('Vérifier le central');
+    expect(el.textContent).toContain('Initialiser le central');
   });
 
-  it('allows selecting operation modes', () => {
+  it('only advances after the administrator form is valid', () => {
+    const fixture = TestBed.createComponent(SetupWizardPageComponent);
+    const component = fixture.componentInstance;
+
+    component['nextFromAccount']();
+    expect(component['currentStep']()).toBe(0);
+
+    fillAdmin(component);
+    component['nextFromAccount']();
+    expect(component['currentStep']()).toBe(1);
+
+    component['advanceToReview']();
+    expect(component['currentStep']()).toBe(2);
+    component['previousStep']();
+    expect(component['currentStep']()).toBe(1);
+  });
+
+  it('uses the central cluster mode by default', () => {
     const fixture = TestBed.createComponent(SetupWizardPageComponent);
     fixture.detectChanges();
     const component = fixture.componentInstance;
 
-    expect(component['selectedMode']()).toBe('standalone');
-    component['selectedMode'].set('createCluster');
     expect(component['selectedMode']()).toBe('createCluster');
-    component['selectedMode'].set('joinCluster');
-    expect(component['selectedMode']()).toBe('joinCluster');
   });
 
   it('submits standalone mode and redirects to root', async () => {

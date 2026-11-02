@@ -76,6 +76,14 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+            },
+            "worker": {
+              "fileReplacements": [
+                {
+                  "replace": "src/app/app.routes.ts",
+                  "with": "src/app/app.routes.worker.ts"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"

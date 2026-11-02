@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Encoding.Core.Nodes;
@@ -36,6 +37,9 @@ public static class NodeModeEndpoints
     {
         app.MapGet(pattern, async (IServiceProvider services, CancellationToken cancellationToken) =>
         {
+            var configuration = services.GetRequiredService<IConfiguration>();
+            if (configuration.GetValue("Node:FixedWorker", false))
+                return Results.Ok(new NodeModeStatus(false, false, true));
             var client = services.GetService<LauncherControlClient>();
             var mode = client is null ? null : await client.GetAsync(cancellationToken);
             return Results.Ok(mode is null ? new NodeModeStatus(false, true, true) : new NodeModeStatus(true, mode.Server, mode.Worker));
@@ -43,6 +47,9 @@ public static class NodeModeEndpoints
 
         app.MapPut(pattern, async (NodeMode requested, IServiceProvider services, CancellationToken cancellationToken) =>
         {
+            var configuration = services.GetRequiredService<IConfiguration>();
+            if (configuration.GetValue("Node:FixedWorker", false))
+                return Results.Conflict(new { title = "Ce worker est fixé par son image et ne peut pas devenir serveur." });
             var client = services.GetService<LauncherControlClient>();
             if (client is null)
                 return Results.Conflict(new { title = "Ce nœud n’est pas géré par l’image unique : son mode se règle par la variable Node__Roles." });

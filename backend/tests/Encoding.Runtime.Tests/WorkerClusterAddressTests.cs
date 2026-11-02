@@ -92,6 +92,20 @@ public sealed class WorkerClusterAddressTests
     public async Task UnreachableAddressIsReportedAsAnError() =>
         await Assert.ThrowsAsync<HttpRequestException>(() => Discovery().AddByAddressAsync($"http://127.0.0.1:{FreePort()}/", CancellationToken.None));
 
+    [Fact]
+    public void FixedWorkerForcesTheWorkerRole()
+    {
+        var options = NodeAgentOptions.FromConfiguration(new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?>
+            {
+                ["Node:FixedWorker"] = "true",
+                ["Node:Roles"] = "server,worker"
+            }).Build());
+
+        Assert.True(options.FixedWorker);
+        Assert.Equal([Encoding.Contracts.Nodes.NodeRole.Worker], options.Roles);
+    }
+
     private static int FreePort()
     {
         var socket = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);

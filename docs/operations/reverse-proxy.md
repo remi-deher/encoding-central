@@ -55,7 +55,7 @@ location / {
 
 L'image s'exécute avec l'utilisateur `app` (UID 1654) et non plus en root. Deux conséquences :
 
-- **GPU** : ajouter le GID du groupe de `/dev/dri/renderD128` au conteneur (`group_add`, déjà dans `docker-compose.gpu.yml` avec `GPU_RENDER_GID`, 107 sur TrueNAS SCALE). Sur une custom app TrueNAS, ajouter ce groupe dans la configuration du conteneur.
+- **GPU** : ajouter le GID du groupe de `/dev/dri/renderD128` au worker (`group_add` dans `docker-compose.central.yml`; 107 sur TrueNAS SCALE). Sur une custom app TrueNAS, ajouter ce groupe dans la configuration du conteneur.
 - **Volumes existants** : ceux créés par une ancienne image appartiennent à root. Avant la mise à jour, faire un snapshot ZFS (ou une copie), puis rendre les volumes à l'utilisateur, par exemple : `docker run --rm -v <volume>:/data alpine chown -R 1654:1654 /data` pour chaque volume de données. Les dossiers média montés doivent être lisibles (et écrits pour la publication) par l'UID 1654 ou son groupe.
 
 Non vérifié : sandbox Landlock, accès GPU et écriture des volumes sous cet utilisateur sur de vrais TrueNAS ; à tester avant la production.

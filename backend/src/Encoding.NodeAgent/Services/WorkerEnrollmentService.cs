@@ -182,6 +182,7 @@ public sealed class WorkerEnrollmentService(
     /// <summary>Un nœud rattaché conserve son serveur local actif ; le maillage réconcilie sa copie SQLite du cluster (0049).</summary>
     public async Task KeepLocalServerActiveAsync(CancellationToken cancellationToken)
     {
+        if (options.FixedWorker) return;
         if (launcher is null) return;
         var current = await launcher.GetAsync(cancellationToken);
         if (current is null)

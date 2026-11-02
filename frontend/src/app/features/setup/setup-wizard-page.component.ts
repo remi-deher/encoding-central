@@ -43,8 +43,9 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
   template: `
     <app-access-template
       view="setup"
-      title="Bienvenue sur Encoding"
-      description="Configurez cette machine en un coup d’œil et vérifiez les ressources matérielles détectées localement."
+      layout="stacked"
+      title="Configurer le central"
+      description="Sécurisez le central, nommez le cluster, puis vérifiez les informations avant son démarrage."
       [busy]="busy()"
       progressLabel="Action en cours"
     >
@@ -66,28 +67,51 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
         </div>
       }
 
-      <!-- Colonne gauche : Fiche d'identité live & télémétrie matérielle -->
       <aside access-context class="setup-telemetry" aria-label="Identité et matériel détecté">
         <div class="hardware-bento" role="region" aria-labelledby="hardware-card-title">
           <div class="hardware-bento-header">
             <span class="live-dot" aria-hidden="true"></span>
             <div class="hardware-bento-title-group">
-              <span class="hardware-eyebrow">Nœud local détecté</span>
               <h2 id="hardware-card-title" class="hardware-node-name">
-                {{ effectiveNodeName() }}
+                Configuration détectée
               </h2>
               <span class="hardware-host-meta">{{ hostPlatformLabel() }}</span>
             </div>
           </div>
 
-          <div class="hardware-tiles">
-            <div class="hardware-tile hardware-tile--wide">
-              <span class="tile-label">Accès au nœud</span>
-              @for (url of networkAccessUrls(); track url) {
-                <span class="tile-value tile-value--mono">{{ url }}</span>
-              }
-              <span class="tile-hint">{{ networkAccessSource() }}</span>
+          <dl class="hardware-summary">
+            <div>
+              <dt>Système</dt>
+              <dd>{{ hostPlatformLabel() }}</dd>
             </div>
+            <div>
+              <dt>CPU</dt>
+              <dd>{{ cpuInfo() }}</dd>
+            </div>
+            <div>
+              <dt>RAM</dt>
+              <dd>{{ memoryInfo() }}</dd>
+            </div>
+            <div>
+              <dt>GPU</dt>
+              <dd>{{ gpuInfo() }}</dd>
+            </div>
+            <div>
+              <dt>Encodage GPU</dt>
+              <dd>{{ gpuAccelerationInfo() }}</dd>
+            </div>
+            <div>
+              <dt>Adresse IP / accès</dt>
+              <dd>
+                @for (url of networkAccessUrls(); track url; let last = $last) {
+                  {{ url }}{{ last ? '' : ' · ' }}
+                }
+              </dd>
+            </div>
+          </dl>
+          <details class="hardware-details">
+            <summary>Détails du réseau</summary>
+            <div class="hardware-tiles">
             <div class="hardware-tile hardware-tile--wide">
               <span class="tile-label">Adresses des interfaces</span>
               @if (setupSheet()?.addresses?.length) {
@@ -107,48 +131,26 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
                 }}</span>
               }
             </div>
-            <div class="hardware-tile">
-              <span class="tile-label">Processeur</span>
-              <span class="tile-value">{{ cpuInfo() }}</span>
             </div>
-            <div class="hardware-tile">
-              <span class="tile-label">Mémoire</span>
-              <span class="tile-value">{{ memoryInfo() }}</span>
-            </div>
-            <div class="hardware-tile hardware-tile--wide">
-              <span class="tile-label">Graphique / GPU</span>
-              <span class="tile-value">{{ gpuInfo() }}</span>
-            </div>
-            <div class="hardware-tile hardware-tile--wide hardware-tile--accent">
-              <span class="tile-label">Accélération GPU</span>
-              <span class="tile-value">{{ gpuAccelerationInfo() }}</span>
-            </div>
-          </div>
+          </details>
         </div>
-
-        <p class="telemetry-footnote">
-          <svg
-            viewBox="0 0 24 24"
-            width="16"
-            height="16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            aria-hidden="true"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="16" x2="12" y2="12" />
-            <line x1="12" y1="8" x2="12.01" y2="8" />
-          </svg>
-          <span>
-            Vous pourrez renommer ce nœud ou basculer entre autonome et cluster à chaud depuis la
-            page <strong>Nœuds</strong>.
-          </span>
-        </p>
       </aside>
 
-      <!-- Colonne droite : Atelier de configuration directe -->
       <div access-content class="setup-workbench">
+        <nav class="setup-steps" aria-label="Étapes de l’initialisation">
+          @for (label of ['Administrateur', 'Central', 'Finaliser']; track label; let index = $index) {
+            <span
+              class="setup-step"
+              [class.current]="currentStep() === index"
+              [class.complete]="currentStep() > index"
+              [attr.aria-current]="currentStep() === index ? 'step' : null"
+            >
+              <span>{{ index + 1 }}</span>{{ label }}
+            </span>
+          }
+        </nav>
+
+        @if (currentStep() === 0) {
         <!-- Section 1 : Compte administrateur -->
         <section class="workbench-card" aria-labelledby="step-admin-heading">
           <div class="section-heading">
@@ -242,15 +244,23 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
               }
             </div>
           }
+          <div class="workbench-actions">
+            <button matButton="filled" type="button" [disabled]="busy()" (click)="nextFromAccount()">
+              Continuer
+              <app-icon name="forward" matButtonIcon iconPositionEnd />
+            </button>
+          </div>
         </section>
+        }
 
+        @if (currentStep() === 1) {
         <!-- Section 2 : Identité -->
         <section class="workbench-card" aria-labelledby="step-identity-heading">
           <div class="section-heading">
             <span class="step-pill" aria-hidden="true">2</span>
             <div>
-              <h2 id="step-identity-heading">Identifier cette machine</h2>
-              <p>Donnez un nom convivial pour repérer facilement ce nœud sur votre réseau.</p>
+              <h2 id="step-identity-heading">Identifier le central</h2>
+              <p>Donnez un nom au central et au cluster qu’il hébergera.</p>
             </div>
           </div>
 
@@ -282,8 +292,23 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
               }
             </div>
           </div>
+          <div class="form-group">
+            <label for="cluster-name-input" class="field-label">Nom du cluster</label>
+            <input
+              id="cluster-name-input"
+              type="text"
+              class="text-input"
+              [placeholder]="defaultClusterName()"
+              [ngModel]="clusterName()"
+              (ngModelChange)="clusterName.set($event)"
+              maxlength="128"
+              autocomplete="off"
+            />
+            <span class="field-hint">Les workers se rattacheront à ce central.</span>
+          </div>
         </section>
 
+        @if (showModeChoice()) {
         <!-- Section 3 : Choix de l'architecture -->
         <section class="workbench-card" aria-labelledby="step-mode-heading">
           <div class="section-heading">
@@ -397,9 +422,26 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
             </button>
           </div>
         </section>
+        }
+        <div class="workbench-actions">
+          <button matButton="outlined" type="button" [disabled]="busy()" (click)="previousStep()">
+            Retour
+          </button>
+          <button matButton="filled" type="button" [disabled]="busy()" (click)="advanceToReview()">
+            Continuer
+            <app-icon name="forward" matButtonIcon iconPositionEnd />
+          </button>
+        </div>
+        }
 
+        @if (currentStep() === 2) {
         <!-- Section 4 : Finalisation contextuelle selon le mode choisi -->
         <section class="workbench-card workbench-card--Contextual" aria-live="polite">
+          <div class="workbench-actions workbench-actions--start">
+            <button matButton="outlined" type="button" [disabled]="busy()" (click)="previousStep()">
+              Retour
+            </button>
+          </div>
           @if (selectedMode() === 'standalone') {
             <div class="contextual-summary">
               <div class="contextual-summary-head">
@@ -429,29 +471,17 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
 
           @if (selectedMode() === 'createCluster') {
             <div class="section-heading">
-              <span class="step-pill" aria-hidden="true">4</span>
+              <span class="step-pill" aria-hidden="true">3</span>
               <div>
-                <h3>Nommer votre nouveau cluster</h3>
-                <p>Ce nom sera affiché lors de l’ajout d’autres serveurs ou workers.</p>
+                <h3>Vérifier le central</h3>
+                <p>Le central sera prêt à accueillir des workers après son initialisation.</p>
               </div>
             </div>
 
-            <div class="form-group">
-              <label for="cluster-name-input" class="field-label">Nom du cluster</label>
-              <input
-                id="cluster-name-input"
-                type="text"
-                class="text-input"
-                [placeholder]="defaultClusterName()"
-                [ngModel]="clusterName()"
-                (ngModelChange)="clusterName.set($event)"
-                maxlength="128"
-                autocomplete="off"
-              />
-              <span class="field-hint">
-                Premier coordinateur et worker : <strong>{{ effectiveNodeName() }}</strong>
-              </span>
-            </div>
+            <p class="field-hint">
+              Central : <strong>{{ effectiveNodeName() }}</strong> · Cluster :
+              <strong>{{ clusterName().trim() || defaultClusterName() }}</strong>
+            </p>
 
             <div class="workbench-actions">
               <button
@@ -460,7 +490,7 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
                 [disabled]="busy()"
                 (click)="submitCreateCluster()"
               >
-                Créer le cluster et continuer <app-icon name="forward" />
+                Initialiser le central <app-icon name="forward" />
               </button>
             </div>
           }
@@ -611,6 +641,7 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
             </div>
           }
         </section>
+        }
       </div>
     </app-access-template>
   `,
@@ -646,13 +677,50 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
       box-shadow: var(--elevation-2);
     }
     .setup-telemetry {
-      position: sticky;
-      top: 76px;
+      padding: 0;
+      background: transparent;
+      box-shadow: none;
     }
     .setup-workbench,
     .hardware-bento {
       display: grid;
       gap: var(--space-3);
+    }
+    .setup-steps {
+      display: flex;
+      gap: var(--space-2);
+      padding: var(--space-2);
+      border-radius: var(--radius-pill);
+      background: var(--surface-container-low);
+    }
+    .setup-step {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      min-width: 0;
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-pill);
+      color: var(--text-secondary);
+      font-size: var(--font-label);
+      font-weight: 700;
+    }
+    .setup-step > span {
+      display: grid;
+      place-items: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--surface-container-highest);
+      color: var(--text-primary);
+      font-size: 11px;
+    }
+    .setup-step.current {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .setup-step.complete > span {
+      background: var(--success-soft);
+      color: var(--success);
     }
     .mode-badge {
       padding: 2px 8px;
@@ -674,6 +742,43 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
       border-radius: var(--radius-lg);
       background: var(--surface-container-low);
     }
+    .hardware-summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-2);
+      margin: 0;
+    }
+    .hardware-summary > div {
+      display: grid;
+      gap: 2px;
+      padding: var(--space-3);
+      border-radius: var(--radius-md);
+      background: var(--surface-container-high);
+    }
+    .hardware-summary dt {
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .hardware-summary dd {
+      margin: 0;
+      color: var(--text-primary);
+      font-size: var(--font-body);
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+    .hardware-details {
+      display: grid;
+      gap: var(--space-3);
+    }
+    .hardware-details > summary {
+      color: var(--accent);
+      cursor: pointer;
+      font-size: var(--font-label);
+      font-weight: 700;
+    }
     .hardware-bento-header,
     .section-heading,
     .contextual-summary-head {
@@ -694,12 +799,6 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
       display: grid;
       gap: 2px;
       min-width: 0;
-    }
-    .hardware-eyebrow {
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-      color: var(--text-muted);
     }
     .hardware-node-name {
       margin: 0;
@@ -754,14 +853,6 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
       font-size: 12px;
       color: var(--text-secondary);
       word-break: break-all;
-    }
-    .telemetry-footnote {
-      margin: 0;
-      display: flex;
-      gap: 8px;
-      font-size: 12px;
-      line-height: 1.45;
-      color: var(--text-secondary);
     }
     .workbench-card--Contextual {
       background: color-mix(in srgb, var(--surface-container) 85%, var(--accent-soft));
@@ -917,6 +1008,9 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
       justify-content: flex-end;
       gap: var(--space-2);
     }
+    .workbench-actions--start {
+      justify-content: flex-start;
+    }
     .input-with-button .text-input {
       flex: 1;
     }
@@ -960,8 +1054,19 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
       .mode-grid {
         grid-template-columns: 1fr;
       }
-      .setup-telemetry {
-        position: static;
+      .hardware-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 600px) {
+      .setup-steps {
+        justify-content: space-between;
+      }
+      .setup-step {
+        padding-inline: var(--space-2);
+      }
+      .hardware-summary {
+        grid-template-columns: minmax(0, 1fr);
       }
     }
   `,
@@ -977,11 +1082,12 @@ export class SetupWizardPageComponent {
   protected readonly setupSheet = signal<SetupNodeSheet | null>(null);
 
   protected readonly currentStep = signal(0);
+  protected readonly showModeChoice = signal(false);
   protected readonly busy = signal(false);
   protected readonly errorMessage = signal('');
 
   protected readonly nodeName = signal('');
-  protected readonly selectedMode = signal<SetupOperationMode>('standalone');
+  protected readonly selectedMode = signal<SetupOperationMode>('createCluster');
   protected readonly clusterName = signal('');
   protected readonly clusterAddress = signal('');
   protected readonly adminUsername = signal('admin');
@@ -1040,6 +1146,21 @@ export class SetupWizardPageComponent {
     };
   });
 
+  protected nextFromAccount(): void {
+    this.adminSubmitted.set(true);
+    const errors = this.adminErrors();
+    if (errors.username || errors.password || errors.confirm) return;
+    this.currentStep.set(1);
+  }
+
+  protected previousStep(): void {
+    this.currentStep.update((step) => Math.max(0, step - 1));
+  }
+
+  protected advanceToReview(): void {
+    this.currentStep.set(2);
+  }
+
   protected readonly nodeNameSuggestions = ['Serveur Salon', 'Worker GPU', 'NAS Médias'] as const;
 
   protected readonly defaultNodeName = computed(() => {
@@ -1073,10 +1194,6 @@ export class SetupWizardPageComponent {
     const urls = this.setupSheet()?.urls ?? [];
     return urls.length ? urls : [this.document.location.origin];
   });
-
-  protected readonly networkAccessSource = computed(() =>
-    this.setupSheet()?.urls?.length ? 'Adresse annoncée' : 'Adresse utilisée par ce navigateur',
-  );
 
   protected readonly defaultClusterName = computed(() => {
     return 'Cluster ' + this.effectiveNodeName();

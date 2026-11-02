@@ -9,11 +9,10 @@ Le maillage signé sans quorum est le seul modèle de réplication ; chaque serv
 Prérequis : Docker Compose. Créer le fichier d’environnement local puis démarrer les services :
 
 ```powershell
-Copy-Item .env.example .env
-docker compose up --build
+docker compose -f docker-compose.central.yml up --build
 ```
 
-L’interface Angular et l’API sont servies par le même conteneur : ouvrir `http://localhost:4201` pour l’application ou `http://localhost:5080` pour l’API. Le fichier SQLite local est conservé dans le volume `encoding-node-data` avec l’identité du nœud. La gestion du nœud passe par **Nœuds → Ce nœud et son cluster**, avec la session du serveur. L’agent écoute uniquement en boucle locale dans le conteneur ; le relais utilise le secret créé automatiquement par le lanceur, sans réglage CORS ni `WORKER_UI_ORIGINS` et sans port 8081 à publier. Hors lanceur, configurer le même fichier `Node__LocalEnrollmentSecretFile` pour le serveur et l’agent du même hôte ; sans secret, les routes de l’agent restent fermées.
+Le central sert l’interface Angular et l’API sur `http://localhost:5080`. Son worker local est autonome ; le second conteneur est un worker distinct, avec sa console sur `http://localhost:5081`. Les volumes `central-node-data` et `worker-node-data` conservent leurs identités et leurs états respectifs.
 
 ## Encodage matériel (Intel, AMD, NVIDIA)
 
@@ -21,7 +20,7 @@ L’image embarque les pilotes VA-API Intel (`iHD`, QSV) et AMD (Mesa) ; le pilo
 
 - Intel/AMD : monter `/dev/dri` (`devices: ["/dev/dri:/dev/dri"]`). Le conteneur est root ; pour un usage non-root, `group_add` avec le GID de `renderD128` (`stat -c %g /dev/dri/renderD128`, 107 sur TrueNAS SCALE).
 - NVIDIA : réservation de device `nvidia` (capabilities `gpu, video, compute, utility`) ou `--gpus all`.
-- Exemple prêt à l’emploi : `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d` (retirer le bloc inutile selon l’hôte).
+- Le worker du Compose centralisé déclare déjà `/dev/dri`; adaptez `devices` et `group_add` dans `docker-compose.central.yml` à l’hôte qui l’exécute.
 - Plusieurs GPU : `ENCODING_GPU_DEVICE=/dev/dri/renderD129`. Pilote VA-API imposé : `LIBVA_DRIVER_NAME=iHD` (Intel) ou `radeonsi` (AMD).
 - La version de l’image est attribuée par le workflow Release (tag `vX.Y.Z`), pas dans le dépôt.
 

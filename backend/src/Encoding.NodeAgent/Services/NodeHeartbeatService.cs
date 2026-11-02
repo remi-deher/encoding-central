@@ -78,14 +78,14 @@ public sealed class NodeHeartbeatService(
                                 if (!string.IsNullOrWhiteSpace(node?.MasterUrl))
                                     await identityStore.UpdateMasterUrlAsync(node.MasterUrl, stoppingToken);
 
-                                if (node?.LeadershipHandoff is not null && leadershipReceiver is not null && !string.IsNullOrWhiteSpace(identity.NodeToken))
+                                if (!options.FixedWorker && node?.LeadershipHandoff is not null && leadershipReceiver is not null && !string.IsNullOrWhiteSpace(identity.NodeToken))
                                     _ = Task.Run(async () => await leadershipReceiver.HandleHandoffAsync(node.LeadershipHandoff, serverUrl, identity.NodeToken, stoppingToken));
-                                else if (node?.LatestBackup is not null && leadershipReceiver is not null && !string.IsNullOrWhiteSpace(identity.NodeToken))
+                                else if (!options.FixedWorker && node?.LatestBackup is not null && leadershipReceiver is not null && !string.IsNullOrWhiteSpace(identity.NodeToken))
                                     _ = Task.Run(async () => await leadershipReceiver.HandleBackupNotificationAsync(node.LatestBackup, serverUrl, identity.NodeToken, stoppingToken));
 
                                 logger.LogDebug("Heartbeat envoyé pour le nœud {NodeId} vers {ServerUrl}.", identity.Id, serverUrl);
                                 ReportLifecycle(node);
-                                if (node?.LeadershipHandoff is null)
+                                if (!options.FixedWorker && node?.LeadershipHandoff is null)
                                     await ApplyDesiredModeAsync(node?.DesiredRoles, stoppingToken);
                             }
                         }

@@ -1,4 +1,3 @@
-import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 
@@ -6,12 +5,14 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 @Component({
   selector: 'app-access-template',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatProgressBarModule, NgTemplateOutlet],
+  imports: [MatProgressBarModule],
   template: `
     <main class="access-stage" [class.access-stage_setup]="view() === 'setup'">
       <section
         class="access-frame"
         [class.access-frame_setup]="view() === 'setup'"
+        [class.access-frame_single]="view() === 'setup' && layout() === 'single'"
+        [class.access-frame_stacked]="view() === 'setup' && layout() === 'stacked'"
         [attr.aria-label]="view() === 'setup' ? 'Assistant de premier démarrage' : null"
         aria-labelledby="access-title"
       >
@@ -24,39 +25,18 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
         }
         <div class="access-alert-slot"><ng-content select="[access-alert]" /></div>
         <header class="access-heading">
-          <ng-container [ngTemplateOutlet]="brand" />
           <h1 id="access-title">{{ title() }}</h1>
           <p class="access-description">{{ description() }}</p>
         </header>
-        <div class="access-context-column">
-          <ng-content select="[access-context]" />
-        </div>
         <section class="access-workbench" aria-label="Configuration de cette installation">
           <ng-content select="[access-content]" />
         </section>
+        <div class="access-context-column">
+          <ng-content select="[access-context]" />
+        </div>
       </section>
     </main>
 
-    <ng-template #brand>
-      <div class="access-brand">
-        <span class="access-brand-mark" aria-hidden="true">
-          <svg
-            viewBox="0 0 24 24"
-            width="20"
-            height="20"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.2"
-          >
-            <polygon points="6 4 20 12 6 20 6 4" />
-          </svg>
-        </span>
-        <span class="access-brand-name">Encoding</span>
-        @if (view() === 'setup') {
-          <span class="access-brand-tag">Premier démarrage</span>
-        }
-      </div>
-    </ng-template>
   `,
   styles: `
     :host {
@@ -111,6 +91,30 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
       grid-column: 2;
       grid-row: 2 / span 2;
     }
+    .access-frame_single {
+      width: min(100%, 680px);
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto;
+    }
+    .access-frame_single .access-heading,
+    .access-frame_single .access-workbench {
+      grid-column: 1;
+      grid-row: auto;
+    }
+    .access-frame_single .access-context-column {
+      display: none;
+    }
+    .access-frame_stacked {
+      width: min(100%, 1060px);
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto;
+    }
+    .access-frame_stacked .access-heading,
+    .access-frame_stacked .access-workbench,
+    .access-frame_stacked .access-context-column {
+      grid-column: 1;
+      grid-row: auto;
+    }
     .access-context-column {
       display: grid;
       gap: var(--space-4);
@@ -139,36 +143,6 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
     }
     .access-frame:not(.access-frame_setup) > .access-progress {
       border-radius: 0;
-    }
-    .access-brand {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-2);
-      min-width: 0;
-    }
-    .access-brand-mark {
-      display: grid;
-      place-items: center;
-      width: 40px;
-      height: 40px;
-      flex: 0 0 auto;
-      border-radius: var(--radius-md);
-      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-      color: var(--on-accent);
-    }
-    .access-brand-name {
-      color: var(--text-primary);
-      font-size: var(--font-title-md);
-      font-weight: 800;
-      letter-spacing: -0.02em;
-    }
-    .access-brand-tag {
-      padding: 2px var(--space-2);
-      border-radius: var(--radius-pill);
-      background: var(--accent-soft);
-      color: var(--accent);
-      font-size: var(--font-label);
-      font-weight: 700;
     }
     h1 {
       margin: 0;
@@ -203,13 +177,11 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
         padding-inline: var(--space-4);
       }
     }
-    :host-context([data-theme='dark']) .access-stage_setup {
-      background: radial-gradient(ellipse at 50% 0, var(--accent-soft), transparent 65%);
-    }
   `,
 })
 export class AccessTemplateComponent {
   readonly view = input<'login' | 'setup'>('login');
+  readonly layout = input<'split' | 'single' | 'stacked'>('split');
   readonly title = input.required<string>();
   readonly description = input.required<string>();
   readonly busy = input(false);

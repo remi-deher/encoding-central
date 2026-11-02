@@ -1,6 +1,6 @@
 ---
 domain: cluster
-updated: 2026-10-27
+updated: 2026-11-02
 legacy_adr: [0001, 0002, 0017, 0034, 0036, 0037, 0038, 0039, 0040, 0041, 0044, 0045, 0046, 0047, 0048, 0050, 0051, 0052, 0053, 0066]
 code:
   - backend/src/Encoding.Api/Nodes/
@@ -24,8 +24,8 @@ Un cluster est un ensemble de nœuds sans coordinateur permanent. Une installati
 
 ## État courant
 
-### Image unique et modes
-- Une image `encoding` embarque `Encoding.Api` (port 8080), `Encoding.NodeAgent` (8081, boucle locale) et `Encoding.Launcher` (point d'entrée, contrôle sur `127.0.0.1:8082`). Les anciennes images `encoding-api` et `encoding-node-agent` n'existent plus.
+### Images et modes
+- Le Dockerfile publie `central` et `worker`. `central` embarque `Encoding.Api` (port 8080), `Encoding.NodeAgent` (8081, boucle locale) et `Encoding.Launcher` (contrôle sur `127.0.0.1:8082`). Il est autonome. `worker` n'embarque que l'agent et le shell Angular sur 8081 : ni API, ni lanceur, ni base SQLite d'autorité.
 - Le mode (`server`, `worker`, `server,worker`) est persisté dans `node-mode.json` ; `Node__Roles` ne donne que la valeur initiale. Le mode change à chaud (`GET/PUT /api/v1/node/mode`, admin) ; l'agent tourne toujours (identité, présence). Un processus tombé est relancé avec délai croissant ; SIGTERM puis arrêt forcé à 45 s.
 - Un administrateur peut changer le mode d'un autre nœud : `PUT /api/v1/nodes/{id}/mode` écrit `desired_roles`, livré par la réponse du heartbeat (`desiredRoles`), appliqué via le lanceur local. On ne peut pas retirer la fonction serveur du dernier serveur en ligne (409).
 - Le nœud local de l'image est enrôlé d'office par un secret de conteneur (`local-enrollment.secret`, présenté seulement à un serveur en boucle locale). Le nom convivial est choisi dans l'assistant `/setup`.
@@ -58,7 +58,7 @@ Un cluster est un ensemble de nœuds sans coordinateur permanent. Une installati
 ### Matériel
 - Premier démarrage : la fiche anonyme, disponible seulement avant création de l'administrateur, expose les adresses IPv4/IPv6 assignées à toutes les interfaces avec leur nom (sans troncature arbitraire, dédoublonnées par interface/adresse). En bridge, ces interfaces appartiennent au conteneur ; l'adresse d'accès de l'hôte provient d'une URL annoncée configurée ou, à défaut, de l'origine utilisée par le navigateur. Sans métadonnées de déploiement, aucune détection de l'IP LAN de l'hôte Docker n'est revendiquée.
 - Inventaire déclaré par l'agent (`HardwareInventory` : OS, architecture, CPU, mémoire, GPU via `/proc` et `/sys/class/drm`, noms commerciaux via `hwdata`). Aucune charge CPU/GPU n'existe : ne pas en inventer.
-- Encodage matériel : pilotes VA-API Intel/AMD dans l'image, NVIDIA via NVIDIA Container Toolkit (`docker-compose.gpu.yml`, optionnel). Un encodeur n'est « utilisable » que si une mire synthétique 64×64 réussit (`ToolCapabilityProbe`). `GpuDeviceSelector` : `ENCODING_GPU_DEVICE`, sinon premier `renderD*`. Un seul périphérique de rendu par nœud.
+- Encodage matériel : pilotes VA-API Intel/AMD dans l'image, NVIDIA via NVIDIA Container Toolkit. Le worker de `docker-compose.central.yml` déclare `/dev/dri` et doit recevoir le GID de rendu de l'hôte. Un encodeur n'est « utilisable » que si une mire synthétique 64×64 réussit (`ToolCapabilityProbe`). `GpuDeviceSelector` : `ENCODING_GPU_DEVICE`, sinon premier `renderD*`. Un seul périphérique de rendu par nœud.
 
 ### Interface (page Nœuds)
 La page **Nœuds** comporte trois sous-vues : **Ce nœud**, **Cluster** et **Groupes de nœuds**. Les vues Ce nœud et Cluster partagent `NodeOverviewCardComponent` : l'en-tête présente l'identité et l'icône de plateforme, les valeurs CPU/RAM/GPU, l'admission et la capacité de traitement ; les fonctions occupent un bloc sous l'identité, les ressources et l'admission, et le dernier signal reste sous la capacité. Les sections « État et activité » et « Matériel déclaré » sont retirées de ces cartes : leur état courant est résumé dans l'en-tête, tandis que les métriques historiques ne sont plus répétées dans la carte. Les rôles worker/serveur et l'admission de nouveaux traitements se règlent avec des commutateurs ; la confirmation d'un changement de rôle rappelle les effets et les contrôles métier. Les demandes de rattachement restent en tableau et les actions groupées appellent l'API unitaire. L'inventaire facultatif annonce aussi l'environnement d'exécution (`docker`, `podman`, `container`, `native`), sans invalider les agents antérieurs qui ne le transmettent pas. L'assistant de rattachement utilise `GuidedSetup` (stepper CDK). Détails visuels dans [ui.md](ui.md).
@@ -78,7 +78,7 @@ Dans **Ce nœud** comme dans **Cluster**, l'icône correspond à l'environnement
 - Non vérifié en conditions réelles : GPU réel, changement de mode en charge sur un cluster multi-hôtes, image Docker sous Landlock.
 
 ## Documents opérationnels
-`docs/operations/release.md`, `docs/operations/backup-restore.md`, `backend/README.md`, `backend/docker-compose.yml`.
+`docs/operations/release.md`, `docs/operations/backup-restore.md`, `backend/README.md`, `backend/docker-compose.central.yml`.
 
 ## Présence et métadonnées
 - Un heartbeat dont nom, rôles, capacité, outils et inventaire sont identiques ne modifie que `last_seen_at`. Toute modification ou confirmation des rôles demandés emprunte la mise à jour complète, toujours authentifiée par le hash du jeton et refusée après suppression du nœud. Aucun cache de métadonnées ne remplace la base.
