@@ -1,0 +1,49 @@
+# Transfert et reprise de tâches entre serveurs
+
+## Prérequis et invariants
+
+Chaque serveur conserve son SQLite local. Les baux sont locaux au propriétaire ; le maillage signé transporte les décisions et les checkpoints, jamais une base partagée. Une partition ne suspend pas les calculs déjà possédés. Un simple délai réseau ne permet aucune reprise.
+
+À deux serveurs (ADR [0026](../architecture/adr/0026-reprise-auto-reparatrice-deux-noeuds.md)), le service de maintenance (`ClusterTaskMaintenance`) opère de manière auto-réparatrice :
+- Lorsqu'un serveur redémarre alors que l'autre nœud est hors ligne, il débloque sa file locale dès que ses projections locales sont appliquées.
+- Lorsque l'unique autre serveur est hors ligne (> 90 s) et injoignable et qu'il bloque des tâches, des quarantaines ou des écritures source, il est neutralisé automatiquement ; après le délai de grâce de 135 s, ses tâches éligibles sont reprises automatiquement (au checkpoint ou depuis la source) et les quarantaines éligibles sont levées.
+- Dès que le pair neutralisé revient en ligne et confirme son rattrapage, sa neutralisation est levée automatiquement (`ReadmitAsync`).
+- Les commandes manuelles ci-dessous restent disponibles à tout moment pour forcer immédiatement une décision administrative. À trois serveurs ou plus, la reprise reste refusée tant que le futur module de décision de reprise n’existe pas.
+
+## Procédure
+
+1. Lire `GET /api/v1/cluster/tasks/status` et la propriété de l’exécution. Les commandes de gestion exigent le rôle administrateur.
+2. Pour un transfert coopératif, appeler sur le propriétaire `POST /api/v1/cluster/tasks/{executionId}/move` avec `{"targetPeerId":"…"}`. Le checkpoint doit être durable, les accès et capacités de la cible doivent convenir. La cible vérifie taille et SHA-256 des fichiers puis accuse réception ; seul l’événement d’activation transfère la propriété. Un accusé perdu ne vaut pas activation.
+3. Si l’objectif est de reprendre une exécution au checkpoint, et que la source est définitivement arrêtée et ses workers neutralisés, appeler sur le survivant `POST /api/v1/cluster/tasks/peers/{peerId}/neutralize` avec `{"confirmedStopped":true,"reason":"motif explicite de huit caractères minimum"}`. Attendre au moins 135 secondes à partir de l’attestation enregistrée par le serveur, puis utiliser `POST /api/v1/cluster/tasks/{executionId}/recover`. Sans checkpoint signé actuel, fichiers vérifiés, étapes rejouables et capacités locales adaptées, cette reprise est refusée.
+4. Dans Activité → « Erreurs et annulations », un administrateur peut choisir « Forcer depuis la source » sur une tentative source en file et en quarantaine, ou sur une exécution annulée avant démarrage qui est encore en quarantaine. Confirmer l’arrêt complet du serveur propriétaire et de ses workers, puis fournir un motif. Cette action neutralise le propriétaire et le journalise ; après 135 secondes, la projection libère automatiquement la tentative source existante, ou rend disponible la nouvelle tentative créée depuis une annulation avant démarrage. Une publication confirmée ou incertaine, ou une autre tentative du même média susceptible de publier, bloque l’action et doit être vérifiée manuellement. Le point d’entrée API correspondant est `POST /api/v1/cluster/tasks/{executionId}/force-source-retry` avec `{"confirmedStopped":true,"reason":"motif explicite de huit caractères minimum"}`.
+5. Au retour de la source neutralisée, la laisser synchroniser son journal. Depuis le serveur ayant attesté l’arrêt, appeler `POST /api/v1/cluster/tasks/peers/{peerId}/readmit`. La réponse directe signée, le nonce et le rattrapage du journal sont vérifiés avant réadmission.
+
+Le mode `server` du composant `nodes-handoff` utilise `targetServerPeerId` (identifiant visible dans le statut du serveur cible). Les anciens workers ne déclarant pas le runtime 1.8 ne peuvent pas exécuter ce segment. Les commandes existantes annuler/reprendre/réessayer sont transmises au propriétaire ; une partition donne un refus visible.
+
+## Limites opérationnelles
+
+Les sorties restent temporaires jusqu’à validation et publication ; les sources ne sont pas remplacées par défaut. Les checkpoints précédant une publication ou des effets non rejouables sont refusés. Les caches distants sans travail local ne sont pas automatiquement purgés : surveiller leur volume. Le gossip de présence a une provenance et une expiration ; il ne constitue jamais une preuve de neutralisation. Un verrou de protection de source ne doit pas être supprimé sans vérifier l’arrêt de l’ancien écrivain.
+
+Voir [ADR 0016](../architecture/adr/0016-transferts-et-reprise-manuelle.md) et [le point de reprise de développement](../testing/cluster-implementation-handoff.md).
+
+## Récupération d'une préparation bloquée par des checkpoints en quarantaine
+
+Cette procédure vise notamment les cinq checkpoints de même époque signalés sur `.51` en v0.4.111. Elle ne nécessite aucune suppression SQL ni intervention sur les médias.
+
+1. Lors d'une mise à jour autorisée, installer la version contenant la migration additive **0061** sur le serveur affecté ; sauvegarder et conserver les volumes locaux et les clés selon la procédure habituelle. Ce correctif ne déploie rien lui-même. Chaque serveur doit être mis à jour pour bénéficier de sa propre projection corrigée.
+2. Laisser les services normaux de coordination et de réconciliation tourner. Les cinq anciennes lignes ont une échéance initiale nulle : leur nombre élevé de tentatives n'empêche pas leur premier traitement. Les lots restent bornés à 32 événements. Toutes les preuves sont revérifiées ; les checkpoints valides de la chaîne courante sont conservés dans `task_checkpoints`, puis acquittés de l'inbox atomiquement. Une preuve incorrecte est rejetée avec une raison ; une dépendance réellement absente reste en attente avec délai (au plus 60 s entre tentatives).
+3. Lire avec une session/autorisation existante `GET /api/v1/cluster/reconciliation/status` : `projections` concerne la réplication générale, `attributionBlockers` distingue notamment `pending_entity_projections`, `pending_ownership_events`, `pending_coordination_events`, la neutralisation locale et le rattrapage des pairs. `coordination` indique `pending`, `parked`, `rejected`, `retained` et une liste bornée de métadonnées (`disposition`, `reason`, `attempts`, `nextAttemptAt`). Le même diagnostic figure dans `GET /api/v1/cluster/tasks/status`.
+4. Pour les cinq preuves conformes au diagnostic, constater leur sortie de `pending` et la disposition `retained / quarantined_checkpoint_retained`. Les compteurs de dispositions sont historiques et peuvent inclure d'autres événements ; identifier les cinq clés dans la liste si elles y figurent. Les quarantaines des exécutions restent visibles dans leur propriété et le registre d'exécutions. `parked / quarantined_transition_parked` concerne une activation/reprise conservée inactive ; ce n'est pas une perte de preuve ni une attente de réplication générale.
+5. Le service normal de préparation peut rétablir la disponibilité **uniquement** lorsque toutes ses conditions habituelles sont réunies : inbox d'autorité et coordination vides, projections générales résolues, absence de neutralisation locale et rattrapage initial authentifié des pairs. Ne pas écrire `ready=1`. Une attente restante doit être traitée selon sa cause, sans purger les files. La tâche en quarantaine reste exclue des claims, transferts et écritures source.
+
+Si la convergence existante résout ultérieurement une quarantaine, les preuves de transition suspendues sont remises en inbox et revérifiées ; aucune décision administrative ni nouvelle cession n'est inventée. Une réception durable absente continue de bloquer cette transition. Un checkpoint conservé demeure disponible pour les procédures explicites habituelles, qui exigent toujours l'autorité et les fichiers vérifiés. Ne pas lever une quarantaine dans le seul but de vider le diagnostic.
+
+La récupération des cinq lignes est couverte par un scénario local synthétique avec plus de 101 700 tentatives ; elle n'a pas été exécutée en production.
+
+### Vérification locale du correctif (27 octobre 2026)
+
+- Compilation de `backend/Encoding.sln` en Release, `--no-restore -m:1 /p:UseSharedCompilation=false -warnaserror` : réussie, zéro avertissement et zéro erreur.
+- `dotnet test backend/tests/Encoding.Runtime.Tests -c Release --no-build --no-restore --filter 'Category!=Stress'` : **547 réussis, 17 ignorés, aucun échec** (3 min 26 s). Le dernier cas de révocation a été ajouté après cette passe, sans changement supplémentaire du code produit.
+- Sélection finale `ClusterTaskTransferTests`, `TaskOwnershipTests`, `SourceWriteBarrierTests`, `ClusterPeerSecurityTests` : **59 réussis, 1 ignoré, aucun échec** (40 s), incluant le cas de révocation. Ces sélections se recouvrent, leurs compteurs ne s'additionnent pas.
+- Couverture : checkpoint actif et quarantainé, cinq exécutions concurrentes avec plus de 101 700 tentatives, répétition, époque ancienne, auteur/signature/cluster/preuve précédente invalides et admission révoquée, dépendance tardive, échéance persistante après recréation du projecteur, coexistence d'une attente et d'un événement applicable, suspensions `activate`/`recover`, réception durable manquante, activation suspendue redevenue applicable, rattrapage initial et neutralisation, refus des claims et transferts d'une tâche en quarantaine. Les diagnostics HTTP ne contiennent pas le snapshot.
+- Le scénario de charge opt-in est ignoré ; la suite complète ignore aussi les scénarios nécessitant MKVToolNix absent, des processus/conteneurs ou des options d'intégration non activées. Aucune validation sur les deux hôtes physiques, en production, en charge ou en versions mixtes n'est revendiquée. Aucun déploiement ni déclenchement manuel de CI.

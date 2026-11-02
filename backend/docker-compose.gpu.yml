@@ -1,0 +1,23 @@
+# Surcharge optionnelle pour l'encodage matériel : docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+# Séparée du compose principal : /dev/dri absent ou NVIDIA Container Toolkit non installé font échouer le démarrage.
+# Garder uniquement les blocs correspondant au matériel de l'hôte. Sans GPU, le nœud encode sur CPU.
+services:
+  encoding:
+    # Intel et AMD (VAAPI / QSV). Supprimer ce bloc sur un hôte sans /dev/dri.
+    devices:
+      - /dev/dri:/dev/dri
+    # Image exécutée sans root : ajouter le GID du groupe de renderD128 (`stat -c %g /dev/dri/renderD128`,
+    # 107 sur TrueNAS SCALE), sinon le GPU n'est pas accessible.
+    group_add: ["${GPU_RENDER_GID:-107}"]
+    # Plusieurs GPU : ENCODING_GPU_DEVICE=/dev/dri/renderD129 ; pilote VA-API imposé : LIBVA_DRIVER_NAME=iHD (Intel), radeonsi (AMD).
+    environment:
+      ENCODING_GPU_DEVICE: ${ENCODING_GPU_DEVICE:-}
+      LIBVA_DRIVER_NAME: ${LIBVA_DRIVER_NAME:-}
+    # NVIDIA (NVENC) : exige le NVIDIA Container Toolkit sur l'hôte. Supprimer ce bloc sans GPU NVIDIA.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, video, compute, utility]

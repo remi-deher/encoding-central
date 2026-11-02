@@ -1,0 +1,40 @@
+services:
+  # Cible par défaut : central. L'image fige les fonctions (Cluster__FixedAuthority).
+  # Un déploiement central + worker séparé est dans docker-compose.central.yml.
+  encoding:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ConnectionStrings__Cluster: Data Source=/var/lib/encoding-node/cluster.db
+      NodePresence__OfflineAfterSeconds: 30
+      FlowBackups__Directory: /var/lib/encoding/flow-backups
+      Runtime__ArtifactDirectory: /var/lib/encoding/runtime-artifacts
+      PluginSettings__KeyDirectory: /var/lib/encoding/plugin-keys
+      Cluster__DiscoveryPort: 8080
+      Cluster__Reconciliation__AdvertisedApiBaseUrl: ${CLUSTER_RECONCILIATION_ADVERTISED_API_BASE_URL:-}
+      Cluster__Reconciliation__Peers__0: ${CLUSTER_RECONCILIATION_PEER_0:-}
+      Cluster__AdvertisedApiBaseUrl: ${CLUSTER_ADVERTISED_API_BASE_URL:-http://encoding:8080/}
+      Node__Name: ${NODE_NAME:-encoding-dev-node}
+      Node__Roles: ${NODE_ROLES:-server,worker}
+      Node__MaxConcurrentTasks: ${NODE_MAX_CONCURRENT_TASKS:-1}
+      Node__HeartbeatIntervalSeconds: 10
+      Worker__AutoAcceptEnrollment: ${WORKER_AUTO_ACCEPT_ENROLLMENT:-false}
+      WorkerUi__Port: 8081
+    ports:
+      - "${CLUSTER_API_BIND_ADDRESS:-127.0.0.1}:5080:8080"
+      - "127.0.0.1:4201:8080"
+    volumes:
+      - encoding-flow-backups:/var/lib/encoding/flow-backups
+      - encoding-runtime-artifacts:/var/lib/encoding/runtime-artifacts
+      - encoding-plugin-keys:/var/lib/encoding/plugin-keys
+      - encoding-node-data:/var/lib/encoding-node
+      - ../media-test:/media/test
+    restart: unless-stopped
+
+volumes:
+  encoding-flow-backups:
+  encoding-runtime-artifacts:
+  encoding-plugin-keys:
+  encoding-node-data:

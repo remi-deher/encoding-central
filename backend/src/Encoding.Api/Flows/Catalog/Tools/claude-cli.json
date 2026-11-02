@@ -1,0 +1,39 @@
+{
+  "$schema": "https://encoding.io/schemas/v1/tool.json",
+  "id": "claude-cli",
+  "name": "Anthropic Claude Code CLI",
+  "description": "Interface en ligne de commande officielle pour Claude.",
+  "category": "ai-text",
+  "executable": "claude",
+  "probe": {
+    "versionArgs": [
+      "--version"
+    ],
+    "versionRegex": "(?:(?:claude(?:-code)?\\s+v?)|^)(?<version>[0-9]+(?:\\.[0-9]+)+)(?:\\s+\\(Claude Code\\))?",
+    "smokeTestArgs": [
+      "--help"
+    ]
+  },
+  "capabilitiesExposed": [
+    "ai-text-generation",
+    "subtitles-translation"
+  ],
+  "auth": {
+    "type": "oauth-token",
+    "loginCommand": [
+      "claude",
+      "auth",
+      "login"
+    ],
+    "statusCommand": [
+      "claude",
+      "auth",
+      "status"
+    ],
+    "setupCommand": [
+      "claude",
+      "setup-token"
+    ],
+    "tokenEnvironmentVariable": "CLAUDE_CODE_OAUTH_TOKEN"
+  }
+}

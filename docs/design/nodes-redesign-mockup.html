@@ -1,0 +1,1514 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Maquette — Nœuds</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #101413;
+        --sidebar: #191e1c;
+        --surface: #1d2421;
+        --surface-low: #171d1b;
+        --surface-high: #252e2a;
+        --text: #f1f5f2;
+        --muted: #a6b4ad;
+        --line: #34423b;
+        --accent: #82e0c1;
+        --accent-strong: #0c6d51;
+        --warning: #efbc61;
+        --danger: #f18e8e;
+        --radius-shell: 24px;
+        --radius-card: 18px;
+        --radius-inner: 13px;
+        --radius-control: 11px;
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+      }
+      button,
+      input {
+        font: inherit;
+      }
+      button {
+        color: inherit;
+      }
+      button:focus-visible,
+      input:focus-visible,
+      a:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+      }
+      .app {
+        display: grid;
+        grid-template-columns: 260px minmax(0, 1fr);
+        min-height: 100vh;
+      }
+      .sidebar {
+        display: flex;
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        flex-direction: column;
+        gap: 28px;
+        padding: 22px 16px 18px;
+        background: var(--sidebar);
+      }
+      .nav-list {
+        display: grid;
+        gap: 7px;
+      }
+      .nav-label {
+        margin: 16px 12px 5px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .nav-link {
+        display: flex;
+        min-height: 46px;
+        align-items: center;
+        gap: 13px;
+        padding: 0 14px;
+        border: 0;
+        border-radius: 14px;
+        background: transparent;
+        color: var(--text);
+        text-align: left;
+        cursor: pointer;
+      }
+      .nav-link.active {
+        background: var(--accent-strong);
+        color: #eafff6;
+      }
+      .nav-icon {
+        width: 20px;
+        color: var(--accent);
+        font-size: 18px;
+        text-align: center;
+      }
+      .sidebar-bottom {
+        display: grid;
+        gap: 10px;
+        margin-top: auto;
+      }
+      .appearance {
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-card);
+        background: var(--surface-low);
+      }
+      .appearance strong {
+        display: block;
+        margin-bottom: 11px;
+        font-size: 13px;
+      }
+      .appearance-line {
+        display: flex;
+        justify-content: space-between;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .sidebar-user {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 5px 0;
+      }
+      .avatar {
+        display: grid;
+        width: 36px;
+        height: 36px;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--accent-strong);
+        font-weight: 750;
+      }
+      .main {
+        min-width: 0;
+      }
+      .topbar {
+        position: sticky;
+        z-index: 5;
+        top: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(360px, 720px) minmax(
+            0,
+            1fr
+          );
+        align-items: center;
+        gap: 24px;
+        min-height: 84px;
+        padding: 14px 34px;
+        background: color-mix(in srgb, var(--bg) 93%, transparent);
+        backdrop-filter: blur(14px);
+      }
+      .search {
+        display: flex;
+        min-width: 0;
+        min-height: 50px;
+        align-items: center;
+        gap: 12px;
+        grid-column: 2;
+        padding: 0 16px;
+        border: 1px solid #4d6359;
+        border-radius: 999px;
+        background: var(--surface-low);
+      }
+      .search-icon {
+        color: var(--accent);
+        font-size: 20px;
+      }
+      .search input {
+        width: 100%;
+        min-width: 0;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: var(--text);
+      }
+      .system-status {
+        display: flex;
+        justify-content: flex-end;
+        gap: 9px;
+        grid-column: 3;
+      }
+      .status-pill {
+        display: inline-flex;
+        min-height: 36px;
+        align-items: center;
+        gap: 8px;
+        padding: 0 13px;
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+      .page {
+        width: min(100%, 1640px);
+        margin: 0 auto;
+        padding: 8px 34px 48px;
+      }
+      .subnav-layout {
+        position: sticky;
+        z-index: 4;
+        top: 84px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        align-items: center;
+        width: 100%;
+        min-height: 64px;
+        padding: 8px 0;
+        background: color-mix(in srgb, var(--bg) 95%, transparent);
+        backdrop-filter: blur(12px);
+      }
+      .subnav-side {
+        min-width: 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .subnav-side strong {
+        display: block;
+        overflow: hidden;
+        color: var(--text);
+        font-size: 13px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .subnav-right {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .tabs {
+        display: flex;
+        max-width: 100%;
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--surface-low);
+      }
+      .tab {
+        min-height: 40px;
+        padding: 0 16px;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .tab[aria-selected="true"] {
+        background: var(--surface-high);
+        color: var(--text);
+      }
+      .button {
+        min-height: 40px;
+        padding: 0 14px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-control);
+        background: var(--surface);
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .button.primary {
+        border-color: transparent;
+        background: var(--accent-strong);
+        color: #eafff6;
+      }
+      .button.quiet {
+        background: transparent;
+      }
+      .view {
+        display: grid;
+        gap: 18px;
+        padding-top: 10px;
+      }
+      .cluster-summary {
+        display: grid;
+        grid-template-columns: minmax(230px, 1.4fr) repeat(
+            4,
+            minmax(110px, 1fr)
+          );
+        align-items: center;
+        gap: 12px;
+        padding: 17px 20px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-shell);
+        background: var(--surface-low);
+      }
+      .cluster-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+      .cluster-symbol,
+      .node-symbol {
+        display: grid;
+        width: 44px;
+        height: 44px;
+        flex: 0 0 auto;
+        place-items: center;
+        border-radius: var(--radius-inner);
+        background: #153c30;
+        color: var(--accent);
+        font-size: 20px;
+      }
+      .cluster-title strong {
+        display: block;
+        font-size: 17px;
+      }
+      .cluster-title small {
+        display: block;
+        margin-top: 3px;
+        color: var(--muted);
+      }
+      .metric {
+        padding-left: 14px;
+        border-left: 1px solid var(--line);
+      }
+      .metric span {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .metric strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 18px;
+      }
+      .node-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+        gap: 16px;
+      }
+      .node-parent {
+        display: grid;
+        min-width: 0;
+        gap: 15px;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-shell);
+        background: var(--surface);
+      }
+      .node-parent-head {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 12px;
+      }
+      .node-parent-heading {
+        min-width: 0;
+        flex: 1;
+      }
+      .node-name-row {
+        display: flex;
+        min-width: 0;
+        align-items: baseline;
+        gap: 9px;
+        flex-wrap: wrap;
+      }
+      .node-name-row h2 {
+        margin: 0;
+        font-size: 18px;
+        letter-spacing: -0.02em;
+      }
+      .hostname {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .node-subtitle {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .badge-row {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 7px;
+      }
+      .badge {
+        display: inline-flex;
+        min-height: 24px;
+        align-items: center;
+        gap: 6px;
+        padding: 0 9px;
+        border-radius: 999px;
+        background: var(--surface-high);
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+      .badge.good {
+        background: #153b2f;
+        color: var(--accent);
+      }
+      .badge.warn {
+        background: #483819;
+        color: var(--warning);
+      }
+      .menu-button {
+        display: grid;
+        width: 36px;
+        height: 36px;
+        flex: 0 0 auto;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        background: var(--surface-low);
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .section-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .section-card {
+        min-width: 0;
+        min-height: 138px;
+        padding: 14px;
+        border: 1px solid #2d3933;
+        border-radius: var(--radius-inner);
+        background: var(--surface-low);
+      }
+      .section-heading {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .section-heading h3 {
+        margin: 0;
+        font-size: 13px;
+      }
+      .section-heading .state-icon {
+        color: var(--accent);
+        font-size: 15px;
+      }
+      .section-copy {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .section-copy strong {
+        display: block;
+        margin: 5px 0 3px;
+        color: var(--text);
+        font-size: 13px;
+        font-weight: 650;
+        overflow-wrap: anywhere;
+      }
+      .section-split {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .section-split .section-copy + .section-copy {
+        padding-left: 10px;
+        border-left: 1px solid var(--line);
+      }
+      .hardware-grid,
+      .capability-pair {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .hardware-grid .section-copy:nth-child(even),
+      .capability-pair .section-copy:nth-child(even) {
+        padding-left: 10px;
+        border-left: 1px solid var(--line);
+      }
+      .chip-row {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .chip {
+        padding: 5px 8px;
+        border: 1px solid #35483e;
+        border-radius: 8px;
+        color: var(--accent);
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .libraries {
+        display: grid;
+        gap: 12px;
+        padding-top: 15px;
+        border-top: 1px solid var(--line);
+      }
+      .libraries-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .libraries-heading h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+      .libraries-heading p {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .library-count {
+        flex: 0 0 auto;
+        padding: 5px 9px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .library-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 9px;
+      }
+      .library-card {
+        display: grid;
+        min-width: 0;
+        gap: 10px;
+        padding: 12px;
+        border: 1px solid #303e36;
+        border-radius: var(--radius-inner);
+        background: #202824;
+      }
+      .library-card-head {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 9px;
+      }
+      .library-icon {
+        display: grid;
+        width: 32px;
+        height: 32px;
+        flex: 0 0 auto;
+        place-items: center;
+        border-radius: 9px;
+        background: #153b2f;
+        color: var(--accent);
+      }
+      .library-heading-copy {
+        display: grid;
+        min-width: 0;
+        flex: 1;
+        gap: 2px;
+      }
+      .library-heading-copy strong {
+        overflow: hidden;
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .library-heading-copy small {
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .library-path-block {
+        display: grid;
+        min-width: 0;
+        gap: 5px;
+        padding: 9px 10px;
+        border-radius: 9px;
+        background: var(--surface-low);
+      }
+      .library-path-label {
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .path {
+        display: block;
+        min-width: 0;
+        color: var(--text);
+        font:
+          11px/1.5 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Consolas,
+          monospace;
+        overflow-wrap: anywhere;
+      }
+      .library-card-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .access {
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .empty-note {
+        grid-column: 1 / -1;
+        padding: 13px;
+        border: 1px dashed var(--line);
+        border-radius: var(--radius-inner);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .group-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .group-card {
+        display: grid;
+        gap: 14px;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-card);
+        background: var(--surface);
+      }
+      .group-title {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+      }
+      .group-title strong {
+        font-size: 15px;
+      }
+      .group-card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+      .group-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .notice {
+        padding: 11px 14px;
+        border: 1px solid #493d28;
+        border-radius: var(--radius-inner);
+        background: #292519;
+        color: #dfc48e;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .toast {
+        position: fixed;
+        z-index: 10;
+        right: 24px;
+        bottom: 24px;
+        padding: 12px 16px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-control);
+        background: var(--surface-high);
+        box-shadow: 0 8px 24px #0006;
+        color: var(--text);
+        font-size: 13px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+
+      @media (max-width: 1160px) {
+        .cluster-summary {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+        .cluster-title {
+          grid-column: 1 / -1;
+        }
+        .metric:first-of-type {
+          border-left: 0;
+          padding-left: 0;
+        }
+        .group-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      @media (max-width: 900px) {
+        .app {
+          grid-template-columns: 76px minmax(0, 1fr);
+        }
+        .sidebar {
+          padding-inline: 10px;
+        }
+        .nav-link {
+          justify-content: center;
+          padding: 0;
+          font-size: 0;
+        }
+        .nav-label,
+        .appearance {
+          display: none;
+        }
+        .sidebar-user {
+          justify-content: center;
+        }
+        .sidebar-user > span {
+          display: none;
+        }
+        .topbar {
+          grid-template-columns: 1fr;
+          padding-inline: 18px;
+        }
+        .search {
+          grid-column: 1;
+        }
+        .system-status {
+          display: none;
+        }
+        .page {
+          padding-inline: 18px;
+        }
+        .subnav-layout {
+          grid-template-columns: 1fr;
+          justify-items: center;
+          gap: 10px;
+        }
+        .subnav-side {
+          display: none;
+        }
+        .subnav-right {
+          display: none;
+        }
+        .node-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media (max-width: 600px) {
+        .app {
+          grid-template-columns: 1fr;
+        }
+        .sidebar {
+          display: none;
+        }
+        .topbar {
+          min-height: 72px;
+        }
+        .search {
+          min-height: 46px;
+        }
+        .page {
+          padding: 0 12px 32px;
+        }
+        .tabs {
+          width: 100%;
+          overflow-x: auto;
+          justify-content: flex-start;
+        }
+        .tab {
+          flex: 0 0 auto;
+          padding-inline: 12px;
+        }
+        .cluster-summary {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .metric {
+          padding-left: 0;
+          border-left: 0;
+        }
+        .section-grid,
+        .group-grid {
+          grid-template-columns: 1fr;
+        }
+        .hardware-grid,
+        .capability-pair {
+          grid-template-columns: 1fr;
+        }
+        .hardware-grid .section-copy:nth-child(even),
+        .capability-pair .section-copy:nth-child(even) {
+          padding-left: 0;
+          border-left: 0;
+        }
+        .library-grid {
+          grid-template-columns: 1fr;
+        }
+        .section-card {
+          min-height: auto;
+        }
+        .node-parent {
+          padding: 14px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar" aria-label="Navigation principale">
+        <nav class="nav-list">
+          <button class="nav-link">
+            <span class="nav-icon">▦</span>Vue d’ensemble
+          </button>
+          <div class="nav-label">Traitements</div>
+          <button class="nav-link"><span class="nav-icon">⋈</span>Flows</button>
+          <button class="nav-link">
+            <span class="nav-icon">≋</span>Activité
+          </button>
+          <div class="nav-label">Infrastructure</div>
+          <button class="nav-link active">
+            <span class="nav-icon">▤</span>Nœuds
+          </button>
+          <button class="nav-link">
+            <span class="nav-icon">♧</span>Plugins &amp; outils
+          </button>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="appearance">
+            <strong>Apparence</strong>
+            <div class="appearance-line">
+              <span>Sombre</span><span>Forêt</span>
+            </div>
+          </div>
+          <div class="sidebar-user">
+            <span>Replier</span
+            ><span class="avatar" aria-label="Profil utilisateur">A</span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar" aria-label="Recherche et état du système">
+          <div class="search">
+            <span class="search-icon" aria-hidden="true">⌕</span>
+            <input
+              id="page-search"
+              type="search"
+              placeholder="Rechercher dans Nœuds…"
+              aria-label="Rechercher dans Nœuds"
+            />
+          </div>
+          <div class="system-status">
+            <span class="status-pill"><i class="dot"></i>2 / 2 en ligne</span>
+            <span class="status-pill">0 jobs en cours</span>
+          </div>
+        </header>
+
+        <div class="page">
+          <div class="subnav-layout">
+            <div class="subnav-side">
+              <span id="subnav-label"></span
+              ><strong id="subnav-context"></strong>
+            </div>
+            <nav class="tabs" aria-label="Gestion des nœuds" role="tablist">
+              <button
+                class="tab"
+                role="tab"
+                aria-selected="true"
+                data-view-tab="node"
+              >
+                Ce nœud
+              </button>
+              <button
+                class="tab"
+                role="tab"
+                aria-selected="false"
+                data-view-tab="cluster"
+              >
+                Cluster
+              </button>
+              <button
+                class="tab"
+                role="tab"
+                aria-selected="false"
+                data-view-tab="groups"
+              >
+                Groupes de nœuds
+              </button>
+            </nav>
+            <div class="subnav-right" id="subnav-actions"></div>
+          </div>
+
+          <section
+            class="view"
+            id="view-node"
+            role="tabpanel"
+            aria-label="Ce nœud"
+          >
+            <article
+              class="node-parent searchable"
+              data-search="truenas encoding-50 en ligne serveur worker intel xeon films series hevc h264 av1"
+            >
+              <header class="node-parent-head">
+                <span class="node-symbol" aria-hidden="true">▤</span>
+                <div class="node-parent-heading">
+                  <div class="node-name-row">
+                    <h2>TRUENAS</h2>
+                    <span class="hostname">encoding-50</span>
+                  </div>
+                  <div class="node-subtitle">Membre du cluster Maison</div>
+                  <div class="badge-row">
+                    <span class="badge good"><i class="dot"></i>En ligne</span
+                    ><span class="badge">Serveur</span
+                    ><span class="badge">Worker</span>
+                  </div>
+                </div>
+                <button
+                  class="menu-button demo-action"
+                  aria-label="Autres actions pour TRUENAS"
+                >
+                  ···
+                </button>
+              </header>
+
+              <div class="section-grid">
+                <section class="section-card">
+                  <div class="section-heading">
+                    <span class="state-icon">◉</span>
+                    <h3>État et activité</h3>
+                  </div>
+                  <div class="section-split">
+                    <div class="section-copy">
+                      État du serveur<strong>Actif</strong>API disponible
+                    </div>
+                    <div class="section-copy">
+                      Traitements actifs<strong>0 / 2</strong>Aucune tâche en
+                      cours
+                    </div>
+                  </div>
+                </section>
+                <section class="section-card">
+                  <div class="section-heading">
+                    <span class="state-icon">▦</span>
+                    <h3>Matériel déclaré</h3>
+                  </div>
+                  <div class="hardware-grid">
+                    <div class="section-copy">
+                      Processeur<strong>Intel Xeon E5620</strong>4 cœurs · 16 Go
+                      RAM
+                    </div>
+                    <div class="section-copy">
+                      Système<strong>Linux · x86_64</strong>Type d’OS et
+                      architecture
+                    </div>
+                    <div class="section-copy">
+                      Graphique<strong>AMD FirePro V4900</strong>VAAPI
+                      disponible
+                    </div>
+                    <div class="section-copy">
+                      Environnement<strong>Docker · conteneur</strong>Agent
+                      exécuté dans Docker
+                    </div>
+                  </div>
+                </section>
+                <section class="section-card">
+                  <div class="section-heading">
+                    <span class="state-icon">⌘</span>
+                    <h3>Capacités de traitement</h3>
+                  </div>
+                  <div class="capability-pair">
+                    <div class="section-copy">
+                      Moteur d’accélération<strong>VAAPI</strong>AMD FirePro
+                      V4900
+                    </div>
+                    <div class="section-copy">
+                      Codecs compatibles
+                      <div class="chip-row" style="margin-top: 6px">
+                        <span class="chip">H.264</span
+                        ><span class="chip">HEVC</span
+                        ><span class="chip">AV1</span>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+                <section class="section-card">
+                  <div class="section-heading">
+                    <span class="state-icon">◇</span>
+                    <h3>Identité et appartenance</h3>
+                  </div>
+                  <div class="section-split">
+                    <div class="section-copy">
+                      Identifiant<strong>encoding-50</strong>
+                    </div>
+                    <div class="section-copy">
+                      Cluster<strong>Maison</strong>Nœud serveur · worker
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <section
+                class="libraries"
+                aria-label="Bibliothèques et chemins de ce nœud"
+              >
+                <div class="libraries-heading">
+                  <div>
+                    <h3>Bibliothèques et chemins configurés</h3>
+                    <p>Chemins vus depuis ce nœud et mode d’accès associé.</p>
+                  </div>
+                  <span class="library-count">2 autorisées</span>
+                </div>
+                <div class="library-grid">
+                  <article class="library-card">
+                    <header class="library-card-head">
+                      <span class="library-icon" aria-hidden="true">▱</span
+                      ><span class="library-heading-copy"
+                        ><strong>Films</strong><small>Bibliothèque</small></span
+                      ><span class="badge good">Active</span>
+                    </header>
+                    <div class="library-path-block">
+                      <span class="library-path-label"
+                        >Chemin configuré sur ce nœud</span
+                      ><code class="path">/mnt/tank/media/films</code>
+                    </div>
+                    <div class="library-card-foot">
+                      <span class="badge">Accès direct</span
+                      ><span class="access">Lecture · Écriture</span>
+                    </div>
+                  </article>
+                  <article class="library-card">
+                    <header class="library-card-head">
+                      <span class="library-icon" aria-hidden="true">▱</span
+                      ><span class="library-heading-copy"
+                        ><strong>Séries</strong
+                        ><small>Bibliothèque</small></span
+                      ><span class="badge good">Active</span>
+                    </header>
+                    <div class="library-path-block">
+                      <span class="library-path-label"
+                        >Chemin configuré sur ce nœud</span
+                      ><code class="path">/mnt/tank/media/series</code>
+                    </div>
+                    <div class="library-card-foot">
+                      <span class="badge">Transfert WebDAV</span
+                      ><span class="access">Lecture · Écriture</span>
+                    </div>
+                  </article>
+                </div>
+              </section>
+            </article>
+          </section>
+
+          <section
+            class="view"
+            id="view-cluster"
+            role="tabpanel"
+            aria-label="Vue du cluster"
+            hidden
+          >
+            <section class="cluster-summary" aria-label="Synthèse du cluster">
+              <div class="cluster-title">
+                <span class="cluster-symbol">▤</span>
+                <div>
+                  <strong>Maison</strong
+                  ><small>Cluster · 2 nœuds membres</small>
+                </div>
+              </div>
+              <div class="metric">
+                <span>Nœuds en ligne</span><strong>2 / 2</strong>
+              </div>
+              <div class="metric">
+                <span>Capacité simultanée</span><strong>3</strong>
+              </div>
+              <div class="metric">
+                <span>Bibliothèques accessibles</span><strong>3 / 3</strong>
+              </div>
+              <div class="metric"><span>Demandes</span><strong>0</strong></div>
+            </section>
+            <div class="node-grid">
+              <article
+                class="node-parent searchable"
+                data-search="truenas encoding-50 en ligne serveur worker intel xeon films series hevc h264 av1"
+              >
+                <header class="node-parent-head">
+                  <span class="node-symbol" aria-hidden="true">▤</span>
+                  <div class="node-parent-heading">
+                    <div class="node-name-row">
+                      <h2>TRUENAS</h2>
+                      <span class="hostname">encoding-50</span>
+                    </div>
+                    <div class="node-subtitle">Serveur du cluster</div>
+                    <div class="badge-row">
+                      <span class="badge good"><i class="dot"></i>En ligne</span
+                      ><span class="badge">Serveur</span
+                      ><span class="badge">Worker</span>
+                    </div>
+                  </div>
+                  <button
+                    class="menu-button demo-action"
+                    aria-label="Autres actions pour TRUENAS"
+                  >
+                    ···
+                  </button>
+                </header>
+                <div class="section-grid">
+                  <section class="section-card">
+                    <div class="section-heading">
+                      <span class="state-icon">◉</span>
+                      <h3>État et activité</h3>
+                    </div>
+                    <div class="section-split">
+                      <div class="section-copy">
+                        Agent<strong>Joignable</strong>Dernier signal : à
+                        l’instant
+                      </div>
+                      <div class="section-copy">
+                        Traitements actifs<strong>0 / 2</strong>Disponible
+                      </div>
+                    </div>
+                  </section>
+                  <section class="section-card">
+                    <div class="section-heading">
+                      <span class="state-icon">▦</span>
+                      <h3>Matériel déclaré</h3>
+                    </div>
+                    <div class="hardware-grid">
+                      <div class="section-copy">
+                        Processeur<strong>Intel Xeon E5620</strong>4 cœurs · 16
+                        Go RAM
+                      </div>
+                      <div class="section-copy">
+                        Système<strong>Linux · x86_64</strong>Type d’OS et
+                        architecture
+                      </div>
+                      <div class="section-copy">
+                        Graphique<strong>AMD FirePro V4900</strong>VAAPI
+                        disponible
+                      </div>
+                      <div class="section-copy">
+                        Environnement<strong>Docker · conteneur</strong>Agent
+                        exécuté dans Docker
+                      </div>
+                    </div>
+                  </section>
+                  <section class="section-card">
+                    <div class="section-heading">
+                      <span class="state-icon">⌘</span>
+                      <h3>Capacités de traitement</h3>
+                    </div>
+                    <div class="capability-pair">
+                      <div class="section-copy">
+                        Moteur d’accélération<strong>VAAPI</strong>AMD FirePro
+                        V4900
+                      </div>
+                      <div class="section-copy">
+                        Codecs compatibles
+                        <div class="chip-row" style="margin-top: 6px">
+                          <span class="chip">H.264</span
+                          ><span class="chip">HEVC</span>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                  <section class="section-card">
+                    <div class="section-heading">
+                      <span class="state-icon">◇</span>
+                      <h3>Identité et appartenance</h3>
+                    </div>
+                    <div class="section-copy">
+                      Identifiant<strong>encoding-50</strong>Cluster Maison
+                    </div>
+                  </section>
+                </div>
+                <section class="libraries">
+                  <div class="libraries-heading">
+                    <div>
+                      <h3>Bibliothèques et chemins configurés</h3>
+                      <p>Chemins vus depuis TRUENAS.</p>
+                    </div>
+                    <span class="library-count">2 autorisées</span>
+                  </div>
+                  <div class="library-grid">
+                    <article class="library-card">
+                      <header class="library-card-head">
+                        <span class="library-icon" aria-hidden="true">▱</span
+                        ><span class="library-heading-copy"
+                          ><strong>Films</strong
+                          ><small>Bibliothèque</small></span
+                        ><span class="badge good">Active</span>
+                      </header>
+                      <div class="library-path-block">
+                        <span class="library-path-label"
+                          >Chemin configuré sur ce nœud</span
+                        ><code class="path">/mnt/tank/media/films</code>
+                      </div>
+                      <div class="library-card-foot">
+                        <span class="badge">Accès direct</span
+                        ><span class="access">Lecture · Écriture</span>
+                      </div>
+                    </article>
+                    <article class="library-card">
+                      <header class="library-card-head">
+                        <span class="library-icon" aria-hidden="true">▱</span
+                        ><span class="library-heading-copy"
+                          ><strong>Séries</strong
+                          ><small>Bibliothèque</small></span
+                        ><span class="badge good">Active</span>
+                      </header>
+                      <div class="library-path-block">
+                        <span class="library-path-label"
+                          >Chemin configuré sur ce nœud</span
+                        ><code class="path">/mnt/tank/media/series</code>
+                      </div>
+                      <div class="library-card-foot">
+                        <span class="badge">Transfert WebDAV</span
+                        ><span class="access">Lecture · Écriture</span>
+                      </div>
+                    </article>
+                  </div>
+                </section>
+              </article>
+
+              <article
+                class="node-parent searchable"
+                data-search="artemis encoding-51 en ligne serveur worker intel core films musique hevc h264"
+              >
+                <header class="node-parent-head">
+                  <span class="node-symbol" aria-hidden="true">▤</span>
+                  <div class="node-parent-heading">
+                    <div class="node-name-row">
+                      <h2>ARTEMIS</h2>
+                      <span class="hostname">encoding-51</span>
+                    </div>
+                    <div class="node-subtitle">Worker · Nœud membre</div>
+                    <div class="badge-row">
+                      <span class="badge good"><i class="dot"></i>En ligne</span
+                      ><span class="badge">Worker</span>
+                    </div>
+                  </div>
+                  <button
+                    class="menu-button demo-action"
+                    aria-label="Autres actions pour ARTEMIS"
+                  >
+                    ···
+                  </button>
+                </header>
+                <div class="section-grid">
+                  <section class="section-card">
+                    <div class="section-heading">
+                      <span class="state-icon">◉</span>
+                      <h3>État et activité</h3>
+                    </div>
+                    <div class="section-split">
+                      <div class="section-copy">
+                        Agent<strong>Joignable</strong>Dernier signal : à
+                        l’instant
+                      </div>
+                      <div class="section-copy">
+                        Traitements actifs<strong>1 / 1</strong>Traitement en
+                        cours
+                      </div>
+                    </div>
+                  </section>
+                  <section class="section-card">
+                    <div class="section-heading">
+                      <span class="state-icon">▦</span>
+                      <h3>Matériel déclaré</h3>
+                    </div>
+                    <div class="hardware-grid">
+                      <div class="section-copy">
+                        Processeur<strong>Intel Core i5-8500</strong>6 cœurs ·
+                        16 Go RAM
+                      </div>
+                      <div class="section-copy">
+                        Système<strong>Linux · x86_64</strong>Type d’OS et
+                        architecture
+                      </div>
+                      <div class="section-copy">
+                        Graphique<strong>Intel UHD Graphics 630</strong>QSV
+                        disponible
+                      </div>
+                      <div class="section-copy">
+                        Environnement<strong>Hôte natif</strong>Sans conteneur
+                        Docker
+                      </div>
+                    </div>
+                  </section>
+                  <section class="section-card">
+                    <div class="section-heading">
+                      <span class="state-icon">⌘</span>
+                      <h3>Capacités de traitement</h3>
+                    </div>
+                    <div class="capability-pair">
+                      <div class="section-copy">
+                        Moteur d’accélération<strong>Intel QSV</strong>Intel UHD
+                        Graphics 630
+                      </div>
+                      <div class="section-copy">
+                        Codecs compatibles
+                        <div class="chip-row" style="margin-top: 6px">
+                          <span class="chip">H.264</span
+                          ><span class="chip">HEVC</span>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                  <section class="section-card">
+                    <div class="section-heading">
+                      <span class="state-icon">◇</span>
+                      <h3>Identité et appartenance</h3>
+                    </div>
+                    <div class="section-copy">
+                      Identifiant<strong>encoding-51</strong>Cluster Maison
+                    </div>
+                  </section>
+                </div>
+                <section class="libraries">
+                  <div class="libraries-heading">
+                    <div>
+                      <h3>Bibliothèques et chemins configurés</h3>
+                      <p>Chemins vus depuis ARTEMIS.</p>
+                    </div>
+                    <span class="library-count">1 autorisée</span>
+                  </div>
+                  <div class="library-grid">
+                    <article class="library-card">
+                      <header class="library-card-head">
+                        <span class="library-icon" aria-hidden="true">▱</span
+                        ><span class="library-heading-copy"
+                          ><strong>Films</strong
+                          ><small>Bibliothèque</small></span
+                        ><span class="badge good">Active</span>
+                      </header>
+                      <div class="library-path-block">
+                        <span class="library-path-label"
+                          >Chemin configuré sur ce nœud</span
+                        ><code class="path">/srv/media/films</code>
+                      </div>
+                      <div class="library-card-foot">
+                        <span class="badge">Accès direct</span
+                        ><span class="access">Lecture · Écriture</span>
+                      </div>
+                    </article>
+                    <div class="empty-note">
+                      Aucune autre bibliothèque n’est autorisée sur ce nœud.
+                    </div>
+                  </div>
+                </section>
+              </article>
+            </div>
+          </section>
+
+          <section
+            class="view"
+            id="view-groups"
+            role="tabpanel"
+            aria-label="Groupes de nœuds"
+            hidden
+          >
+            <div class="notice">
+              Les groupes gardent leur fonctionnement métier actuel. Cette vue
+              conserve une grille de cartes, alignée avec le reste de la page
+              Nœuds.
+            </div>
+            <div class="group-grid">
+              <article
+                class="group-card searchable"
+                data-search="workers encodage video hevc h264 truenas artemis"
+              >
+                <div class="group-title">
+                  <span class="cluster-symbol">⌘</span
+                  ><strong>Workers vidéo</strong>
+                </div>
+                <p>
+                  Workers compatibles avec les flows d’encodage vidéo et les
+                  bibliothèques autorisées.
+                </p>
+                <div class="badge-row">
+                  <span class="badge">worker</span
+                  ><span class="badge">video</span>
+                </div>
+                <div class="group-foot">
+                  <span>2 nœuds · 3 critères</span
+                  ><button class="button quiet demo-action">
+                    Voir le groupe
+                  </button>
+                </div>
+              </article>
+              <article
+                class="group-card searchable"
+                data-search="transcodage cluster maison workers"
+              >
+                <div class="group-title">
+                  <span class="cluster-symbol">⌘</span
+                  ><strong>Transcodage Maison</strong>
+                </div>
+                <p>
+                  Groupe dynamique déterminé par le rôle worker et
+                  l’appartenance au cluster Maison.
+                </p>
+                <div class="badge-row">
+                  <span class="badge">cluster: Maison</span
+                  ><span class="badge">worker</span>
+                </div>
+                <div class="group-foot">
+                  <span>2 nœuds · dynamique</span
+                  ><button class="button quiet demo-action">
+                    Voir le groupe
+                  </button>
+                </div>
+              </article>
+              <article
+                class="group-card searchable"
+                data-search="serveur coordinator local"
+              >
+                <div class="group-title">
+                  <span class="cluster-symbol">⌘</span><strong>Serveurs</strong>
+                </div>
+                <p>
+                  Nœuds qui hébergent l’API et coordonnent la distribution des
+                  tâches.
+                </p>
+                <div class="badge-row"><span class="badge">server</span></div>
+                <div class="group-foot">
+                  <span>1 nœud · manuel</span
+                  ><button class="button quiet demo-action">
+                    Voir le groupe
+                  </button>
+                </div>
+              </article>
+            </div>
+          </section>
+          <p class="toast" id="toast" hidden></p>
+        </div>
+      </main>
+    </div>
+    <script>
+      const views = ["node", "cluster", "groups"];
+      const tabs = [...document.querySelectorAll("[data-view-tab]")];
+      const search = document.getElementById("page-search");
+      const leftLabel = document.getElementById("subnav-label");
+      const leftContext = document.getElementById("subnav-context");
+      const actions = document.getElementById("subnav-actions");
+      const toast = document.getElementById("toast");
+      const labels = {
+        node: ["", "", "Rechercher dans Ce nœud…", ""],
+        cluster: [
+          "Cluster actuel",
+          "Maison",
+          "Rechercher un nœud dans le cluster…",
+          "＋ Ajouter un nœud",
+        ],
+        groups: [
+          "Organisation",
+          "3 groupes",
+          "Rechercher un groupe…",
+          "＋ Créer un groupe",
+        ],
+      };
+      let toastTimer;
+      function showView(view) {
+        views.forEach((item) => {
+          document.getElementById(`view-${item}`).hidden = item !== view;
+          const tab = tabs.find(
+            (candidate) => candidate.dataset.viewTab === item,
+          );
+          tab.setAttribute("aria-selected", String(item === view));
+          tab.tabIndex = item === view ? 0 : -1;
+        });
+        [leftLabel.textContent, leftContext.textContent, search.placeholder] =
+          labels[view];
+        actions.innerHTML = labels[view][3]
+          ? `<button class="button primary demo-action">${labels[view][3]}</button>`
+          : "";
+        actions
+          .querySelector("button")
+          ?.addEventListener("click", () =>
+            showToast("Action représentée dans la maquette."),
+          );
+        search.value = "";
+        filterCards();
+      }
+      function filterCards() {
+        const query = search.value.trim().toLocaleLowerCase("fr");
+        document
+          .querySelectorAll(
+            `#view-${tabs.find((tab) => tab.getAttribute("aria-selected") === "true").dataset.viewTab} .searchable`,
+          )
+          .forEach((card) => {
+            card.hidden = !card.dataset.search.includes(query);
+          });
+      }
+      function showToast(message) {
+        toast.textContent = message;
+        toast.hidden = false;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => (toast.hidden = true), 2300);
+      }
+      tabs.forEach((tab) =>
+        tab.addEventListener("click", () => showView(tab.dataset.viewTab)),
+      );
+      search.addEventListener("input", filterCards);
+      document
+        .querySelectorAll(".demo-action")
+        .forEach((button) =>
+          button.addEventListener("click", () =>
+            showToast("Action représentée dans la maquette."),
+          ),
+        );
+    </script>
+  </body>
+</html>

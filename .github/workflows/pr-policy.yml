@@ -1,0 +1,85 @@
+name: PR policy
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited, ready_for_review]
+concurrency:
+  group: pr-policy-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Validate the source and target branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if [ "$BASE_REF" = "main" ] && [ "$HEAD_REF" = "dev" ]; then
+            echo "Pull request autorisée : $HEAD_REF vers $BASE_REF."
+            exit 0
+          fi
+          if [ "$BASE_REF" = "dev" ] && [ "$HEAD_REF" != "main" ]; then
+            echo "Pull request autorisée : $HEAD_REF vers dev."
+            exit 0
+          fi
+
+          echo "Seules les PR vers dev (hors main) et les promotions dev vers main sont autorisées."
+          gh pr close "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            --comment "PR fermée automatiquement : seules les PR vers dev et les promotions de dev vers main sont autorisées."
+          exit 1
+
+      - name: Enable auto-merge for a dev-to-main promotion
+        if: >-
+          github.event.pull_request.base.ref == 'main' &&
+          github.event.pull_request.head.ref == 'dev' &&
+          github.event.pull_request.draft == false
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          read_promotion() {
+            pr="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid,state,statusCheckRollup)"
+            if [ "$(jq -r '.headRefOid' <<<"$pr")" != "$EXPECTED_SHA" ]; then
+              echo "::error::La PR a changé ; cette autorisation est périmée."
+              exit 1
+            fi
+            gate="$(jq '[.statusCheckRollup[] | select(.name == "promotion-ci")] | sort_by(.startedAt) | last' <<<"$pr")"
+            if [ "$(jq -r '.state' <<<"$pr")" = MERGED ] &&
+               [ "$(jq -r '.status' <<<"$gate")" = COMPLETED ] &&
+               [ "$(jq -r '.conclusion' <<<"$gate")" = SUCCESS ]; then
+              echo "Le commit attendu est déjà fusionné après réussite de promotion-ci."
+              exit 0
+            fi
+            if [ "$(jq -r '.state' <<<"$pr")" != OPEN ]; then
+              echo "::error::La PR n’est plus ouverte ; aucune fusion n’est autorisée."
+              exit 1
+            fi
+          }
+          read_promotion
+          # Revoke a previous authorization only while this promotion is open.
+          gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --disable-auto || {
+            code=$?; read_promotion; exit "$code";
+          }
+          for _ in $(seq 1 120); do
+            read_promotion
+            if [ "$(jq -r '.status' <<<"$gate")" = COMPLETED ]; then
+              if [ "$(jq -r '.conclusion' <<<"$gate")" != SUCCESS ]; then
+                echo "::error::promotion-ci a échoué : auto-merge vers main refusé."
+                exit 1
+              fi
+              gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --auto --merge --match-head-commit "$EXPECTED_SHA" || {
+                code=$?; read_promotion; exit "$code";
+              }
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::promotion-ci absent ou toujours en attente : auto-merge refusé."
+          exit 1

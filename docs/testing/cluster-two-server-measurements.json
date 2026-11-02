@@ -1,0 +1,58 @@
+{
+  "measured_code_commit": "0e07a56",
+  "date_utc": "2026-10-25",
+  "environment": "one workspace host; two logical HTTP servers and local SQLite files in one process; two synthetic workers; no other heavy test running",
+  "measurements": {
+    "servers": 2,
+    "sqlite_files": 2,
+    "host_processes": 1,
+    "synthetic_workers": 2,
+    "queued": 7000,
+    "concurrentCapture": true,
+    "replication_passes": 1,
+    "setup_ms": 3308.9186,
+    "elapsed_ms": 12525.9146,
+    "claim": {
+      "count": 100,
+      "p50_ms": 151.524,
+      "p95_ms": 310.049,
+      "p99_ms": 522.638,
+      "max_ms": 730.9052
+    },
+    "renew": {
+      "count": 100,
+      "p50_ms": 13.317,
+      "p95_ms": 73.286,
+      "p99_ms": 82.388,
+      "max_ms": 86.6321
+    },
+    "overview": {
+      "count": 100,
+      "p50_ms": 81.358,
+      "p95_ms": 222.114,
+      "p99_ms": 334.073,
+      "max_ms": 375.3882
+    },
+    "history": {
+      "count": 100,
+      "p50_ms": 77.926,
+      "p95_ms": 149.535,
+      "p99_ms": 176.657,
+      "max_ms": 202.9167
+    },
+    "writerA": {
+      "admissions": 281,
+      "wait_ms": 2223.5794,
+      "hold_ms": 7178.732099999999,
+      "rejected": 0,
+      "expired": 0
+    },
+    "writerB": {
+      "admissions": 286,
+      "wait_ms": 1972.493,
+      "hold_ms": 6269.3959,
+      "rejected": 0,
+      "expired": 0
+    }
+  }
+}

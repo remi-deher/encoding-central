@@ -1,0 +1,405 @@
+<form class="node-group-editor" (ngSubmit)="submit()">
+  <!-- Sélecteur de Mode -->
+  <section class="editor-section">
+    <div class="section-header">
+      <h3>Type de groupe</h3>
+      <p>Choisissez comment les membres de ce groupe sont déterminés.</p>
+    </div>
+    <div class="mode-selector">
+      <button
+        type="button"
+        class="mode-card"
+        [class.is-active]="mode() === 'manual'"
+        (click)="setMode('manual')"
+      >
+        <span class="mode-title">Groupe manuel</span>
+        <span class="mode-desc">
+          Affectation explicite et fixe de nœuds spécifiques au cluster.
+        </span>
+      </button>
+      <button
+        type="button"
+        class="mode-card"
+        [class.is-active]="mode() === 'automatic'"
+        (click)="setMode('automatic')"
+      >
+        <span class="mode-title">Groupe automatique</span>
+        <span class="mode-desc">
+          Résolution dynamique des nœuds selon leurs capacités (RAM, CPU, outils, OS).
+        </span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Informations Générales -->
+  <section class="editor-section">
+    <div class="section-header">
+      <h3>Identité du groupe</h3>
+    </div>
+    <div class="fields-grid">
+      <mat-form-field appearance="outline" class="full-width" subscriptSizing="dynamic">
+        <mat-label>Nom unique du groupe</mat-label>
+        <input
+          matInput
+          type="text"
+          [value]="name()"
+          (input)="onNameInput($event)"
+          name="groupName"
+          maxlength="128"
+          required
+          placeholder="Ex. Workers-GPU-Transcode ou Fast-Linux-Pool"
+        />
+        <mat-hint>Obligatoire. 128 caractères maximum.</mat-hint>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full-width" subscriptSizing="dynamic">
+        <mat-label>Description (facultative)</mat-label>
+        <textarea
+          matInput
+          rows="2"
+          [value]="description()"
+          (input)="onDescriptionInput($event)"
+          name="groupDescription"
+          maxlength="2000"
+          placeholder="Usage du groupe ou contraintes spécifiques..."
+        ></textarea>
+      </mat-form-field>
+    </div>
+  </section>
+
+  <!-- Section Mode Manuel : Sélection des Nœuds -->
+  @if (mode() === 'manual') {
+    <section class="editor-section">
+      <div class="section-header">
+        <h3>
+          Nœuds membres ({{ selectedNodeIds().size }} sélectionné{{
+            selectedNodeIds().size > 1 ? 's' : ''
+          }})
+        </h3>
+        <p>Cochez les nœuds faisant partie de ce groupe manuel.</p>
+      </div>
+
+      <div class="nodes-selection-toolbar">
+        <app-search-field
+          class="search-field"
+          variant="filled"
+          name="nodeSearch"
+          label="Filtrer les nœuds"
+          placeholder="Rechercher par nom, système ou architecture..."
+          [value]="nodeSearchQuery()"
+          (valueChange)="nodeSearchQuery.set($event)"
+        />
+
+        <div class="selection-actions">
+          <button matButton="outlined" type="button" (click)="selectAllVisibleNodes()">
+            Tout sélectionner
+          </button>
+          <button matButton="outlined" type="button" (click)="clearNodeSelection()">
+            Désélectionner
+          </button>
+        </div>
+      </div>
+
+      <div class="nodes-list-container">
+        @if (filteredNodes().length === 0) {
+          <div class="nodes-empty">
+            @if (nodes().length === 0) {
+              Aucun nœud n’est encore enregistré dans le cluster.
+            } @else {
+              Aucun nœud ne correspond au filtre de recherche.
+            }
+          </div>
+        } @else {
+          @for (node of filteredNodes(); track node.id) {
+            <label class="node-selection-item" [class.is-checked]="selectedNodeIds().has(node.id)">
+              <mat-checkbox
+                [checked]="selectedNodeIds().has(node.id)"
+                (change)="toggleNode(node.id)"
+                [attr.aria-label]="'Sélectionner ' + formatNode(node)"
+              />
+              <div class="node-item-info">
+                <div class="node-item-primary">
+                  <span class="node-item-name">{{ formatNode(node) }}</span>
+                  <app-status-badge
+                    [label]="node.status === 'online' ? 'En ligne' : 'Hors ligne'"
+                    [tone]="node.status === 'online' ? 'success' : 'neutral'"
+                  />
+                  @for (role of node.roles; track role) {
+                    <span class="node-role-badge">{{
+                      role === 'worker' ? 'Worker' : 'Serveur'
+                    }}</span>
+                  }
+                </div>
+                <div class="node-item-details">
+                  @if (node.inventory?.operatingSystem) {
+                    <span
+                      >{{ node.inventory?.operatingSystem }} ({{
+                        node.inventory?.architecture
+                      }})</span
+                    >
+                  }
+                  @if (node.inventory?.processorCount) {
+                    <span>· {{ node.inventory?.processorCount }} CPU</span>
+                  }
+                  @if (node.inventory?.memoryMb) {
+                    <span>· {{ Math.round(node.inventory!.memoryMb / 1024) }} Go RAM</span>
+                  }
+                  @if (node.capabilities.length) {
+                    <span>· {{ node.capabilities.length }} outil(s)</span>
+                  }
+                </div>
+              </div>
+            </label>
+          }
+        }
+      </div>
+    </section>
+  }
+
+  <!-- Section Mode Automatique : Critères d'inventaire -->
+  @if (mode() === 'automatic') {
+    <section class="editor-section">
+      <div class="section-header">
+        <h3>Critères d’attribution automatique</h3>
+        <p>
+          Les nœuds du cluster qui valident tous ces critères feront automatiquement partie du
+          groupe.
+        </p>
+      </div>
+
+      <div class="fields-grid">
+        <!-- Rôle requis -->
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Rôle requis</mat-label>
+          <mat-select [value]="selectedRole()" (valueChange)="selectedRole.set($event)">
+            <mat-option value="all">Tous les rôles</mat-option>
+            <mat-option value="worker">Workers uniquement</mat-option>
+            <mat-option value="server">Serveurs uniquement</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <!-- Système d'exploitation -->
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Système d’exploitation</mat-label>
+          <mat-select [value]="selectedOs()" (valueChange)="selectedOs.set($event)">
+            <mat-option value="">Indifférent</mat-option>
+            @for (os of availableOs(); track os) {
+              <mat-option [value]="os">{{ os }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <!-- Architecture -->
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Architecture processeur</mat-label>
+          <mat-select
+            [value]="selectedArchitecture()"
+            (valueChange)="selectedArchitecture.set($event)"
+          >
+            <mat-option value="">Indifférente</mat-option>
+            @for (arch of availableArchitectures(); track arch) {
+              <mat-option [value]="arch">{{ arch }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <!-- Mémoire minimale en Go -->
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Mémoire minimale (Go)</mat-label>
+          <mat-select [value]="minMemoryGb()" (valueChange)="minMemoryGb.set($event)">
+            <mat-option [value]="null">Aucune restriction</mat-option>
+            <mat-option [value]="4">≥ 4 Go</mat-option>
+            <mat-option [value]="8">≥ 8 Go</mat-option>
+            <mat-option [value]="16">≥ 16 Go</mat-option>
+            <mat-option [value]="32">≥ 32 Go</mat-option>
+            <mat-option [value]="64">≥ 64 Go</mat-option>
+            <mat-option [value]="128">≥ 128 Go</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <!-- Processeurs minimum -->
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Processeurs minimum (CPU)</mat-label>
+          <input
+            matInput
+            type="number"
+            min="0"
+            max="4096"
+            [value]="minProcessorCount() ?? ''"
+            (input)="onCpuInput($event)"
+            name="minCpu"
+            placeholder="Ex. 4"
+          />
+        </mat-form-field>
+
+        <!-- Concurrence minimale -->
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Tâches simultanées min.</mat-label>
+          <input
+            matInput
+            type="number"
+            min="0"
+            max="1024"
+            [value]="minConcurrentTasks() ?? ''"
+            (input)="onTasksInput($event)"
+            name="minTasks"
+            placeholder="Ex. 2"
+          />
+        </mat-form-field>
+
+        <!-- Outils requis -->
+        <div class="full-width">
+          <label class="section-label">Outils média requis</label>
+          <div class="tool-chips-selector">
+            @for (tool of availableTools(); track tool) {
+              <button
+                type="button"
+                class="tool-chip"
+                [class.is-selected]="selectedTools().has(tool)"
+                (click)="toggleTool(tool)"
+              >
+                {{ tool }}
+              </button>
+            }
+          </div>
+        </div>
+
+        <!-- Capacité d'encodeurs -->
+        <div class="full-width">
+          <label class="section-label">Capacité d’encodeurs vidéo requise</label>
+          <div class="tool-chips-selector">
+            @for (enc of availableEncoderOptions(); track enc.id) {
+              <button
+                type="button"
+                class="tool-chip"
+                [class.is-selected]="selectedEncoders().has(enc.id)"
+                (click)="toggleEncoder(enc.id)"
+              >
+                {{ enc.label }}
+              </button>
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Matching Preview -->
+      <div
+        class="preview-box"
+        [class.has-matches]="matchedNodes().length > 0"
+        [class.no-matches]="matchedNodes().length === 0"
+      >
+        <div class="preview-header">
+          <span>Aperçu des nœuds correspondants</span>
+          <span class="preview-count">
+            {{ matchedNodes().length }} nœud{{ matchedNodes().length > 1 ? 's' : '' }} éligible{{
+              matchedNodes().length > 1 ? 's' : ''
+            }}
+          </span>
+        </div>
+
+        @if (matchedNodes().length > 0) {
+          <div class="preview-nodes">
+            @for (n of matchedNodes(); track n.id) {
+              <span class="preview-node-pill">
+                <span
+                  class="status-dot"
+                  [class.online]="n.status === 'online'"
+                  [class.offline]="n.status === 'offline'"
+                ></span>
+                {{ formatNode(n) }}
+              </span>
+            }
+          </div>
+        } @else {
+          <p class="preview-empty-note">
+            ⚠️ Aucun nœud du cluster ne remplit actuellement ces critères. Le groupe sera vide
+            jusqu'à ce qu'un nœud compatible soit détecté ou enrôlé.
+          </p>
+        }
+      </div>
+    </section>
+  }
+
+  <!-- Section Étiquettes Partagées (Labels) -->
+  <section class="editor-section">
+    <div class="section-header">
+      <h3>Étiquettes partagées (Labels)</h3>
+      <p>
+        Ces étiquettes seront héritées par tous les membres du groupe. Les étiquettes locales d'un
+        nœud remplacent celles du groupe pour une même clé.
+      </p>
+    </div>
+
+    <div class="labels-editor">
+      <div class="label-input-row">
+        <mat-form-field appearance="outline" class="label-key-field" subscriptSizing="dynamic">
+          <mat-label>Clé d’étiquette</mat-label>
+          <input
+            matInput
+            type="text"
+            [value]="newLabelKey()"
+            (input)="onLabelKeyInput($event)"
+            name="newLabelKey"
+            placeholder="Ex. gpu ou env"
+            (keydown.enter)="$event.preventDefault(); addLabel()"
+          />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="label-value-field" subscriptSizing="dynamic">
+          <mat-label>Valeur (facultative)</mat-label>
+          <input
+            matInput
+            type="text"
+            [value]="newLabelValue()"
+            (input)="onLabelValueInput($event)"
+            name="newLabelValue"
+            placeholder="Ex. nvidia ou prod"
+            (keydown.enter)="$event.preventDefault(); addLabel()"
+          />
+        </mat-form-field>
+
+        <button matButton="tonal" type="button" class="add-label-btn" (click)="addLabel()">
+          Ajouter
+        </button>
+      </div>
+
+      @if (labelError()) {
+        <p class="label-error-text" role="alert">{{ labelError() }}</p>
+      }
+
+      <div class="labels-chips-list" aria-label="Étiquettes définies">
+        @if (labelEntries().length === 0) {
+          <span class="labels-empty-text">Aucune étiquette partagée définie.</span>
+        } @else {
+          @for (entry of labelEntries(); track entry[0]) {
+            <span class="label-chip">
+              <span class="label-key">{{ entry[0] }}</span>
+              @if (entry[1] != null) {
+                <span class="label-sep">=</span>
+                <span class="label-val">{{ entry[1] }}</span>
+              }
+              <button
+                type="button"
+                class="remove-chip-btn"
+                [attr.aria-label]="'Supprimer l\'étiquette ' + entry[0]"
+                (click)="removeLabel(entry[0])"
+              >
+                ×
+              </button>
+            </span>
+          }
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- Actions -->
+  <div class="editor-actions">
+    <button matButton="outlined" type="button" [disabled]="busy()" (click)="cancelled.emit()">
+      Annuler
+    </button>
+    <button matButton="filled" type="submit" [disabled]="!canSave() || busy()">
+      {{ busy() ? 'Enregistrement…' : group() ? 'Mettre à jour le groupe' : 'Créer le groupe' }}
+    </button>
+  </div>
+</form>

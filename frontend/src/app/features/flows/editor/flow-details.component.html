@@ -1,0 +1,291 @@
+<mat-tab-group
+  [selectedIndex]="tab()"
+  (selectedIndexChange)="tab.set($event)"
+  [preserveContent]="true"
+  animationDuration="0ms"
+>
+  <mat-tab label="Aperçu">
+    <section class="detail-section" aria-label="Prévisualisation du flow">
+      <div class="section-heading">
+        <div>
+          <h3>{{ previewLabel() }}</h3>
+          <p>Lecture seule · la définition et les connexions sont conservées.</p>
+        </div>
+        <button
+          mat-button
+          type="button"
+          [disabled]="!current() || busy()"
+          (click)="preview({ kind: 'current' })"
+        >
+          Revenir à la version actuelle
+        </button>
+      </div>
+      @if (selectedDate(); as date) {
+        <p>
+          {{
+            current()?.draftRevision != null && selection().kind === 'current'
+              ? 'Enregistré'
+              : 'Publié'
+          }}
+          le {{ formatDate(date) }}
+        </p>
+      }
+      @if (previewState() === 'loading') {
+        <p role="status">Chargement de l’aperçu…</p>
+      } @else if (previewState() === 'error') {
+        <p role="alert">Aperçu indisponible. Réessayez depuis Versions ou rechargez le panneau.</p>
+      } @else if (document(); as flow) {
+        <div class="graph-preview">
+          <app-flow-graph-editor
+            [readOnly]="true"
+            [nodes]="nodes()"
+            [connections]="flow.connections"
+            [componentPacks]="flow.componentPacks ?? []"
+            [mediaType]="flow.mediaType"
+            [layoutKey]="'preview.' + flow.id + '.' + previewLabel()"
+          />
+        </div>
+        @if (auth.isAdmin() && selection().kind !== 'current') {
+          <button
+            matButton="filled"
+            type="button"
+            [disabled]="busy() || !current()"
+            (click)="restore()"
+          >
+            Créer un brouillon depuis cet aperçu
+          </button>
+        }
+      }
+      @if (auth.isAdmin()) {
+        <button
+          matButton="tonal"
+          type="button"
+          [disabled]="busy() || !current()"
+          (click)="duplicate()"
+        >
+          Dupliquer le flow actuel
+        </button>
+      }
+    </section>
+  </mat-tab>
+  <mat-tab label="Versions">
+    <section class="detail-section" aria-label="Versions du flow">
+      <h3>Historique publié</h3>
+      <p>
+        Prévisualisez une version, puis créez un brouillon pour la restaurer. Les bibliothèques
+        gardent leur version attribuée.
+      </p>
+      @if (!extrasLoaded()) {
+        <p role="status">Chargement des versions…</p>
+      } @else if (errors().has('versions')) {
+        <p role="alert">Historique indisponible.</p>
+      } @else {
+        @if (current()?.draftRevision != null) {
+          <button
+            matButton="tonal"
+            [disabled]="busy() || !current()"
+            (click)="preview({ kind: 'current' })"
+          >
+            Prévisualiser le brouillon actuel
+          </button>
+        }
+        <ul class="history-list">
+          @for (version of versions(); track version.version) {
+            <li>
+              <div>
+                <strong>v{{ version.version }} · {{ version.name }}</strong>
+                <p>
+                  {{ version.nodes.length }} blocs · {{ version.connections.length }} connexions
+                </p>
+              </div>
+              <button
+                mat-button
+                [disabled]="busy() || !current()"
+                (click)="preview({ kind: 'published', version: version.version })"
+                [attr.aria-label]="'Prévisualiser la version ' + version.version"
+              >
+                Prévisualiser
+              </button>
+            </li>
+          } @empty {
+            <li>Aucune version publiée. Le brouillon reste accessible dans Aperçu.</li>
+          }
+        </ul>
+        @if (versions().length > 1) {
+          <h3>Comparer deux versions</h3>
+          <div class="comparison-selectors">
+            <mat-form-field appearance="outline"
+              ><mat-label>Version de référence</mat-label
+              ><mat-select
+                [value]="compareBefore()"
+                (selectionChange)="compareBefore.set($event.value)"
+              >
+                @for (v of versions(); track v.version) {
+                  <mat-option [value]="v.version">v{{ v.version }}</mat-option>
+                }
+              </mat-select></mat-form-field
+            >
+            <mat-form-field appearance="outline"
+              ><mat-label>Version à comparer</mat-label
+              ><mat-select
+                [value]="compareAfter()"
+                (selectionChange)="compareAfter.set($event.value)"
+              >
+                @for (v of versions(); track v.version) {
+                  <mat-option [value]="v.version">v{{ v.version }}</mat-option>
+                }
+              </mat-select></mat-form-field
+            >
+          </div>
+          @if (comparison(); as differences) {
+            <ul class="differences" aria-label="Différences entre les versions">
+              @for (difference of differences; track $index) {
+                <li>
+                  <strong>{{ difference.label }}</strong>
+                  <p>{{ difference.detail }}</p>
+                </li>
+              } @empty {
+                <li>Aucune différence de définition.</li>
+              }
+            </ul>
+          }
+        }
+      }
+    </section>
+  </mat-tab>
+  <mat-tab label="Utilisation">
+    <section class="detail-section" aria-label="Bibliothèques utilisant ce flow">
+      <h3>Affectations aux bibliothèques</h3>
+      @if (!extrasLoaded()) {
+        <p role="status">Chargement des affectations…</p>
+      } @else if (errors().has('usage')) {
+        <p role="alert">Affectations indisponibles.</p>
+      } @else {
+        <ul class="history-list">
+          @for (library of usage(); track library.libraryId) {
+            <li>
+              <a [routerLink]="['/libraries']">{{ library.libraryName }}</a
+              ><span
+                >Version attribuée v{{ library.version }} ·
+                {{ library.isActive ? 'Active' : 'Inactive' }}</span
+              >
+            </li>
+          } @empty {
+            <li>Aucune bibliothèque n’utilise ce flow.</li>
+          }
+        </ul>
+      }
+    </section>
+  </mat-tab>
+  <mat-tab label="Validation">
+    <section class="detail-section" aria-label="Validation du flow">
+      <h3>Définition actuelle et workers observés</h3>
+      <p>
+        Ce contrôle concerne le brouillon actuel, ou la dernière version publiée en l’absence de
+        brouillon. L’accès et les droits de la bibliothèque cible restent à vérifier au lancement.
+        Les informations sont actualisées en arrière-plan toutes les minutes.
+      </p>
+      @if (!extrasLoaded()) {
+        <p role="status">Vérification en cours…</p>
+      } @else if (errors().has('validation')) {
+        <p role="alert">Validation indisponible.</p>
+      } @else if (preflight(); as result) {
+        <p>
+          {{ result.graph.valid ? 'Graphe valide' : 'Graphe à corriger' }} ·
+          {{
+            result.execution.workerCompatible
+              ? 'Worker compatible observé'
+              : 'Aucun worker compatible observé'
+          }}
+        </p>
+        <ul>
+          @for (issue of result.graph.issues; track $index) {
+            <li>{{ issue.message }}</li>
+          }
+        </ul>
+        <ul>
+          @for (worker of result.execution.compatibleWorkers; track worker.id) {
+            <li>{{ worker.name }}</li>
+          }
+        </ul>
+        <p>Observation du {{ formatDate(result.execution.observedAt) }}</p>
+      }
+      <h3>Plugins de l’aperçu sélectionné</h3>
+      <ul>
+        @for (requirement of requirements(); track requirement) {
+          <li>{{ requirement }}</li>
+        }
+      </ul>
+    </section>
+  </mat-tab>
+  <mat-tab label="Sauvegardes et export">
+    <section class="detail-section" aria-label="Sauvegardes du flow">
+      <h3>Exporter</h3>
+      <p>
+        JSON exporte exactement l’aperçu sélectionné. ZIP contient les versions publiées et le
+        brouillon actuel.
+      </p>
+      <div class="actions">
+        <button
+          matButton="tonal"
+          [disabled]="previewState() !== 'ready'"
+          (click)="download('json')"
+        >
+          Exporter l’aperçu JSON</button
+        ><button mat-button (click)="download('zip')">Exporter le flow ZIP</button>
+      </div>
+      @if (document()) {
+        <p>Sauvegarde de l’aperçu : {{ backupLabel(selectedBackup()) }}</p>
+      }
+      <h3>Sauvegardes de brouillons</h3>
+      <p>
+        Les 200 révisions les plus récentes conservées sur ce serveur. La vérification indique
+        l’état de la copie JSON ; une prévisualisation lit l’instantané immuable en base.
+      </p>
+      @if (!extrasLoaded()) {
+        <p role="status">Chargement des sauvegardes…</p>
+      } @else if (errors().has('backups')) {
+        <p role="alert">Sauvegardes indisponibles.</p>
+      } @else {
+        <ul class="history-list">
+          @for (backup of backups(); track backup.revision) {
+            <li>
+              <div>
+                <strong>Brouillon r{{ backup.revision }}</strong>
+                <p>
+                  {{ backupLabel(backup.backupStatus) }}
+                  @if (backup.checkedAt) {
+                    · Vérifiée le {{ formatDate(backup.checkedAt) }}
+                  }
+                </p>
+              </div>
+              <button
+                mat-button
+                [disabled]="busy()"
+                (click)="preview({ kind: 'backup', revision: backup.revision })"
+                [attr.aria-label]="'Prévisualiser la sauvegarde ' + backup.revision"
+              >
+                Prévisualiser
+              </button>
+            </li>
+          } @empty {
+            <li>Aucune sauvegarde de brouillon conservée sur ce serveur.</li>
+          }
+        </ul>
+      }
+      @if (auth.isAdmin()) {
+        <h3>Restaurer un fichier de sauvegarde</h3>
+        <p>
+          Une définition JSON sera validée par le serveur et copiée dans un brouillon après
+          confirmation. Maximum 2 Mo.
+        </p>
+        <app-file-import
+          label="Choisir une sauvegarde JSON"
+          accept=".json"
+          [busy]="busy()"
+          (selected)="importBackup($event)"
+        />
+      }
+    </section>
+  </mat-tab>
+</mat-tab-group>

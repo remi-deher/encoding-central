@@ -1,0 +1,189 @@
+<input
+  #globalFlowImportPicker
+  hidden
+  type="file"
+  accept=".json,.zip"
+  [disabled]="importing()"
+  (change)="onGlobalImportChange($event)"
+/>
+
+<app-resource-catalog-template
+  [title]="title()"
+  [items]="catalogueItems()"
+  [rowActions]="rowActions"
+  [selectionActions]="selectionActions"
+  [selectable]="auth.isAdmin()"
+  [disabled]="selectingFlows()"
+  [(selectedIds)]="selectedFlowIds"
+  openLabel="Consulter"
+  selectionUnit="flow(s)"
+  listEmptyMessage="Aucun flow ne correspond à votre recherche ou au type sélectionné."
+  [showResourceIcon]="false"
+  resourceIcon="flow"
+  [detailOpen]="selectedFlow() !== null"
+  [actionOpen]="actionOpen()"
+  [actionTitle]="actionForm().title"
+  [actionDescription]="actionForm().description"
+  [actionStep]="actionOpen() ? creationProgress() : null"
+  [detailTitle]="detailTitle()"
+  [detailDescription]="detailDescription()"
+  (detailClosed)="onDetailClosed()"
+  (actionClosed)="closeFlowCreation()"
+  filterLabel=""
+  searchLabel=""
+  searchLayout="end"
+  [showToolbar]="false"
+  [emptyState]="catalogState() === 'ready' && totalCount() === 0 ? emptyState : null"
+  (emptyStateAction)="openFlowCreation()"
+  [searchQuery]="searchQuery()"
+  (searchQueryChange)="searchQuery.set($event)"
+  [catalogState]="catalogState()"
+  [catalogMessage]="
+    catalogState() === 'loading' ? 'Chargement des flows…' : 'Impossible de charger les flows.'
+  "
+  (open)="onFlowOpen($event)"
+  (action)="onRowAction($event)"
+  (selectionAction)="onSelectionAction($event)"
+>
+  <ng-template #catalogueSummary>
+    <div class="flow-types" role="group" aria-label="Filtrer par type de média">
+      @if (totalCount() > 0) {
+        @for (type of typeTiles(); track type.value) {
+          <button
+            type="button"
+            class="flow-type"
+            [attr.data-media]="type.value"
+            [attr.aria-pressed]="typeFilter() === type.value"
+            [disabled]="type.count === 0"
+            (click)="toggleType(type.value)"
+          >
+            <span class="flow-type-icon"><app-icon [name]="type.icon" /></span>
+            <span class="flow-type-label">{{ type.label }}</span>
+            <span class="flow-type-count">{{ type.count }}</span>
+          </button>
+        }
+      }
+    </div>
+  </ng-template>
+
+  <ng-template #detailContent catalogue-detail>
+    @if (selectedFlow(); as flow) {
+      <app-flow-details
+        [flowId]="flow.id"
+        [initialTab]="detailTab()"
+        (refreshed)="refreshDetails()"
+      />
+    }
+  </ng-template>
+
+  <ng-template #detailHeaderActions>
+    @if (selectedFlow(); as flow) {
+      @if (auth.isAdmin()) {
+        <button
+          mat-icon-button
+          type="button"
+          [matMenuTriggerFor]="flowActions"
+          aria-label="Actions du flow"
+        >
+          ⋮
+        </button>
+        <mat-menu #flowActions="matMenu">
+          <button
+            mat-menu-item
+            type="button"
+            [disabled]="deletingFlow() !== null"
+            (click)="confirmDeleteFlow(flow)"
+          >
+            Supprimer le flow
+          </button>
+        </mat-menu>
+      }
+    }
+  </ng-template>
+
+  <ng-template #detailFooterActions>
+    @if (selectedFlow(); as flow) {
+      <app-drawer-action-button
+        label="Ouvrir l’éditeur"
+        [routerLink]="['/flows', flow.id, 'edit']"
+        [navigationInfo]="{ flowEditorDirection: 'forward' }"
+      />
+    }
+  </ng-template>
+
+  <ng-template #actionFooterActions>
+    @if (!actionDefinition()) {
+      <button matButton="text" type="button" (click)="creationSecondary()">
+        {{ creationSecondaryLabel() }}
+      </button>
+      <button matButton="filled" type="button" (click)="creationPrimary()">
+        {{ creationStepLabel() }}
+      </button>
+    }
+  </ng-template>
+
+  <ng-template #actionContent>
+    @if (actionDefinition()) {
+      <app-record-form
+        [data]="actionForm()"
+        (submitted)="submitAction($event)"
+        (cancelled)="closeFlowCreation()"
+      />
+      @if (templateSource()) {
+        <section
+          class="template-setup-fields"
+          aria-label="Paramètres modifiables par les utilisateurs du modèle"
+        >
+          <h3>Paramètres configurables depuis le modèle</h3>
+          <p>
+            Les valeurs de cette version resteront les valeurs par défaut. Seuls les paramètres
+            cochés pourront être ajustés lors de la création d’un flow.
+          </p>
+          @if (sourcePreviewStatus() === 'ready') {
+            @for (block of templateConfigurableFields(); track block.node.id) {
+              <fieldset>
+                <legend>{{ block.node.name || block.component.name }}</legend>
+                @for (field of block.fields; track field.id) {
+                  <mat-checkbox
+                    [checked]="templateFieldSelected(block.node.id, field.id)"
+                    (change)="toggleTemplateField(block.node.id, field.id, $event.checked)"
+                  >
+                    {{ field.label }}
+                  </mat-checkbox>
+                }
+              </fieldset>
+            } @empty {
+              <p>Ce flow ne contient aucun paramètre configurable compatible avec un modèle.</p>
+            }
+          }
+        </section>
+      }
+    } @else {
+      <app-record-form
+        [embedded]="true"
+        [data]="flowCreationForm()"
+        (submitted)="startFlow($event)"
+        (cancelled)="closeFlowCreation()"
+      />
+      @if (creationStep() === 1) {
+        <section class="flow-creation-choice" aria-label="Importer un flow">
+          <h3>Ou importer un flow existant</h3>
+          <p>Importez un fichier JSON ou ZIP pour l’ajouter à votre bibliothèque de flows.</p>
+          <app-file-import
+            label="Importer un flow"
+            accept=".json,.zip"
+            [busy]="importing()"
+            (selected)="importCreationFile($event)"
+          />
+        </section>
+      }
+    }
+    @if (sourcePreviewStatus() === 'loading') {
+      <p role="status">Chargement de la version source…</p>
+    } @else if (sourcePreviewStatus() === 'error') {
+      <p role="alert">Le flow source n’est pas disponible pour l’aperçu.</p>
+    } @else if (sourcePreview(); as flow) {
+      <app-flow-preview [flow]="flow" [components]="sourcePreviewComponents()" mode="flow" />
+    }
+  </ng-template>
+</app-resource-catalog-template>

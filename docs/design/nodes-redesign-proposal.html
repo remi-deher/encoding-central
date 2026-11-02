@@ -1,0 +1,392 @@
+<title>Refonte de la page Nœuds</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Concept : une page de gestion en trois plans. Résumé du cluster (état), cartes de nœuds (comparer), tiroir latéral (agir). Jetons du projet conservés (0035). */
+:root{
+  --font-ui:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-data:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --page:#f7f8f7; --surface:#ffffff; --surface-2:#f1f4f2; --line:#e0e6e3; --line-strong:#c9d2ce;
+  --text:#1c2723; --text-2:#4d5b55; --text-3:#66736e;
+  --accent:#2f6f5d; --accent-hover:#285e4f; --accent-soft:#e3f0ec; --on-accent:#ffffff;
+  --ok:#2e7d57; --ok-soft:#e5f3ec; --warn:#9a6414; --warn-soft:#f8efdc; --bad:#b3372f; --bad-soft:#fae9e7; --idle:#5f6b66; --idle-soft:#eceff0;
+  --scrim:rgb(15 25 21 / 38%); --shadow:0 12px 40px rgb(15 25 21 / 18%);
+  --r-sm:6px; --r-md:10px; --r-lg:14px; --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --page:#121715; --surface:#1a211e; --surface-2:#222a27; --line:#2f3935; --line-strong:#41504a;
+  --text:#e5ece8; --text-2:#b3bfb9; --text-3:#90a098;
+  --accent:#7cc4ab; --accent-hover:#97d4bf; --accent-soft:#233a32; --on-accent:#0f1c17;
+  --ok:#6cc79a; --ok-soft:#1f3328; --warn:#e0b05a; --warn-soft:#3a2f18; --bad:#f08a80; --bad-soft:#3b2220; --idle:#9aa6a0; --idle-soft:#262e2b;
+  --scrim:rgb(0 0 0 / 55%); --shadow:0 12px 40px rgb(0 0 0 / 50%); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --page:#121715; --surface:#1a211e; --surface-2:#222a27; --line:#2f3935; --line-strong:#41504a;
+  --text:#e5ece8; --text-2:#b3bfb9; --text-3:#90a098;
+  --accent:#7cc4ab; --accent-hover:#97d4bf; --accent-soft:#233a32; --on-accent:#0f1c17;
+  --ok:#6cc79a; --ok-soft:#1f3328; --warn:#e0b05a; --warn-soft:#3a2f18; --bad:#f08a80; --bad-soft:#3b2220; --idle:#9aa6a0; --idle-soft:#262e2b;
+  --scrim:rgb(0 0 0 / 55%); --shadow:0 12px 40px rgb(0 0 0 / 50%); color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--page);color:var(--text);font-family:var(--font-ui);font-size:14px;line-height:1.5;padding-inline:var(--s4);padding-block:var(--s5) 64px}
+.wrap{max-width:1120px;margin-inline:auto;display:grid;gap:var(--s6)}
+h1,h2,h3{margin:0;text-wrap:balance}
+h1{font-size:22px;font-weight:600}
+h2{font-size:18px;font-weight:600}
+h3{font-size:14px;font-weight:600}
+p{margin:0}
+.muted{color:var(--text-3)}
+.mono{font-family:var(--font-data);font-size:12px}
+.intro{display:grid;gap:var(--s2);max-width:70ch}
+.intro .tag{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3)}
+nav.sections{display:flex;gap:var(--s2);flex-wrap:wrap}
+nav.sections a{color:var(--text-2);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-weight:500}
+nav.sections a:hover{border-color:var(--accent);color:var(--accent)}
+section.block{display:grid;gap:var(--s4)}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--s4)}
+.note{border-top:2px solid var(--line-strong);padding-top:var(--s3);display:grid;gap:var(--s1)}
+.note b{font-weight:600}
+
+/* ---------- Boutons ---------- */
+.btn{--h:40px;display:inline-flex;align-items:center;justify-content:center;gap:var(--s2);height:var(--h);padding-inline:var(--s4);border-radius:var(--r-sm);border:1px solid transparent;font:500 14px/1 var(--font-ui);cursor:pointer;white-space:nowrap;transition:background .15s,border-color .15s,box-shadow .15s}
+.btn:focus-visible,.chip:focus-visible,.card:focus-visible,.icon-btn:focus-visible,.seg button:focus-visible,.tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn-filled{background:var(--accent);color:var(--on-accent)}
+.btn-filled:hover{background:var(--accent-hover)}
+.btn-tonal{background:var(--accent-soft);color:var(--accent)}
+.btn-tonal:hover{filter:brightness(.97)}
+.btn-outline{background:transparent;border-color:var(--line-strong);color:var(--text)}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent)}
+.btn-text{background:transparent;color:var(--accent);padding-inline:var(--s3)}
+.btn-text:hover{background:var(--accent-soft)}
+.btn-danger{background:transparent;border-color:color-mix(in srgb,var(--bad) 50%,transparent);color:var(--bad)}
+.btn-danger:hover{background:var(--bad-soft)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.dense{--h:32px;padding-inline:var(--s3);font-size:13px}
+.icon-btn{width:40px;height:40px;border-radius:var(--r-sm);border:1px solid transparent;background:transparent;color:var(--text-2);display:grid;place-items:center;cursor:pointer}
+.icon-btn:hover{background:var(--surface-2)}
+.icon-btn svg{width:20px;height:20px}
+.spec{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:var(--s4)}
+.spec>div{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s4);display:grid;gap:var(--s3);align-content:start}
+.row{display:flex;gap:var(--s2);flex-wrap:wrap;align-items:center}
+
+/* ---------- Mock de page ---------- */
+.frame{border:1px solid var(--line-strong);border-radius:var(--r-lg);background:var(--page);overflow:hidden;position:relative;min-height:760px}
+.topbar{display:flex;align-items:center;gap:var(--s4);padding:var(--s3) var(--s5);background:var(--surface);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.logo{width:32px;height:32px;border-radius:var(--r-sm);background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-weight:600}
+.topbar nav{display:flex;gap:var(--s1);flex-wrap:wrap}
+.topbar nav span{padding:6px 12px;border-radius:var(--r-sm);color:var(--text-2)}
+.topbar nav span.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.page{padding:var(--s5);display:grid;gap:var(--s4)}
+.page-head{display:flex;justify-content:space-between;gap:var(--s4);align-items:flex-start;flex-wrap:wrap}
+.crumb{display:flex;gap:var(--s2);align-items:center;color:var(--text-3);flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:500;background:var(--idle-soft);color:var(--idle);white-space:nowrap}
+.pill i{width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill.acc{background:var(--accent-soft);color:var(--accent)}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:var(--s3)}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s3) var(--s4);display:grid;gap:2px}
+.stat .v{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.stat .l{font-size:12px;color:var(--text-3)}
+.alert{display:flex;gap:var(--s3);align-items:center;background:var(--warn-soft);color:var(--text);border:1px solid color-mix(in srgb,var(--warn) 35%,transparent);border-radius:var(--r-md);padding:var(--s3) var(--s4);flex-wrap:wrap}
+.alert b{color:var(--warn)}
+.alert .btn{margin-inline-start:auto}
+.toolbar{display:flex;gap:var(--s3);align-items:center;flex-wrap:wrap}
+.search{flex:1 1 220px;min-width:0;height:40px;border:1px solid var(--line-strong);border-radius:var(--r-sm);padding-inline:var(--s3);background:var(--surface);color:var(--text);font:inherit}
+.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:var(--r-sm);overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:transparent;padding:0 14px;height:38px;font:500 13px var(--font-ui);color:var(--text-2);cursor:pointer;border-inline-end:1px solid var(--line)}
+.seg button:last-child{border-inline-end:0}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:var(--s4)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s4);display:grid;gap:var(--s3);cursor:pointer;text-align:left;font:inherit;color:inherit;min-width:0;transition:border-color .15s,box-shadow .15s}
+.card:hover{border-color:var(--accent);box-shadow:0 4px 18px rgb(15 25 21 / 8%)}
+.card[aria-selected="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.card header{display:flex;gap:var(--s3);align-items:flex-start;justify-content:space-between}
+.card h3{font-size:16px;overflow-wrap:anywhere}
+.card .sub{display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:6px}
+.meter{display:grid;gap:6px}
+.meter .bar{height:6px;border-radius:999px;background:var(--surface-2);overflow:hidden}
+.meter .bar span{display:block;height:100%;background:var(--accent);border-radius:999px}
+.meter .cap{display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.tags{display:flex;gap:6px;flex-wrap:wrap}
+.tag{font-family:var(--font-data);font-size:12px;border:1px solid var(--line);border-radius:var(--r-sm);padding:1px 8px;color:var(--text-2)}
+.tag.gpu{border-color:color-mix(in srgb,var(--accent) 45%,transparent);color:var(--accent)}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
+.fact{display:grid;gap:2px;min-width:0}
+.fact .l{font-size:12px;color:var(--text-3)}
+.fact .v{overflow-wrap:anywhere}
+.card footer{display:flex;gap:var(--s2);align-items:center;justify-content:space-between;border-top:1px solid var(--line);padding-top:var(--s3)}
+.bulk{position:sticky;bottom:var(--s4);margin-inline:var(--s5);background:var(--text);color:var(--surface);border-radius:var(--r-md);padding:var(--s2) var(--s4);display:flex;gap:var(--s3);align-items:center;box-shadow:var(--shadow)}
+.bulk .btn-text{color:var(--surface)}
+
+/* ---------- Tiroir ---------- */
+.scrim{position:absolute;inset:0;background:var(--scrim);opacity:0;pointer-events:none;transition:opacity .2s}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:min(480px,100%);background:var(--surface);border-inline-start:1px solid var(--line-strong);box-shadow:var(--shadow);transform:translateX(102%);transition:transform .22s ease;display:grid;grid-template-rows:auto auto 1fr auto}
+.frame.open .scrim{opacity:1;pointer-events:auto}
+.frame.open .drawer{transform:none}
+.drawer-head{padding:var(--s4) var(--s5);display:flex;justify-content:space-between;gap:var(--s3);align-items:flex-start;border-bottom:1px solid var(--line)}
+.tabs{display:flex;gap:var(--s1);padding-inline:var(--s4);border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{background:transparent;border:0;border-bottom:2px solid transparent;padding:12px var(--s3);font:500 14px var(--font-ui);color:var(--text-2);cursor:pointer;white-space:nowrap}
+.tabs button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+.drawer-body{padding:var(--s5);overflow:auto;display:grid;gap:var(--s5);align-content:start}
+.drawer-foot{padding:var(--s3) var(--s5);border-top:1px solid var(--line);display:flex;gap:var(--s2);justify-content:flex-end;flex-wrap:wrap;background:var(--surface)}
+.sect{display:grid;gap:var(--s3)}
+.kv{display:grid;grid-template-columns:140px 1fr;gap:var(--s2) var(--s4)}
+.kv dt{color:var(--text-3)} .kv dd{margin:0;overflow-wrap:anywhere}
+.steps{display:grid;gap:var(--s3);counter-reset:s;padding:0;margin:0;list-style:none}
+.steps li{display:grid;grid-template-columns:28px 1fr;gap:var(--s3);align-items:start}
+.steps li::before{counter-increment:s;content:counter(s);width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-weight:600;font-size:13px}
+.field{display:grid;gap:6px}
+.field label{font-weight:500}
+.field input{height:40px;border:1px solid var(--line-strong);border-radius:var(--r-sm);padding-inline:var(--s3);background:var(--surface);color:var(--text);font:inherit}
+.key{font-family:var(--font-data);font-size:22px;letter-spacing:.14em;background:var(--surface-2);border:1px dashed var(--line-strong);border-radius:var(--r-md);padding:var(--s3) var(--s4);text-align:center}
+.mobile-note{color:var(--text-3)}
+@media (max-width:560px){.kv{grid-template-columns:1fr}.facts{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){.drawer,.scrim{transition:none}}
+</style>
+
+<div class="wrap">
+  <header class="intro">
+    <span class="tag">Proposition de design · /nodes</span>
+    <h1>Refonte de la page Nœuds</h1>
+    <p>La page répond à une seule question : <b>quel est l’état de mes nœuds et que dois-je faire ?</b> Elle se lit en trois plans. Le résumé donne l’état du cluster, les cartes permettent de comparer les nœuds, le tiroir latéral sert à agir sur un seul nœud sans quitter la liste. La maquette ci-dessous est interactive : filtrez, ouvrez une carte, changez d’onglet.</p>
+    <nav class="sections" aria-label="Sections"><a href="#maquette">Maquette</a><a href="#boutons">Boutons</a><a href="#cartes">Cartes</a><a href="#tiroir">Tiroir</a><a href="#interactions">Interactions</a></nav>
+  </header>
+
+  <section class="block" id="maquette">
+    <h2>Page complète</h2>
+    <div class="frame" id="frame">
+      <div class="topbar">
+        <div class="logo">E</div>
+        <nav aria-label="Navigation de l’exemple"><span>Vue d’ensemble</span><span>Tâches</span><span>Bibliothèques</span><span class="on">Nœuds</span><span>Flows</span></nav>
+      </div>
+      <div class="page">
+        <div class="page-head">
+          <div style="display:grid;gap:6px">
+            <div class="crumb"><span>Cluster</span><span class="pill acc">Maison</span><span>· 2 nœuds · 1 serveur actif</span></div>
+            <h1>Nœuds</h1>
+          </div>
+          <div class="row">
+            <button class="btn btn-outline" type="button">Groupes de nœuds</button>
+            <button class="btn btn-filled" type="button">Ajouter un nœud</button>
+          </div>
+        </div>
+
+        <div class="summary" role="group" aria-label="Résumé du cluster">
+          <div class="stat"><span class="v">2</span><span class="l">nœuds dans le cluster</span></div>
+          <div class="stat"><span class="v" style="color:var(--ok)">1</span><span class="l">en ligne</span></div>
+          <div class="stat"><span class="v" style="color:var(--warn)">1</span><span class="l">demande en attente</span></div>
+          <div class="stat"><span class="v">1 / 2</span><span class="l">tâches simultanées utilisées</span></div>
+          <div class="stat"><span class="v">1</span><span class="l">GPU disponible</span></div>
+        </div>
+
+        <div class="alert" role="status">
+          <b>1 nœud attend votre approbation</b><span>encoding-50 demande à rejoindre « Maison ». Code de vérification <span class="mono">W6DM5M</span>.</span>
+          <button class="btn btn-tonal dense" type="button" data-open="n50">Examiner la demande</button>
+        </div>
+
+        <div class="toolbar">
+          <input class="search" id="q" type="search" placeholder="Rechercher un nœud, une étiquette, un outil" aria-label="Rechercher un nœud">
+          <div class="seg" role="group" aria-label="Filtrer par rôle">
+            <button type="button" data-role="all" aria-pressed="true">Tous 3</button>
+            <button type="button" data-role="server" aria-pressed="false">Serveur</button>
+            <button type="button" data-role="worker" aria-pressed="false">Worker</button>
+          </div>
+          <div class="seg" role="group" aria-label="Filtrer par état">
+            <button type="button" data-state="all" aria-pressed="true">Tous états</button>
+            <button type="button" data-state="ok" aria-pressed="false">En ligne</button>
+            <button type="button" data-state="attention" aria-pressed="false">À traiter</button>
+          </div>
+        </div>
+
+        <div class="cards" id="cards">
+          <article class="card" tabindex="0" role="button" data-id="n51" data-role="server worker" data-state="ok" aria-label="Ouvrir encoding-51">
+            <header>
+              <div><h3>encoding-51</h3><div class="sub"><span class="pill ok"><i></i>En ligne</span><span class="pill">Serveur</span><span class="pill">Worker</span></div></div>
+              <button class="icon-btn" type="button" aria-label="Plus d’actions" data-stop><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg></button>
+            </header>
+            <div class="meter"><div class="bar"><span style="width:100%"></span></div><div class="cap"><span>Tâches 1 / 1</span><span>Signal il y a 6 s</span></div></div>
+            <div class="tags"><span class="tag gpu">GPU Intel · QSV</span><span class="tag">ffmpeg 6.1</span><span class="tag">mkvtoolnix 82</span><span class="tag">+3</span></div>
+            <div class="facts">
+              <div class="fact"><span class="l">Bibliothèques</span><span class="v">2 configurées</span></div>
+              <div class="fact"><span class="l">Version</span><span class="v mono">0.1.13</span></div>
+            </div>
+            <footer><span class="muted">Groupe : Transcodage GPU</span><span class="btn btn-text dense" aria-hidden="true">Ouvrir ›</span></footer>
+          </article>
+
+          <article class="card" tabindex="0" role="button" data-id="n50" data-role="server worker" data-state="attention" aria-label="Ouvrir encoding-50">
+            <header>
+              <div><h3>encoding-50</h3><div class="sub"><span class="pill warn"><i></i>Approbation requise</span><span class="pill">Worker</span></div></div>
+              <button class="icon-btn" type="button" aria-label="Plus d’actions" data-stop><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg></button>
+            </header>
+            <div class="meter"><div class="bar"><span style="width:0"></span></div><div class="cap"><span>Aucune tâche</span><span>Signal il y a 3 s</span></div></div>
+            <div class="tags"><span class="tag gpu">GPU Intel · VAAPI</span><span class="tag">ffmpeg 6.1</span><span class="tag">+4</span></div>
+            <div class="facts">
+              <div class="fact"><span class="l">Accès bibliothèques</span><span class="v">À configurer</span></div>
+              <div class="fact"><span class="l">Code de vérification</span><span class="v mono">W6DM5M</span></div>
+            </div>
+            <footer><span class="muted">Demande reçue il y a 4 min</span><span class="row"><span class="btn btn-outline dense" aria-hidden="true">Refuser</span><span class="btn btn-filled dense" aria-hidden="true">Accepter</span></span></footer>
+          </article>
+
+          <article class="card" tabindex="0" role="button" data-id="n52" data-role="worker" data-state="ok" aria-label="Ouvrir encoding-52">
+            <header>
+              <div><h3>encoding-52</h3><div class="sub"><span class="pill">Hors ligne depuis 2 h</span><span class="pill">Worker</span></div></div>
+              <button class="icon-btn" type="button" aria-label="Plus d’actions" data-stop><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg></button>
+            </header>
+            <div class="meter"><div class="bar"><span style="width:0"></span></div><div class="cap"><span>Capacité 2 tâches</span><span>Dernier signal 15:42</span></div></div>
+            <div class="tags"><span class="tag">ffmpeg 6.1</span><span class="tag">imagemagick</span></div>
+            <div class="facts">
+              <div class="fact"><span class="l">Bibliothèques</span><span class="v">1 configurée</span></div>
+              <div class="fact"><span class="l">Version</span><span class="v mono">0.1.9</span></div>
+            </div>
+            <footer><span class="muted">Aucun groupe</span><span class="btn btn-text dense" aria-hidden="true">Ouvrir ›</span></footer>
+          </article>
+        </div>
+        <p class="muted">Cartes triées par « à traiter » d’abord, puis état, puis nom. La grille garde 3 colonnes à 1120 px, 2 à 800 px, 1 sur mobile.</p>
+      </div>
+
+      <div class="scrim" id="scrim"></div>
+      <aside class="drawer" id="drawer" aria-label="Détail du nœud" aria-hidden="true">
+        <div class="drawer-head">
+          <div style="display:grid;gap:6px;min-width:0">
+            <h2 id="d-name">encoding-51</h2>
+            <div class="row" id="d-pills"></div>
+          </div>
+          <button class="icon-btn" type="button" id="close" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </div>
+        <div class="tabs" role="tablist" aria-label="Sections du nœud">
+          <button role="tab" type="button" aria-selected="true" data-tab="summary">Résumé</button>
+          <button role="tab" type="button" aria-selected="false" data-tab="cluster">Rattachement</button>
+          <button role="tab" type="button" aria-selected="false" data-tab="caps">Capacités</button>
+          <button role="tab" type="button" aria-selected="false" data-tab="libs">Bibliothèques</button>
+        </div>
+        <div class="drawer-body" id="d-body"></div>
+        <div class="drawer-foot" id="d-foot"></div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="block" id="boutons">
+    <h2>Boutons : une hiérarchie, un seul bouton principal par vue</h2>
+    <div class="spec">
+      <div><h3>Principal (rempli)</h3><div class="row"><button class="btn btn-filled" type="button">Ajouter un nœud</button><button class="btn btn-filled" type="button" disabled>Désactivé</button></div><p class="muted">Une seule action par écran ou par panneau : celle qui fait avancer la tâche. 40 px, texte à la phrase.</p></div>
+      <div><h3>Tonal</h3><div class="row"><button class="btn btn-tonal" type="button">Générer une clé</button></div><p class="muted">Action utile mais secondaire, dans une carte ou un panneau.</p></div>
+      <div><h3>Contour</h3><div class="row"><button class="btn btn-outline" type="button">Groupes de nœuds</button></div><p class="muted">Navigation, annuler, actions neutres de barre d’outils.</p></div>
+      <div><h3>Texte et icône</h3><div class="row"><button class="btn btn-text" type="button">Ouvrir ›</button><button class="icon-btn" type="button" aria-label="Plus d’actions"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg></button></div><p class="muted">Actions tertiaires. L’icône porte toujours un nom accessible.</p></div>
+      <div><h3>Destructif</h3><div class="row"><button class="btn btn-danger" type="button">Retirer ce nœud</button></div><p class="muted">Contour rouge, jamais rempli sauf dans la boîte de confirmation. Toujours séparé des autres actions.</p></div>
+      <div><h3>Dense</h3><div class="row"><button class="btn btn-filled dense" type="button">Accepter</button><button class="btn btn-outline dense" type="button">Refuser</button></div><p class="muted">32 px dans les cartes. Zone cliquable étendue à 48 px sur mobile.</p></div>
+    </div>
+  </section>
+
+  <section class="block" id="cartes">
+    <h2>Cartes : même squelette, quatre états lisibles d’un coup d’œil</h2>
+    <div class="notes">
+      <div class="note"><b>1. Identité</b><span class="muted">Nom, état sous forme de pastille (couleur et texte), rôles. L’état n’est jamais porté par la couleur seule.</span></div>
+      <div class="note"><b>2. Charge</b><span class="muted">Barre de capacité et dernier signal. Ce qui change vite reste au même endroit sur toutes les cartes.</span></div>
+      <div class="note"><b>3. Capacités</b><span class="muted">Trois étiquettes visibles au maximum, GPU en premier, puis « +n » qui ouvre l’onglet Capacités.</span></div>
+      <div class="note"><b>4. Action contextuelle</b><span class="muted">Le pied de carte change avec l’état : Ouvrir, Accepter / Refuser, Reprendre. Les autres actions sont dans le menu ⋮.</span></div>
+    </div>
+    <div class="spec">
+      <div><h3>En ligne</h3><div class="row"><span class="pill ok"><i></i>En ligne</span></div></div>
+      <div><h3>À traiter</h3><div class="row"><span class="pill warn"><i></i>Approbation requise</span><span class="pill warn"><i></i>Vidange en cours</span></div></div>
+      <div><h3>Problème</h3><div class="row"><span class="pill bad"><i></i>Incompatible</span><span class="pill bad"><i></i>Quarantaine</span></div></div>
+      <div><h3>Inactif</h3><div class="row"><span class="pill"><i></i>Hors ligne</span><span class="pill acc">Nœud autonome</span></div></div>
+    </div>
+  </section>
+
+  <section class="block" id="tiroir">
+    <h2>Tiroir latéral : agir sur un nœud sans perdre la liste</h2>
+    <div class="notes">
+      <div class="note"><b>Largeur fixe 480 px</b><span class="muted">Plein écran sous 600 px. La liste reste visible derrière un voile, et la carte active garde un contour.</span></div>
+      <div class="note"><b>Trois zones</b><span class="muted">En-tête (nom, état, fermer), corps défilant à onglets, pied collant avec les actions. Les actions ne défilent jamais hors de vue.</span></div>
+      <div class="note"><b>Un onglet = un besoin</b><span class="muted">Résumé (comprendre), Rattachement (cluster), Capacités (outils, GPU), Bibliothèques (accès). Plus de panneau qui mélange tout.</span></div>
+      <div class="note"><b>Rattachement guidé</b><span class="muted">Un nœud autonome voit deux choix : créer ou rejoindre. Rejoindre se fait en trois étapes numérotées : adresse, clé, approbation.</span></div>
+    </div>
+    <p class="muted">Ouvrez une carte dans la maquette, puis l’onglet « Rattachement » : le contenu change selon l’état (cluster, en attente, autonome).</p>
+  </section>
+
+  <section class="block" id="interactions">
+    <h2>Interactions</h2>
+    <div class="notes">
+      <div class="note"><b>Ouvrir</b><span class="muted">Clic ou Entrée sur la carte. Échap ou clic sur le voile referme. Le focus revient sur la carte.</span></div>
+      <div class="note"><b>Filtrer</b><span class="muted">Recherche, rôle et état se cumulent et se retrouvent dans l’URL. Le compteur de chaque segment reste visible.</span></div>
+      <div class="note"><b>Sélection multiple</b><span class="muted">Case à cocher au survol ou au clavier. Une barre flottante propose Changer le mode, Étiqueter, Vidanger.</span></div>
+      <div class="note"><b>Confirmer sans surprise</b><span class="muted">Les actions destructives ouvrent une boîte qui nomme le nœud et dit ce qui est conservé (base, bibliothèques).</span></div>
+      <div class="note"><b>Mise à jour vivante</b><span class="muted">Cartes et résumé se rafraîchissent toutes les 5 s sans perdre le focus ni l’onglet ouvert.</span></div>
+      <div class="note"><b>Mobile</b><span class="muted">Une colonne, résumé en défilement horizontal, tiroir plein écran avec pied collant. Cibles de 48 px.</span></div>
+    </div>
+    <div class="note"><b>Cohérence avec le projet</b><span class="muted">Jetons existants conservés (grille 4 px, rayons, couleurs sémantiques, thème sombre). Composants visés : gabarit de catalogue, DataTable en cartes, MatSidenav pour le tiroir, boutons Material avec les variantes ci-dessus. Aucune règle de UI_RULES.md n’est contournée : l’évolution se fait dans le gabarit commun et profite aux pages Bibliothèques et Scripts.</span></div>
+  </section>
+</div>
+
+<script>
+(function(){
+  var frame=document.getElementById('frame'),drawer=document.getElementById('drawer'),body=document.getElementById('d-body'),foot=document.getElementById('d-foot'),pills=document.getElementById('d-pills'),nameEl=document.getElementById('d-name');
+  var nodes={
+    n51:{name:'encoding-51',state:'ok',pills:['<span class="pill ok"><i></i>En ligne</span>','<span class="pill">Serveur</span>','<span class="pill">Worker</span>'],cluster:'in',clusterName:'Maison',version:'0.1.13',tasks:'1 / 1',seen:'il y a 6 s'},
+    n50:{name:'encoding-50',state:'attention',pills:['<span class="pill warn"><i></i>Approbation requise</span>','<span class="pill">Worker</span>'],cluster:'pending',clusterName:'Maison',version:'0.1.13',tasks:'0 / 1',seen:'il y a 3 s',code:'W6DM5M'},
+    n52:{name:'encoding-52',state:'ok',pills:['<span class="pill"><i></i>Hors ligne</span>','<span class="pill">Worker</span>'],cluster:'in',clusterName:'Maison',version:'0.1.9',tasks:'0 / 2',seen:'15:42'}
+  };
+  var current=null,tab='summary',lastFocus=null;
+  function kv(rows){return '<dl class="kv">'+rows.map(function(r){return '<dt>'+r[0]+'</dt><dd>'+r[1]+'</dd>';}).join('')+'</dl>';}
+  function render(){
+    var n=nodes[current];if(!n)return;
+    nameEl.textContent=n.name;pills.innerHTML=n.pills.join('');
+    Array.prototype.forEach.call(document.querySelectorAll('.tabs button'),function(b){b.setAttribute('aria-selected',String(b.dataset.tab===tab));});
+    var html='',f='';
+    if(tab==='summary'){
+      html='<div class="sect"><h3>Vue d’ensemble</h3>'+kv([['Cluster',n.clusterName],['Tâches',n.tasks],['Dernier signal',n.seen],['Version','<span class="mono">'+n.version+'</span>']])+'</div>'
+        +'<div class="sect"><h3>Mode</h3><p class="muted">Le serveur fournit l’interface et l’API ; le worker exécute les tâches. Le changement s’applique à chaud.</p></div>';
+      f='<button class="btn btn-danger" type="button" style="margin-inline-end:auto">Retirer ce nœud</button><button class="btn btn-outline" type="button">Nom et étiquettes</button><button class="btn btn-filled" type="button">Changer le mode</button>';
+    }else if(tab==='cluster'){
+      if(n.cluster==='pending'){
+        html='<div class="sect"><h3>Demande de rattachement</h3><p>Ce nœud demande à rejoindre <b>'+n.clusterName+'</b>. Vérifiez que le code ci-dessous est identique à celui affiché sur le nœud.</p><div class="key" aria-label="Code de vérification">'+n.code+'</div></div>'
+          +'<div class="sect"><h3>Après acceptation</h3><p class="muted">Le nœud devient worker du cluster. Son serveur local s’arrête ; sa base et ses bibliothèques sont conservées.</p></div>';
+        f='<button class="btn btn-outline" type="button">Refuser</button><button class="btn btn-filled" type="button">Accepter ce nœud</button>';
+      }else if(n.cluster==='in'){
+        html='<div class="sect"><h3>Cluster</h3>'+kv([['Nom',n.clusterName],['Membres','2 nœuds'],['Identifiant','<span class="mono">51a28e48…</span>']])+'</div>'
+          +'<div class="sect"><h3>Rejoindre un autre cluster</h3><p class="muted">Le changement se fait en deux phases : ce nœud reste dans « Maison » tant que l’autre cluster n’a pas approuvé son arrivée.</p></div>'
+          +'<div class="field"><label for="addr">Adresse d’un cluster</label><input id="addr" type="url" placeholder="http://192.168.1.60:8090" autocomplete="off"></div>';
+        f='<button class="btn btn-outline" type="button" style="margin-inline-end:auto">Quitter le cluster</button><button class="btn btn-tonal" type="button">Ajouter l’adresse</button>';
+      }
+    }else if(tab==='caps'){
+      html='<div class="sect"><h3>Accélération</h3><div class="tags"><span class="tag gpu">GPU Intel · QSV</span><span class="tag gpu">VAAPI</span></div></div>'
+        +'<div class="sect"><h3>Outils détectés</h3><div class="tags"><span class="tag">ffmpeg 6.1.1</span><span class="tag">ffprobe 6.1.1</span><span class="tag">mkvtoolnix 82.0</span><span class="tag">mediainfo 24.01</span><span class="tag">imagemagick 6.9.12</span><span class="tag">python 3.12.3</span><span class="tag">node 18.19</span></div></div>'
+        +'<p class="muted">Un encodeur est « utilisable » seulement s’il a réussi la mire de test.</p>';
+      f='<button class="btn btn-outline" type="button">Relancer la détection</button>';
+    }else{
+      html='<div class="sect"><h3>Accès aux bibliothèques</h3>'+kv([['Films','Accès direct · /media/films'],['Séries','Transfert vers un worker'],['Musique','<span class="pill">Non pris en charge</span>']])+'</div>';
+      f='<button class="btn btn-filled" type="button">Configurer les accès</button>';
+    }
+    body.innerHTML=html;foot.innerHTML=f;
+  }
+  function open(id,from){current=id;tab='summary';lastFocus=from;render();frame.classList.add('open');drawer.setAttribute('aria-hidden','false');
+    Array.prototype.forEach.call(document.querySelectorAll('.card'),function(c){c.setAttribute('aria-selected',String(c.dataset.id===id));});
+    document.getElementById('close').focus();}
+  function close(){frame.classList.remove('open');drawer.setAttribute('aria-hidden','true');
+    Array.prototype.forEach.call(document.querySelectorAll('.card'),function(c){c.removeAttribute('aria-selected');});
+    if(lastFocus&&lastFocus.focus)lastFocus.focus();}
+  document.getElementById('cards').addEventListener('click',function(e){
+    if(e.target.closest('[data-stop]'))return;
+    var c=e.target.closest('.card');if(c)open(c.dataset.id,c);});
+  document.getElementById('cards').addEventListener('keydown',function(e){
+    if((e.key==='Enter'||e.key===' ')&&e.target.classList.contains('card')){e.preventDefault();open(e.target.dataset.id,e.target);}});
+  document.querySelector('[data-open]').addEventListener('click',function(e){open(e.currentTarget.dataset.open,e.currentTarget);});
+  document.getElementById('close').addEventListener('click',close);
+  document.getElementById('scrim').addEventListener('click',close);
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&frame.classList.contains('open'))close();});
+  document.querySelector('.tabs').addEventListener('click',function(e){var b=e.target.closest('button');if(b){tab=b.dataset.tab;render();}});
+
+  var role='all',state='all',q='';
+  function filter(){
+    var shown=0;
+    Array.prototype.forEach.call(document.querySelectorAll('.card'),function(c){
+      var ok=(role==='all'||c.dataset.role.indexOf(role)>-1)&&(state==='all'||c.dataset.state===state)&&(!q||c.textContent.toLowerCase().indexOf(q)>-1);
+      c.hidden=!ok;if(ok)shown++;});
+  }
+  document.querySelector('[aria-label="Filtrer par rôle"]').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;role=b.dataset.role;
+    Array.prototype.forEach.call(e.currentTarget.children,function(x){x.setAttribute('aria-pressed',String(x===b));});filter();});
+  document.querySelector('[aria-label="Filtrer par état"]').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;state=b.dataset.state;
+    Array.prototype.forEach.call(e.currentTarget.children,function(x){x.setAttribute('aria-pressed',String(x===b));});filter();});
+  document.getElementById('q').addEventListener('input',function(e){q=e.target.value.trim().toLowerCase();filter();});
+})();
+</script>

@@ -1,11 +1,37 @@
-bin/
-obj/
+# .NET build and test outputs
+**/bin/
+**/obj/
+**/TestResults/
+*.trx
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+**/secrets/
+*.pfx
+*.p12
+
+# IDE and editor files
 .vs/
+.idea/
 *.user
-*.db
-*.db-wal
-*.db-shm
-data/
-frontend/node_modules/
-frontend/dist/
-frontend/.angular/
+*.suo
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+tmp/
+temp/
+media-test/*
+!media-test/README.md
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Python bytecode
+__pycache__/
+*.pyc

@@ -1,0 +1,273 @@
+@if (canUndoLayout() || expandedPacks().length || pending()) {
+  <div class="canvas-tools" role="toolbar" aria-label="Navigation du canvas">
+    @if (canUndoLayout()) {
+      <button mat-button (click)="undoLayout()">Annuler la disposition</button>
+    }
+    @for (pack of expandedPacks(); track pack.id) {
+      <button
+        mat-button
+        (click)="packToggle.emit(pack.id)"
+        [attr.aria-label]="'Replier le pack ' + pack.label"
+      >
+        Replier « {{ pack.label }} »
+      </button>
+    }
+    @if (pending(); as selection) {
+      <span role="status"
+        >{{ selection.output.label }} <app-icon name="forward" /> choisissez une entrée</span
+      ><button mat-button (click)="pending.set(null)">Annuler la liaison</button>
+    }
+  </div>
+}
+<div
+  #viewport
+  class="canvas-viewport"
+  appFlowComponentDrop
+  (componentDropped)="dropComponent($event)"
+  role="region"
+  (scroll)="navigate()"
+  (pointerdown)="pan($event)"
+  (wheel)="wheel($event)"
+  appContextActions
+  (contextActions)="!readOnly() && menu($event)"
+  tabindex="0"
+  aria-label="Canvas libre du flow"
+>
+  <div
+    class="canvas-frame"
+    [style.width.px]="size().width * scale()"
+    [style.height.px]="size().height * scale()"
+  >
+    <div
+      #canvasSurface
+      class="canvas-surface"
+      [style.width.px]="size().width"
+      [style.height.px]="size().height"
+      [style.transform]="'scale(' + scale() + ')'"
+    >
+      <svg
+        class="wires"
+        [attr.width]="size().width"
+        [attr.height]="size().height"
+        aria-hidden="true"
+      >
+        @if (showConnections()) {
+          @for (edge of connections(); track edge.id) {
+            <path
+              class="wire"
+              [class.highlighted]="
+                selectedNodeId() === edge.sourceNodeId ||
+                selectedNodeId() === edge.targetNodeId ||
+                (executedConnectionIds()?.has(edge.id) ?? false)
+              "
+              [class.muted]="
+                (selectedNodeId() &&
+                  selectedNodeId() !== edge.sourceNodeId &&
+                  selectedNodeId() !== edge.targetNodeId) ||
+                (executedConnectionIds() !== null && !executedConnectionIds()!.has(edge.id))
+              "
+              [class.wire-active]="executedConnectionIds()?.has(edge.id) ?? false"
+              [attr.d]="path(edge)"
+            />
+            <path
+              class="wire-hit"
+              [attr.d]="path(edge)"
+              appContextActions
+              (contextActions)="!readOnly() && menu($event, undefined, edge)"
+              (click)="
+                !readOnly() &&
+                  menu({ x: $event.clientX, y: $event.clientY, origin: viewport }, undefined, edge)
+              "
+            />
+          }
+        }
+        @if (pointer()) {
+          <path class="ghost" [attr.d]="ghost()" />
+        }
+      </svg>
+      @for (node of nodes(); track node.id) {
+        <article
+          #canvasCard
+          class="canvas-node"
+          draggable="false"
+          [class.selected]="selectedNodeId() === node.id"
+          [class.dragging]="liveDrag()?.id === node.id"
+          [class.canvas-node-executed]="executedNodeIds()?.has(node.id) ?? false"
+          [class.canvas-node-dimmed]="
+            executedNodeIds() !== null && !executedNodeIds()!.has(node.id)
+          "
+          [attr.data-node-id]="node.id"
+          [style.left.px]="dragPosition(node).x"
+          [style.top.px]="dragPosition(node).y"
+          [style.--node-color]="colors(node.component).color"
+          [style.--output-count]="node.component.outputs.length"
+          appContextActions
+          (contextActions)="!readOnly() && menu($event, node)"
+          tabindex="0"
+          (click)="selectNode.emit(node.id)"
+          (dblclick)="edit(node)"
+          (keydown.enter)="configureWithKeyboard($event, node)"
+          [attr.aria-label]="node.name || node.component.name"
+        >
+          @if (node.component.kind !== 'input') {
+            <button
+              class="port input"
+              data-port="input"
+              [attr.data-canvas-input]="node.id"
+              [class.valid]="canFinish(node)"
+              [matTooltip]="'Entrée de ' + (node.name || node.component.name)"
+              (click)="$event.stopPropagation(); finish(node.id)"
+              [attr.aria-label]="'Relier à ' + (node.name || node.component.name)"
+              [disabled]="readOnly()"
+            ></button>
+          }
+          <div class="canvas-heading">
+            <button
+              type="button"
+              class="canvas-icon drag"
+              draggable="false"
+              [disabled]="readOnly()"
+              aria-label="Déplacer l’étape"
+              [matTooltip]="'Déplacer : ' + (node.name || node.component.name)"
+            >
+              <app-icon [name]="colors(node.component).icon" />
+            </button>
+            <div class="canvas-text">
+              <button
+                [matTooltip]="nodeTooltip(node)"
+                class="canvas-title"
+                (click)="$event.stopPropagation(); edit(node)"
+              >
+                {{ node.name || node.component.name }}
+              </button>
+              <span class="canvas-plugin"
+                >{{ node.component.pluginName }} · {{ kindLabels[node.component.kind] }}</span
+              >
+              @if (nodeExecutionDetails()?.get(node.id); as execDetail) {
+                <span class="canvas-execution-badge">
+                  @if (execDetail.duration) {
+                    <strong class="exec-duration">{{ execDetail.duration }}</strong>
+                  }
+                  @if (execDetail.output) {
+                    <span class="exec-output">· {{ execDetail.output }}</span>
+                  }
+                </span>
+              }
+            </div>
+            <app-flow-simulation-status
+              [compact]="true"
+              [node]="node"
+              [result]="simulationResult()"
+              (detailsRequested)="simulationDetailsRequested.emit()"
+            />
+            <button
+              class="more"
+              (click)="menuButton($event, node)"
+              [attr.aria-label]="'Actions de ' + (node.name || node.component.name)"
+              [matTooltip]="'Actions de ' + (node.name || node.component.name)"
+            >
+              <app-icon name="more" />
+            </button>
+          </div>
+          @if (node.component.outputs.length) {
+            <div class="canvas-outputs">
+              @for (port of node.component.outputs; track port.id; let index = $index) {
+                @let presentation = outputPresentation(port);
+                <div class="output-row" [attr.data-tone]="presentation.tone">
+                  <button
+                    class="port output"
+                    [disabled]="readOnly()"
+                    [attr.data-port]="'output:' + port.id"
+                    [matTooltip]="port.label + (port.description ? ' · ' + port.description : '')"
+                    (pointerdown)="begin(node, port, $event)"
+                    (click)="$event.stopPropagation()"
+                    (keydown.enter)="$event.preventDefault(); begin(node, port)"
+                    (keydown.space)="$event.preventDefault(); begin(node, port)"
+                    [attr.aria-label]="'Créer une liaison depuis ' + port.label"
+                  >
+                    @if (presentation.icon; as icon) {
+                      <app-icon [name]="icon" />
+                    } @else {
+                      <span aria-hidden="true">{{ index + 1 }}</span>
+                    }
+                  </button>
+                  @if (!readOnly()) {
+                    <button
+                      class="output-add"
+                      (click)="
+                        $event.stopPropagation();
+                        insert.emit({ sourceNodeId: node.id, output: port })
+                      "
+                      [matTooltip]="'Ajouter sur la sortie ' + port.label"
+                      [attr.aria-label]="'Ajouter sur la sortie ' + port.label"
+                    >
+                      <app-icon name="add" />
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </article>
+      }
+    </div>
+  </div>
+</div>
+<div class="minimap-panel" aria-label="Vue d’ensemble du flow">
+  <div class="minimap-tools" role="toolbar" aria-label="Zoom et affichage du canvas">
+    <button mat-icon-button (click)="zoom(-0.1)" aria-label="Dézoomer">−</button>
+    <button
+      mat-button
+      class="minimap-zoom-reset"
+      (click)="resetOrFit()"
+      [attr.aria-label]="fitActive() ? 'Revenir à 100 %' : 'Tout afficher'"
+      aria-live="polite"
+      matTooltip="Cliquer pour revenir à 100 %, puis cliquer de nouveau pour tout afficher"
+    >
+      {{ (scale() * 100).toFixed(0) }} %
+    </button>
+    <button mat-icon-button (click)="zoom(0.1)" aria-label="Zoomer">＋</button>
+  </div>
+  <button
+    [disabled]="pending() !== null"
+    class="minimap"
+    aria-label="Naviguer dans la vue d’ensemble"
+    (pointerdown)="miniPanStart($event)"
+    (click)="miniNavigate($event)"
+  >
+    <svg [attr.viewBox]="miniViewBox()" preserveAspectRatio="none" aria-hidden="true">
+      @for (node of nodes(); track node.id) {
+        <rect
+          [attr.x]="position(node).x"
+          [attr.y]="position(node).y"
+          [attr.width]="nodeSize(node).width"
+          [attr.height]="nodeSize(node).height"
+          [class.mini-selected]="selectedNodeId() === node.id"
+        />
+      }
+      <rect
+        class="mini-viewport"
+        [attr.x]="overview().x"
+        [attr.y]="overview().y"
+        [attr.width]="overview().width"
+        [attr.height]="overview().height"
+      />
+    </svg>
+  </button>
+</div>
+<div class="connection-list" role="group" aria-label="Actions accessibles sur les liaisons">
+  @for (edge of connections(); track edge.id) {
+    <button
+      mat-button
+      [attr.aria-label]="'Liaison ' + edge.sourceOutputId + ' vers ' + edge.targetNodeId"
+      (click)="menu({ x: $event.clientX, y: $event.clientY, origin: viewport }, undefined, edge)"
+    >
+      Liaison {{ edge.sourceOutputId }} <app-icon name="forward" /> {{ edge.targetNodeId }}
+    </button>
+  }
+</div>
+<app-context-action-menu
+  [context]="context()"
+  (action)="action($event)"
+  (closed)="context.set(null)"
+/>

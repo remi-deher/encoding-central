@@ -1,0 +1,103 @@
+.flow-types {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: var(--space-3);
+}
+
+.flow-type {
+  --media-tone: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: var(--radius-xl);
+  background: var(--surface-container);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition:
+    background-color 160ms var(--motion-emphasized),
+    box-shadow 160ms var(--motion-emphasized);
+
+  &[data-media='video'] {
+    --media-tone: var(--tone-blue);
+  }
+
+  &[data-media='image'] {
+    --media-tone: var(--tone-purple);
+  }
+
+  &[data-media='music'] {
+    --media-tone: var(--warning);
+  }
+
+  &:hover:not(:disabled) {
+    background: var(--surface-container-high);
+  }
+
+  &[aria-pressed='true'] {
+    background: color-mix(in srgb, var(--media-tone) 16%, var(--surface-container));
+    box-shadow: inset 0 0 0 2px var(--media-tone);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--media-tone);
+    outline-offset: 2px;
+  }
+}
+
+.flow-type-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  color: var(--media-tone);
+  background: color-mix(in srgb, var(--media-tone) 16%, var(--surface-container-low));
+}
+
+.flow-type-label {
+  flex: 1;
+  font-weight: 600;
+}
+
+.flow-type-count {
+  font-size: var(--font-title-lg);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.template-setup-fields {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  margin-top: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface-container-low);
+}
+
+.template-setup-fields h3,
+.template-setup-fields p {
+  margin: 0;
+}
+
+.template-setup-fields fieldset {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.template-setup-fields legend {
+  padding-inline: var(--space-1);
+  font-weight: 600;
+}

@@ -1,0 +1,242 @@
+@if (!mobileDock()) {
+  <nav
+    class="primary-navigation"
+    [class.is-collapsed]="collapsed()"
+    aria-label="Navigation principale"
+  >
+    <div class="navigation-groups">
+      @for (group of groups(); track group.label; let first = $first) {
+        <section class="navigation-group" [class.is-separated]="!first">
+          @if (group.items.length > 1 && !collapsed()) {
+            <p class="navigation-group-label">{{ group.label }}</p>
+          }
+          <div class="navigation-items">
+            @for (item of group.items; track item.path) {
+              <a
+                class="navigation-link"
+                [routerLink]="item.path"
+                routerLinkActive="is-active"
+                [routerLinkActiveOptions]="{ exact: item.exact ?? false }"
+                ariaCurrentWhenActive="page"
+                [matTooltip]="collapsed() ? item.label : ''"
+                matTooltipPosition="right"
+                [matTooltipDisabled]="!collapsed()"
+                [attr.aria-label]="
+                  item.path === '/activity' && activeExecutionCount() > 0
+                    ? item.label + ' (' + activeExecutionCount() + ' en cours)'
+                    : item.label
+                "
+              >
+                <span class="navigation-icon-box" aria-hidden="true">
+                  <ng-container *ngTemplateOutlet="itemIcon; context: { $implicit: item }" />
+                  @if (item.path === '/activity' && activeExecutionCount() > 0 && collapsed()) {
+                    <span class="navigation-badge-dot"></span>
+                  }
+                </span>
+                @if (!collapsed()) {
+                  <span class="navigation-link-label">{{ item.label }}</span>
+                  @if (item.path === '/activity' && activeExecutionCount() > 0) {
+                    <span class="navigation-badge-pill" aria-hidden="true">
+                      {{ activeExecutionCount() }}
+                    </span>
+                  }
+                }
+              </a>
+            }
+          </div>
+        </section>
+      }
+    </div>
+  </nav>
+} @else {
+  <nav
+    class="mobile-navigation"
+    aria-label="Navigation principale"
+    [attr.inert]="mobileMenuOpen() ? '' : null"
+  >
+    <ul class="mobile-dock-items">
+      @for (item of dockItems(); track item.path) {
+        <li>
+          <a
+            class="mobile-dock-link"
+            [routerLink]="item.path"
+            routerLinkActive="is-active"
+            [routerLinkActiveOptions]="{ exact: item.exact ?? false }"
+            ariaCurrentWhenActive="page"
+            [attr.aria-label]="
+              item.path === '/activity' && activeExecutionCount() > 0
+                ? item.label + ' (' + activeExecutionCount() + ' en cours)'
+                : item.label
+            "
+          >
+            <span class="mobile-dock-icon" aria-hidden="true">
+              <ng-container *ngTemplateOutlet="itemIcon; context: { $implicit: item }" />
+              @if (item.path === '/activity' && activeExecutionCount() > 0) {
+                <span class="mobile-dock-badge">{{ activeExecutionCount() }}</span>
+              }
+            </span>
+            <span class="mobile-dock-label">{{ dockLabel(item) }}</span>
+          </a>
+        </li>
+      }
+      <li>
+        <button
+          #moreButton
+          class="mobile-dock-link mobile-dock-more"
+          type="button"
+          [class.is-active]="activeOutsideDock()"
+          [attr.aria-current]="activeOutsideDock() ? 'page' : null"
+          [attr.aria-expanded]="mobileMenuOpen()"
+          aria-haspopup="dialog"
+          (click)="toggleMobileMenu()"
+        >
+          <span class="mobile-dock-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" class="navigation-svg">
+              <circle cx="5" cy="12" r="1" />
+              <circle cx="12" cy="12" r="1" />
+              <circle cx="19" cy="12" r="1" />
+            </svg>
+            @if (activeOutsideDock()) {
+              <span class="mobile-dock-active-dot"></span>
+            }
+          </span>
+          <span class="mobile-dock-label">Plus</span>
+        </button>
+      </li>
+    </ul>
+  </nav>
+
+  @if (mobileMenuOpen()) {
+    <div class="mobile-navigation-scrim" (click)="closeMobileMenu()">
+      <section
+        class="mobile-navigation-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mobile-navigation-title"
+        cdkTrapFocus
+        [cdkTrapFocusAutoCapture]="true"
+        (click)="$event.stopPropagation()"
+      >
+        <header class="mobile-navigation-sheet-header">
+          <h2 id="mobile-navigation-title">Navigation</h2>
+          <button
+            #closeMenuButton
+            type="button"
+            class="mobile-navigation-close"
+            aria-label="Fermer la navigation"
+            (click)="closeMobileMenu()"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m6 6 12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </header>
+
+        @if (!shell.worker()) {
+        <button class="mobile-assistant-shortcut" type="button" (click)="openQuickAssistant()">
+          <span class="mobile-assistant-shortcut-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="m12 2 2.8 7.2L22 12l-7.2 2.8L12 22l-2.8-7.2L2 12l7.2-2.8Z" />
+            </svg>
+          </span>
+          <span class="mobile-assistant-shortcut-copy">
+            <strong>Assistant rapide</strong>
+            <small>Poser une question sans quitter cette page</small>
+          </span>
+        </button>
+        }
+
+        <nav class="mobile-navigation-menu" aria-label="Toutes les destinations">
+          @for (group of groups(); track group.label) {
+            <section class="mobile-navigation-group">
+              <p class="mobile-navigation-group-label">{{ group.label }}</p>
+              @for (item of group.items; track item.path) {
+                <a
+                  class="mobile-navigation-link"
+                  [routerLink]="item.path"
+                  routerLinkActive="is-active"
+                  [routerLinkActiveOptions]="{ exact: item.exact ?? false }"
+                  ariaCurrentWhenActive="page"
+                  (click)="closeMobileMenu()"
+                >
+                  <span class="mobile-navigation-menu-icon" aria-hidden="true">
+                    <ng-container *ngTemplateOutlet="itemIcon; context: { $implicit: item }" />
+                  </span>
+                  <span>{{ item.label }}</span>
+                  @if (item.path === '/activity' && activeExecutionCount() > 0) {
+                    <span class="navigation-badge-pill" aria-hidden="true">
+                      {{ activeExecutionCount() }}
+                    </span>
+                  }
+                </a>
+              }
+            </section>
+          }
+        </nav>
+
+        <footer class="mobile-navigation-sheet-footer" aria-label="Compte et apparence">
+          <app-user-menu [collapsed]="true" />
+          <app-appearance-palette />
+        </footer>
+      </section>
+    </div>
+  }
+}
+
+<ng-template #itemIcon let-item>
+  @switch (item.path) {
+    @case ('/') {
+      <svg viewBox="0 0 24 24" class="navigation-svg">
+        <rect x="3" y="3" width="7.5" height="7.5" rx="2" />
+        <rect x="13.5" y="3" width="7.5" height="7.5" rx="2" />
+        <rect x="3" y="13.5" width="7.5" height="7.5" rx="2" />
+        <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2" />
+      </svg>
+    }
+    @case ('/flows') {
+      <svg viewBox="0 0 24 24" class="navigation-svg">
+        <circle cx="6" cy="6" r="3" />
+        <circle cx="18" cy="6" r="3" />
+        <circle cx="12" cy="18" r="3" />
+        <path d="M8.5 7.5 11 15.2M15.5 7.5 13 15.2" />
+      </svg>
+    }
+    @case ('/activity') {
+      <svg viewBox="0 0 24 24" class="navigation-svg">
+        <path d="M4 7h10M4 12h16M4 17h12" />
+        <circle cx="18" cy="7" r="2" />
+      </svg>
+    }
+    @case ('/libraries') {
+      <svg viewBox="0 0 24 24" class="navigation-svg">
+        <path d="M4 6a2 2 0 0 1 2-2h5l2 2h5a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6Z" />
+      </svg>
+    }
+    @case ('/nodes') {
+      <svg viewBox="0 0 24 24" class="navigation-svg">
+        <rect x="3" y="4" width="18" height="6" rx="2" />
+        <rect x="3" y="14" width="18" height="6" rx="2" />
+        <circle cx="7" cy="7" r="1" fill="currentColor" />
+        <circle cx="7" cy="17" r="1" fill="currentColor" />
+      </svg>
+    }
+    @case ('/plugins') {
+      <svg viewBox="0 0 24 24" class="navigation-svg">
+        <path
+          d="M12 3v3m-4 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Zm-5 4h3m12 0h3"
+        />
+      </svg>
+    }
+    @case ('/settings') {
+      <svg viewBox="0 0 24 24" class="navigation-svg">
+        <circle cx="12" cy="12" r="3.2" />
+        <path
+          d="M12 3v2.2m0 13.6V21M3 12h2.2m13.6 0H21m-2.6-6.4-1.6 1.6M7.2 16.8l-1.6 1.6m0-12.8 1.6 1.6m9.6 9.6 1.6 1.6"
+        />
+      </svg>
+    }
+    @default {
+      <span class="navigation-glyph">{{ item.glyph }}</span>
+    }
+  }
+</ng-template>

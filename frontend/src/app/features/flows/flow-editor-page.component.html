@@ -1,0 +1,181 @@
+<app-flow-workspace-template>
+  <!-- Zone 1 : Command Bar -->
+  <app-flow-command-bar
+    flow-workspace-toolbar
+    [canUndo]="canUndoEdit()"
+    [canRedo]="canRedoEdit()"
+    (undoRequested)="undoEdit()"
+    (redoRequested)="undoEdit(true)"
+    [title]="flowTitle()"
+    [mediaType]="flowMediaType()"
+    [storedVersion]="storedVersion()"
+    [hasDraft]="hasDraft()"
+    [hasUnsavedChanges]="hasUnsavedChanges()"
+    [backupStatus]="backupStatus()"
+    [editorStatus]="editorStatus()"
+    [nodeCount]="nodes().length"
+    [saving]="saving()"
+    [validating]="validating()"
+    [canSave]="hasUnsavedChanges() || hasDraft()"
+    [disabled]="loadState() !== 'ready'"
+    [simulatorBusy]="simulator.busy()"
+    [canCreatePack]="storedVersion() >= 1"
+    [canRestoreAiProposal]="aiProposalRollback() !== null"
+    [paletteOpen]="paletteOpen()"
+    [trayOpen]="trayOpen()"
+    [showConnections]="showFlowConnections()"
+    (titleChange)="onTitleChange($event)"
+    (saveRequested)="saveFlow()"
+    (validateRequested)="validateGraph()"
+    (simulateRequested)="openSimulator()"
+    (simulationSettingsRequested)="openSimulator(true)"
+    (packCreationRequested)="openPackCreation()"
+    (restoreAiProposalRequested)="restoreAiProposal()"
+    (togglePalette)="togglePalette()"
+    (toggleTray)="trayOpen.set(!trayOpen())"
+    (toggleConnections)="toggleFlowConnections()"
+    (autoLayoutRequested)="requestAutoLayout()"
+  >
+  </app-flow-command-bar>
+
+  <!-- Main Split Body (Zone 2 and Zone 3) -->
+  <app-detail-drawer
+    class="flow-inspector"
+    flow-workspace-main
+    [fill]="true"
+    mode="side"
+    size="standard"
+    [opened]="configuringNode() !== undefined"
+    [title]="configuringNode()?.name || configuringNode()?.component?.name || 'Réglages du bloc'"
+    [eyebrow]="configuringNode()?.component?.pluginName ?? ''"
+    [description]="configuringNode()?.component?.description ?? ''"
+    [content]="inspectorContent"
+    (closed)="closeComponentEditor()"
+  >
+    <div drawer-main class="workbench-body">
+      <!-- Zone 2 : Left Palette Dock -->
+      <app-flow-palette-dock
+        [opened]="paletteOpen()"
+        [(pinned)]="palettePinned"
+        [components]="components()"
+        [otherMediaComponents]="otherMediaComponents()"
+        [flowMediaType]="flowMediaType()"
+        [packCatalog]="packCatalog()"
+        [insertionPending]="componentDestination() !== null"
+        [destinationLabel]="destinationDescription()"
+        (openedChange)="paletteOpen.set($event)"
+        (componentSelected)="onPaletteComponentSelected($event)"
+        (packSelected)="onPalettePackSelected($event)"
+        (cancelInsertion)="cancelInsertion()"
+      />
+
+      <!-- Zone 3 : Center Canvas Workspace -->
+      <main
+        appFlowComponentDrop
+        (componentDropped)="onPaletteComponentDropped($event)"
+        class="workbench-canvas"
+        role="main"
+        aria-label="Canevas d'édition du flow"
+      >
+        @if (loadState() !== 'ready') {
+          <div class="canvas-state-message" role="status">
+            <p>
+              {{
+                loadState() === 'loading'
+                  ? 'Chargement du flow…'
+                  : 'Le flow n’a pas pu être chargé.'
+              }}
+            </p>
+          </div>
+        } @else {
+          <app-flow-graph-editor
+            (componentDropped)="onPaletteComponentDropped($event)"
+            [layoutKey]="validationFlowId"
+            [simulationResult]="simulator.result()"
+            (simulationDetailsRequested)="trayTab.set('simulation'); trayOpen.set(true)"
+            (paletteRequested)="openPalette()"
+            (duplicateRequested)="duplicateNode($event)"
+            (aiRequested)="openAiAssistant($event)"
+            [nodes]="nodes()"
+            [componentPacks]="componentPacks()"
+            [mediaType]="flowMediaType()"
+            [connections]="connections()"
+            [showConnections]="showFlowConnections()"
+            [autoLayoutRequest]="autoLayoutRequest()"
+            (configurationRequested)="onConfigurationRequested($event)"
+            (branchComponentRequested)="onBranchComponentRequested($event)"
+            (connectionRequested)="onConnectionRequested($event)"
+            (nodeRemoved)="removeNode($event)"
+            (connectionRemoved)="removeConnection($event)"
+          />
+        }
+      </main>
+    </div>
+  </app-detail-drawer>
+  <!-- Zone 5 : Bottom Tray (Simulation & Diagnostics) -->
+  <app-flow-simulation-tray
+    flow-workspace-tray
+    [opened]="trayOpen()"
+    [(activeTab)]="trayTab"
+    [nodes]="nodes()"
+    [profile]="simulator.profile()"
+    [result]="simulator.result()"
+    [busy]="simulator.busy()"
+    [error]="simulator.error()"
+    [validationIssues]="validationIssues()"
+    [validating]="validating()"
+    [isValid]="validationSuccess()"
+    (openedChange)="trayOpen.set($event)"
+    (runRequested)="runSimulation($event)"
+    (continueRequested)="runSimulation($event, true)"
+    (fileSelected)="simulator.import($event)"
+    (revalidateRequested)="validateGraph()"
+  />
+
+  <ng-template #inspectorContent>
+    @if (configuringNode(); as current) {
+      <app-component-configuration-form
+        [schema]="configuringSchema()"
+        [referenceOptions]="configurationReferences()"
+        [values]="configuringValues()"
+        [instanceName]="current.name ?? ''"
+        [progressiveDisclosure]="true"
+        submitLabel="Appliquer les réglages"
+        (instanceNameChange)="renameNode($event)"
+        (saved)="saveNodeConfiguration($event)"
+        (cancelled)="closeComponentEditor()"
+      >
+        @if (current.component.kind !== 'input') {
+          <button
+            matButton="text"
+            class="component-editor-delete"
+            form-secondary-actions
+            type="button"
+            (click)="deleteConfiguredNode(current.id)"
+          >
+            Supprimer ce bloc
+          </button>
+        }
+      </app-component-configuration-form>
+    }
+  </ng-template>
+  <!-- Modal Dialog : Création de Pack -->
+  @if (packCreationOpen()) {
+    <div
+      flow-workspace-overlay
+      class="modal-backdrop"
+      (click)="packCreationOpen.set(false)"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Créer un pack depuis la version publiée"
+    >
+      <div class="modal-card" (click)="$event.stopPropagation()">
+        <app-record-form
+          [data]="packCreationForm()"
+          (submitted)="createPackFromPublishedFlow($event)"
+          (cancelled)="packCreationOpen.set(false)"
+        />
+      </div>
+    </div>
+  }
+</app-flow-workspace-template>

@@ -1,0 +1,45 @@
+:host {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+svg {
+  display: block;
+  overflow: visible;
+}
+path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2px;
+  opacity: 0.65;
+}
+.error-connection {
+  stroke: var(--warning);
+  stroke-dasharray: 5 4;
+}
+.link-insertion {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  color: var(--accent);
+  background: var(--surface);
+  white-space: nowrap;
+}
+.link-insertion app-icon {
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
+}
+
+.link-hit {
+  stroke: transparent;
+  stroke-width: 18px;
+  pointer-events: stroke;
+  cursor: context-menu;
+}
+.arrow {
+  fill: var(--accent);
+  stroke: none;
+}

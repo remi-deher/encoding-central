@@ -1,0 +1,204 @@
+@if (presets().length) {
+  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+    <mat-label>Partir d'un préréglage</mat-label>
+    <mat-select
+      [ngModel]="null"
+      [ngModelOptions]="{ standalone: true }"
+      (ngModelChange)="applyPreset($event)"
+    >
+      @for (preset of presets(); track preset.id) {
+        <mat-option [value]="preset.id">{{ preset.label }}</mat-option>
+      }
+    </mat-select>
+    <mat-hint>Remplace les règles actuelles par un exemple entièrement modifiable.</mat-hint>
+  </mat-form-field>
+}
+<ng-container
+  [ngTemplateOutlet]="nodeTemplate"
+  [ngTemplateOutletContext]="{ node: root(), path: [], depth: 0 }"
+/>
+@if (error()) {
+  <p class="condition-error" role="status" aria-live="polite">{{ error() }}</p>
+}
+
+<ng-template #nodeTemplate let-node="node" let-path="path" let-depth="depth">
+  @if (node.kind === 'group') {
+    <section
+      class="condition-group"
+      role="group"
+      [attr.aria-label]="
+        'Groupe ' + (node.match === 'all' ? 'ET' : 'OU') + ', niveau ' + (depth + 1)
+      "
+    >
+      <div class="group-heading">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Correspondance du groupe</mat-label>
+          <mat-select
+            [ngModel]="node.match"
+            [ngModelOptions]="{ standalone: true }"
+            (ngModelChange)="match(path, $event)"
+          >
+            <mat-option value="all">Toutes les conditions (ET)</mat-option>
+            <mat-option value="any">Au moins une condition (OU)</mat-option>
+          </mat-select>
+        </mat-form-field>
+        @if (path.length) {
+          <button
+            matButton="text"
+            type="button"
+            (click)="remove(path)"
+            aria-label="Supprimer ce groupe"
+          >
+            Supprimer le groupe
+          </button>
+        }
+      </div>
+      <ol class="condition-children">
+        @for (child of node.children; track $index; let index = $index) {
+          <li>
+            <ng-container
+              [ngTemplateOutlet]="nodeTemplate"
+              [ngTemplateOutletContext]="{
+                node: child,
+                path: childPath(path, index),
+                depth: depth + 1,
+              }"
+            />
+            <div class="order-actions">
+              <button
+                matButton="text"
+                type="button"
+                [disabled]="index === 0"
+                (click)="move(childPath(path, index), -1)"
+                aria-label="Remonter cet élément"
+              >
+                Monter
+              </button>
+              <button
+                matButton="text"
+                type="button"
+                [disabled]="index === node.children.length - 1"
+                (click)="move(childPath(path, index), 1)"
+                aria-label="Descendre cet élément"
+              >
+                Descendre
+              </button>
+            </div>
+          </li>
+        }
+      </ol>
+      <div class="group-actions">
+        <button
+          matButton="outlined"
+          type="button"
+          [disabled]="count() >= maxNodes || depth + 2 > maxDepth"
+          (click)="add(path, false)"
+        >
+          Ajouter une règle
+        </button>
+        <button
+          matButton="outlined"
+          type="button"
+          [disabled]="count() + 2 > maxNodes || depth + 3 > maxDepth"
+          (click)="add(path, true)"
+        >
+          Ajouter un groupe
+        </button>
+      </div>
+    </section>
+  } @else {
+    @let definition = field(node.field);
+    <div class="condition-rule" role="group" aria-label="Règle de comparaison">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-label>Champ</mat-label>
+        <mat-select
+          [ngModel]="node.field"
+          [ngModelOptions]="{ standalone: true }"
+          (ngModelChange)="changeField(path, $event)"
+        >
+          @for (field of fields(); track field.id) {
+            <mat-option [value]="field.id">{{ field.label }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+      @if (definition?.requiresVariableName) {
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Nom de la variable</mat-label>
+          <input
+            matInput
+            maxlength="128"
+            [ngModel]="node.variableName ?? ''"
+            [ngModelOptions]="{ standalone: true }"
+            (ngModelChange)="rule(path, { variableName: $event })"
+          />
+        </mat-form-field>
+      }
+      @if (definition?.supportsScope) {
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Fichier à examiner</mat-label>
+          <mat-select
+            [ngModel]="node.scope ?? 'current'"
+            [ngModelOptions]="{ standalone: true }"
+            (ngModelChange)="rule(path, { scope: $event })"
+          >
+            <mat-option value="current">Fichier courant</mat-option>
+            <mat-option value="source">Fichier d'origine</mat-option>
+          </mat-select>
+        </mat-form-field>
+      }
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-label>Opérateur</mat-label>
+        <mat-select
+          [ngModel]="node.operator"
+          [ngModelOptions]="{ standalone: true }"
+          (ngModelChange)="operator(path, $event)"
+        >
+          @for (operator of definition?.operators ?? []; track operator.value) {
+            <mat-option [value]="operator.value">{{ operator.label }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+      @if (node.operator !== 'exists' && node.operator !== 'missing') {
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Valeur{{ definition?.unit ? ' (' + definition?.unit + ')' : '' }}</mat-label>
+          @if (definition?.type === 'boolean') {
+            <mat-select
+              [ngModel]="node.value"
+              [ngModelOptions]="{ standalone: true }"
+              (ngModelChange)="rule(path, { value: $event })"
+            >
+              <mat-option [value]="true">Oui</mat-option>
+              <mat-option [value]="false">Non</mat-option>
+            </mat-select>
+          } @else if (definition?.type === 'number') {
+            <input
+              matInput
+              type="number"
+              [ngModel]="node.value"
+              [ngModelOptions]="{ standalone: true }"
+              (ngModelChange)="rule(path, { value: $event })"
+            />
+          } @else {
+            <input
+              matInput
+              type="text"
+              maxlength="4096"
+              [ngModel]="node.value ?? ''"
+              [ngModelOptions]="{ standalone: true }"
+              (ngModelChange)="rule(path, { value: $event })"
+            />
+          }
+        </mat-form-field>
+      }
+      <button
+        matButton="text"
+        class="remove-rule"
+        type="button"
+        (click)="remove(path)"
+        aria-label="Supprimer cette règle"
+      >
+        Supprimer la règle
+      </button>
+    </div>
+  }
+</ng-template>

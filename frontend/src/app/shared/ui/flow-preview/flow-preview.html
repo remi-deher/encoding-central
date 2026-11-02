@@ -1,0 +1,61 @@
+<section class="preview" aria-label="Aperçu du flow">
+  <header class="preview__header">
+    <div>
+      <h3>{{ flow()?.name ?? 'Blocs' }}</h3>
+      @if (flow(); as definition) {
+        <p>{{ mediaTypeLabel() }} · Version publiée v{{ definition.version }}</p>
+      }
+    </div>
+    <span class="preview__count">{{ previewNodes().length }} blocs</span>
+  </header>
+
+  @if (previewNodes().length === 0) {
+    <p class="preview__empty">Ce flow ne contient aucun bloc.</p>
+  } @else {
+    <ol class="preview__nodes">
+      @for (node of previewNodes(); track node.id) {
+        <li
+          class="preview-node"
+          [style.--node-color]="node.color"
+          [style.--node-background]="node.background"
+        >
+          <div class="preview-node__heading">
+            <span class="preview-node__kind">{{ node.kind }}</span>
+            <span class="preview-node__plugin">{{ node.plugin }}</span>
+          </div>
+          <h4>{{ node.title }}</h4>
+          @if (node.description) {
+            <p class="preview-node__description">{{ node.description }}</p>
+          }
+
+          @if (node.configuration.length > 0) {
+            <dl class="preview-node__configuration">
+              @for (item of node.configuration; track item.label) {
+                <div>
+                  <dt>{{ item.label }}</dt>
+                  <dd>{{ item.value }}</dd>
+                </div>
+              }
+            </dl>
+          }
+
+          @if (mode() === 'flow' && flow()) {
+            @if (node.connections.length > 0) {
+              <ul class="preview-node__connections" aria-label="Liaisons sortantes">
+                @for (connection of node.connections; track $index) {
+                  <li>
+                    <span>{{ connection.label }}</span
+                    ><span aria-hidden="true"><app-icon name="forward" /></span
+                    ><strong>{{ connection.target }}</strong>
+                  </li>
+                }
+              </ul>
+            } @else if (node.hasOutputs) {
+              <p class="preview-node__end">Aucune liaison sortante.</p>
+            }
+          }
+        </li>
+      }
+    </ol>
+  }
+</section>

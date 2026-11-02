@@ -1,0 +1,447 @@
+<app-cluster-maintenance-template
+  [title]="title()"
+  navigationLabel="Sections"
+  [navigationOptions]="extensionTabs()"
+  [navigationSelected]="activeTab()"
+  (navigationSelectedChange)="onExtensionTabChange($event)"
+  [detailOpen]="selectedPlugin() !== null"
+  [detailTitle]="detailTitle()"
+  [detailDescription]="detailDescription()"
+  (detailClosed)="onDetailClosed()"
+  filterLabel="Filtrer"
+  [showToolbar]="activeTab() === 'plugins' && pluginCategoryOptions().length > 1"
+>
+  <div catalogue-filters>
+    @if (activeTab() === 'plugins') {
+      <app-category-tabs
+        label="Catégorie des plugins"
+        [options]="pluginCategoryOptions()"
+        [selected]="selectedPluginCategory()"
+        (selectedChange)="onPluginCategoryChange($event)"
+      />
+    }
+  </div>
+
+  <div catalogue-table>
+    @if (activeTab() === 'plugins') {
+      <p class="activation-scope-note">
+        @if (shell.worker()) {
+          Cette liste est en lecture seule. L’installation et l’activation se font sur le central.
+        } @else {
+          L’activation est partagée dans le cluster. Une désactivation bloque les nouveaux
+          traitements quand elle est reçue par chaque serveur ; les traitements déjà lancés
+          continuent. Elle ne désinstalle pas le paquet, qui reste installé séparément sur chaque
+          serveur.
+        }
+      </p>
+      @if (rejectedPlugins().length > 0) {
+        <div class="rejected-plugins" role="alert">
+          <strong>{{ rejectedPlugins().length }} manifeste(s) de plugin ignoré(s) :</strong>
+          <ul>
+            @for (item of rejectedPlugins(); track item.file) {
+              <li>
+                <code>{{ item.file }}</code> — {{ item.reason }}
+              </li>
+            }
+          </ul>
+        </div>
+      }
+      <input
+        class="plugin-archive-file"
+        type="file"
+        accept=".zip,application/zip"
+        hidden
+        [disabled]="storeBusy() || shell.worker()"
+        (change)="onArchiveSelected($event, 'plugin')"
+      />
+      @if (filteredPluginOffers().length === 0) {
+        <p class="plugin-empty">
+          @if (searchQuery().trim()) {
+            Aucun plugin ne correspond à cette recherche.
+          } @else if (shell.worker()) {
+            Aucun plugin publié. Le central décide de ce qui est installé et activé.
+          } @else {
+            Aucun plugin publié par les dépôts actifs. Rien n’est activé tant que vous ne
+            l’activez pas.
+          }
+        </p>
+      } @else {
+        <div class="plugin-grid">
+          @for (offer of filteredPluginOffers(); track offer.id) {
+            <article class="plugin-card" [id]="'plugin-' + offer.id">
+              @if (!shell.worker() && offer.record; as plugin) {
+                <mat-slide-toggle
+                  class="plugin-activation"
+                  [checked]="plugin.enabled"
+                  [disabled]="!plugin.canDisable || isActivationBusy('plugin', plugin.id)"
+                  [aria-label]="(plugin.enabled ? 'Désactiver ' : 'Activer ') + plugin.name"
+                  (change)="setPluginEnabled(plugin, $event.checked)"
+                />
+              }
+              <div class="plugin-card-header">
+                @if (offer.record; as plugin) {
+                  <img class="plugin-icon" [src]="plugin.iconUrl" alt="" />
+                }
+                <div>
+                  <h3>
+                    @if (offer.record) {
+                      <button
+                        class="plugin-title-button"
+                        type="button"
+                        (click)="onPluginOpen(offer.id)"
+                      >
+                        {{ offer.name }}
+                      </button>
+                    } @else {
+                      {{ offer.name }}
+                    }
+                  </h3>
+                  <span class="plugin-subtitle">{{ offer.categoryLabel }}</span>
+                </div>
+              </div>
+              <p>{{ offer.description }}</p>
+              <div class="plugin-meta">
+                @if (offer.record; as plugin) {
+                  <span class="plugin-state" [class.plugin-state_disabled]="!plugin.enabled">
+                    {{ plugin.state }}
+                  </span>
+                }
+                <span>Version {{ offer.version }}</span>
+              </div>
+              @if (offer.pack; as pack) {
+                <div class="store-card-actions">
+                  @if (pack.installedVersion) {
+                    @if (pack.hasUpdate && !shell.worker()) {
+                      <button
+                        matButton="filled"
+                        type="button"
+                        [disabled]="storeBusy()"
+                        (click)="installPackage(pack)"
+                      >
+                        Mettre à jour (v{{ pack.version }})
+                      </button>
+                    } @else {
+                      <app-status-badge
+                        [label]="'Installé (v' + pack.installedVersion + ')'"
+                        tone="success"
+                      />
+                    }
+                    @if (!shell.worker()) {
+                      <button
+                        matButton="outlined"
+                        type="button"
+                        [disabled]="storeBusy()"
+                        (click)="removePackage(pack)"
+                      >
+                        Retirer
+                      </button>
+                    }
+                  } @else if (!shell.worker()) {
+                    <button
+                      matButton="filled"
+                      type="button"
+                      [disabled]="storeBusy()"
+                      (click)="installPackage(pack)"
+                    >
+                      Installer
+                    </button>
+                  }
+                </div>
+              }
+            </article>
+          }
+        </div>
+      }
+    } @else if (activeTab() === 'tools') {
+      <p class="activation-scope-note">
+        @if (shell.worker()) {
+          Cette liste est en lecture seule. L’activation des outils se fait sur le central.
+        } @else {
+          Ces interrupteurs règlent l’usage des outils dans tout le cluster. Les paquets
+          s’installent ici. Aucun n’est activé tant que vous ne l’activez pas. Les traitements déjà
+          lancés continuent.
+        }
+      </p>
+      <input
+        class="tool-archive-file"
+        type="file"
+        accept=".zip,application/zip"
+        hidden
+        [disabled]="storeBusy() || shell.worker()"
+        (change)="onArchiveSelected($event, 'tool')"
+      />
+      @if (filteredToolPackages().length > 0) {
+        <section class="plugin-section" aria-label="Paquets d’outils publiés">
+          <header class="plugin-section-heading">
+            <div>
+              <h2>Paquets publiés</h2>
+              <p>Archives vérifiées des dépôts actifs, installées sur ce serveur</p>
+            </div>
+          </header>
+          <div class="store-grid">
+            @for (pkg of filteredToolPackages(); track pkg.id) {
+              <div class="store-card" [id]="'tool-package-' + pkg.id">
+                <div class="store-card-header">
+                  <span class="store-icon" aria-hidden="true">{{ pkg.icon }}</span>
+                  <div class="store-title-group">
+                    <h3>{{ pkg.name }}</h3>
+                    <span class="store-author">v{{ pkg.version }}</span>
+                  </div>
+                </div>
+                <p class="store-description">{{ pkg.description }}</p>
+                @if (pkg.installedSha256 || pkg.sha256) {
+                  <div class="tool-details">
+                    <strong>SHA-256 de l’archive</strong>
+                    <code>{{ pkg.installedSha256 || pkg.sha256 }}</code>
+                  </div>
+                }
+                <div class="store-card-actions">
+                  @if (pkg.installedVersion) {
+                    @if (pkg.hasUpdate && !shell.worker()) {
+                      <button
+                        matButton="filled"
+                        type="button"
+                        [disabled]="storeBusy()"
+                        (click)="installPackage(pkg)"
+                      >
+                        Mettre à jour (v{{ pkg.version }})
+                      </button>
+                    } @else {
+                      <app-status-badge
+                        [label]="'Installé (v' + pkg.installedVersion + ')'"
+                        tone="success"
+                      />
+                    }
+                    @if (!shell.worker()) {
+                      <button
+                        matButton="outlined"
+                        type="button"
+                        [disabled]="storeBusy()"
+                        (click)="removePackage(pkg)"
+                      >
+                        Retirer
+                      </button>
+                    }
+                  } @else if (!shell.worker()) {
+                    <button
+                      matButton="filled"
+                      type="button"
+                      [disabled]="storeBusy()"
+                      (click)="installPackage(pkg)"
+                    >
+                      Installer
+                    </button>
+                  } @else {
+                    <app-status-badge label="Non installé" tone="neutral" />
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        </section>
+      }
+      <section class="plugin-section" aria-label="Outils média déclarés par le cluster">
+        <header class="plugin-section-heading">
+          <div>
+            <h2>Outils déclarés par le cluster</h2>
+            <p>Inventaire, exécutables et capacités remontés par les workers</p>
+          </div>
+        </header>
+        <div class="plugin-grid">
+          @for (tool of filteredTools(); track tool.id) {
+            <article class="plugin-card tool-card" [id]="'cluster-tool-' + tool.id">
+              <div class="tool-card-header">
+                <span class="tool-icon" aria-hidden="true">
+                  @switch (tool.id) {
+                    @case ('ffmpeg') {
+                      🎞️
+                    }
+                    @case ('mkvtoolnix') {
+                      📦
+                    }
+                    @case ('ffprobe') {
+                      🔍
+                    }
+                    @case ('mediainfo') {
+                      📊
+                    }
+                    @case ('imagemagick') {
+                      🖼️
+                    }
+                    @case ('python') {
+                      🐍
+                    }
+                    @default {
+                      ⚙️
+                    }
+                  }
+                </span>
+                <div class="tool-title-group">
+                  <h3 class="tool-name">{{ tool.name }}</h3>
+                  <span class="tool-version">{{
+                    tool.provider === 'stock' ? 'Outil livré avec l’image' : 'Personnalisé'
+                  }}</span>
+                </div>
+                <app-status-badge
+                  [label]="tool.enabled ? tool.clusterReadiness : 'Désactivé'"
+                  [tone]="tool.enabled ? 'neutral' : 'warning'"
+                />
+                @if (!shell.worker()) {
+                  <mat-slide-toggle
+                    class="tool-activation"
+                    [checked]="tool.enabled"
+                    [disabled]="isActivationBusy('tool', tool.id)"
+                    [aria-label]="(tool.enabled ? 'Désactiver ' : 'Activer ') + tool.name"
+                    (change)="setToolEnabled(tool, $event.checked)"
+                  />
+                }
+              </div>
+
+              <p class="tool-description">{{ tool.role }}</p>
+
+              <div class="tool-details">
+                <div><strong>Exécutables :</strong> {{ tool.executables.join(', ') }}</div>
+                <div><strong>Médias supportés :</strong> {{ tool.mediaTypes.join(', ') }}</div>
+                @if (tool.id === 'ffmpeg' && tool.encoders.length > 0) {
+                  <div>
+                    <strong>Encodeurs vérifiés :</strong> {{ tool.encoders.length }} (CPU, NVENC,
+                    QSV, VAAPI)
+                  </div>
+                }
+                <div>
+                  <strong>Sonde système :</strong>
+                  {{ tool.probePreserved ? 'Préservée (/usr/bin)' : 'Personnalisée' }}
+                </div>
+              </div>
+            </article>
+          } @empty {
+            <p class="plugin-empty">Aucun outil ne correspond à cette recherche.</p>
+          }
+        </div>
+      </section>
+    } @else if (activeTab() === 'store') {
+      <div class="repositories-section">
+        <h3>Dépôts configurés pour ce serveur</h3>
+        <div class="repos-list">
+          @for (repo of filteredRepositories(); track repo.id) {
+            <div class="repo-item" [id]="'store-repository-' + repo.id">
+              <div class="repo-info">
+                <span class="repo-name">{{ repo.name }}</span>
+                <span class="repo-url">{{ repo.url }}</span>
+                @if (repo.lastError) {
+                  <span class="repo-error">{{ repo.lastError }}</span>
+                }
+              </div>
+              <div class="repo-badges">
+                @if (repo.isLocked) {
+                  <app-status-badge label="Officiel" tone="accent" />
+                }
+                <app-status-badge
+                  [label]="repo.enabled ? 'Actif' : 'Désactivé'"
+                  [tone]="repo.enabled ? 'success' : 'neutral'"
+                />
+                <app-status-badge [label]="repo.packagesCount + ' paquets'" />
+                <button
+                  matButton="outlined"
+                  type="button"
+                  [disabled]="storeBusy()"
+                  (click)="syncRepository(repo)"
+                >
+                  Synchroniser
+                </button>
+                @if (!repo.isLocked) {
+                  <button
+                    matButton="outlined"
+                    type="button"
+                    [disabled]="storeBusy()"
+                    (click)="toggleRepository(repo)"
+                  >
+                    {{ repo.enabled ? 'Désactiver' : 'Activer' }}
+                  </button>
+                  <button
+                    matButton="outlined"
+                    type="button"
+                    [disabled]="storeBusy()"
+                    (click)="removeRepository(repo)"
+                  >
+                    Supprimer
+                  </button>
+                }
+              </div>
+            </div>
+          } @empty {
+            <p class="store-empty">
+              @if (storeRepositories().length) {
+                Aucun dépôt ne correspond à cette recherche.
+              } @else {
+                Aucun dépôt configuré. Ajoutez l’adresse d’un fichier
+                <code>repository.json</code>.
+              }
+            </p>
+          }
+        </div>
+        <div class="store-actions">
+          <input
+            class="store-url"
+            type="url"
+            aria-label="Adresse du dépôt"
+            placeholder="https://exemple.org/plugins/repository.json"
+            [value]="repositoryUrl()"
+            (input)="onRepositoryUrlInput($event)"
+            (keydown.enter)="addCustomRepository()"
+          />
+        </div>
+        <p class="store-note">
+          Cet onglet règle les dépôts. Les plugins et les outils s’installent dans leurs propres
+          sections. Les workers téléchargent ensuite les archives et vérifient leur empreinte.
+        </p>
+      </div>
+    }
+  </div>
+
+  <ng-template #detailContent catalogue-detail>
+    <mat-tab-group class="plugin-detail-tabs" aria-label="Détails du plugin">
+      <mat-tab label="Synthèse">
+        @if (pluginSheet(); as sheet) {
+          <app-resource-sheet
+            ariaLabel="Résumé du plugin"
+            [title]="sheet.title"
+            [subtitle]="sheet.subtitle"
+            [iconUrl]="sheet.iconUrl ?? null"
+            [sections]="sheet.sections"
+          />
+        }
+      </mat-tab>
+      <mat-tab label="Composants">
+        <app-flow-component-list [components]="selectedComponents()" />
+      </mat-tab>
+      @if (!shell.worker() && configurationSchema(); as schema) {
+        <mat-tab label="Configuration">
+          <div class="plugin-configuration-section">
+            <h3>Configuration globale par défaut</h3>
+            <p>
+              Ces valeurs sont partagées par le cluster. Un flow peut définir ses propres
+              dérogations.
+            </p>
+          </div>
+          @if (selectedPlugin()?.id === 'plex') {
+            <app-plex-setup-assistant (configurationSaved)="onAssistantSaved($event)" />
+          }
+          <app-component-configuration-form
+            [schema]="schema"
+            [values]="configurationValues()"
+            [configuredSecrets]="configuredSecrets()"
+            [showConnectionTest]="selectedPlugin()?.id !== 'nodes'"
+            [connectionTestBusy]="connectionTestBusy()"
+            [connectionTestMessage]="connectionTestMessage()"
+            [connectionTestSuccess]="connectionTestSuccess()"
+            [submitLabel]="configurationBusy() ? 'Enregistrement…' : 'Enregistrer'"
+            (savedWithSecrets)="saveConfiguration($event.values, $event.clearSecrets)"
+            (connectionTestRequested)="testConnection($event)"
+            (cancelled)="onConfigurationCancelled()"
+          />
+        </mat-tab>
+      }
+    </mat-tab-group>
+  </ng-template>
+</app-cluster-maintenance-template>

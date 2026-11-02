@@ -1,0 +1,65 @@
+{
+  "formatVersion": 1,
+  "id": "6523c1f0-89c2-4bcc-9c65-1d8c58cf1211",
+  "version": 1,
+  "name": "Test — Inspection vidéo",
+  "mediaType": "video",
+  "nodes": [
+    {
+      "id": "input",
+      "name": "Fichier vidéo",
+      "component": {
+        "pluginId": "base",
+        "pluginVersion": "1.0.0",
+        "componentId": "base-input-video",
+        "componentVersion": "1.0.0",
+        "configurationSchemaVersion": 1
+      },
+      "configuration": {}
+    },
+    {
+      "id": "inspect",
+      "name": "Analyser le média",
+      "component": {
+        "pluginId": "base",
+        "pluginVersion": "1.0.0",
+        "componentId": "base-probe-media",
+        "componentVersion": "1.0.0",
+        "configurationSchemaVersion": 1
+      },
+      "configuration": {
+        "resultVariable": "mediaDetails",
+        "refreshMetadata": false
+      }
+    },
+    {
+      "id": "finish",
+      "name": "Terminer le flow",
+      "component": {
+        "pluginId": "base",
+        "pluginVersion": "1.0.0",
+        "componentId": "base-complete-flow",
+        "componentVersion": "1.0.0",
+        "configurationSchemaVersion": 1
+      },
+      "configuration": {
+        "result": "unchanged",
+        "message": "Inspection de test terminée, source inchangée."
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "input-inspect",
+      "sourceNodeId": "input",
+      "sourceOutputId": "success",
+      "targetNodeId": "inspect"
+    },
+    {
+      "id": "inspect-finish",
+      "sourceNodeId": "inspect",
+      "sourceOutputId": "success",
+      "targetNodeId": "finish"
+    }
+  ]
+}

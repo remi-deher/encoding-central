@@ -1,0 +1,44 @@
+# Le rôle est dans l'image. Ce fichier ne publie que les ports et un volume de données
+# par conteneur. Les ports sont sur toutes les interfaces pour qu'un worker joigne
+# le central par l'adresse IP de la machine.
+name: encoding-central
+
+services:
+  server:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+      target: central
+    hostname: encoding-central
+    ports:
+      - "5080:8080"
+    volumes:
+      - central-node-data:/var/lib/encoding-node
+      - /home/remi/encoding-tests/central-media:/libraries/central
+      - /home/remi/encoding-tests/shared-media:/libraries/shared
+      - /home/remi/encoding-tests/central-only:/libraries/central-only
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+      target: worker
+    hostname: encoding-worker
+    ports:
+      - "5081:8080"
+    volumes:
+      - worker-node-data:/var/lib/encoding-node
+      - /home/remi/encoding-tests/worker-media:/libraries/worker
+      - /home/remi/encoding-tests/shared-media:/libraries/shared
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - "987"
+    depends_on:
+      - server
+    restart: unless-stopped
+
+volumes:
+  central-node-data:
+  worker-node-data:

@@ -1,0 +1,123 @@
+name: Release
+# Publie l'image Docker unique après un merge validé de dev vers main.
+# Secrets requis (Settings > Secrets and variables > Actions) : DOCKERHUB_USERNAME, DOCKERHUB_TOKEN.
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+concurrency:
+  group: release
+  cancel-in-progress: false
+permissions:
+  contents: write
+  checks: read
+  pull-requests: read
+jobs:
+  wait-ci:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      green: ${{ steps.wait.outputs.green }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - id: wait
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ "$GITHUB_REF_NAME" != "main" ]; then
+            echo "::error::La publication n'est autorisée que depuis main."
+            echo green=false >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          merged_prs="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${SHA}/pulls" \
+            --jq '[.[] | select(.base.ref == "main" and .head.ref == "dev" and .merged_at != null)]')"
+          if [ "$(jq length <<< "$merged_prs")" -eq 0 ]; then
+            msg="Aucune PR dev vers main fusionnée n'est associée à ce commit (commit direct sur main ?) : aucune image n'est publiée. Reporter le changement dans dev et publier via une PR dev vers main."
+            echo "::error::$msg"
+            echo "- Publication refusée : $msg" >> "$GITHUB_STEP_SUMMARY"
+            echo green=false >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          if git tag --points-at "$SHA" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Ce commit possède déjà un tag de release; publication ignorée."
+            echo green=false >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          node .github/scripts/wait-ci.mjs
+          echo green=true >> "$GITHUB_OUTPUT"
+  publish:
+    needs: wait-ci
+    if: needs.wait-ci.outputs.green == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          labels="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" --jq '[.[].labels[].name] | join(",")' || true)"
+          echo "version=$(PR_LABELS="$labels" .github/scripts/next-version.sh "$GITHUB_SHA")" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Generate release manifest
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: node .github/scripts/release-manifest.mjs "$RELEASE_VERSION" "$GITHUB_REPOSITORY" backend/src/Encoding.Api/release-manifest.json
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/encoding:${{ steps.version.outputs.version }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/encoding:latest
+          cache-from: type=gha,scope=encoding
+          cache-to: type=gha,scope=encoding,mode=max
+      - name: Tag git
+        run: |
+          git tag "v${{ steps.version.outputs.version }}" "$GITHUB_SHA"
+          git push origin "v${{ steps.version.outputs.version }}"
+      - name: Publish release notes and manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          node -e 'const fs = require("node:fs"); const manifest = JSON.parse(fs.readFileSync("backend/src/Encoding.Api/release-manifest.json")); fs.writeFileSync("/tmp/release-notes.txt", manifest.releases[0].notes);'
+          gh release create "v$RELEASE_VERSION" backend/src/Encoding.Api/release-manifest.json --verify-tag --title "Encoding $RELEASE_VERSION" --notes-file /tmp/release-notes.txt --latest
+  cleanup-branches:
+    needs: publish
+    if: needs.publish.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test .github/scripts/cleanup-released-branches.test.mjs
+      - name: Delete branches integrated into dev and this release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/scripts/cleanup-released-branches.mjs --apply

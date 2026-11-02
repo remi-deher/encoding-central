@@ -1,0 +1,520 @@
+app-shell {
+  display: block;
+  height: 100dvh;
+  min-height: 0;
+}
+
+/* Lien d'évitement W3C WCAG 2.4.1 */
+.skip-to-content-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 2000;
+  padding: 10px 18px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-strong);
+  color: var(--on-accent, #ffffff);
+  font-size: var(--font-body);
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: var(--elevation-2);
+  transform: translateY(-160%);
+  transition: transform 180ms var(--motion-spring-fast);
+
+  &:focus,
+  &:focus-visible {
+    transform: translateY(0);
+    outline: 3px solid var(--surface);
+    outline-offset: 2px;
+  }
+}
+
+.application-shell {
+  // Shared navigation geometry belongs to the shell, not individual page templates.
+  --shell-sidebar-expanded-width: 248px;
+  --shell-sidebar-collapsed-width: 88px;
+  --shell-header-sticky-offset: 84px;
+
+  height: 100dvh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--page-background);
+}
+
+/* This control lives outside the scrolling Material container. Its positioning must
+   also win over Material's lazily loaded button positioning styles. */
+button.assistant-launcher {
+  position: fixed;
+  right: max(var(--space-5), env(safe-area-inset-right));
+  bottom: max(var(--space-5), env(safe-area-inset-bottom));
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  padding: 0;
+  border-radius: var(--radius-pill);
+  z-index: 80;
+  touch-action: none;
+  cursor: grab;
+  box-shadow: var(--elevation-2);
+  transition:
+    opacity 150ms ease,
+    visibility 0s;
+  &[hidden] {
+    display: none;
+  }
+  &:focus-visible {
+    outline: 3px solid var(--accent-strong);
+    outline-offset: 4px;
+  }
+  &.is-dragging {
+    cursor: grabbing;
+    user-select: none;
+  }
+  &.is-panel-open {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      opacity 130ms ease,
+      visibility 0s linear 220ms;
+  }
+}
+.assistant-widget-panel {
+  position: fixed;
+  right: max(var(--space-4), env(safe-area-inset-right));
+  bottom: max(88px, calc(env(safe-area-inset-bottom) + 72px));
+  width: min(380px, calc(100vw - 32px));
+  height: min(520px, calc(100dvh - 112px));
+  z-index: 80;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  background: var(--surface-container-lowest);
+  box-shadow: var(--elevation-2);
+  display: flex;
+  flex-direction: column;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(var(--assistant-panel-scale-x, 0.15), var(--assistant-panel-scale-y, 0.11));
+  transform-origin: var(--assistant-panel-origin-x, 100%) var(--assistant-panel-origin-y, 100%);
+  transition:
+    opacity 160ms ease,
+    transform 240ms var(--motion-emphasized),
+    visibility 0s linear 240ms;
+  &.is-open {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    transform: scale(1);
+    transition:
+      opacity 170ms ease,
+      transform 240ms var(--motion-emphasized),
+      visibility 0s;
+  }
+  > app-ai-assistant-page {
+    flex: 1;
+    min-height: 0;
+  }
+}
+.assistant-widget-header {
+  flex: 0 0 auto;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--surface-container-low);
+  h2 {
+    flex: 1;
+    margin: 0;
+    font-size: var(--font-title-sm);
+  }
+}
+@media (max-width: 760px) {
+  button.assistant-launcher {
+    right: var(--space-4);
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.assistant-launcher,
+  .assistant-widget-panel {
+    transition: none;
+  }
+}
+
+/* Auth Header */
+.auth-header {
+  height: 64px;
+  min-height: 64px;
+  box-sizing: border-box;
+  width: min(100%, 1440px);
+  margin-inline: auto;
+  padding-inline: clamp(16px, 3vw, 40px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+}
+
+.brand {
+  min-width: 0;
+  min-height: 40px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--text-primary);
+  text-decoration: none;
+  border-radius: var(--radius-md);
+
+  &:focus-visible {
+    outline: 2px solid var(--sidebar-accent);
+    outline-offset: 2px;
+  }
+}
+
+.brand-mark {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: var(--accent-strong);
+  color: var(--on-accent, #ffffff);
+  font-size: var(--font-title);
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  box-shadow: var(--elevation-1);
+}
+
+.brand-name {
+  max-width: 180px;
+  overflow: hidden;
+  font-size: var(--font-title-md);
+  font-weight: 780;
+  letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Navigation persistante : scaffold CSS sans modification des internes Material. */
+.application-navigation-layout {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  // Clip page overflow without creating a second scroll container. The page region
+  // owns vertical scrolling so shared sticky subnavs follow it consistently.
+  overflow: clip;
+}
+.application-sidebar {
+  width: var(--shell-sidebar-expanded-width);
+  flex: 0 0 var(--shell-sidebar-expanded-width);
+  background: var(--sidebar-background);
+  transition:
+    width 220ms var(--motion-emphasized),
+    flex-basis 220ms var(--motion-emphasized);
+  &.is-collapsed {
+    width: var(--shell-sidebar-collapsed-width);
+    flex-basis: var(--shell-sidebar-collapsed-width);
+  }
+}
+
+.sidebar-content {
+  box-sizing: border-box;
+  height: 100%;
+  width: 100%;
+  padding: var(--space-2) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  transition:
+    width 220ms var(--motion-emphasized),
+    padding 220ms var(--motion-emphasized);
+}
+
+/* Sidebar Navigation */
+.sidebar-navigation {
+  min-height: 0;
+  flex: 1;
+  overflow-y: hidden;
+  overflow-x: hidden;
+}
+
+/* Contrôles du pied de navigation */
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--sidebar-border);
+}
+
+.sidebar-footer-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.sidebar-footer-controls .sidebar-collapse-btn {
+  width: auto;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.sidebar-footer-controls app-user-menu,
+.sidebar-footer-controls app-appearance-palette {
+  width: 38px;
+  height: 40px;
+  flex: 0 0 38px;
+}
+
+.sidebar-footer.is-collapsed .sidebar-footer-controls {
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-footer.is-collapsed .sidebar-footer-controls .sidebar-collapse-btn {
+  width: 40px;
+  min-height: 40px;
+  flex: 0 0 40px;
+  justify-content: center;
+}
+
+.sidebar-footer.is-collapsed .sidebar-footer-controls .collapse-btn-label {
+  display: none;
+}
+
+.sidebar-collapse-btn {
+  width: 100%;
+  min-height: var(--touch-target);
+  padding: 0 var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: transparent;
+  color: var(--sidebar-text-muted);
+  font-family: inherit;
+  font-size: var(--font-label);
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+
+  &:hover {
+    background: var(--sidebar-hover);
+    color: var(--sidebar-text-strong);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--sidebar-accent);
+    outline-offset: 2px;
+  }
+
+  .is-collapsed & {
+    width: 44px;
+    height: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+  }
+}
+
+/* Main Content Area */
+.page-transition-region {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  z-index: auto;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+}
+
+.application-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--content-wide-width);
+  min-height: 84px;
+  margin-inline: auto;
+  padding: var(--space-3) clamp(16px, 3vw, 40px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex: 0 0 auto;
+  background: var(--page-background);
+}
+
+.application-header > app-page-system-actions {
+  margin-left: auto;
+  z-index: 2;
+}
+
+@media (min-width: 1101px) and (max-width: 1600px) {
+  .application-header {
+    padding-inline: clamp(12px, 1.25vw, 20px);
+  }
+}
+
+.application-shell.rail-navigation-shell .application-header {
+  max-width: calc(
+    var(--content-wide-width) +
+      var(--shell-sidebar-expanded-width) - var(--shell-sidebar-collapsed-width)
+  );
+}
+
+@media (min-width: 1101px) {
+  .application-shell.rail-navigation-shell app-global-search-bar {
+    width: min(980px, 50%, calc(100% - 740px));
+  }
+}
+
+.main-content {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--content-max-width);
+  --main-content-padding-block-start: var(--space-5);
+  --main-content-padding-block-end: var(--space-6);
+  margin-inline: auto;
+  padding-inline: clamp(16px, 3vw, 40px);
+  padding-block: var(--main-content-padding-block-start) var(--main-content-padding-block-end);
+  flex: 1;
+  outline: none;
+}
+
+.main-content.is-full-width {
+  max-width: none;
+  min-height: 0;
+  margin-inline: 0;
+}
+
+/* Workspace Shell (Flow Editor Fullscreen Atelier) */
+.workspace-shell {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+
+  .application-navigation-layout {
+    height: 100%;
+  }
+
+  .page-transition-region {
+    overflow: hidden;
+  }
+
+  .main-content {
+    width: 100%;
+    max-width: none;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+}
+
+/* Auth Shell */
+.auth-shell {
+  min-height: 100dvh;
+
+  .application-navigation-layout {
+    height: calc(100dvh - 64px);
+  }
+
+  .main-content {
+    width: min(100% - 32px, 1440px);
+  }
+}
+
+/* Responsive Rules */
+@media (max-width: 760px) {
+  .application-shell {
+    --shell-header-sticky-offset: 116px;
+  }
+
+  .application-shell.has-search-controls {
+    --shell-header-sticky-offset: 162px;
+  }
+
+  .application-header {
+    display: flex;
+    min-height: 116px;
+    padding: 62px 16px 8px;
+    align-items: flex-end;
+  }
+
+  .application-header.has-search-controls {
+    min-height: 162px;
+    padding-top: 108px;
+  }
+
+  .main-content {
+    --main-content-padding-block-start: 10px;
+    --main-content-padding-block-end: 28px;
+    padding-inline: 16px;
+    padding-block: var(--main-content-padding-block-start) var(--main-content-padding-block-end);
+  }
+
+  .compact-navigation-shell .main-content {
+    --main-content-padding-block-end: calc(80px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: var(--main-content-padding-block-end);
+  }
+}
+
+@media (max-width: 480px) {
+  .application-header {
+    padding-inline: 12px;
+  }
+
+  .main-content {
+    padding-inline: 12px;
+    --main-content-padding-block-start: 8px;
+    --main-content-padding-block-end: 24px;
+    padding-block: var(--main-content-padding-block-start) var(--main-content-padding-block-end);
+  }
+
+  .compact-navigation-shell .main-content {
+    --main-content-padding-block-end: calc(80px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: var(--main-content-padding-block-end);
+  }
+}
+
+.assistant-widget-panel.flow-assistant-panel {
+  width: min(640px, calc(100vw - 32px));
+  height: min(840px, calc(100dvh - 112px));
+}
+.assistant-widget-panel > app-flow-ai-assistant-panel {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.application-sidebar.is-collapsed .sidebar-content {
+  padding-inline: var(--space-3);
+}
+.sidebar-collapse-btn[hidden] {
+  display: none;
+}

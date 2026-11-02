@@ -1,0 +1,43 @@
+<svg aria-hidden="true" [attr.width]="size().width" [attr.height]="size().height">
+  <defs>
+    <marker
+      id="flow-link-arrow"
+      viewBox="0 0 10 10"
+      refX="9"
+      refY="5"
+      markerWidth="8"
+      markerHeight="8"
+      orient="auto"
+    >
+      <path class="arrow" d="M 0 0 L 10 5 L 0 10 Z" />
+    </marker>
+  </defs>
+  @for (link of links(); track link.id) {
+    <path
+      [attr.d]="link.path"
+      [class.error-connection]="link.error"
+      marker-end="url(#flow-link-arrow)"
+    />
+    <path
+      class="link-hit"
+      [attr.d]="link.path"
+      appContextActions
+      (contextActions)="contextRequested.emit({ id: link.id, position: $event })"
+    />
+  }
+</svg>
+@for (link of links(); track link.id) {
+  <button
+    matButton="tonal"
+    class="link-insertion"
+    appContextActions
+    (contextActions)="contextRequested.emit({ id: link.id, position: $event })"
+    type="button"
+    [style.left.px]="link.insertion.x"
+    [style.top.px]="link.insertion.y"
+    aria-label="Insérer une étape sur cette liaison"
+    (click)="insertionRequested.emit(link.id)"
+  >
+    <app-icon name="add" /> Étape
+  </button>
+}

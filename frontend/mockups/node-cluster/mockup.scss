@@ -1,0 +1,61 @@
+:host {
+  display: block;
+  min-height: 100dvh;
+  background: var(--page-background);
+  color: var(--text-primary);
+}
+.mock-toolbar {
+  height: auto;
+  min-height: 76px;
+  padding: var(--space-4) var(--space-6);
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface);
+}
+.brand {
+  letter-spacing: 0.14em;
+  font-weight: 750;
+  font-size: 17px;
+}
+.brand-detail {
+  color: var(--text-secondary);
+  font-weight: 400;
+  letter-spacing: normal;
+}
+.toolbar-space {
+  flex: 1;
+}
+.mock-workspace {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: var(--space-6);
+}
+.button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.section-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-6) var(--space-4) var(--space-4);
+  font-size: var(--font-title);
+}
+@media (max-width: 640px) {
+  .mock-workspace {
+    padding: var(--space-3);
+  }
+  .mock-toolbar {
+    padding: var(--space-3);
+    gap: var(--space-2);
+  }
+  .brand {
+    font-size: 14px;
+  }
+  .brand-detail {
+    display: none;
+  }
+}

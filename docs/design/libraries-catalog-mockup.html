@@ -1,0 +1,1651 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Maquette — Bibliothèques</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --page: #111416;
+        --sidebar: #1b1e20;
+        --surface: #1b2022;
+        --surface-raised: #242b2d;
+        --surface-soft: #161a1c;
+        --line: #30383a;
+        --line-strong: #485254;
+        --text: #edf2f3;
+        --muted: #a3afb1;
+        --subtle: #788588;
+        --accent: #69d1b4;
+        --accent-soft: #173d34;
+        --accent-on: #09271f;
+        --ok: #68d6a7;
+        --ok-soft: #17392d;
+        --warn: #edbd68;
+        --warn-soft: #3b301d;
+        --danger: #f18b83;
+        --radius: 18px;
+        --radius-sm: 12px;
+        --shadow: 0 18px 60px rgb(0 0 0 / 42%);
+        font-family: Inter, "Segoe UI", system-ui, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      body {
+        margin: 0;
+        min-width: 360px;
+        min-height: 100vh;
+        background: var(--page);
+        color: var(--text);
+      }
+      button,
+      input {
+        font: inherit;
+      }
+      button {
+        color: inherit;
+        cursor: pointer;
+      }
+      .sidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        z-index: 5;
+        display: flex;
+        flex-direction: column;
+        width: 248px;
+        padding: 18px 16px 14px;
+        background: var(--sidebar);
+        border-right: 1px solid #252a2c;
+      }
+      .nav {
+        display: grid;
+        gap: 5px;
+      }
+      .nav-label {
+        margin: 15px 14px 5px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-height: 46px;
+        padding: 0 14px;
+        border: 0;
+        border-radius: 14px;
+        background: transparent;
+        color: #d6dfe0;
+        text-align: left;
+        font-weight: 600;
+      }
+      .nav-item svg {
+        width: 20px;
+        height: 20px;
+        flex: 0 0 auto;
+      }
+      .nav-item.selected {
+        background: var(--accent-soft);
+        color: #a5f1d9;
+      }
+      .nav-item:hover:not(.selected) {
+        background: #272d2f;
+      }
+      .sidebar-spacer {
+        flex: 1;
+        min-height: 24px;
+      }
+      .appearance {
+        position: absolute;
+        left: 14px;
+        bottom: 76px;
+        z-index: 2;
+        display: none;
+        width: 220px;
+        margin: 0;
+        padding: 14px;
+        border: 1px solid var(--line-strong);
+        border-radius: 16px;
+        background: #171b1d;
+        gap: 12px;
+        box-shadow: var(--shadow);
+      }
+      .sidebar.appearance-open .appearance {
+        display: grid;
+      }
+      .appearance-title {
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .theme-switch {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        padding: 3px;
+        border-radius: 999px;
+        background: var(--surface-raised);
+      }
+      .theme-switch button {
+        display: flex;
+        justify-content: center;
+        gap: 7px;
+        padding: 8px 4px;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .theme-switch button.active {
+        background: #34423e;
+        color: var(--text);
+      }
+      .palette {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .palette button {
+        width: 23px;
+        height: 23px;
+        padding: 0;
+        border: 2px solid transparent;
+        border-radius: 50%;
+        background: var(--dot);
+      }
+      .palette button.active {
+        outline: 2px solid var(--dot);
+        outline-offset: 3px;
+      }
+      .sidebar-footer {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border-top: 1px solid var(--line);
+        padding-top: 12px;
+      }
+      .collapse {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-right: auto;
+        padding: 8px 10px;
+        border: 0;
+        border-radius: 10px;
+        background: transparent;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .icon-button,
+      .profile {
+        display: grid;
+        place-items: center;
+        width: 40px;
+        height: 40px;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--muted);
+      }
+      .icon-button:hover {
+        background: var(--surface-raised);
+        color: var(--text);
+      }
+      .profile {
+        background: #176854;
+        color: #effff9;
+        font-weight: 700;
+      }
+      .icon-button svg {
+        width: 20px;
+        height: 20px;
+      }
+      .main {
+        min-height: 100vh;
+        margin-left: 248px;
+      }
+      .global-header {
+        position: sticky;
+        top: 0;
+        z-index: 4;
+        display: grid;
+        grid-template-columns:
+          minmax(240px, 1fr)
+          minmax(0, min(760px, calc(100% - 480px)))
+          minmax(240px, 1fr);
+        align-items: center;
+        height: 76px;
+        padding: 0 34px;
+        background: color-mix(in srgb, var(--page) 93%, transparent);
+        backdrop-filter: blur(16px);
+        border-bottom: 1px solid rgb(255 255 255 / 3%);
+      }
+      .global-search {
+        grid-column: 2;
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        height: 46px;
+        padding-left: 15px;
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        background: var(--surface-soft);
+        box-shadow: 0 8px 24px rgb(0 0 0 / 10%);
+        transition:
+          border-color 0.16s,
+          box-shadow 0.16s;
+      }
+      .global-search:focus-within {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent);
+      }
+      .search-field {
+        display: flex;
+        align-items: center;
+        flex: 1;
+        gap: 10px;
+        min-width: 0;
+        color: var(--muted);
+      }
+      .search-field svg {
+        flex: 0 0 auto;
+        width: 19px;
+        height: 19px;
+      }
+      .search-field input {
+        width: 100%;
+        min-width: 0;
+        height: 42px;
+        padding: 0;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        font-size: 13px;
+      }
+      .search-field input::placeholder {
+        color: var(--muted);
+      }
+      .search-actions {
+        display: flex;
+        align-items: center;
+        align-self: stretch;
+        flex: 0 0 auto;
+        padding-right: 5px;
+      }
+      .search-actions .button {
+        min-height: 32px;
+        height: calc(100% - 10px);
+        padding-inline: 13px;
+        border: 0;
+        border-left: 1px solid var(--line);
+        border-radius: 0;
+        background: transparent;
+      }
+      .search-actions .button:hover {
+        background: var(--surface-raised);
+      }
+      .search-actions .button.filled {
+        color: var(--accent);
+      }
+      .search-actions .button[hidden] {
+        display: none;
+      }
+      .system-status {
+        grid-column: 3;
+        justify-self: end;
+        display: flex;
+        gap: 9px;
+        white-space: nowrap;
+      }
+      .status-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 38px;
+        padding: 0 13px;
+        border-radius: 999px;
+        background: #202527;
+        color: #dbe2e3;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .status-chip .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--ok);
+      }
+      .status-chip.jobs {
+        background: #163f35;
+        color: #a5f1d9;
+      }
+      .content {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 0 38px 56px;
+      }
+      .subnav-row {
+        position: sticky;
+        top: 76px;
+        z-index: 3;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 82px;
+        margin-bottom: 28px;
+        background: color-mix(in srgb, var(--page) 96%, transparent);
+        backdrop-filter: blur(12px);
+      }
+      .subnav {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        max-width: 100%;
+        padding: 5px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--surface-soft);
+      }
+      .subnav a {
+        display: flex;
+        align-items: center;
+        min-height: 38px;
+        padding: 0 13px;
+        border-radius: 999px;
+        color: #b5c0c1;
+        text-decoration: none;
+        font-size: 12px;
+        font-weight: 650;
+        white-space: nowrap;
+      }
+      .subnav a.active {
+        background: #353b3e;
+        color: var(--text);
+      }
+      .subnav a:hover:not(.active) {
+        background: var(--surface-raised);
+        color: var(--text);
+      }
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 38px;
+        padding: 0 14px;
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        background: transparent;
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+      .button:hover {
+        background: var(--surface-raised);
+      }
+      .button.filled {
+        border-color: transparent;
+        background: var(--accent);
+        color: var(--accent-on);
+      }
+      .button.filled:hover {
+        filter: brightness(1.08);
+      }
+      .search-actions .button.filled {
+        border-color: transparent;
+        background: transparent;
+        color: var(--accent);
+      }
+      .search-actions .button.filled:hover {
+        background: var(--surface-raised);
+        filter: none;
+      }
+      .button svg {
+        width: 16px;
+        height: 16px;
+      }
+      .sections {
+        display: grid;
+        gap: 20px;
+      }
+      .resource-section {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .section-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 17px 20px;
+        border-bottom: 1px solid var(--line);
+      }
+      .section-title {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        min-width: 0;
+      }
+      .section-title h2 {
+        margin: 0;
+        font-size: 15px;
+        letter-spacing: -0.01em;
+      }
+      .section-title p {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .section-number {
+        display: grid;
+        place-items: center;
+        min-width: 25px;
+        height: 25px;
+        padding: 0 7px;
+        border-radius: 999px;
+        background: var(--surface-raised);
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .section-number.attention {
+        background: var(--warn-soft);
+        color: var(--warn);
+      }
+      .section-body {
+        padding: 12px;
+      }
+      .resource-row {
+        position: relative;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        align-items: center;
+        gap: 18px;
+        min-width: 0;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 15px;
+        background: #171c1e;
+      }
+      .resource-main {
+        display: flex;
+        align-items: flex-start;
+        gap: 13px;
+        min-width: 0;
+      }
+      .resource-select {
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        width: 25px;
+        height: 42px;
+      }
+      .resource-select input {
+        width: 17px;
+        height: 17px;
+        margin: 0;
+        accent-color: var(--accent);
+        cursor: pointer;
+      }
+      .resource-icon {
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        width: 42px;
+        height: 42px;
+        border-radius: 13px;
+        background: #252d2f;
+        color: #d4dfe0;
+      }
+      .resource-icon svg {
+        width: 21px;
+        height: 21px;
+      }
+      .resource-info {
+        min-width: 0;
+        flex: 1;
+      }
+      .resource-heading {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px 10px;
+        padding-right: 156px;
+      }
+      .resource-heading h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+      .resource-title-button {
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: var(--text);
+        font-size: inherit;
+        font-weight: inherit;
+        text-align: left;
+      }
+      .resource-title-button:hover {
+        color: var(--accent);
+      }
+      .resource-date {
+        margin-top: 5px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 23px;
+        padding: 0 9px;
+        border-radius: 999px;
+        background: #2b3234;
+        color: #d2dcdd;
+        font-size: 10px;
+        font-weight: 650;
+        white-space: nowrap;
+      }
+      .badge.ok {
+        background: var(--ok-soft);
+        color: var(--ok);
+      }
+      .badge.warn {
+        background: var(--warn-soft);
+        color: var(--warn);
+      }
+      .attention-text {
+        color: var(--warn) !important;
+      }
+      .resource-details {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(140px, 1fr));
+        gap: 10px;
+        margin-top: 15px;
+      }
+      .detail {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+        padding: 10px 12px;
+        border-radius: 11px;
+        background: #202628;
+      }
+      .detail span {
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .detail strong {
+        overflow: hidden;
+        color: #e0e7e8;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 11px;
+        font-weight: 650;
+      }
+      .resource-action-group {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        display: inline-flex;
+        align-items: center;
+        min-height: 38px;
+        overflow: hidden;
+        gap: 2px;
+        padding: 2px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--surface-soft);
+      }
+      .switch-control {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        height: 32px;
+        padding: 0 8px;
+        border: 0;
+        border-radius: 9px;
+        color: #cbd5d6;
+        font-size: 11px;
+        font-weight: 650;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .switch-control input {
+        appearance: none;
+        flex: 0 0 auto;
+        width: 34px;
+        height: 20px;
+        margin: 0;
+        border: 1px solid #52605f;
+        border-radius: 999px;
+        background: #303739;
+        cursor: pointer;
+        transition: 0.16s;
+      }
+      .switch-control input::before {
+        content: "";
+        display: block;
+        width: 15px;
+        height: 15px;
+        margin: 2px;
+        border-radius: 50%;
+        background: #c2cecf;
+        transition: 0.16s;
+      }
+      .switch-control input:checked {
+        border-color: #2f8d74;
+        background: #176550;
+      }
+      .switch-control input:checked::before {
+        transform: translateX(15px);
+        background: #caffee;
+      }
+      .resource-action-group .more-button {
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+      }
+      .resource-action-group .more-button:hover {
+        background: var(--surface-raised);
+      }
+      .icon-button {
+        display: grid;
+        place-items: center;
+        width: 36px;
+        height: 36px;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--muted);
+      }
+      .icon-button:hover {
+        background: var(--surface-raised);
+        color: var(--text);
+      }
+      .icon-button svg {
+        width: 18px;
+        height: 18px;
+      }
+      .empty-section {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        min-height: 64px;
+        padding: 13px 16px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .empty-section svg {
+        width: 17px;
+        height: 17px;
+        color: var(--subtle);
+        flex: 0 0 auto;
+      }
+      .search-empty {
+        display: none;
+        margin-top: 16px;
+        padding: 28px 20px;
+        border: 1px dashed var(--line-strong);
+        border-radius: var(--radius);
+        color: var(--muted);
+        text-align: center;
+        font-size: 13px;
+      }
+      .search-empty.visible {
+        display: block;
+      }
+      .lower-sections {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+      details.resource-section {
+        align-self: start;
+      }
+      details.resource-section summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 15px 18px;
+        cursor: pointer;
+        list-style: none;
+      }
+      details.resource-section summary::-webkit-details-marker {
+        display: none;
+      }
+      details.resource-section summary .section-title {
+        display: flex;
+        align-items: center;
+      }
+      details.resource-section summary h2 {
+        margin: 0;
+        font-size: 13px;
+      }
+      details.resource-section summary::after {
+        content: "⌄";
+        color: var(--muted);
+        font-size: 16px;
+      }
+      details.resource-section[open] summary {
+        border-bottom: 1px solid var(--line);
+      }
+      .section-title-stack {
+        display: grid;
+        gap: 3px;
+      }
+      .section-title-stack span {
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .drawer-scrim {
+        position: fixed;
+        inset: 0;
+        z-index: 8;
+        background: rgb(0 0 0 / 58%);
+        opacity: 0;
+        visibility: hidden;
+        transition:
+          opacity 0.18s,
+          visibility 0.18s;
+      }
+      .drawer {
+        position: fixed;
+        z-index: 9;
+        inset: 0 0 0 auto;
+        display: grid;
+        grid-template-rows: auto auto 1fr auto;
+        width: min(540px, calc(100vw - 22px));
+        background: var(--surface);
+        border-left: 1px solid var(--line-strong);
+        box-shadow: var(--shadow);
+        transform: translateX(102%);
+        transition: transform 0.22s ease;
+      }
+      .drawer-open .drawer-scrim {
+        opacity: 1;
+        visibility: visible;
+      }
+      .drawer-open .drawer {
+        transform: none;
+      }
+      .drawer-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 14px;
+        padding: 22px 24px 17px;
+        border-bottom: 1px solid var(--line);
+      }
+      .drawer-head h2 {
+        margin: 0 0 6px;
+        font-size: 19px;
+      }
+      .drawer-head p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .drawer-tabs {
+        display: flex;
+        gap: 4px;
+        padding: 0 18px;
+        overflow-x: auto;
+        border-bottom: 1px solid var(--line);
+      }
+      .drawer-tabs button {
+        min-height: 47px;
+        padding: 0 13px;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        background: transparent;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 650;
+        white-space: nowrap;
+      }
+      .drawer-tabs button.active {
+        border-bottom-color: var(--accent);
+        color: var(--text);
+      }
+      .drawer-body {
+        overflow: auto;
+        padding: 20px 24px;
+      }
+      .drawer-section {
+        padding: 16px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .drawer-section:first-child {
+        padding-top: 0;
+      }
+      .drawer-section h3 {
+        margin: 0 0 12px;
+        font-size: 12px;
+      }
+      .drawer-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 8px 0;
+        font-size: 11px;
+      }
+      .drawer-row span:first-child {
+        color: var(--muted);
+      }
+      .drawer-row span:last-child {
+        text-align: right;
+      }
+      .drawer-foot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 13px 24px;
+        border-top: 1px solid var(--line);
+        background: var(--surface);
+      }
+      .toast {
+        position: fixed;
+        z-index: 10;
+        left: 50%;
+        bottom: 20px;
+        transform: translate(-50%, 20px);
+        opacity: 0;
+        pointer-events: none;
+        padding: 11px 16px;
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        background: #252d2f;
+        color: var(--text);
+        box-shadow: var(--shadow);
+        font-size: 12px;
+        transition: 0.18s;
+      }
+      .toast.visible {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+      @media (max-width: 1280px) {
+        .content {
+          padding-inline: 24px;
+        }
+        .global-header {
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          gap: 7px;
+          height: 108px;
+          padding-inline: 24px;
+        }
+        .global-search {
+          width: min(760px, 100%);
+          flex: 0 0 46px;
+        }
+        .system-status {
+          justify-content: center;
+        }
+        .subnav-row {
+          top: 108px;
+        }
+        .subnav a {
+          padding-inline: 10px;
+          font-size: 11px;
+        }
+      }
+      @media (max-width: 1020px) {
+        .sidebar {
+          width: 88px;
+          align-items: center;
+          padding-inline: 10px;
+        }
+        .nav-item {
+          justify-content: center;
+          width: 58px;
+          padding: 0;
+          font-size: 0;
+        }
+        .nav-item svg {
+          width: 22px;
+          height: 22px;
+        }
+        .nav-label,
+        .appearance,
+        .collapse span {
+          display: none;
+        }
+        .sidebar-footer {
+          flex-wrap: wrap;
+          justify-content: center;
+        }
+        .collapse {
+          margin: 0;
+          padding: 8px;
+        }
+        .main {
+          margin-left: 88px;
+        }
+        .global-header {
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          gap: 7px;
+          height: 108px;
+          padding: 8px 20px;
+        }
+        .global-search {
+          width: min(760px, 100%);
+          flex: 0 0 46px;
+        }
+        .system-status {
+          justify-content: center;
+        }
+        .subnav-row {
+          top: 108px;
+          padding-block: 14px;
+        }
+      }
+      @media (max-width: 720px) {
+        .global-header {
+          height: 104px;
+          gap: 4px;
+          padding: 7px 12px;
+        }
+        .global-search {
+          height: 42px;
+          flex-basis: 42px;
+          padding-left: 11px;
+        }
+        .search-actions {
+          padding-right: 3px;
+        }
+        .search-actions .button {
+          gap: 0;
+          width: 38px;
+          padding: 0;
+        }
+        .search-actions .action-label {
+          display: none;
+        }
+        .search-field input {
+          font-size: 12px;
+        }
+        .status-chip {
+          min-height: 27px;
+          padding-inline: 10px;
+          font-size: 10px;
+        }
+        .content {
+          padding-inline: 14px;
+        }
+        .subnav-row {
+          top: 104px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          margin-bottom: 20px;
+          padding-block: 11px;
+        }
+        .subnav {
+          width: 100%;
+          justify-content: flex-start;
+          overflow-x: auto;
+          border-radius: 18px;
+        }
+        .resource-row {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 12px;
+        }
+        .resource-action-group {
+          position: static;
+          justify-self: end;
+        }
+        .resource-heading {
+          padding-right: 0;
+        }
+        .resource-details {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .lower-sections {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .section-heading {
+          padding-inline: 15px;
+        }
+        .drawer {
+          width: min(540px, calc(100vw - 12px));
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <aside class="sidebar" aria-label="Navigation principale">
+      <nav class="nav">
+        <button class="nav-item">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+          >
+            <rect x="3" y="3" width="7" height="7" rx="1.5" />
+            <rect x="14" y="3" width="7" height="7" rx="1.5" />
+            <rect x="3" y="14" width="7" height="7" rx="1.5" />
+            <rect x="14" y="14" width="7" height="7" rx="1.5" /></svg
+          >Vue d’ensemble
+        </button>
+        <div class="nav-label">Traitements</div>
+        <button class="nav-item">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+          >
+            <circle cx="6" cy="6" r="2.5" />
+            <circle cx="18" cy="6" r="2.5" />
+            <circle cx="12" cy="18" r="2.5" />
+            <path d="m8 7.5 2.7 7m5.3-7-2.7 7M8.5 6h7" /></svg
+          >Flows
+        </button>
+        <button class="nav-item">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+          >
+            <path d="M4 7h11M4 12h16M4 17h11" />
+            <circle cx="18" cy="7" r="1.5" /></svg
+          >Activité
+        </button>
+        <button class="nav-item">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+          >
+            <path d="m12 3 2 6 6 3-6 2-2 7-2-7-6-2 6-3z" /></svg
+          >Assistant
+        </button>
+        <div class="nav-label">Construire</div>
+        <button class="nav-item selected" aria-current="page">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+          >
+            <path
+              d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+            /></svg
+          >Bibliothèques
+        </button>
+        <div class="nav-label">Infrastructure</div>
+        <button class="nav-item">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+          >
+            <rect x="3" y="4" width="18" height="6" rx="2" />
+            <rect x="3" y="14" width="18" height="6" rx="2" />
+            <path d="M7 7h.01M7 17h.01M11 7h7m-7 10h7" /></svg
+          >Nœuds
+        </button>
+        <button class="nav-item">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+          >
+            <rect x="5" y="7" width="14" height="14" rx="2" />
+            <path d="M9 7V4m6 3V4M12 11v6m-3-3h6" /></svg
+          >Plugins &amp; Outils
+        </button>
+        <div class="nav-label">Administration</div>
+        <button class="nav-item">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+          >
+            <circle cx="12" cy="12" r="3" />
+            <path
+              d="M12 2v3m0 14v3M4.9 4.9 7 7m10 10 2.1 2.1M2 12h3m14 0h3M4.9 19.1 7 17m10-10 2.1-2.1"
+            /></svg
+          >Paramètres
+        </button>
+        <button class="nav-item">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+          >
+            <path d="M20 7v5h-5M4 17v-5h5" />
+            <path d="M6 9a7 7 0 0 1 12-2l2 2M4 13l2 2a7 7 0 0 0 12-2" /></svg
+          >Mise à jour
+        </button>
+      </nav>
+      <div class="sidebar-spacer"></div>
+      <section class="appearance" aria-label="Apparence">
+        <div class="appearance-title">Apparence</div>
+        <div class="theme-switch">
+          <button>☼ Clair</button><button class="active">☾ Sombre</button>
+        </div>
+        <div style="font-size: 12px; color: var(--muted)">Couleur</div>
+        <div class="palette">
+          <button
+            class="active"
+            style="--dot: #69d1b4"
+            aria-label="Forêt"
+          ></button
+          ><button style="--dot: #45a7e7" aria-label="Océan"></button
+          ><button style="--dot: #a979ef" aria-label="Iris"></button
+          ><button style="--dot: #ed6d9c" aria-label="Rose"></button>
+        </div>
+      </section>
+      <div class="sidebar-footer">
+        <button class="collapse"><span>‹</span><span>Replier</span></button>
+        <button class="profile" aria-label="Profil">A</button>
+        <button
+          class="icon-button"
+          id="paletteToggle"
+          aria-label="Palette de couleur"
+          aria-expanded="false"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+          >
+            <path
+              d="M12 3a9 9 0 1 0 0 18h1.3a2 2 0 0 0 1.4-3.4 1.7 1.7 0 0 1 1.2-2.9H18a3 3 0 0 0 3-3c0-4.8-4-8.7-9-8.7Z"
+            />
+            <circle cx="7.5" cy="11" r="1" />
+            <circle cx="10" cy="7.5" r="1" />
+            <circle cx="14" cy="7.5" r="1" />
+            <circle cx="17" cy="10.5" r="1" />
+          </svg>
+        </button>
+      </div>
+    </aside>
+    <main class="main">
+      <header class="global-header" aria-label="Recherche et état du système">
+        <div class="global-search" role="search">
+          <label class="search-field" for="librarySearch">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="10.8" cy="10.8" r="6.8" />
+              <path d="m16 16 4.5 4.5" />
+            </svg>
+            <input
+              id="librarySearch"
+              type="search"
+              aria-label="Rechercher dans les bibliothèques"
+              placeholder="Rechercher dans les bibliothèques…"
+              autocomplete="off"
+            />
+          </label>
+          <div class="search-actions" aria-label="Actions du catalogue">
+            <button
+              class="button filled"
+              id="addButton"
+              type="button"
+              aria-label="Ajouter une bibliothèque"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              <span class="action-label">Ajouter une bibliothèque</span>
+            </button>
+            <button
+              class="button"
+              id="importButton"
+              type="button"
+              aria-label="Importer des bibliothèques"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+              >
+                <path
+                  d="M12 15V3m0 12-4-4m4 4 4-4M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"
+                />
+              </svg>
+              <span class="action-label">Importer</span>
+            </button>
+            <button
+              class="button"
+              id="exportButton"
+              type="button"
+              aria-label="Exporter les bibliothèques sélectionnées"
+              hidden
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+              >
+                <path
+                  d="M12 3v12m0-12 4 4m-4-4L8 7M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"
+                />
+              </svg>
+              <span class="action-label">Exporter</span>
+            </button>
+          </div>
+        </div>
+        <div class="system-status">
+          <span class="status-chip"><i class="dot"></i>2 / 2 en ligne</span
+          ><span class="status-chip jobs">0 jobs en cours</span>
+        </div>
+      </header>
+      <div class="content">
+        <div class="subnav-row">
+          <nav class="subnav" aria-label="Sections des bibliothèques">
+            <a class="active" href="#bibliotheques" aria-current="page"
+              >Bibliothèques</a
+            >
+            <a href="#scripts" data-inactive-tab>Scripts</a>
+            <a href="#modeles" data-inactive-tab>Modèles de flow</a>
+            <a href="#packs" data-inactive-tab>Packs de composants</a>
+            <a href="#profils" data-inactive-tab>Profils d’encodage</a>
+            <a href="#ressources" data-inactive-tab>Ressources</a>
+          </nav>
+        </div>
+        <div class="sections" id="bibliotheques">
+          <section class="resource-section" aria-labelledby="config-heading">
+            <header class="section-heading">
+              <div class="section-title">
+                <span class="section-number attention">1</span>
+                <div class="section-title-stack">
+                  <h2 id="config-heading">À configurer</h2>
+                  <span
+                    >Actives mais sans flow attribué ou sans accès de
+                    nœud.</span
+                  >
+                </div>
+              </div>
+              <button
+                class="icon-button"
+                aria-label="Réduire la section"
+                data-collapse="config-list"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
+            </header>
+            <div class="section-body" id="config-list">
+              <article
+                class="resource-row"
+                data-search="films truenas à configurer flow à attribuer aucun nœud autorisé surveillance automatique"
+              >
+                <div class="resource-main">
+                  <label class="resource-select">
+                    <input
+                      type="checkbox"
+                      data-resource-select
+                      aria-label="Sélectionner FILMS - TRUENAS"
+                    />
+                  </label>
+                  <span class="resource-icon"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                    >
+                      <path
+                        d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+                      /></svg
+                  ></span>
+                  <div class="resource-info">
+                    <div class="resource-heading">
+                      <h3>
+                        <button
+                          class="resource-title-button"
+                          data-open="library"
+                        >
+                          FILMS - TRUENAS
+                        </button>
+                      </h3>
+                      <span class="badge warn">Configuration requise</span>
+                    </div>
+                    <div class="resource-date">Créée le 24 oct. 2026</div>
+                    <div class="resource-details">
+                      <div class="detail">
+                        <span>Flow attribué</span
+                        ><strong class="attention-text">À attribuer</strong>
+                      </div>
+                      <div class="detail">
+                        <span>Accès des nœuds</span
+                        ><strong class="attention-text"
+                          >Aucun nœud autorisé</strong
+                        >
+                      </div>
+                      <div class="detail">
+                        <span>Surveillance</span><strong>Automatique</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  class="resource-action-group"
+                  role="group"
+                  aria-label="Actions de FILMS - TRUENAS"
+                >
+                  <label class="switch-control">
+                    <input
+                      type="checkbox"
+                      checked
+                      aria-label="Bibliothèque activée"
+                    />
+                    <span>Activée</span>
+                  </label>
+                  <button
+                    class="icon-button more-button"
+                    aria-label="Autres actions pour FILMS - TRUENAS"
+                  >
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <circle cx="12" cy="5" r="1.8" />
+                      <circle cx="12" cy="12" r="1.8" />
+                      <circle cx="12" cy="19" r="1.8" />
+                    </svg>
+                  </button>
+                </div>
+              </article>
+            </div>
+          </section>
+          <div class="lower-sections">
+            <details class="resource-section">
+              <summary>
+                <span class="section-title"
+                  ><span class="section-number">0</span
+                  ><span class="section-title-stack"
+                    ><h2>Prêtes</h2>
+                    <span>Flow et accès configurés</span></span
+                  ></span
+                >
+              </summary>
+              <div class="empty-section">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="m8 12 3 3 5-6" /></svg
+                >Aucune bibliothèque prête pour le moment.
+              </div>
+            </details>
+            <details class="resource-section">
+              <summary>
+                <span class="section-title"
+                  ><span class="section-number">0</span
+                  ><span class="section-title-stack"
+                    ><h2>Désactivées</h2>
+                    <span>Conservées, sans traitement</span></span
+                  ></span
+                >
+              </summary>
+              <div class="empty-section">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M8 12h8" /></svg
+                >Aucune bibliothèque désactivée.
+              </div>
+            </details>
+          </div>
+        </div>
+        <div class="search-empty" id="searchEmpty" role="status">
+          Aucune bibliothèque ne correspond à cette recherche.
+        </div>
+      </div>
+    </main>
+    <div class="drawer-scrim" id="scrim"></div>
+    <aside
+      class="drawer"
+      id="drawer"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Détails de la bibliothèque"
+      aria-hidden="true"
+    >
+      <header class="drawer-head">
+        <div>
+          <h2>FILMS - TRUENAS</h2>
+          <p>Active · Flow à attribuer · Aucun nœud autorisé</p>
+        </div>
+        <button class="icon-button" id="closeDrawer" aria-label="Fermer">
+          ✕
+        </button>
+      </header>
+      <nav class="drawer-tabs" aria-label="Sections de la bibliothèque">
+        <button class="active">Synthèse</button
+        ><button>Fichiers détectés</button><button>Accès des nœuds</button
+        ><button>Historique</button>
+      </nav>
+      <div class="drawer-body">
+        <section class="drawer-section">
+          <h3>Configuration</h3>
+          <div class="drawer-row">
+            <span>État</span><span>Activée · Configuration requise</span>
+          </div>
+          <div class="drawer-row">
+            <span>Flow</span><span>À attribuer</span>
+          </div>
+          <div class="drawer-row">
+            <span>Surveillance</span><span>Automatique</span>
+          </div>
+        </section>
+        <section class="drawer-section">
+          <h3>Traitement</h3>
+          <div class="drawer-row">
+            <span>Nœuds autorisés</span><span>0</span>
+          </div>
+        </section>
+      </div>
+      <footer class="drawer-foot">
+        <button class="button" id="drawerClose">Fermer</button
+        ><button class="button filled" id="assignFlow">
+          Attribuer un flow
+        </button>
+      </footer>
+    </aside>
+    <div class="toast" id="toast" role="status"></div>
+    <script>
+      const body = document.body;
+      const sidebar = document.querySelector(".sidebar");
+      const paletteToggle = document.querySelector("#paletteToggle");
+      const toast = document.querySelector("#toast");
+      let toastTimer;
+      function announce(message) {
+        toast.textContent = message;
+        toast.classList.add("visible");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove("visible"), 1900);
+      }
+      function openDrawer() {
+        body.classList.add("drawer-open");
+        document.querySelector("#drawer").setAttribute("aria-hidden", "false");
+        document.querySelector("#closeDrawer").focus();
+      }
+      function closeDrawer() {
+        body.classList.remove("drawer-open");
+        document.querySelector("#drawer").setAttribute("aria-hidden", "true");
+      }
+      document
+        .querySelectorAll('[data-open="library"]')
+        .forEach((button) => button.addEventListener("click", openDrawer));
+      document
+        .querySelector(".more-button")
+        .addEventListener("click", () =>
+          announce("Actions de la bibliothèque FILMS - TRUENAS"),
+        );
+      document.querySelector("#scrim").addEventListener("click", closeDrawer);
+      document
+        .querySelector("#closeDrawer")
+        .addEventListener("click", closeDrawer);
+      document
+        .querySelector("#drawerClose")
+        .addEventListener("click", closeDrawer);
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") closeDrawer();
+      });
+      document
+        .querySelector("#assignFlow")
+        .addEventListener("click", () =>
+          announce("Ouverture de l’attribution du flow"),
+        );
+      document
+        .querySelector("#addButton")
+        .addEventListener("click", () =>
+          announce("Ouverture du formulaire d’ajout"),
+        );
+      document
+        .querySelector("#importButton")
+        .addEventListener("click", () =>
+          announce("Ouverture de l’import des bibliothèques"),
+        );
+      document.querySelector("#exportButton").addEventListener("click", () => {
+        const selectedCount = document.querySelectorAll(
+          "[data-resource-select]:checked",
+        ).length;
+        announce(
+          `Export de ${selectedCount} bibliothèque${selectedCount > 1 ? "s" : ""}`,
+        );
+      });
+      const searchInput = document.querySelector("#librarySearch");
+      const searchEmpty = document.querySelector("#searchEmpty");
+      const importButton = document.querySelector("#importButton");
+      const exportButton = document.querySelector("#exportButton");
+      const resourceRows = [...document.querySelectorAll(".resource-row")];
+      const lowerSections = document.querySelector(".lower-sections");
+      function updateSelectionActions() {
+        const selectedCount = document.querySelectorAll(
+          "[data-resource-select]:checked",
+        ).length;
+        importButton.hidden = selectedCount > 0;
+        exportButton.hidden = selectedCount === 0;
+        exportButton.querySelector(".action-label").textContent =
+          selectedCount > 0 ? `Exporter (${selectedCount})` : "Exporter";
+      }
+      document
+        .querySelectorAll("[data-resource-select]")
+        .forEach((checkbox) =>
+          checkbox.addEventListener("change", updateSelectionActions),
+        );
+      searchInput.addEventListener("input", () => {
+        const query = searchInput.value
+          .trim()
+          .toLocaleLowerCase("fr")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
+        let visibleCount = 0;
+        resourceRows.forEach((row) => {
+          const searchableText = row.dataset.search
+            .toLocaleLowerCase("fr")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "");
+          const matches = !query || searchableText.includes(query);
+          row.hidden = !matches;
+          if (matches) visibleCount += 1;
+          row.closest(".resource-section").hidden = Boolean(query) && !matches;
+        });
+        lowerSections.hidden = Boolean(query);
+        searchEmpty.classList.toggle(
+          "visible",
+          Boolean(query) && visibleCount === 0,
+        );
+        searchEmpty.textContent = query
+          ? `Aucune bibliothèque ne correspond à « ${searchInput.value.trim()} ».`
+          : "Aucune bibliothèque ne correspond à cette recherche.";
+      });
+      document.querySelectorAll("[data-collapse]").forEach((button) =>
+        button.addEventListener("click", () => {
+          const section = document.getElementById(button.dataset.collapse);
+          section.hidden = !section.hidden;
+          button.setAttribute(
+            "aria-label",
+            section.hidden ? "Développer la section" : "Réduire la section",
+          );
+        }),
+      );
+      document.querySelectorAll("[data-inactive-tab]").forEach((link) =>
+        link.addEventListener("click", (event) => {
+          event.preventDefault();
+          announce(
+            `La section « ${link.textContent.trim()} » utilise la même sous-navigation`,
+          );
+        }),
+      );
+      document
+        .querySelector(".switch-control input")
+        .addEventListener("change", (event) =>
+          announce(
+            event.target.checked
+              ? "Bibliothèque activée"
+              : "Confirmation requise pour désactiver la bibliothèque",
+          ),
+        );
+      paletteToggle.addEventListener("click", () => {
+        const expanded = sidebar.classList.toggle("appearance-open");
+        paletteToggle.setAttribute("aria-expanded", String(expanded));
+      });
+      document.addEventListener("click", (event) => {
+        if (!sidebar.contains(event.target)) {
+          sidebar.classList.remove("appearance-open");
+          paletteToggle.setAttribute("aria-expanded", "false");
+        }
+      });
+    </script>
+  </body>
+</html>

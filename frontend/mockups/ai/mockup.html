@@ -1,0 +1,185 @@
+<div class="prototype">
+  <span><span class="prototype-dot"></span> MAQUETTE INTERACTIVE <span class="prototype-separator">·</span> réponses simulées, aucune requête externe</span>
+  <app-theme-toggle />
+</div>
+<div class="shell">
+  <aside class="rail" aria-label="Navigation principale">
+    <div class="brand"><span class="brand-mark">e</span><span>encoding</span><button matButton="text" class="collapse-button" aria-label="Réduire le menu">‹</button></div>
+    <div class="rail-label">ESPACE DE TRAVAIL</div>
+    <nav class="work-nav" aria-label="Espace de travail">
+      <button matButton="text"><span>◫</span>Vue d’ensemble</button>
+      <button matButton="text"><span>▤</span>Bibliothèques</button>
+      <button matButton="text"><span>⌘</span>Flows</button>
+      <button matButton="text"><span>◷</span>Exécutions</button>
+      <button matButton="text"><span>◉</span>Nœuds</button>
+      <button matButton="tonal" class="rail-active"><span>✳</span>Assistant IA</button>
+    </nav>
+    <div class="rail-bottom">
+      <div class="cluster-avatar">M</div>
+      <div><strong>Cluster Maison</strong><small><i></i> Démonstration</small></div>
+      <button matButton="text" aria-label="Options du cluster">···</button>
+    </div>
+  </aside>
+  <main>
+    <header class="page-heading">
+      <div class="heading-copy"><div class="eyebrow">VOTRE ESPACE DE TRAVAIL</div><h1>Assistant IA</h1></div>
+      <app-category-tabs
+        label="Espace IA"
+        [options]="tabs"
+        [selected]="tab()"
+        (selectedChange)="tab.set($event)"
+      />
+    </header>
+    @if (tab() === 'assistant') {
+      <div class="workspace">
+        <aside class="history" aria-label="Historique des conversations">
+          <button matButton="filled" class="new-chat" (click)="reset()"><span>＋</span> Nouvelle conversation</button>
+          <div class="history-search"><span>⌕</span><input aria-label="Rechercher une conversation" placeholder="Rechercher" /></div>
+          <div class="history-group">
+            <div class="history-label">Aujourd’hui</div>
+            <button matButton="text" class="history-item selected" (click)="openConversation()"><span class="history-icon">✳</span><span>Optimiser mon flow HEVC</span><span class="history-more">···</span></button>
+            <button matButton="text" class="history-item" (click)="openConversation()"><span class="history-icon">✳</span><span>Analyser une exécution</span></button>
+          </div>
+          <div class="history-group older">
+            <div class="history-label">Cette semaine</div>
+            <button matButton="text" class="history-item" (click)="openConversation()"><span class="history-icon">✳</span><span>Configuration des nœuds</span></button>
+            <button matButton="text" class="history-item" (click)="openConversation()"><span class="history-icon">✳</span><span>Créer un flow audio</span></button>
+          </div>
+          <div class="history-footer"><span class="history-avatar">JD</span><span><strong>Jean Dupont</strong><small>Administrateur</small></span><span class="history-more">···</span></div>
+        </aside>
+        <section class="chat" aria-label="Assistant">
+          <div class="chat-toolbar">
+            <div class="assistant-identity"><span class="assistant-mark">✳</span><div><strong>Encoding</strong><small>Assistant IA · Cluster Maison</small></div></div>
+            <button matButton="text" class="more-button" aria-label="Plus d’options">···</button>
+          </div>
+          <div class="messages" aria-live="polite">
+            @if (!started()) {
+              <div class="welcome">
+                <div class="welcome-mark">✳</div>
+                <p class="welcome-kicker">Bonjour Jean</p>
+                <h2>Comment puis-je vous aider ?</h2>
+                <p class="welcome-subtitle">Posez une question sur vos flows, vos médias ou votre cluster.</p>
+                <div class="suggestions" aria-label="Suggestions de départ">
+                  <button matButton="outlined" (click)="ask('Comment optimiser mon flow HEVC sans perdre le HDR ?')"><span>⌁</span><span><strong>Optimiser un flow</strong><small>Préserver le HDR en HEVC</small></span><b>↗</b></button>
+                  <button matButton="outlined" (click)="ask('Pourquoi cette exécution a-t-elle échoué ?')"><span>◷</span><span><strong>Comprendre un échec</strong><small>Analyser une exécution</small></span><b>↗</b></button>
+                  <button matButton="outlined" (click)="ask('Quels nœuds peuvent traiter ma bibliothèque Films ?')"><span>◉</span><span><strong>Explorer le cluster</strong><small>Disponibilité des nœuds</small></span><b>↗</b></button>
+                  <button matButton="outlined" (click)="ask('Aide-moi à créer un flow de normalisation audio.')"><span>⌘</span><span><strong>Créer un flow</strong><small>Normaliser les pistes audio</small></span><b>↗</b></button>
+                </div>
+              </div>
+            } @else {
+              <div class="conversation">
+                @for (message of messages(); track $index) {
+                  <div class="message-row user-row"><div class="bubble user">{{ message }}</div><span class="user-avatar">JD</span></div>
+                  <div class="message-row assistant-row"><span class="assistant-mark response-mark">✳</span><article class="answer">
+                    <p>Pour préserver le HDR tout en optimisant votre flow HEVC, commencez par vérifier le profil de qualité et l’encodeur sélectionné. Le bloc de transcodage doit conserver les métadonnées HDR / Dolby Vision sur le fichier de sortie.</p>
+                    <h3>Vérifications recommandées</h3>
+                    <ol><li>Confirmez que l’encodeur choisi est disponible sur le nœud assigné.</li><li>Comparez les métadonnées vidéo avant et après le transcodage.</li><li>Validez le résultat sur un fichier de test avant de publier le flow.</li></ol>
+                    <div class="answer-source"><span>↗</span><span><strong>Flow HEVC + AAC/AC3 + ASS</strong><small>Version 3 · ressource jointe</small></span><span class="source-tag">Contexte</span></div>
+                    <div class="answer-actions"><button matButton="text" aria-label="Copier la réponse" (click)="notice.show('Réponse copiée (simulation).')">▢</button><button matButton="text" aria-label="Bonne réponse" (click)="notice.show('Merci pour votre retour.')">♡</button><button matButton="text" aria-label="Mauvaise réponse" (click)="notice.show('Merci pour votre retour.')">♧</button><span>Réponse illustrative</span></div>
+                  </article></div>
+                }
+              </div>
+            }
+          </div>
+          <form class="composer" (ngSubmit)="send()">
+            <div class="attached-inline">
+              @for (id of attachedResources(); track id) {
+                <span class="attached-chip"><span>↗</span>{{ resourceLabel(id) }}<button type="button" [attr.aria-label]="'Retirer ' + resourceLabel(id)" (click)="removeResource(id)">×</button></span>
+              }
+            </div>
+            <div class="composer-line">
+              <div class="tool-menu-anchor">
+                <button matButton="text" class="add-button" type="button" aria-label="Ajouter du contenu ou un outil" [attr.aria-expanded]="toolsMenuOpen()" aria-controls="tools-menu" (click)="toolsMenuOpen.set(!toolsMenuOpen()); moreToolsOpen.set(false)">{{ toolsMenuOpen() ? '×' : '+' }}</button>
+                @if (toolsMenuOpen()) {
+                  <div id="tools-menu" class="floating-menu tools-menu" role="menu" aria-label="Importer et utiliser des outils">
+                    @if (!moreToolsOpen()) {
+                      <button matButton="text" role="menuitem" (click)="chooseTool('file')"><span class="menu-icon">↥</span><span>Importer un fichier</span></button>
+                      <button matButton="text" role="menuitem" (click)="chooseTool('resource')"><span class="menu-icon">▧</span><span>Joindre une ressource</span></button>
+                      <button matButton="text" role="menuitem" (click)="moreToolsOpen.set(true)"><span class="menu-icon">···</span><span>Plus d’outils</span><span class="menu-chevron">›</span></button>
+                    } @else {
+                      <button matButton="text" role="menuitem" (click)="moreToolsOpen.set(false)"><span class="menu-icon">‹</span><span>Retour</span></button>
+                      <div class="menu-divider"></div>
+                      <button matButton="text" role="menuitem" (click)="chooseTool('cluster')"><span class="menu-icon">◉</span><span>Analyser le cluster</span></button>
+                      <button matButton="text" role="menuitem" (click)="chooseTool('flow')"><span class="menu-icon">⌘</span><span>Créer un flow</span></button>
+                      <button matButton="text" role="menuitem" (click)="chooseTool('execution')"><span class="menu-icon">◷</span><span>Résumer une exécution</span></button>
+                    }
+                  </div>
+                }
+              </div>
+              <textarea aria-label="Votre message à l’assistant" name="message" rows="1" placeholder="Demander à Encoding" [ngModel]="prompt()" (ngModelChange)="prompt.set($event)"></textarea>
+              <div class="composer-actions">
+                <div class="provider-menu-anchor">
+                  <button matButton="text" class="provider-pill" type="button" aria-label="Choisir un fournisseur IA" [attr.aria-expanded]="providerMenuOpen()" aria-controls="provider-menu" (click)="providerMenuOpen.set(!providerMenuOpen()); modelMenuOpen.set(false)">{{ providerLabel(provider()) }} <span>{{ providerMenuOpen() ? '⌃' : '⌄' }}</span></button>
+                  @if (providerMenuOpen()) {
+                    <div id="provider-menu" class="floating-menu provider-menu" aria-label="Fournisseurs IA actifs">
+                      <div class="menu-section-heading">Fournisseurs actifs</div>
+                      @for (group of modelGroups; track group.provider) {
+                        @if (group.models.some(isEnabledModel)) {
+                          <button matButton="text" type="button" [class.provider-choice-active]="provider() === group.provider" [attr.aria-pressed]="provider() === group.provider" (click)="chooseProvider(group.provider)"><span class="provider-choice-icon">{{ group.provider === 'codex-cli' ? '◈' : group.provider === 'claude-cli' ? '✳' : '◎' }}</span><span class="provider-choice-copy"><strong>{{ group.label }}</strong><small>{{ group.detail }}</small></span><span class="selection-check">{{ provider() === group.provider ? '✓' : '' }}</span></button>
+                        }
+                      }
+                    </div>
+                  }
+                </div>
+                <div class="model-menu-anchor">
+                  <button matButton="text" class="model-pill" type="button" aria-label="Choisir un modèle et régler l’effort" [attr.aria-expanded]="modelMenuOpen()" aria-controls="model-menu" (click)="modelMenuOpen.set(!modelMenuOpen()); providerMenuOpen.set(false)">{{ selectedModel()?.label ?? 'Choisir un modèle' }} <span>{{ modelMenuOpen() ? '⌃' : '⌄' }}</span></button>
+                  @if (modelMenuOpen()) {
+                    <div id="model-menu" class="floating-menu model-menu" aria-label="Modèles et effort de réflexion">
+                      <div class="menu-section-heading">Modèles disponibles pour {{ providerLabel(provider()) }}</div>
+                      <div class="provider-models" role="group" aria-label="Modèles disponibles pour le fournisseur sélectionné">
+                        @for (option of providerModels(); track option.id) {
+                          <button matButton="text" type="button" [class.model-choice-active]="model() === option.id" [attr.aria-pressed]="model() === option.id" (click)="chooseModel(option.id)"><span class="selection-check">{{ model() === option.id ? '✓' : '' }}</span><span class="menu-label"><strong>{{ option.label }}</strong><small>{{ option.reasoningEfforts.length ? option.reasoningEfforts.length + ' niveaux de réflexion' : option.reasoningKnown ? 'Sans effort de réflexion' : 'Niveaux non communiqués' }}</small></span></button>
+                        }
+                        @if (!providerModels().length) { <p class="menu-empty">Aucun modèle actif pour ce fournisseur.</p> }
+                      </div>
+                      <div class="menu-divider"></div>
+                      <div class="effort-control">
+                        <div class="effort-heading"><span><strong>Effort de réflexion</strong><small>{{ reasoningEfforts().length ? 'Réglages disponibles pour ' + (selectedModel()?.label ?? 'ce modèle') : selectedModel()?.reasoningKnown ? 'Non disponible pour ce modèle' : 'Efforts non communiqués par le fournisseur' }}</small></span><span class="effort-value">{{ reasoningEfforts().length ? effortLabel(reasoning()) : '—' }}</span></div>
+                        @if (reasoningEfforts().length) {
+                          <input aria-label="Effort de réflexion" type="range" min="0" [max]="reasoningEfforts().length - 1" step="1" [value]="reasoningIndex()" (input)="setReasoningIndex(+$any($event.target).value)" />
+                          <div class="effort-ticks"><span>{{ effortLabel(reasoningEfforts()[0]) }}</span><span>{{ effortLabel(reasoningEfforts()[reasoningEfforts().length - 1]) }}</span></div>
+                        } @else {
+                          <input aria-label="Effort de réflexion indisponible" type="range" min="0" max="0" value="0" disabled />
+                        }
+                        <small class="backend-note">Niveaux proposés par le catalogue du fournisseur</small>
+                      </div>
+                    </div>
+                  }
+                </div>
+                <button matButton="text" type="button" class="mic-button" aria-label="Saisie vocale simulée" (click)="notice.show('La saisie vocale sera disponible dans une prochaine version.')">♩</button>
+                <button matButton="filled" type="submit" class="send-button" aria-label="Envoyer" [disabled]="!prompt().trim() || !model()">↑</button>
+              </div>
+            </div>
+            @if (resourcePickerOpen()) {
+              <section id="resource-picker" class="resource-picker" aria-label="Joindre une ressource">
+                <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Ressource</mat-label><mat-select name="resource" [ngModel]="selectedResource()" (ngModelChange)="selectedResource.set($event)">
+                  @for (group of resourceGroups; track group.label) { <mat-optgroup [label]="group.label">@for (resource of group.resources; track resource.id) { <mat-option [value]="resource.id" [disabled]="attachedResources().includes(resource.id)">{{ resource.label }}</mat-option> }</mat-optgroup> }
+                </mat-select></mat-form-field>
+                <button matButton="tonal" type="button" [disabled]="!selectedResource()" (click)="attachResource()">Joindre</button>
+              </section>
+            }
+            <div class="composer-foot"><span>Les réponses de l’IA peuvent contenir des erreurs.</span><span>Contexte : cluster Maison</span></div>
+          </form>
+          <p class="disclaimer">Les réponses de l’IA peuvent contenir des erreurs. Vérifiez les changements avant de les appliquer.</p>
+        </section>
+      </div>
+    }
+    @if (tab() === 'providers') {
+      <section class="secondary">
+        <div class="eyebrow">CONNEXIONS DU CLUSTER</div><h2>Vos fournisseurs IA</h2><p>Gérez les modèles disponibles pour les conversations de votre cluster.</p>
+        <div class="provider-grid">
+          @for (provider of providers; track provider) {<article><div class="provider-head"><span class="provider-symbol">{{ provider === 'Codex CLI' ? '◈' : '✳' }}</span><app-status-badge label="Exemple · connecté" tone="success" /></div><h2>{{ provider }}</h2><p>Nœud Maison · Configuration illustrative</p><button matButton="tonal" (click)="notice.show('Maquette : la configuration utilisera le parcours existant des paramètres IA.')">Configurer <span>↗</span></button></article>}
+        </div>
+        <h2>Modèles disponibles</h2><div class="model-settings">
+          @for (group of modelGroups; track group.provider) {<section><div><h3>{{ group.label }}</h3><p>Modèles proposés par cette connexion</p></div>@for (option of group.models; track option.id) {<div class="model-row"><span class="model-dot"></span><span>{{ option.label }}</span><mat-slide-toggle [checked]="!disabledModels().includes(option.id)" (change)="toggleModel(option.id, $event.checked)" [aria-label]="option.label"></mat-slide-toggle></div>}</section>}
+        </div>
+        <p class="muted">Ollama · Non configuré &nbsp;·&nbsp; Quotas indisponibles dans cette démonstration.</p>
+      </section>
+    }
+    @if (tab() === 'activity') {
+      <section class="secondary"><div class="eyebrow">SUIVI DES DEMANDES</div><h2>Activité récente</h2><p>Retrouvez ici les conversations et les demandes envoyées à vos fournisseurs.</p>
+        <article class="activity"><span class="activity-mark">✳</span><div class="activity-copy"><strong>Explication du flow HEVC</strong><p>Codex CLI · Aujourd’hui à 10:42</p></div><app-status-badge label="Terminée · exemple" tone="success" /><button matButton="tonal" (click)="tab.set('assistant'); openConversation()">Ouvrir la conversation <span>↗</span></button></article>
+      </section>
+    }
+  </main>
+</div>

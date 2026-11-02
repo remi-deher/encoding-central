@@ -1,0 +1,172 @@
+<main class="preview-canvas">
+  <section class="widget" aria-label="Assistant IA" (keydown.escape)="closeSettings()">
+    <header class="widget-header">
+      <span class="assistant-mark" aria-hidden="true">✦</span>
+      <h1>Assistant</h1>
+      <button
+        mat-icon-button
+        class="more-menu-button"
+        type="button"
+        [matMenuTriggerFor]="resources"
+        aria-label="Joindre une ressource"
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="currentColor">
+          <circle cx="5" cy="12" r="1.7" />
+          <circle cx="12" cy="12" r="1.7" />
+          <circle cx="19" cy="12" r="1.7" />
+        </svg>
+      </button>
+    </header>
+
+    <div #thread class="thread" role="log" aria-label="Messages" aria-live="polite" tabindex="0">
+      @for (message of messages(); track $index) {
+        <article class="message" [class.user]="message.role === 'Vous'">
+          <span class="message-author">{{ message.role }}</span>
+          <p>{{ message.text }}</p>
+        </article>
+      }
+    </div>
+
+    @if (resource() || fileName()) {
+      <div class="attachment-list" aria-label="Éléments joints">
+        @if (resource()) {
+          <div class="resource-chip">
+            <span>⌁ {{ resource() }}</span>
+            <button type="button" aria-label="Retirer la ressource" (click)="resource.set(null)">×</button>
+          </div>
+        }
+        @if (fileName()) {
+          <div class="resource-chip file-chip">
+            <span>📎 {{ fileName() }}</span>
+            <button type="button" aria-label="Retirer le fichier" (click)="fileName.set(null)">×</button>
+          </div>
+        }
+      </div>
+    }
+
+    <form class="composer" (ngSubmit)="send()">
+      <label class="sr-only" for="message-input">Votre message</label>
+      <textarea
+        id="message-input"
+        #messageInput
+        name="message"
+        rows="2"
+        placeholder="Message à l’assistant"
+        [ngModel]="text()"
+        (ngModelChange)="text.set($event)"
+        (keydown)="keydown($event)"
+      ></textarea>
+      <input
+        #fileInput
+        class="sr-only"
+        type="file"
+        aria-label="Choisir un fichier à joindre"
+        (change)="onFileSelected($event)"
+      />
+      <div class="composer-actions">
+        <div class="composer-action-group">
+          <div #modelControl class="model-control">
+            <button
+              class="model-button"
+              type="button"
+              aria-controls="assistant-settings"
+              [attr.aria-expanded]="settingsOpen()"
+              [attr.aria-label]="'Modèle : ' + selectedModelOption().label + ', ' + effortLabel(selectedEffort())"
+              (click)="settingsOpen.update((open) => !open)"
+            >
+              <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                <path d="M4 7h9m4 0h3M4 17h3m4 0h9" />
+                <circle cx="15" cy="7" r="2" />
+                <circle cx="9" cy="17" r="2" />
+              </svg>
+              <span>Modèle</span>
+              <span class="model-current">{{ selectedModelOption().label }}</span>
+              <svg class="model-chevron" [class.is-rotated]="settingsOpen()" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+
+            <section
+              id="assistant-settings"
+              class="settings-popover"
+              [class.is-open]="settingsOpen()"
+              role="region"
+              aria-label="Réglages du modèle et de l’effort"
+              [attr.aria-hidden]="!settingsOpen()"
+              [attr.inert]="!settingsOpen() ? '' : null"
+            >
+              <div class="popover-heading">
+                <span class="popover-symbol" aria-hidden="true">ϟ</span>
+                <div class="popover-model">
+                  <strong>{{ effortLabel(selectedEffort()) }}</strong>
+                  <span>{{ selectedModelOption().label }}</span>
+                </div>
+                <button class="reset-effort" type="button" aria-label="Réinitialiser l’effort" (click)="resetEffort()">
+                  <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 12a9 9 0 1 0 2.6-6.4L3 8m0-5v5h5" />
+                  </svg>
+                </button>
+              </div>
+
+              <div class="select-row">
+                <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                  <mat-label>IA</mat-label>
+                  <mat-select [ngModel]="provider()" (ngModelChange)="selectProvider($event)">
+                    @for (option of providers; track option.id) {
+                      <mat-option [value]="option.id">{{ option.label }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+                <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                  <mat-label>Modèle</mat-label>
+                  <mat-select [ngModel]="model()" (ngModelChange)="selectModel($event)">
+                    @for (option of filteredModels(); track option.model) {
+                      <mat-option [value]="option.model">{{ option.label }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+              </div>
+
+              <div class="effort-control">
+                <div class="effort-heading">
+                  <label for="effort-range">Effort de raisonnement</label>
+                  <output for="effort-range">{{ effortLabel(selectedEffort()) }}</output>
+                </div>
+                <input
+                  id="effort-range"
+                  type="range"
+                  min="0"
+                  [max]="efforts().length - 1"
+                  step="1"
+                  [value]="effortIndex()"
+                  [attr.aria-valuetext]="effortLabel(selectedEffort())"
+                  (input)="setEffortIndex($any($event.target).value)"
+                />
+                <div class="effort-labels" aria-hidden="true">
+                  <span>{{ effortLabel(efforts()[0]) }}</span>
+                  <span>{{ effortLabel(efforts()[efforts().length - 1]) }}</span>
+                </div>
+              </div>
+            </section>
+          </div>
+          <button class="file-button" type="button" aria-label="Ajouter un fichier" title="Ajouter un fichier" (click)="fileInput.click()">
+            <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+        </div>
+        <button class="send-button" type="submit" [disabled]="!text().trim()" aria-label="Envoyer le message">
+          <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 19V5m-6 6 6-6 6 6" />
+          </svg>
+        </button>
+      </div>
+    </form>
+
+    <mat-menu #resources="matMenu">
+      <button mat-menu-item (click)="resource.set('Flow · HEVC + AAC/AC3 + ASS')">Joindre un Flow</button>
+      <button mat-menu-item (click)="resource.set('Nœud · Salon')">Joindre un nœud</button>
+      <button mat-menu-item (click)="resource.set('Exécution · 4821')">Joindre une exécution</button>
+    </mat-menu>
+  </section>
+</main>

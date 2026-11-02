@@ -1,0 +1,428 @@
+<app-page-header title="Activité" [visuallyHidden]="true" />
+<app-subnav-template>
+  <span subnav-info class="activity-count-pill">{{ countText() }}</span>
+  <app-subnav
+    #activityNavigation
+    presentation="capsule"
+    panelId="activity-status-panel"
+    label="État des fichiers"
+    [options]="statusOptions()"
+    [selected]="status()"
+    (selectedChange)="setStatus($event)"
+  />
+</app-subnav-template>
+
+<div
+  id="activity-status-panel"
+  role="tabpanel"
+  [attr.aria-labelledby]="activityNavigation.tabId(status())"
+>
+  <section class="activity-panel" [attr.aria-label]="currentStatusLabel()">
+    @if (filtersOpen()) {
+      <div class="activity-filter-panel">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Bibliothèque</mat-label>
+          <mat-select [value]="libraryFilter() ?? ''" (selectionChange)="setLibrary($event.value)">
+            <mat-option value="">Toutes les bibliothèques</mat-option>
+            @for (library of libraries(); track library.id) {
+              <mat-option [value]="library.id">{{ library.name }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Flow</mat-label>
+          <mat-select [value]="flowFilter() ?? ''" (selectionChange)="setFlow($event.value)">
+            <mat-option value="">Tous les flows</mat-option>
+            @for (flow of flowOptions(); track flow) {
+              <mat-option [value]="flow">{{ flow }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Nœud</mat-label>
+          <mat-select [value]="nodeFilter() ?? ''" (selectionChange)="setNode($event.value)">
+            <mat-option value="">Tous les nœuds</mat-option>
+            @for (node of nodes(); track node.id) {
+              <mat-option [value]="node.id">{{ node.name }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        @if (libraryFilter() || flowFilter() || nodeFilter()) {
+          <button matButton="text" type="button" (click)="clearFilters()">
+            Effacer les filtres
+          </button>
+        }
+      </div>
+    }
+
+    @if (feedback()) {
+      <p class="activity-feedback" role="status">{{ feedback() }}</p>
+    }
+    @if (pageState().status === 'error') {
+      <p class="activity-feedback" role="status">
+        L’activité n’a pas pu être actualisée. Les données affichées peuvent être anciennes.
+      </p>
+    }
+
+    @if (selectedCount() > 0) {
+      <div
+        class="activity-selection"
+        role="toolbar"
+        aria-label="Actions groupées sur les fichiers sélectionnés"
+      >
+        <span class="selection-count" aria-live="polite">
+          {{ selectedCount() }} fichier{{ selectedCount() > 1 ? 's' : '' }} sélectionné{{ selectedCount() > 1 ? 's' : '' }}
+        </span>
+        <div class="selection-actions">
+          @if (selectedRetriableFiles().length > 0) {
+            <button
+              matButton="filled"
+              type="button"
+              class="bulk-action-btn"
+              [disabled]="actionBusy()"
+              (click)="runBulkRetry()"
+            >
+              <app-icon name="refresh" />
+              <span>Relancer la tâche ({{ selectedRetriableFiles().length }})</span>
+            </button>
+          }
+          @if (selectedCancelableFiles().length > 0) {
+            <button
+              matButton="outlined"
+              type="button"
+              class="bulk-action-btn bulk-action-btn_danger"
+              [disabled]="actionBusy()"
+              (click)="runBulkCancel()"
+            >
+              <app-icon name="close" />
+              <span>Annuler la tâche ({{ selectedCancelableFiles().length }})</span>
+            </button>
+          }
+          <button
+            matButton="text"
+            type="button"
+            class="bulk-action-btn"
+            (click)="clearSelection()"
+          >
+            Tout désélectionner
+          </button>
+        </div>
+      </div>
+    }
+
+    @if (!files().length) {
+      <div class="empty-state">
+        <h2>{{ pageState().status === 'error' ? 'Données indisponibles' : 'Aucun fichier' }}</h2>
+        <p>
+          @if (pageState().status === 'error') {
+            La liste sera actualisée dès que le serveur répond.
+          } @else {
+            Aucun fichier ne correspond à cet état et à ces filtres.
+          }
+        </p>
+      </div>
+    } @else {
+      <div class="activity-list-header">
+        <mat-checkbox
+          class="item-select-all"
+          [checked]="isAllSelected()"
+          [indeterminate]="isPartiallySelected()"
+          (change)="toggleSelectAll($event.checked)"
+          aria-label="Sélectionner ou désélectionner tous les fichiers de cette page"
+        >
+          <span class="select-all-label">Tout sélectionner ({{ files().length }})</span>
+        </mat-checkbox>
+      </div>
+
+      <ul class="item-stack">
+        @for (file of files(); track file.id) {
+          <li
+            class="item-row"
+            [class.is-selected]="selectedFile()?.id === file.id"
+            [class.is-checked]="selectedIds().has(file.id)"
+          >
+            <mat-checkbox
+              class="item-select"
+              [checked]="selectedIds().has(file.id)"
+              [aria-label]="'Sélectionner ' + fileName(file.relativePath)"
+              (click)="$event.stopPropagation()"
+              (change)="toggleFileSelection(file, $event.checked)"
+            />
+            <button type="button" class="item-main" (click)="open(file)">
+              <span
+                class="item-icon"
+                [class.is-disabled]="file.status === 'disabled'"
+                aria-hidden="true"
+              >
+                <app-icon name="play" />
+              </span>
+              <span class="item-text">
+                <span class="item-title">{{ fileName(file.relativePath) }}</span>
+                <span class="item-subtitle">
+                  {{ file.library }} ·
+                  {{ file.flow ? file.flow + ' · v' + file.flowVersion : 'Aucun flow attribué' }}
+                  @if (file.node) {
+                    · {{ file.node }}
+                  }
+                </span>
+                @if (activityExecutionLabel(file); as exactState) {
+                  <span class="item-execution-state">Exécution : {{ exactState }}</span>
+                }
+                @if (file.detail) {
+                  <span class="item-detail">{{ file.detail }}</span>
+                }
+                @if (file.quarantineReason) {
+                  <span class="item-detail item-detail_warning">
+                    En quarantaine en attendant une décision sûre du cluster. Un administrateur peut
+                    attester l’arrêt complet du propriétaire et forcer une reprise depuis la source.
+                  </span>
+                }
+                @if (file.status === 'active' && file.progress !== null) {
+                  <mat-progress-bar
+                    mode="determinate"
+                    [value]="file.progress"
+                    [attr.aria-label]="'Progression de ' + fileName(file.relativePath)"
+                  />
+                }
+              </span>
+              <span class="item-meta">
+                <app-status-badge
+                  [label]="statusLabel(file.status)"
+                  [tone]="statusTone(file.status)"
+                />
+                @if (activityExecutionLabel(file); as exactState) {
+                  <app-status-badge [label]="exactState" [tone]="activityExecutionTone(file)" />
+                }
+                <span class="item-time">
+                  @if (file.status === 'active' && file.progress !== null) {
+                    {{ file.progress }} % ·
+                  }
+                  {{ rowTime(file) }}
+                </span>
+              </span>
+            </button>
+          </li>
+        }
+      </ul>
+      @if (totalPages() > 1) {
+        <nav class="activity-pagination" aria-label="Pagination des fichiers">
+          <button
+            matButton="outlined"
+            type="button"
+            class="pagination-btn"
+            [disabled]="pageIndex() === 0"
+            (click)="prevPage()"
+            aria-label="Page précédente"
+          >
+            Précédent
+          </button>
+          <span class="pagination-info" aria-live="polite">{{ pageRangeText() }}</span>
+          <button
+            matButton="outlined"
+            type="button"
+            class="pagination-btn"
+            [disabled]="pageIndex() + 1 >= totalPages()"
+            (click)="nextPage()"
+            aria-label="Page suivante"
+          >
+            Suivant
+          </button>
+        </nav>
+      }
+    }
+  </section>
+
+  <app-detail-drawer
+    [opened]="selectedFile() !== null"
+    [modal]="true"
+    size="wide"
+    bodyLayout="fill"
+    [title]="drawerTitle()"
+    [description]="drawerDescription()"
+    [content]="drawerContent()"
+    [headerActions]="drawerHeaderActions()"
+    [footerActions]="drawerFooter()"
+    (closed)="close()"
+  />
+</div>
+
+<ng-template #detailHeaderActions>
+  @if (selectedExecution(); as execution) {
+    <button
+      matButton="text"
+      type="button"
+      class="header-action-btn"
+      (click)="downloadExecutionLog()"
+      title="Télécharger le journal de l’exécution (.log)"
+    >
+      <app-icon name="download" />
+      <span>Télécharger le journal</span>
+    </button>
+    @if (canResume()) {
+      <button
+        matButton="text"
+        type="button"
+        class="header-action-btn"
+        [disabled]="actionBusy()"
+        (click)="resumeSelected()"
+        title="Remettre en file depuis la source"
+      >
+        <app-icon name="refresh" />
+        <span>Remettre en file</span>
+      </button>
+    }
+    @if (canForceSourceRetry()) {
+      <button
+        matButton="text"
+        type="button"
+        class="header-action-btn"
+        [disabled]="actionBusy()"
+        (click)="forceSourceRetrySelected()"
+        title="Neutraliser le propriétaire arrêté et relancer depuis la source"
+      >
+        <app-icon name="refresh" />
+        <span>Forcer depuis la source</span>
+      </button>
+    }
+  }
+</ng-template>
+
+<ng-template #detailContent>
+  @if (selectedFile(); as file) {
+    <mat-tab-group
+      class="detail-tabs activity-detail-tabs"
+      aria-label="Options avancées du fichier"
+      [selectedIndex]="selectedDetailTab()"
+      (selectedIndexChange)="selectedDetailTab.set($event)"
+    >
+      <mat-tab label="Information">
+        <div class="detail-tab-pane">
+          @if (file.quarantineReason) {
+            <p class="activity-feedback" role="alert">
+              Le cluster vérifie qu’aucun autre nœud ne traite ce média. Un administrateur peut
+              attester l’arrêt complet du propriétaire et de ses workers pour libérer cette
+              tentative source après 135 secondes. Une publication confirmée ou incertaine bloque
+              cette action.
+              @if (file.conflictingExecutionId) {
+                Référence de l’exécution en conflit : {{ file.conflictingExecutionId }}.
+              }
+              Détail : {{ file.quarantineReason }}
+            </p>
+          }
+          <app-activity-execution-summary
+            [execution]="selectedExecution()"
+            [file]="file"
+            [steps]="pipelineState().steps"
+            [loading]="executionLoading()"
+          />
+        </div>
+      </mat-tab>
+      <mat-tab label="Éléments de Flow exécutés">
+        <div class="detail-tab-pane detail-tab-pane-flow">
+          <app-activity-flow-trace
+            [executionId]="file.executionId"
+            [steps]="pipelineState().steps"
+            [executionState]="selectedExecution()?.state ?? file.executionState"
+          />
+        </div>
+      </mat-tab>
+      <mat-tab label="Métadonnées">
+        <div class="detail-tab-pane">
+          <app-activity-metadata-viewer
+            [beforeMetadata]="selectedExecution()?.beforeMetadata"
+            [afterMetadata]="selectedExecution()?.afterMetadata"
+          />
+        </div>
+      </mat-tab>
+      <mat-tab label="Pipeline">
+        <div class="detail-tab-pane">
+          @if (selectedExecution(); as execution) {
+            <app-execution-pipeline-logs
+              [executionId]="execution.id"
+              [phase]="execution.currentPhase ?? null"
+              [steps]="pipelineState().steps"
+              [feedback]="pipelineState().message"
+            />
+          } @else if (executionLoading()) {
+            <p class="detail-empty" role="status">Chargement des données du pipeline…</p>
+          } @else {
+            <p class="detail-empty">Aucune exécution enregistrée pour ce fichier.</p>
+          }
+        </div>
+      </mat-tab>
+      <mat-tab label="Événements">
+        <div class="detail-tab-pane">
+          <h3>Historique de l’exécution</h3>
+          @if (eventState().message) {
+            <p role="status">{{ eventState().message }}</p>
+          }
+          <app-data-table
+            [columns]="eventColumns"
+            [rows]="eventState().rows"
+            emptyMessage="Aucun événement enregistré."
+          />
+        </div>
+      </mat-tab>
+      <mat-tab label="Résultats">
+        <div class="detail-tab-pane">
+          @if (artifactsState().message) {
+            <p role="status">{{ artifactsState().message }}</p>
+          }
+          @if (artifactsState().rows.length) {
+            <h3>Fichiers produits</h3>
+            <app-data-table
+              [columns]="artifactColumns"
+              [rows]="artifactsState().rows"
+              [rowActions]="artifactActions"
+              (rowAction)="downloadArtifact($event.row)"
+              emptyMessage="Aucun fichier produit."
+            />
+          }
+          @if (videoEncodingRows().length) {
+            <h3>Configuration vidéo retenue</h3>
+            <app-data-table
+              [columns]="videoEncodingColumns"
+              [rows]="videoEncodingRows()"
+              emptyMessage="Aucun encodeur vidéo résolu pour cette exécution."
+            />
+          }
+          @if (
+            !artifactsState().rows.length &&
+            !artifactsState().message &&
+            !videoEncodingRows().length
+          ) {
+            <p class="detail-empty">Aucun fichier ou réglage vidéo enregistré.</p>
+          }
+        </div>
+      </mat-tab>
+    </mat-tab-group>
+  }
+</ng-template>
+
+<ng-template #detailFooter>
+  @if (canRetry()) {
+    <button matButton="filled" type="button" [disabled]="actionBusy()" (click)="retrySelected()">
+      Créer une nouvelle tentative
+    </button>
+  }
+  @if (canResume()) {
+    <button matButton="filled" type="button" [disabled]="actionBusy()" (click)="resumeSelected()">
+      Remettre en file depuis la source
+    </button>
+  }
+  @if (canForceSourceRetry()) {
+    <button
+      matButton="filled"
+      type="button"
+      [disabled]="actionBusy()"
+      (click)="forceSourceRetrySelected()"
+    >
+      Neutraliser et remettre en file depuis la source
+    </button>
+  }
+  @if (canCancel()) {
+    <button matButton="outlined" type="button" [disabled]="actionBusy()" (click)="cancelSelected()">
+      Annuler l’exécution
+    </button>
+  }
+</ng-template>

@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Maquette — Shell des tiroirs et modales</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --page: #111a17;
+        --sidebar: #17211d;
+        --surface: #1c2823;
+        --surface-raised: #22312b;
+        --surface-soft: #202b27;
+        --text: #e9f0ec;
+        --secondary: #b6c4bd;
+        --muted: #8d9c94;
+        --line: #34443c;
+        --accent: #a0e2cb;
+        --accent-ink: #17372c;
+        --danger: #ffb4ab;
+        --danger-soft: #482a28;
+        --success: #80d5a9;
+        --shadow: 0 24px 70px #0008;
+        font-family: Inter, Roboto, "Segoe UI", sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; background: var(--page); color: var(--text); }
+      button { color: inherit; font: inherit; cursor: pointer; }
+      .app { min-height: 100vh; display: grid; grid-template: 68px 1fr / 240px 1fr; }
+      .topbar {
+        grid-column: 1 / -1; display: flex; align-items: center; gap: 18px;
+        padding: 0 28px; border-bottom: 1px solid var(--line); background: var(--surface);
+      }
+      .brand { display: flex; align-items: center; gap: 10px; font-weight: 750; letter-spacing: .01em; }
+      .brand-mark { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; background: var(--accent); color: var(--accent-ink); }
+      .breadcrumb { padding-left: 18px; border-left: 1px solid var(--line); color: var(--secondary); font-size: 13px; }
+      .top-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; color: var(--secondary); font-size: 12px; }
+      .status-dot { width: 8px; height: 8px; display: inline-block; border-radius: 99px; background: var(--success); }
+      .sidebar { padding: 24px 14px; border-right: 1px solid var(--line); background: var(--sidebar); }
+      .nav-label { margin: 20px 10px 8px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+      .nav-item { padding: 11px 12px; display: flex; gap: 11px; border-radius: 9px; color: var(--secondary); font-size: 13px; }
+      .nav-item.active { background: #294238; color: var(--accent); font-weight: 650; }
+      .main { width: min(100%, 1240px); margin: 0 auto; padding: 36px clamp(20px, 4vw, 54px) 60px; }
+      .eyebrow { margin: 0 0 8px; color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+      h1 { margin: 0; font-size: clamp(25px, 3vw, 34px); letter-spacing: -.035em; }
+      .intro { max-width: 690px; margin: 9px 0 0; color: var(--secondary); line-height: 1.55; }
+      .toolbar { margin: 25px 0 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+      .toolbar h2 { margin: 0 auto 0 0; font-size: 17px; }
+      .button { min-height: 38px; padding: 0 14px; border: 1px solid var(--line); border-radius: 9px; background: transparent; color: var(--text); font-size: 12px; font-weight: 650; }
+      .button:hover { background: var(--surface-raised); }
+      .button.primary { border-color: transparent; background: var(--accent); color: var(--accent-ink); }
+      .button.danger { border-color: transparent; background: #ef8f86; color: #351614; }
+      .button.quiet { color: var(--secondary); }
+      .member-list { display: grid; gap: 10px; }
+      .member { padding: 18px 20px; display: grid; grid-template-columns: minmax(190px, 1.2fr) repeat(3, minmax(105px, .65fr)) auto; align-items: center; gap: 18px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); }
+      .member-name { display: flex; align-items: center; gap: 9px; font-weight: 680; }
+      .member-sub { margin: 5px 0 0 17px; color: var(--muted); font-size: 11px; }
+      .metric-label { color: var(--muted); font-size: 10px; }
+      .metric-value { margin-top: 5px; color: var(--text); font-size: 13px; font-weight: 620; }
+      .metric-value small { color: var(--muted); font-size: 10px; font-weight: 450; }
+      .chip { width: fit-content; padding: 5px 9px; border: 1px solid #39584a; border-radius: 99px; background: #233a30; color: var(--accent); font-size: 10px; font-weight: 650; }
+      .member-action { border: 0; background: transparent; color: var(--accent); font-size: 12px; font-weight: 650; }
+      .concept-note { margin-top: 24px; padding: 15px 17px; border-left: 2px solid var(--accent); border-radius: 0 10px 10px 0; background: #1c2923; color: var(--secondary); font-size: 12px; line-height: 1.6; }
+      .concept-note strong { color: var(--text); }
+
+      /* Shell cible du mat-drawer: en-tête et pied fixes, contenu seul défilant. */
+      .scrim { position: fixed; inset: 68px 0 0; z-index: 10; background: #030907a8; backdrop-filter: blur(2px); }
+      .drawer {
+        position: fixed; z-index: 11; inset: 68px 0 0 auto; width: min(600px, 58vw);
+        display: flex; flex-direction: column; border-left: 1px solid var(--line);
+        background: var(--surface); box-shadow: var(--shadow); animation: slide-in .22s ease-out;
+      }
+      .drawer-header { min-height: 88px; padding: 18px 22px; display: flex; align-items: flex-start; gap: 18px; border-bottom: 1px solid var(--line); }
+      .drawer-title { min-width: 0; flex: 1; }
+      .drawer-title h2 { margin: 0; font-size: 19px; letter-spacing: -.02em; }
+      .drawer-title p { margin: 6px 0 0; color: var(--secondary); font-size: 12px; line-height: 1.45; }
+      .drawer-close { width: 36px; height: 36px; flex: 0 0 36px; border: 1px solid var(--line); border-radius: 9px; background: transparent; color: var(--secondary); font-size: 21px; line-height: 1; }
+      .drawer-body { min-height: 0; padding: 22px; flex: 1; overflow: auto; }
+      .form-section { margin-bottom: 22px; }
+      .form-section h3 { margin: 0 0 12px; font-size: 13px; }
+      .field { margin-top: 12px; }
+      .field label { display: block; margin-bottom: 7px; color: var(--secondary); font-size: 11px; font-weight: 600; }
+      .input { min-height: 42px; padding: 11px 12px; border: 1px solid #43534a; border-radius: 9px; background: #17221e; color: var(--text); font-size: 12px; }
+      .input.select { display: flex; justify-content: space-between; }
+      .field-help { margin: 6px 0 0; color: var(--muted); font-size: 10px; }
+      .access-summary { margin-top: 18px; padding: 13px 14px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); font-size: 11px; }
+      .access-summary span:last-child { color: var(--accent); font-weight: 650; }
+      .drawer-footer { min-height: 70px; padding: 13px 22px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); background: var(--surface); }
+      .footer-hint { color: var(--muted); font-size: 10px; }
+      .footer-actions { display: flex; gap: 8px; }
+
+      /* Confirmation courte: overlay CDK / MatDialog, largeur contrôlée. */
+      .dialog-scrim { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 24px; background: #030907b8; backdrop-filter: blur(3px); }
+      .dialog { width: min(460px, 100%); overflow: hidden; border: 1px solid #46554c; border-radius: 16px; background: var(--surface); box-shadow: 0 28px 100px #000a; animation: pop-in .16s ease-out; }
+      .dialog-header { padding: 22px 23px 0; }
+      .dialog-icon { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid #69433c; border-radius: 11px; background: var(--danger-soft); color: var(--danger); font-size: 19px; }
+      .dialog-header h2 { margin: 15px 0 0; font-size: 19px; letter-spacing: -.02em; }
+      .dialog-body { padding: 12px 23px 22px; color: var(--secondary); font-size: 12px; line-height: 1.6; }
+      .dialog-body p { margin: 0; }
+      .dialog-info { margin-top: 14px; padding: 12px 13px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); color: var(--text); }
+      .dialog-info strong { display: block; margin-bottom: 4px; font-size: 11px; }
+      .dialog-footer { padding: 13px 18px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--line); background: #19241f; }
+      .hidden { display: none !important; }
+      @keyframes slide-in { from { transform: translateX(18px); opacity: .6; } to { transform: translateX(0); opacity: 1; } }
+      @keyframes pop-in { from { transform: translateY(5px) scale(.99); opacity: .6; } to { transform: none; opacity: 1; } }
+
+      @media (max-width: 900px) {
+        .app { grid-template-columns: 190px 1fr; }
+        .member { grid-template-columns: minmax(160px, 1fr) repeat(2, minmax(100px, .7fr)) auto; }
+        .member .metric:nth-of-type(4) { display: none; }
+        .drawer { width: min(560px, 72vw); }
+      }
+      @media (max-width: 650px) {
+        .app { display: block; }
+        .topbar { height: 60px; padding-inline: 14px; }
+        .sidebar { display: none; }
+        .breadcrumb { display: none; }
+        .main { padding: 25px 16px 42px; }
+        .toolbar { align-items: flex-start; }
+        .toolbar h2 { width: 100%; margin-bottom: 4px; }
+        .member { grid-template-columns: 1fr 1fr; gap: 15px; padding: 16px; }
+        .member-identity { grid-column: 1 / -1; }
+        .member-action { grid-column: 1 / -1; justify-self: start; }
+        .member .metric:nth-of-type(4) { display: block; }
+        .scrim { inset-block-start: 60px; }
+        .drawer { inset-block-start: 60px; width: 100%; border-left: 0; }
+        .drawer-header { min-height: 76px; padding: 15px 17px; }
+        .drawer-body { padding: 18px 17px; }
+        .drawer-footer { padding: 11px 15px; }
+        .footer-hint { display: none; }
+        .dialog-scrim { align-items: center; padding: 12px; }
+        .dialog { border-radius: 14px; }
+        .dialog-header { padding-inline: 19px; }
+        .dialog-body { padding-inline: 19px; }
+        .dialog-footer { padding-inline: 13px; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation-duration: .01ms !important; scroll-behavior: auto !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand"><span class="brand-mark">E</span><span>Encoding</span></div>
+        <span class="breadcrumb">Infrastructure / Cluster Maison</span>
+        <div class="top-actions"><span class="status-dot"></span>2 nœuds en ligne <span>·</span> <span>truenas_admin</span></div>
+      </header>
+      <aside class="sidebar" aria-label="Navigation principale">
+        <div class="nav-label">Vue générale</div><div class="nav-item">▦ &nbsp; Vue d’ensemble</div>
+        <div class="nav-label">Traitements</div><div class="nav-item">⋈ &nbsp; Flows</div><div class="nav-item">≡ &nbsp; Tâches</div>
+        <div class="nav-label">Ressources</div><div class="nav-item">◇ &nbsp; Librairies</div><div class="nav-item">✣ &nbsp; Plugins</div>
+        <div class="nav-label">Infrastructure</div><div class="nav-item">▣ &nbsp; Nœuds</div><div class="nav-item active">♧ &nbsp; Cluster</div>
+      </aside>
+
+      <main class="main">
+        <p class="eyebrow">Infrastructure · Cluster</p>
+        <h1>Cluster Maison</h1>
+        <p class="intro">État et capacité des membres du cluster. Ouvrez un tiroir pour consulter ou modifier une ressource ; réservez la modale aux décisions courtes et bloquantes.</p>
+
+        <div class="toolbar">
+          <h2>Membres du cluster <span style="color:var(--muted);font-size:12px;font-weight:500">· 2</span></h2>
+          <button class="button" onclick="toggleDrawer()">Basculer le tiroir</button>
+          <button class="button quiet" onclick="openDialog()">Voir la modale</button>
+        </div>
+
+        <section class="member-list" aria-label="Membres du cluster">
+          <article class="member">
+            <div class="member-identity"><div class="member-name"><span class="status-dot"></span>NAS principal <span class="chip">Serveur · Worker</span></div><p class="member-sub">192.168.1.51 · Signal reçu il y a 8 s</p></div>
+            <div class="metric"><div class="metric-label">Traitements actifs</div><div class="metric-value">3 <small>/ 6</small></div></div>
+            <div class="metric"><div class="metric-label">Charge CPU</div><div class="metric-value">28 <small>%</small></div></div>
+            <div class="metric"><div class="metric-label">Accès médias</div><div class="metric-value">4 <small>librairies</small></div></div>
+            <button class="member-action" onclick="openDrawer()">Configurer →</button>
+          </article>
+          <article class="member">
+            <div class="member-identity"><div class="member-name"><span class="status-dot"></span>NAS secondaire <span class="chip">Worker</span></div><p class="member-sub">192.168.1.50 · Signal reçu il y a 12 s</p></div>
+            <div class="metric"><div class="metric-label">Traitements actifs</div><div class="metric-value">1 <small>/ 4</small></div></div>
+            <div class="metric"><div class="metric-label">Charge CPU</div><div class="metric-value">14 <small>%</small></div></div>
+            <div class="metric"><div class="metric-label">Accès médias</div><div class="metric-value">2 <small>librairies</small></div></div>
+            <button class="member-action" onclick="openDialog()">Retirer →</button>
+          </article>
+        </section>
+
+        <div class="concept-note"><strong>Recommandation :</strong> le tiroir porte le contexte et la tâche longue (fiche, choix, formulaire ou étapes). Son en-tête et ses actions restent fixes, seul le corps défile. La modale MatDialog/CDK sert à une confirmation ou une information brève, avec une largeur standard et deux actions maximum.</div>
+      </main>
+    </div>
+
+    <div id="drawer-scrim" class="scrim" onclick="closeDrawer()"></div>
+    <aside id="drawer" class="drawer" role="complementary" aria-labelledby="drawer-title">
+      <header class="drawer-header">
+        <div class="drawer-title"><p class="eyebrow">Configuration · NAS principal</p><h2 id="drawer-title">Accès aux librairies</h2><p>Choisissez les ressources que ce nœud peut traiter.</p></div>
+        <button class="drawer-close" aria-label="Fermer le tiroir" onclick="closeDrawer()">×</button>
+      </header>
+      <div class="drawer-body">
+        <section class="form-section">
+          <h3>Accès direct</h3>
+          <p style="margin:0;color:var(--secondary);font-size:11px;line-height:1.55">Le nœud lit les fichiers depuis les chemins locaux configurés. Chaque librairie peut avoir un chemin différent.</p>
+          <div class="access-summary"><span>Films</span><span>Lecture · écriture</span></div>
+          <div class="field"><label>Chemin sur ce nœud</label><div class="input">/mnt/media/films</div><p class="field-help">Chemin local visible depuis NAS principal.</p></div>
+          <div class="access-summary"><span>Séries</span><span style="color:var(--secondary)">Non configuré</span></div>
+          <div class="field"><label>Mode d’accès</label><div class="input select">Non pris en charge <span>⌄</span></div></div>
+        </section>
+        <section class="form-section"><h3>Éligibilité du worker</h3><div class="access-summary"><span>Peut recevoir des traitements</span><span>Activé</span></div></section>
+        <section class="form-section"><h3>Information d’application</h3><p style="margin:0;color:var(--secondary);font-size:11px;line-height:1.55">Les changements prennent effet après enregistrement. Les traitements déjà attribués ne sont pas interrompus.</p></section>
+      </div>
+      <footer class="drawer-footer"><span class="footer-hint">Modifications non enregistrées</span><div class="footer-actions"><button class="button" onclick="closeDrawer()">Annuler</button><button class="button primary" onclick="closeDrawer()">Enregistrer</button></div></footer>
+    </aside>
+
+    <div id="dialog-scrim" class="dialog-scrim hidden" role="presentation" onclick="closeDialog(event)">
+      <section class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-message">
+        <header class="dialog-header"><div class="dialog-icon" aria-hidden="true">!</div><h2 id="dialog-title">Retirer NAS secondaire ?</h2></header>
+        <div class="dialog-body"><p id="dialog-message">Ce nœud sera retiré du cluster Maison et ne recevra plus de traitements. Son historique sera conservé.</p><div class="dialog-info"><strong>Nœud concerné</strong>NAS secondaire · 192.168.1.50</div></div>
+        <footer class="dialog-footer"><button class="button" onclick="closeDialog()">Annuler</button><button class="button danger" onclick="closeDialog()">Retirer le nœud</button></footer>
+      </section>
+    </div>
+
+    <script>
+      const drawer = document.getElementById('drawer');
+      const drawerScrim = document.getElementById('drawer-scrim');
+      const dialogScrim = document.getElementById('dialog-scrim');
+      function openDrawer() { drawer.classList.remove('hidden'); drawerScrim.classList.remove('hidden'); }
+      function closeDrawer() { drawer.classList.add('hidden'); drawerScrim.classList.add('hidden'); }
+      function toggleDrawer() { drawer.classList.contains('hidden') ? openDrawer() : closeDrawer(); }
+      function openDialog() { closeDrawer(); dialogScrim.classList.remove('hidden'); }
+      function closeDialog(event) { if (!event || event.target === dialogScrim) dialogScrim.classList.add('hidden'); }
+      document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { closeDrawer(); dialogScrim.classList.add('hidden'); } });
+    </script>
+  </body>
+</html>

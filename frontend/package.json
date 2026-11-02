@@ -3,30 +3,41 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "ng serve",
+    "start": "ng serve --proxy-config proxy.conf.json",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "node --test tests/*.test.mjs && ng test --watch=false",
+    "test:e2e": "playwright test",
+    "lint": "tsc --noEmit --noUnusedLocals --noUnusedParameters --project tsconfig.app.json",
+    "format:flows": "prettier --check src/app/shared/models/flow-component.ts src/app/shared/models/flow-graph.ts src/app/shared/models/flow-validation.ts src/app/shared/services/flow-validation.ts src/app/shared/models/flow-sequence.ts src/app/shared/models/flow-presentation.ts src/app/shared/models/flow-configuration.ts src/app/shared/models/flow-control-components.ts src/app/shared/models/flow-component-catalog.ts src/app/shared/models/media-tool-actions.ts src/app/shared/ui/flow-graph-editor.component.ts src/app/shared/ui/flow-graph-editor.component.html src/app/shared/ui/component-configuration-form.component.ts src/app/shared/ui/flow-inline-parameters.ts src/app/shared/ui/flow-inline-parameters.html src/app/shared/ui/flow-inline-parameters.scss src/app/shared/ui/flow-configuration-controls.ts src/app/shared/ui/flow-link-routing.ts src/app/shared/ui/flow-links.ts src/app/shared/ui/flow-links.html src/app/shared/ui/flow-links.scss src/app/shared/ui/searchable-component-catalog.component.ts src/app/features/flows/flow-editor-page.component.ts src/app/features/flows/flow-editor-page.component.html src/app/features/flows/flow-catalog-page.component.ts src/app/features/flows/flow-catalog-page.component.html src/app/shared/guards/unsaved-changes-guard.ts tests/*.test.mjs src/app/shared/models/condition-tree.ts src/app/shared/ui/condition-tree-editor.component.ts src/app/shared/ui/condition-tree-editor.component.html src/app/shared/ui/condition-tree-editor.component.scss tests/model-loader.mjs src/app/shared/models/flow-simulation.ts src/app/shared/services/flow-simulation.ts src/app/shared/ui/flow-simulation-panel.component.ts src/app/shared/ui/file-import.component.ts src/app/shared/ui/page-header.component.ts src/app/shared/ui/page-header.component.scss src/app/shared/models/auth.ts src/app/shared/services/user-accounts.ts src/app/core/auth/auth.service.ts src/app/core/auth/auth.interceptor.ts src/app/core/auth/auth.guard.ts src/app/core/auth/user-menu.component.ts src/app/core/auth/password-change-dialog.component.ts src/app/features/auth/login-page.component.ts src/app/shared/models/flow-canvas.ts \"src/app/shared/ui/flow-canvas/*.{ts,html,scss}\" src/app/shared/ui/context-actions.directive.ts src/app/shared/ui/context-actions.directive.spec.ts src/app/shared/ui/context-action-menu.component.ts \"src/app/shared/services/flow-editor-assistant.service*.ts\" src/app/features/flows/editor/flow-ai-assistant-panel.component.ts src/app/features/flows/editor/flow-command-bar.component.ts src/app/features/flows/flow-editor-page.component.scss \"src/app/core/layout/app-shell.component.{ts,html,scss}\" e2e/flow-editor.spec.ts",
+    "format:settings": "prettier --check \"src/app/features/settings/**/*.{ts,html,scss}\" \"src/app/shared/ui/system-log-viewer/*.{ts,html,scss}\" src/app/shared/ui/configuration-section.component.ts \"src/app/shared/ui/settings/*.ts\" src/app/shared/models/system-log-presentation.ts src/app/shared/ui/data-table.component.ts src/app/shared/ui/data-table.component.scss src/app/shared/ui/record-form.component.ts src/app/shared/services/system-logs.service.ts src/app/shared/services/system-logs.service.spec.ts src/app/app.routes.ts e2e/settings-redesign.spec.ts e2e/ai-providers.spec.ts"
   },
   "private": true,
-  "packageManager": "npm@11.20.0",
+  "packageManager": "npm@11.13.0",
   "dependencies": {
-    "@angular/cdk": "^22.2.5",
+    "@angular/cdk": "^22.2.2",
     "@angular/common": "^22.2.0",
     "@angular/compiler": "^22.2.0",
     "@angular/core": "^22.2.0",
     "@angular/forms": "^22.2.0",
-    "@angular/material": "^22.2.5",
+    "@angular/material": "^22.2.2",
     "@angular/platform-browser": "^22.2.0",
     "@angular/router": "^22.2.0",
+    "@codemirror/lang-javascript": "^6.2.5",
+    "@codemirror/lang-python": "^6.2.1",
+    "codemirror": "^6.0.2",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },
   "devDependencies": {
-    "@angular/build": "^22.2.5",
-    "@angular/cli": "^22.2.5",
+    "@angular/build": "^22.2.2",
+    "@angular/cli": "^22.2.2",
     "@angular/compiler-cli": "^22.2.0",
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.64.1",
+    "jsdom": "^29.1.1",
     "prettier": "^3.8.1",
-    "typescript": "~6.0.2"
+    "typescript": "~6.0.2",
+    "vitest": "^5.0.4"
   }
 }

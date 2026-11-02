@@ -1,10 +1,10 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { Shell } from './shell/shell';
+import { AppShellComponent } from './core/layout/app-shell.component';
 
 @Component({
-  selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Shell],
+  imports: [AppShellComponent],
+  selector: 'app-root',
   template: '<app-shell />',
 })
 export class App {}

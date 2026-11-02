@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <title>Encoding · Maquette de l’assistant</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --page-background: #101514;
+        --surface-lowest: #0c1110;
+        --surface-low: #171d1b;
+        --surface: #1d2422;
+        --surface-high: #29312e;
+        --surface-highest: #333c39;
+        --primary: #a6ddcb;
+        --primary-container: #194f40;
+        --on-primary: #06291e;
+        --text-primary: #e5ece9;
+        --text-secondary: #b9c5c0;
+        --text-muted: #899791;
+        --outline: #56625c;
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+        --space-5: 24px;
+        --space-6: 32px;
+        --radius-sm: 8px;
+        --radius-md: 12px;
+        --radius-lg: 16px;
+        --radius-xl: 24px;
+        --radius-pill: 999px;
+        --touch-target: 44px;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        color: var(--text-primary);
+        background: var(--page-background);
+      }
+
+      * { box-sizing: border-box; }
+      body { min-width: 320px; min-height: 100vh; margin: 0; overflow-x: hidden; background: var(--page-background); }
+      button, input { color: inherit; font: inherit; }
+      button { border: 0; cursor: pointer; }
+      button:focus-visible, input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+      .app { min-height: 100vh; display: grid; grid-template-columns: 232px minmax(0, 1fr); }
+      .primary-nav { display: flex; min-width: 0; flex-direction: column; gap: var(--space-5); padding: var(--space-5) var(--space-3); background: var(--surface-low); }
+      .nav-brand { display: flex; align-items: center; gap: var(--space-3); padding-inline: var(--space-2); font-size: 18px; font-weight: 700; }
+      .brand-mark { display: grid; width: 34px; height: 34px; place-items: center; border-radius: var(--radius-md); color: var(--on-primary); background: var(--primary); }
+      .nav-group { display: grid; gap: var(--space-1); }
+      .nav-label { margin: 0 0 var(--space-1); padding-inline: var(--space-2); color: var(--text-muted); font-size: 12px; font-weight: 650; }
+      .nav-link { display: flex; min-height: var(--touch-target); align-items: center; gap: var(--space-3); padding-inline: var(--space-3); border-radius: var(--radius-pill); color: var(--text-secondary); background: transparent; text-align: left; }
+      .nav-link[aria-current="page"] { color: var(--text-primary); background: var(--primary-container); }
+      .nav-glyph { width: 22px; text-align: center; font-size: 18px; }
+      .nav-footer { display: flex; align-items: center; gap: var(--space-2); margin-top: auto; padding: var(--space-3) var(--space-2) 0; border-top: 1px solid color-mix(in srgb, var(--text-primary) 12%, transparent); color: var(--text-secondary); font-size: 13px; }
+      .avatar { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 50%; color: var(--on-primary); background: var(--primary); font-weight: 700; }
+      main { display: flex; min-width: 0; min-height: 100vh; flex-direction: column; padding: var(--space-4) var(--space-5) var(--space-5); }
+      .global-header { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-5); min-height: 52px; margin-bottom: var(--space-4); }
+      .global-search { position: absolute; left: 50%; display: flex; width: min(610px, calc(100% - 480px)); min-width: 240px; height: 48px; align-items: center; transform: translateX(-50%); overflow: hidden; border: 1px solid var(--outline); border-radius: var(--radius-pill); background: var(--surface-lowest); }
+      .search-input { display: flex; min-width: 0; flex: 1 1 auto; align-items: center; gap: var(--space-2); padding-inline: var(--space-4); }
+      .search-input > span { color: var(--primary); font-size: 20px; }
+      .search-input input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; font-size: 14px; }
+      .search-input input::placeholder { color: var(--text-muted); }
+      .search-action { display: inline-flex; min-height: 100%; flex: 0 0 auto; align-items: center; justify-content: center; gap: var(--space-2); padding-inline: var(--space-3); border-left: 1px solid color-mix(in srgb, var(--text-primary) 14%, transparent); color: var(--text-primary); background: transparent; font-size: 13px; font-weight: 650; white-space: nowrap; }
+      .search-action:hover { color: var(--primary); background: var(--surface-high); }
+      .search-action span { color: var(--primary); font-size: 18px; }
+      .system-status { display: flex; grid-column: 2; align-items: center; gap: var(--space-2); }
+      .status-pill { min-height: 36px; padding: 0 var(--space-3); border-radius: var(--radius-pill); background: var(--surface); color: var(--text-secondary); font-size: 12px; font-weight: 650; white-space: nowrap; }
+      .status-pill strong { color: var(--primary); }
+      .workspace { position: relative; display: grid; flex: 1; grid-template-columns: clamp(220px, 22vw, 272px) minmax(0, 1fr); min-height: min(800px, calc(100vh - 100px)); overflow: hidden; border: 1px solid color-mix(in srgb, var(--text-primary) 10%, transparent); border-radius: var(--radius-xl); background: var(--surface-lowest); }
+      .history { z-index: 2; display: flex; min-width: 0; flex-direction: column; gap: var(--space-3); padding: var(--space-4) var(--space-3); background: var(--surface-low); }
+      .history-heading { display: flex; min-height: var(--touch-target); align-items: center; gap: var(--space-2); padding-inline: var(--space-2); }
+      .history-heading h1 { margin: 0; font-size: 16px; font-weight: 680; letter-spacing: -0.01em; }
+      .count { display: grid; min-width: 28px; height: 28px; place-items: center; padding-inline: var(--space-2); border-radius: var(--radius-pill); color: var(--text-secondary); background: var(--surface-high); font-size: 12px; font-weight: 650; }
+      .history-list { display: grid; align-content: start; gap: var(--space-4); min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--space-1); }
+      .history-group { display: grid; gap: var(--space-1); }
+      .history-group h2 { margin: 0; padding: var(--space-1) var(--space-2); color: var(--text-muted); font-size: 12px; font-weight: 650; }
+      .history-item { display: flex; width: 100%; min-width: 0; min-height: var(--touch-target); align-items: center; gap: var(--space-2); padding: var(--space-2); border-radius: var(--radius-lg); color: var(--text-secondary); background: transparent; text-align: left; }
+      .history-item:hover { background: var(--surface-high); }
+      .history-item[aria-current="true"] { color: var(--text-primary); background: var(--primary-container); }
+      .history-symbol { display: grid; width: 36px; height: 36px; flex: 0 0 36px; place-items: center; border-radius: var(--radius-md); color: var(--primary); background: var(--surface-high); }
+      .history-item[aria-current="true"] .history-symbol { color: var(--on-primary); background: var(--primary); }
+      .history-copy { min-width: 0; }
+      .history-copy strong, .history-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .history-copy strong { font-size: 13px; font-weight: 620; }
+      .history-copy small { margin-top: var(--space-1); color: var(--text-muted); font-size: 11px; }
+      .chat { display: flex; min-width: 0; min-height: 0; flex-direction: column; background: var(--page-background); }
+      .chat-toolbar { display: flex; min-width: 0; min-height: 64px; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 10%, transparent); background: var(--surface-low); }
+      .history-toggle, .context-button { display: inline-flex; min-width: var(--touch-target); min-height: var(--touch-target); align-items: center; justify-content: center; border-radius: var(--radius-pill); color: var(--text-primary); background: transparent; }
+      .history-toggle { font-size: 21px; }
+      .history-toggle:hover, .context-button:hover { background: var(--surface-high); }
+      .conversation-title { flex: 1; min-width: 0; }
+      .conversation-title h2 { overflow: hidden; margin: 0; font-size: 16px; font-weight: 680; letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
+      .conversation-title p { overflow: hidden; margin: var(--space-1) 0 0; color: var(--text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+      .context-button { gap: var(--space-2); padding-inline: var(--space-3); background: var(--surface-high); font-size: 13px; }
+      .messages { display: flex; width: min(760px, 100%); min-width: 0; flex: 1; flex-direction: column; gap: var(--space-5); align-self: center; overflow-y: auto; padding: var(--space-6) var(--space-5); }
+      .welcome { margin: auto; padding: var(--space-5); color: var(--text-secondary); text-align: center; }
+      .welcome-mark { display: grid; width: 44px; height: 44px; place-items: center; margin: 0 auto var(--space-4); border-radius: 50%; color: var(--primary); background: var(--primary-container); font-size: 22px; }
+      .welcome h2 { margin: 0; color: var(--text-primary); font-size: 24px; letter-spacing: -0.03em; }
+      .welcome p { margin: var(--space-2) 0 0; color: var(--text-muted); font-size: 14px; }
+      .message { max-width: 84%; padding: var(--space-3) var(--space-4); border-radius: var(--radius-xl); line-height: 1.6; overflow-wrap: anywhere; }
+      .message.user { align-self: flex-end; background: var(--surface-high); }
+      .message.assistant { align-self: flex-start; padding-inline: 0; }
+      .composer { width: min(800px, calc(100% - var(--space-5))); align-self: center; margin: 0 auto var(--space-4); padding: var(--space-3); border: 1px solid color-mix(in srgb, var(--text-primary) 14%, transparent); border-radius: var(--radius-xl); background: var(--surface); box-shadow: 0 8px 28px color-mix(in srgb, #000 20%, transparent); }
+      .composer textarea { display: block; width: 100%; min-height: 52px; resize: vertical; border: 0; outline: 0; background: transparent; color: var(--text-primary); font-size: 15px; }
+      .composer textarea::placeholder { color: var(--text-muted); }
+      .composer-actions { display: flex; align-items: center; gap: var(--space-2); }
+      .composer-spacer { flex: 1; }
+      .composer-chip, .send-button { min-height: 36px; padding-inline: var(--space-3); border-radius: var(--radius-pill); color: var(--text-secondary); background: var(--surface-high); font-size: 12px; }
+      .send-button { width: 40px; color: var(--on-primary); background: var(--primary); font-size: 18px; }
+      .history-backdrop { display: none; }
+      .history-closed { grid-template-columns: minmax(0, 1fr); }
+      .history-closed .history { display: none; }
+      @media (max-width: 920px) {
+        .app { grid-template-columns: 72px minmax(0, 1fr); }
+        .primary-nav { align-items: center; padding-inline: var(--space-2); }
+        .nav-brand { padding: 0; }
+        .nav-brand > span:last-child, .nav-label, .nav-link > span:last-child, .nav-footer > span:last-child { display: none; }
+        .nav-link { width: var(--touch-target); justify-content: center; padding: 0; }
+        .nav-footer { border: 0; }
+        main { padding-inline: var(--space-3); }
+        .global-search { width: min(520px, calc(100% - 320px)); }
+      }
+      @media (max-width: 680px) {
+        .app { display: block; }
+        .primary-nav { display: none; }
+        main { min-height: 100vh; padding: var(--space-3); }
+        .global-header { grid-template-columns: minmax(0, 1fr); min-height: 48px; margin-bottom: var(--space-3); }
+        .global-search { position: static; grid-column: 1; width: 100%; min-width: 0; height: auto; flex-wrap: wrap; transform: none; border-radius: var(--radius-lg); }
+        .search-input { min-height: 46px; flex: 1 0 100%; border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 12%, transparent); }
+        .search-action { min-height: 44px; max-width: 50%; border-left: 0; padding-inline: var(--space-2); font-size: 12px; }
+        .system-status { display: none; }
+        .workspace { display: block; min-height: calc(100dvh - 84px); border-radius: var(--radius-lg); }
+        .history { position: absolute; inset: 0 auto 0 0; display: none; width: min(300px, calc(100vw - 48px)); border-radius: var(--radius-lg) 0 0 var(--radius-lg); box-shadow: 0 12px 32px color-mix(in srgb, #000 36%, transparent); }
+        .workspace:not(.history-open) .history { display: none; }
+        .workspace.history-open .history { display: flex; }
+        .workspace.history-open .history-backdrop { position: absolute; inset: 0; z-index: 1; display: block; background: color-mix(in srgb, #000 54%, transparent); }
+        .history-closed { display: block; }
+        .chat-toolbar { min-height: 58px; padding-inline: var(--space-2); }
+        .conversation-title h2 { font-size: 14px; }
+        .conversation-title p { font-size: 11px; }
+        .context-button { gap: 0; padding-inline: var(--space-2); font-size: 12px; }
+        .messages { padding: var(--space-4) var(--space-3); }
+        .composer { width: calc(100% - var(--space-3)); margin-bottom: var(--space-3); }
+        .composer-chip { padding-inline: var(--space-2); }
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .history { transition: width 180ms ease, transform 180ms ease; }
+        .history-item, .history-toggle, .context-button { transition: background-color 160ms ease; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="primary-nav" aria-label="Navigation principale">
+        <div class="nav-brand"><span class="brand-mark">E</span><span>Encoding</span></div>
+        <nav class="nav-group" aria-label="Pages">
+          <p class="nav-label">Espace de travail</p>
+          <button class="nav-link"><span class="nav-glyph">▦</span><span>Vue d’ensemble</span></button>
+          <button class="nav-link"><span class="nav-glyph">▣</span><span>Bibliothèques</span></button>
+          <button class="nav-link"><span class="nav-glyph">⌘</span><span>Flows</span></button>
+          <button class="nav-link"><span class="nav-glyph">◷</span><span>Activité</span></button>
+          <button class="nav-link" aria-current="page"><span class="nav-glyph">✦</span><span>Assistant</span></button>
+          <button class="nav-link"><span class="nav-glyph">▤</span><span>Nœuds</span></button>
+        </nav>
+        <div class="nav-footer"><span class="avatar">A</span><span>Administrateur</span></div>
+      </aside>
+
+      <main>
+        <header class="global-header" aria-label="En-tête global">
+          <div class="global-search" aria-label="Recherche globale et action de page">
+            <label class="search-input"><span aria-hidden="true">⌕</span><input type="search" placeholder="Rechercher dans Encoding…" aria-label="Rechercher dans Encoding" /></label>
+            <button class="search-action" type="button" id="new-conversation"><span aria-hidden="true">＋</span>Nouvelle conversation</button>
+          </div>
+          <div class="system-status" aria-label="État du système">
+            <span class="status-pill"><strong>●</strong> 2 / 2 en ligne</span>
+            <span class="status-pill"><strong>0 jobs en cours</strong></span>
+          </div>
+        </header>
+
+        <div class="workspace history-open" id="assistant-workspace">
+          <aside class="history" id="conversation-history" aria-label="Historique des conversations">
+            <header class="history-heading"><h1>Conversations</h1><span class="count">4</span></header>
+            <nav class="history-list" aria-label="Conversations IA">
+              <section class="history-group" aria-label="Aujourd’hui">
+                <h2>Aujourd’hui</h2>
+                <button class="history-item" type="button" aria-current="true" data-title="Optimiser mon flow HEVC">
+                  <span class="history-symbol" aria-hidden="true">✦</span>
+                  <span class="history-copy"><strong>Optimiser mon flow HEVC</strong><small>Flow · Aujourd’hui à 10:42</small></span>
+                </button>
+                <button class="history-item" type="button" data-title="Analyser une exécution">
+                  <span class="history-symbol" aria-hidden="true">✦</span>
+                  <span class="history-copy"><strong>Analyser une exécution</strong><small>Exécution · Aujourd’hui à 09:18</small></span>
+                </button>
+              </section>
+              <section class="history-group" aria-label="Cette semaine">
+                <h2>Cette semaine</h2>
+                <button class="history-item" type="button" data-title="Configuration des nœuds">
+                  <span class="history-symbol" aria-hidden="true">✦</span>
+                  <span class="history-copy"><strong>Configuration des nœuds</strong><small>Nœud · Hier</small></span>
+                </button>
+                <button class="history-item" type="button" data-title="Créer un flow audio">
+                  <span class="history-symbol" aria-hidden="true">✦</span>
+                  <span class="history-copy"><strong>Créer un flow audio</strong><small>Flow · Lundi</small></span>
+                </button>
+              </section>
+            </nav>
+          </aside>
+          <button class="history-backdrop" type="button" aria-label="Fermer l’historique des conversations"></button>
+
+          <section class="chat" aria-label="Assistant">
+            <header class="chat-toolbar">
+              <button class="history-toggle" type="button" id="history-toggle" aria-label="Masquer les conversations" aria-expanded="true" aria-controls="conversation-history">☰</button>
+              <div class="conversation-title"><h2 id="conversation-title">Optimiser mon flow HEVC</h2><p>Assistant IA · Nœud Maison</p></div>
+              <button class="context-button" type="button">Contexte</button>
+            </header>
+            <div class="messages" aria-live="polite">
+              <div class="message user">Comment optimiser mon flow HEVC sans perdre le HDR ?</div>
+              <div class="message assistant">Je peux examiner la structure du flow, les réglages vidéo et les capacités disponibles sur vos nœuds. Joignez un flow ou une bibliothèque pour préciser le contexte.</div>
+              <div class="welcome" id="new-conversation-message" hidden>
+                <span class="welcome-mark" aria-hidden="true">✦</span>
+                <h2>Que souhaitez-vous faire ?</h2>
+                <p>Posez une question sur vos flows, vos médias ou votre cluster.</p>
+              </div>
+            </div>
+            <form class="composer" onsubmit="event.preventDefault()">
+              <textarea aria-label="Votre question" placeholder="Envoyer un message à l’Assistant"></textarea>
+              <div class="composer-actions"><button class="composer-chip" type="button">＋ Joindre</button><button class="composer-chip" type="button">Modèle · Élevé</button><span class="composer-spacer"></span><button class="send-button" type="submit" aria-label="Envoyer">↑</button></div>
+            </form>
+          </section>
+        </div>
+      </main>
+    </div>
+    <script>
+      const workspace = document.querySelector('#assistant-workspace');
+      const historyToggle = document.querySelector('#history-toggle');
+      const compactQuery = window.matchMedia('(max-width: 680px)');
+      const setHistoryOpen = (open) => {
+        workspace.classList.toggle('history-open', open);
+        workspace.classList.toggle('history-closed', !open);
+        historyToggle.setAttribute('aria-expanded', String(open));
+        historyToggle.setAttribute('aria-label', open ? 'Masquer les conversations' : 'Afficher les conversations');
+      };
+      setHistoryOpen(!compactQuery.matches);
+      historyToggle.addEventListener('click', () => setHistoryOpen(!workspace.classList.contains('history-open')));
+      document.querySelector('.history-backdrop').addEventListener('click', () => setHistoryOpen(false));
+      compactQuery.addEventListener('change', (event) => setHistoryOpen(!event.matches));
+      document.querySelectorAll('.history-item').forEach((item) => {
+        item.addEventListener('click', () => {
+          document.querySelectorAll('.history-item').forEach((entry) => entry.removeAttribute('aria-current'));
+          item.setAttribute('aria-current', 'true');
+          document.querySelector('#conversation-title').textContent = item.dataset.title;
+          document.querySelector('#new-conversation-message').hidden = true;
+          document.querySelector('.message.user').hidden = false;
+          document.querySelector('.message.assistant').hidden = false;
+          if (compactQuery.matches) setHistoryOpen(false);
+        });
+      });
+      document.querySelector('#new-conversation').addEventListener('click', () => {
+        document.querySelectorAll('.history-item').forEach((item) => item.removeAttribute('aria-current'));
+        document.querySelector('#conversation-title').textContent = 'Nouvelle conversation';
+        document.querySelector('#new-conversation-message').hidden = false;
+        document.querySelector('.message.user').hidden = true;
+        document.querySelector('.message.assistant').hidden = true;
+        document.querySelector('.composer textarea').focus();
+        if (compactQuery.matches) setHistoryOpen(false);
+      });
+    </script>
+  </body>
+</html>

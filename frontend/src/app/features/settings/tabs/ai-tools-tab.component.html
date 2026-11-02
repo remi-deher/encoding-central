@@ -1,0 +1,512 @@
+@if (loadingSettings()) {
+  <app-configuration-section
+    title="Moteur et usages"
+    description="Quel fournisseur répond à l’assistant et aux flows, pour tout le cluster."
+    icon="settings"
+  >
+    <p role="status">Chargement des paramètres…</p>
+    @if (settingsError()) {
+      <p role="alert">Impossible de charger les paramètres IA.</p>
+      <button matButton="text" (click)="loadSettings()">Réessayer</button>
+    }
+  </app-configuration-section>
+} @else {
+  <form id="ai-settings-form" #settingsForm="ngForm" (ngSubmit)="saveSettings()">
+    <app-configuration-section
+      title="Moteur et usages"
+      description="Quel fournisseur répond à l’assistant et aux flows. Valable pour tout le cluster."
+      icon="settings"
+    >
+      @if (loadingModelCatalog()) {
+        <app-settings-notice>Chargement des modèles annoncés par les nœuds…</app-settings-notice>
+      } @else if (!modelCatalog()) {
+        <app-settings-notice tone="warning"
+          >Impossible de charger les modèles annoncés. Une nouvelle vérification sera effectuée en
+          arrière-plan.</app-settings-notice
+        >
+      } @else if (!providerChoices().length) {
+        <app-settings-notice
+          >Aucun fournisseur n’annonce actuellement de modèle disponible.</app-settings-notice
+        >
+      }
+      <app-setting-group>
+        <app-setting-row
+          label="Moteur par défaut"
+          hint="Utilisé quand un usage n’a pas son propre réglage."
+          [stacked]="true"
+        >
+          <div class="usage-model-fields">
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>Type d’IA</mat-label>
+              <mat-select
+                name="defaultProvider"
+                [ngModel]="defaultProvider()"
+                (ngModelChange)="changeDefaultProvider($event)"
+                [disabled]="!isAdmin() || !modelCatalog() || loadingModelCatalog()"
+              >
+                @for (provider of providerChoices(); track provider.id) {
+                  <mat-option [value]="provider.id">{{ provider.name }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>Modèle</mat-label>
+              <mat-select
+                name="defaultModel"
+                [ngModel]="modelValue('default')"
+                (ngModelChange)="changeModel('default', $event)"
+                [disabled]="!isAdmin() || !modelCatalog() || loadingModelCatalog()"
+              >
+                <mat-option value="">Modèle par défaut du fournisseur</mat-option>
+                @for (model of modelChoices(defaultProvider()); track model.id) {
+                  <mat-option [value]="model.id">{{ model.label }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>Effort de raisonnement</mat-label>
+              <mat-select
+                name="defaultReasoningEffort"
+                [ngModel]="effortValue('default')"
+                (ngModelChange)="changeEffort('default', $event)"
+                [disabled]="
+                  !isAdmin() ||
+                  loadingModelCatalog() ||
+                  !reasoningChoices(defaultProvider(), modelValue('default')).length
+                "
+              >
+                <mat-option value="">Valeur par défaut du modèle</mat-option>
+                @for (
+                  effort of reasoningChoices(defaultProvider(), modelValue('default'));
+                  track effort
+                ) {
+                  <mat-option [value]="effort">{{ effortName(effort) }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+          </div>
+        </app-setting-row>
+        @for (usage of usageOptions; track usage) {
+          <app-setting-row
+            [label]="usage === 'assistant' ? 'Assistant' : 'Génération et modification de flows'"
+            [hint]="
+              usage === 'assistant'
+                ? 'Conversations avec l’assistant. Reprend le moteur par défaut sauf réglage propre.'
+                : 'Création, explication et modification. Reprend le moteur par défaut sauf réglage propre.'
+            "
+            [stacked]="true"
+          >
+            <div class="usage-model-fields">
+              <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                <mat-label>Type d’IA</mat-label>
+                <mat-select
+                  [name]="usage + 'Provider'"
+                  [ngModel]="usage === 'assistant' ? assistantProvider() : flowProvider()"
+                  (ngModelChange)="changeUsageProvider(usage, $event || null)"
+                  [disabled]="!isAdmin() || !modelCatalog() || loadingModelCatalog()"
+                >
+                  <mat-option [value]="null"
+                    >Par défaut · {{ providerName(defaultProvider()) }}</mat-option
+                  >
+                  @for (provider of providerChoices(usage); track provider.id) {
+                    <mat-option [value]="provider.id">{{ provider.name }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                <mat-label>Modèle</mat-label>
+                <mat-select
+                  [name]="usage + 'Model'"
+                  [ngModel]="modelValue(usage)"
+                  (ngModelChange)="changeModel(usage, $event)"
+                  [disabled]="!isAdmin() || !modelCatalog() || loadingModelCatalog()"
+                >
+                  <mat-option value="">Modèle par défaut du fournisseur</mat-option>
+                  @for (model of modelChoices(effectiveProvider(usage), usage); track model.id) {
+                    <mat-option [value]="model.id">{{ model.label }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                <mat-label>Effort de raisonnement</mat-label>
+                <mat-select
+                  [name]="usage + 'ReasoningEffort'"
+                  [ngModel]="effortValue(usage)"
+                  (ngModelChange)="changeEffort(usage, $event)"
+                  [disabled]="
+                    !isAdmin() ||
+                    loadingModelCatalog() ||
+                    !reasoningChoices(effectiveProvider(usage), modelValue(usage), usage).length
+                  "
+                >
+                  <mat-option value="">Valeur par défaut du modèle</mat-option>
+                  @for (
+                    effort of reasoningChoices(effectiveProvider(usage), modelValue(usage), usage);
+                    track effort
+                  ) {
+                    <mat-option [value]="effort">{{ effortName(effort) }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+            </div>
+          </app-setting-row>
+        }
+        <app-setting-row
+          label="Assistant : local uniquement"
+          hint="Exige Ollama sur une adresse de boucle locale ; rien n’est envoyé aux autres nœuds ni fournisseurs."
+        >
+          <mat-slide-toggle
+            name="assistantLocalOnly"
+            aria-label="Assistant : local uniquement"
+            [ngModel]="assistantLocalOnly()"
+            (ngModelChange)="assistantLocalOnly.set($event)"
+            [disabled]="!isAdmin()"
+          />
+        </app-setting-row>
+        <app-setting-row
+          label="Flows : local uniquement"
+          hint="Sans cette règle, la demande, la définition du flow et les ressources jointes peuvent être transmises au fournisseur choisi."
+        >
+          <mat-slide-toggle
+            name="flowLocalOnly"
+            aria-label="Flows : local uniquement"
+            [ngModel]="flowLocalOnly()"
+            (ngModelChange)="flowLocalOnly.set($event)"
+            [disabled]="!isAdmin()"
+          />
+        </app-setting-row>
+        <mat-expansion-panel class="advanced">
+          <mat-expansion-panel-header>
+            <mat-panel-title>Options avancées</mat-panel-title>
+          </mat-expansion-panel-header>
+          <div class="fields">
+            <mat-form-field appearance="outline"
+              ><mat-label>Délai maximal par tentative (secondes)</mat-label
+              ><input
+                matInput
+                name="timeoutSeconds"
+                type="number"
+                min="10"
+                max="600"
+                required
+                [(ngModel)]="timeoutSeconds"
+                [readonly]="!isAdmin()" /></mat-form-field
+            ><mat-form-field appearance="outline"
+              ><mat-label>Lignes de sous-titres par lot</mat-label
+              ><input
+                matInput
+                name="subtitleBatchSize"
+                type="number"
+                min="5"
+                max="200"
+                required
+                [(ngModel)]="subtitleBatchSize"
+                [readonly]="!isAdmin()"
+            /></mat-form-field>
+            <mat-form-field appearance="outline"
+              ><mat-label>Conservation des conversations (jours)</mat-label
+              ><input
+                matInput
+                name="assistantConversationRetentionDays"
+                type="number"
+                min="1"
+                max="3650"
+                required
+                [(ngModel)]="assistantConversationRetentionDays"
+                [readonly]="!isAdmin()"
+            /></mat-form-field>
+            <mat-form-field appearance="outline"
+              ><mat-label>Conservation de l’activité IA (jours)</mat-label
+              ><input
+                matInput
+                name="assistantActivityRetentionDays"
+                type="number"
+                min="1"
+                max="3650"
+                required
+                [(ngModel)]="assistantActivityRetentionDays"
+                [readonly]="!isAdmin()"
+            /></mat-form-field>
+          </div>
+          <p class="muted">
+            Les demandes en attente ne sont pas expirées. Les tombstones sont répliqués ; les
+            anciens événements chiffrés restent dans le journal append-only.
+          </p>
+        </mat-expansion-panel>
+      </app-setting-group>
+    </app-configuration-section>
+
+    <app-configuration-section
+      title="Fournisseurs"
+      description="Les connexions Codex, Claude Code et les clés OpenAI et Anthropic sont copiées chiffrées sur tous les nœuds : si le serveur tombe, les flows IA continuent."
+      icon="api"
+    >
+      <app-setting-group>
+        @for (provider of providers; track provider.id) {
+          <app-setting-row [label]="provider.name" [hint]="clusterLabel(provider.id)">
+            <app-icon
+              row-lead
+              class="provider-icon"
+              [name]="
+                provider.id === 'ollama'
+                  ? 'server'
+                  : provider.id === 'openai' || provider.id === 'anthropic'
+                    ? 'api'
+                    : 'terminal'
+              "
+            />
+            <span class="provider-status">{{ providerStatus(provider.id) }}</span>
+            <mat-slide-toggle
+              [checked]="providerEnabled(provider.id)"
+              [disabled]="!isAdmin() || savingSettings()"
+              [aria-label]="'Actif : ' + provider.name"
+              (change)="setProviderEnabled(provider.id, $event.checked)"
+              >Actif</mat-slide-toggle
+            >
+            <button
+              matButton="text"
+              type="button"
+              [disabled]="!isAdmin() || savingSettings() || connecting()"
+              (click)="removeProvider(provider.id)"
+            >
+              Supprimer
+            </button>
+            <button
+              matButton="tonal"
+              type="button"
+              [attr.aria-label]="'Configurer ' + provider.name"
+              (click)="openProvider(provider.id)"
+            >
+              {{ isAdmin() ? 'Configurer' : 'Consulter' }}
+            </button>
+          </app-setting-row>
+        }
+      </app-setting-group>
+      @if (cluster(); as view) {
+        <h3 class="subheading">Réplication par nœud</h3>
+        <app-ai-replication-panel [view]="view" />
+      } @else {
+        <p class="muted">Disponibilité du cluster indisponible.</p>
+      }
+    </app-configuration-section>
+  </form>
+}
+@if (isAdmin()) {
+  <mat-expansion-panel class="ai-secondary-panel">
+    <mat-expansion-panel-header>
+      <mat-panel-title>Modèles disponibles</mat-panel-title>
+      <mat-panel-description>Choix des modèles autorisés pour le cluster</mat-panel-description>
+    </mat-expansion-panel-header>
+    <ng-template matExpansionPanelContent>
+      <app-ai-model-catalog />
+    </ng-template>
+  </mat-expansion-panel>
+  <mat-expansion-panel class="ai-secondary-panel">
+    <mat-expansion-panel-header>
+      <mat-panel-title>Suivi de l’IA</mat-panel-title>
+      <mat-panel-description>Quotas, consommation et historique des sessions</mat-panel-description>
+    </mat-expansion-panel-header>
+    <ng-template matExpansionPanelContent>
+      <div class="ai-follow-up">
+        <app-ai-quota-panel [refreshKey]="quotaRevision()" />
+        <app-ai-usage-panel [refreshKey]="quotaRevision()" />
+        <app-ai-session-history />
+      </div>
+    </ng-template>
+  </mat-expansion-panel>
+}
+<ng-template #providerEditor>
+  <form #providerForm="ngForm" class="provider-editor" (ngSubmit)="saveSettings()">
+    <p>
+      Les connexions Codex, Claude Code et les clés OpenAI et Anthropic sont partagées avec tout le
+      cluster : les modifier ici les modifie sur chaque nœud. Les adresses et modèles Ollama et
+      OpenAI restent propres à ce nœud.
+    </p>
+    @if (cluster(); as view) {
+      <section class="drawer-replication" aria-label="Réplication par nœud">
+        <h4>
+          {{ selectedProvider() === 'ollama' ? 'Disponibilité par nœud' : 'Réplication par nœud' }}
+        </h4>
+        <app-ai-replication-panel [view]="view" [only]="selectedProvider()" />
+      </section>
+    }
+    @switch (selectedProvider()) {
+      @case ('ollama') {
+        <div class="fields">
+          <mat-form-field appearance="outline"
+            ><mat-label>Adresse du serveur</mat-label
+            ><input
+              matInput
+              name="ollamaBaseUrl"
+              [(ngModel)]="ollamaBaseUrl"
+              [readonly]="!isAdmin()"
+              required
+              type="url"
+          /></mat-form-field>
+          <mat-form-field appearance="outline"
+            ><mat-label>Modèle</mat-label
+            ><input
+              matInput
+              name="ollamaModel"
+              [(ngModel)]="ollamaModel"
+              [readonly]="!isAdmin()"
+              required
+          /></mat-form-field>
+        </div>
+      }
+      @case ('openai') {
+        <div class="fields">
+          <mat-form-field appearance="outline"
+            ><mat-label>Adresse de l’API compatible OpenAI</mat-label
+            ><input
+              matInput
+              name="openAiBaseUrl"
+              [(ngModel)]="openAiBaseUrl"
+              [readonly]="!isAdmin()"
+              required
+              type="url"
+          /></mat-form-field>
+          <mat-form-field appearance="outline"
+            ><mat-label>Modèle</mat-label
+            ><input
+              matInput
+              name="openAiModel"
+              [(ngModel)]="openAiModel"
+              [readonly]="!isAdmin()"
+              required
+          /></mat-form-field>
+          <mat-form-field appearance="outline"
+            ><mat-label>Clé API</mat-label
+            ><input
+              matInput
+              name="openAiApiKey"
+              type="password"
+              autocomplete="new-password"
+              [(ngModel)]="openAiApiKey"
+              [readonly]="!isAdmin()"
+            />
+            <mat-hint>{{
+              hasOpenAiApiKey()
+                ? 'Clé enregistrée. Laissez vide pour la conserver.'
+                : 'La clé sera copiée chiffrée sur tous les nœuds.'
+            }}</mat-hint>
+          </mat-form-field>
+        </div>
+      }
+      @case ('anthropic') {
+        <div class="fields">
+          <mat-form-field appearance="outline"
+            ><mat-label>Modèle</mat-label
+            ><input
+              matInput
+              name="anthropicModel"
+              placeholder="claude-sonnet-5-5"
+              [(ngModel)]="anthropicModel"
+              [readonly]="!isAdmin()"
+              required
+          /></mat-form-field>
+          <mat-form-field appearance="outline"
+            ><mat-label>Clé API</mat-label
+            ><input
+              matInput
+              name="anthropicApiKey"
+              type="password"
+              autocomplete="new-password"
+              [(ngModel)]="anthropicApiKey"
+              [readonly]="!isAdmin()"
+              [required]="!hasAnthropicApiKey()"
+            />
+            <mat-hint>{{
+              hasAnthropicApiKey()
+                ? 'Clé enregistrée. Laissez vide pour la conserver.'
+                : 'La clé sera copiée chiffrée sur tous les nœuds.'
+            }}</mat-hint>
+          </mat-form-field>
+        </div>
+      }
+      @default {
+        @if (selectedTool(); as tool) {
+          <div
+            class="connection-status"
+            [class.is-authorized]="tool.authStatus.state === 'authorized'"
+          >
+            <span class="badge">{{ authLabel(tool.authStatus.state) }}</span
+            ><span>{{
+              tool.isInstalled ? 'Outil installé sur ce nœud' : 'Outil non installé sur ce nœud'
+            }}</span>
+          </div>
+          @if (tool.authStatus.errorMessage) {
+            <p class="connection-error" role="status">{{ tool.authStatus.errorMessage }}</p>
+          }
+          @if (!tool.isInstalled) {
+            <p>Installez l’outil officiel sur ce nœud pour y ajouter une connexion.</p>
+          } @else {
+            @if (isAdmin()) {
+              <button
+                matButton="tonal"
+                type="button"
+                [disabled]="connecting()"
+                (click)="startAuth(tool)"
+              >
+                {{ connecting() ? 'Préparation de la connexion…' : 'Se connecter' }}
+              </button>
+            }
+            <p class="help">
+              @if (tool.id === 'codex-cli') {
+                Le lien et le code sont fournis par Codex. Une fois connecté, le compte est copié
+                chiffré sur tous les nœuds du cluster ; un renouvellement ou une déconnexion s’y
+                propage aussi.
+              } @else {
+                Claude Code ouvre une connexion navigateur. Le lien est affiché ici ; si la CLI
+                demande un code, vous pourrez le coller. La connexion est ensuite copiée chiffrée
+                sur tous les nœuds.
+              }
+            </p>
+          }
+        } @else {
+          <p>État local indisponible. Actualisez les connexions.</p>
+        }
+      }
+    }
+
+    @if (isAdmin()) {
+      <footer>
+        <button
+          matButton="text"
+          type="button"
+          [disabled]="savingSettings() || connecting()"
+          (click)="editor.close()"
+        >
+          Annuler
+        </button>
+        @if (
+          selectedProvider() === 'ollama' ||
+          selectedProvider() === 'openai' ||
+          selectedProvider() === 'anthropic'
+        ) {
+          <button
+            matButton="filled"
+            type="submit"
+            [disabled]="savingSettings() || providerForm.invalid"
+          >
+            {{ savingSettings() ? 'Enregistrement…' : 'Enregistrer' }}
+          </button>
+        }
+      </footer>
+    }
+    @if (selectedTool(); as tool) {
+      @if (tool.authStatus.state === 'authorized' && isAdmin()) {
+        <button matButton="text" type="button" [disabled]="connecting()" (click)="revoke(tool.id)">
+          Déconnecter le cluster
+        </button>
+      }
+    }
+  </form>
+</ng-template>
+
+<app-settings-save-bar
+  [visible]="isAdmin() && hasUnsavedChanges() && !editor.state()"
+  [busy]="savingSettings()"
+  (saved)="saveSettings()"
+  (cancelled)="discardChanges()"
+/>

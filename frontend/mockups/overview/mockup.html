@@ -1,0 +1,181 @@
+<div class="preview-note">Maquette · Données de démonstration <app-theme-toggle /></div>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand"><b>E</b> Encoding</div>
+    <nav aria-label="Navigation de démonstration">
+      @for (
+        item of [
+          'Vue d’ensemble',
+          'Flows',
+          'Tâches',
+          'Assistant',
+          'Activité',
+          'Bibliothèques',
+          'Plugins & Outils',
+          'Nœuds',
+          'Paramètres',
+        ];
+        track item
+      ) {
+        <button
+          matButton="text"
+          [class.active]="item === 'Vue d’ensemble'"
+          (click)="selected.set(item)"
+        >
+          {{ item }}
+        </button>
+      }
+    </nav>
+    <span class="sidebar-bottom">Maison · 3 nœuds</span>
+  </aside>
+  <div class="workspace">
+    <header class="topbar">
+      <span>Vue d’ensemble</span>
+      <button class="search" (click)="selected.set('Recherche globale')">
+        ⌕ <span>Rechercher une page, un fichier…</span> <kbd>⌘ K</kbd>
+      </button>
+      <div class="tools">
+        <span class="pill">● 3 / 3 en ligne</span
+        ><button class="pill jobs" (click)="selected.set('Tâches en cours')">4 jobs en cours</button
+        ><span class="avatar">A</span>
+      </div>
+    </header>
+    <main>
+      <div class="heading">
+        <div>
+          <p class="eyebrow">Maison</p>
+          <h1>Vue d’ensemble</h1>
+        </div>
+        <mat-button-toggle-group
+          aria-label="Période des statistiques"
+          [value]="period()"
+          (change)="period.set($event.value)"
+          ><mat-button-toggle value="24 h">24 h</mat-button-toggle
+          ><mat-button-toggle value="7 jours">7 jours</mat-button-toggle></mat-button-toggle-group
+        >
+      </div>
+      <section class="metrics" aria-label="Indicateurs clés">
+        <article class="metric featured">
+          <span>En cours</span><strong>4<span> / 6 slots</span></strong
+          ><mat-progress-bar mode="determinate" [value]="67" /><small>3 nœuds mobilisés</small>
+        </article>
+        <article class="metric">
+          <span>En attente</span><strong>18</strong><small>Prêts à être traités</small>
+        </article>
+        <article class="metric">
+          <span>Terminés · {{ period() }}</span
+          ><strong>{{ period() === '24 h' ? '126' : '842' }}</strong
+          ><small>Fichiers validés et publiés</small>
+        </article>
+        <article class="metric">
+          <span>Espace récupéré · {{ period() }}</span
+          ><strong>{{ period() === '24 h' ? '84,2' : '562' }} <span>Go</span></strong
+          ><small>Après publication des sorties</small>
+        </article>
+      </section>
+      <div class="content-grid">
+        <section class="processing">
+          <div class="section-heading">
+            <h2>Traitements en cours <span class="count">4</span></h2>
+            <button matButton="text" (click)="selected.set('Toutes les tâches')">
+              Tout voir ↗
+            </button>
+          </div>
+          <div class="job-list">
+            @for (job of jobs; track job.name) {
+              <button class="job" (click)="selected.set(job.name)">
+                <div class="job-top">
+                  <div>
+                    <h3>{{ job.name }}</h3>
+                    <p>{{ job.detail }}</p>
+                  </div>
+                  <span class="node-tag">{{ job.node }}</span>
+                </div>
+                <div class="job-status">
+                  <span>{{ job.step }}</span
+                  ><strong>{{ job.progress }} %</strong>
+                </div>
+                <mat-progress-bar mode="determinate" [value]="job.progress" />
+                <div class="job-footer">
+                  <span>{{ job.time }}</span
+                  ><span>Voir le traitement ↗</span>
+                </div>
+              </button>
+            }
+          </div>
+          <p class="secondary-job">1 autre traitement en cours · Analyse des pistes audio</p>
+        </section>
+        <section class="nodes">
+          <div class="section-heading">
+            <h2>Nœuds</h2>
+            <button matButton="text" (click)="selected.set('Tous les nœuds')">Gérer ↗</button>
+          </div>
+          @for (node of nodes; track node.name) {
+            <button class="node" (click)="selected.set(node.name)">
+              <div class="node-title">
+                <h3>{{ node.name }}</h3>
+                <span>En ligne</span>
+              </div>
+              <p>{{ node.detail }}</p>
+              <div class="gauges">
+                <div>
+                  <span
+                    >CPU <b>{{ node.cpu }} %</b></span
+                  ><mat-progress-bar mode="determinate" [value]="node.cpu" />
+                </div>
+                <div>
+                  <span
+                    >Mémoire <b>{{ node.memory }} %</b></span
+                  ><mat-progress-bar mode="determinate" [value]="node.memory" />
+                </div>
+              </div>
+            </button>
+          }
+          <div class="attention">
+            <strong>2 tâches à examiner</strong>
+            <p>Aucun worker compatible pour ces fichiers.</p>
+            <button matButton="text" (click)="selected.set('Tâches à examiner')">
+              Examiner les échecs ↗
+            </button>
+          </div>
+        </section>
+      </div>
+      <section class="activity">
+        <div class="section-heading">
+          <h2>Dernières publications</h2>
+          <button matButton="text" (click)="selected.set('Historique')">Historique ↗</button>
+        </div>
+        <div class="activity-row">
+          <span class="check">✓</span>
+          <div>
+            <strong>Severance · S02E03</strong>
+            <p>Séries · HEVC 1080p</p>
+          </div>
+          <span class="saving">− 1,8 Go</span><span>Il y a 3 min</span>
+        </div>
+        <div class="activity-row">
+          <span class="check">✓</span>
+          <div>
+            <strong>Le Voyage de Chihiro</strong>
+            <p>Animation · HEVC 1080p</p>
+          </div>
+          <span class="saving">− 3,2 Go</span><span>Il y a 8 min</span>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+@if (selected(); as selection) {
+  <div class="demo-feedback" role="status">
+    <span>Maquette : {{ selection }}</span
+    ><button matButton="text" (click)="selected.set(null)">Fermer</button>
+  </div>
+}
+<button
+  mat-fab
+  class="assistant"
+  aria-label="Ouvrir l’assistant de démonstration"
+  (click)="selected.set('Assistant IA')"
+>
+  ✦
+</button>

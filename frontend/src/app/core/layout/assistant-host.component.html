@@ -1,0 +1,131 @@
+@if (showAssistantBubble()) {
+  <button
+    class="assistant-launcher"
+    mat-fab
+    type="button"
+    [hidden]="navigationSheetOpen() || (isCompactNavigation() && !workspaceMode())"
+    [class.is-panel-open]="assistantPanelOpen()"
+    [attr.aria-hidden]="assistantPanelOpen() ? 'true' : null"
+    [attr.tabindex]="assistantPanelOpen() ? -1 : null"
+    [class.is-dragging]="assistantLauncherDragging()"
+    [style.left.px]="assistantLauncherPosition()?.left ?? null"
+    [style.top.px]="assistantLauncherPosition()?.top ?? null"
+    [style.right]="assistantLauncherPosition() ? 'auto' : null"
+    [style.bottom]="assistantLauncherPosition() ? 'auto' : null"
+    #assistantLauncher
+    aria-label="Ouvrir l’assistant IA"
+    aria-description="Glissez pour déplacer. Alt plus les flèches déplace par pas de grille."
+    aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Alt+ArrowUp Alt+ArrowDown"
+    aria-controls="assistant-widget-panel"
+    [attr.aria-expanded]="assistantPanelOpen()"
+    (pointerdown)="startAssistantLauncherDrag($event)"
+    (pointermove)="moveAssistantLauncher($event)"
+    (pointerup)="finishAssistantLauncherDrag($event)"
+    (pointercancel)="finishAssistantLauncherDrag($event)"
+    (keydown)="onAssistantLauncherKeydown($event)"
+    (click)="onAssistantLauncherClick($event)"
+  >
+    <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="currentColor">
+      <path d="m12 2 2.8 7.2L22 12l-7.2 2.8L12 22l-2.8-7.2L2 12l7.2-2.8Z" />
+    </svg>
+  </button>
+}
+@if (assistantWidgetMounted()) {
+  <aside
+    id="assistant-widget-panel"
+    class="assistant-widget-panel"
+    [class.flow-assistant-panel]="flowAssistant.session() !== null"
+    [class.is-open]="assistantPanelOpen() && showAssistantBubble()"
+    [style.left.px]="assistantPanelGeometry()?.left ?? null"
+    [style.top.px]="assistantPanelGeometry()?.top ?? null"
+    [style.right]="assistantPanelGeometry() ? 'auto' : null"
+    [style.bottom]="assistantPanelGeometry() ? 'auto' : null"
+    [style.--assistant-panel-origin-x]="
+      assistantPanelGeometry() ? assistantPanelGeometry()!.originX + 'px' : null
+    "
+    [style.--assistant-panel-origin-y]="
+      assistantPanelGeometry() ? assistantPanelGeometry()!.originY + 'px' : null
+    "
+    [style.--assistant-panel-scale-x]="
+      assistantPanelGeometry() ? assistantPanelGeometry()!.scaleX : null
+    "
+    [style.--assistant-panel-scale-y]="
+      assistantPanelGeometry() ? assistantPanelGeometry()!.scaleY : null
+    "
+    [attr.inert]="assistantPanelOpen() && showAssistantBubble() ? null : ''"
+    [attr.aria-hidden]="!(assistantPanelOpen() && showAssistantBubble())"
+    aria-label="Panneau de l’assistant IA"
+  >
+    <header class="assistant-widget-header">
+      <h2>✦ Assistant</h2>
+      <a
+        mat-icon-button
+        aria-label="Ouvrir la conversation dans Assistant"
+        routerLink="/ai/assistant"
+        [queryParams]="
+          generalAssistant()?.conversationId()
+            ? { conversation: generalAssistant()?.conversationId() }
+            : {}
+        "
+        ><svg
+          viewBox="0 0 24 24"
+          width="20"
+          height="20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          aria-hidden="true"
+        >
+          <path d="M14 4h6v6m0-6-9 9M10 4H4v16h16v-6" /></svg
+      ></a>
+      <button
+        mat-icon-button
+        type="button"
+        #assistantCloseButton
+        aria-label="Fermer le panneau de l’assistant"
+        (click)="closeAssistantPanel()"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="20"
+          height="20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
+        >
+          <path d="M5 12h14" />
+        </svg>
+      </button>
+    </header>
+    @if (flowAssistant.session(); as session) {
+      @defer (on immediate) {
+        <app-flow-ai-assistant-panel
+          #flowWidget
+          [applyBusy]="flowAssistant.applying()"
+          [context]="{
+            mediaType: session.flow.mediaType,
+            currentFlow: session.flow,
+            label: session.label,
+            initialPrompt: session.prompt,
+            components: session.components,
+          }"
+          (flowApplied)="applyFlowProposal($event)"
+          (dismissed)="flowAssistant.session.set(null); closeAssistantPanel()"
+        />
+      } @placeholder {
+        <p role="status">Chargement de l’assistant du flow…</p>
+      }
+    }
+    @if (generalAssistantMounted()) {
+      @defer (on immediate) {
+        <app-ai-assistant-page
+          #generalAssistant
+          [panelMode]="true"
+          [style.display]="flowAssistant.session() ? 'none' : null"
+          [attr.inert]="flowAssistant.session() ? '' : null"
+        />
+      }
+    }
+  </aside>
+}

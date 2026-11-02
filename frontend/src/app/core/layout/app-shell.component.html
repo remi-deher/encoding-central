@@ -1,0 +1,117 @@
+<a class="skip-to-content-link" href="#main-content">Aller au contenu principal</a>
+
+<div
+  class="application-shell"
+  [class.has-search-controls]="hasSearchControls()"
+  [class.workspace-shell]="workspaceMode()"
+  [class.auth-shell]="authMode()"
+  [class.rail-navigation-shell]="!authMode() && !workspaceMode() && railNavigation()"
+  [class.compact-navigation-shell]="!authMode() && !workspaceMode() && isCompactNavigation()"
+>
+  @if (authMode()) {
+    <header class="auth-header">
+      <a class="brand header-brand" routerLink="/" aria-label="Encoding, accueil">
+        <span class="brand-mark" aria-hidden="true">E</span>
+        <span class="brand-name">Encoding</span>
+      </a>
+      <app-appearance-palette class="auth-appearance-palette" />
+    </header>
+  }
+
+  <div
+    class="application-navigation-layout"
+    [class.workspace-navigation-layout]="workspaceMode()"
+    [class.auth-navigation-layout]="authMode()"
+  >
+    @if (!authMode() && !workspaceMode() && !isCompactNavigation()) {
+      <aside
+        class="application-sidebar"
+        [class.is-collapsed]="railNavigation()"
+        aria-label="Navigation principale"
+      >
+        <div class="sidebar-content">
+          <app-primary-navigation
+            class="sidebar-navigation"
+            [collapsed]="railNavigation()"
+            [activeExecutionCount]="activeExecutionCount()"
+            (click)="onNavigationClick()"
+          />
+
+          <div class="sidebar-footer" [class.is-collapsed]="railNavigation()">
+            <div class="sidebar-footer-controls">
+              <button
+                type="button"
+                class="sidebar-collapse-btn"
+                [hidden]="isTabletNavigation()"
+                [attr.aria-expanded]="!railNavigation()"
+                [attr.aria-label]="
+                  railNavigation() ? 'Déplier la navigation' : 'Replier la navigation'
+                "
+                [matTooltip]="railNavigation() ? 'Déplier la navigation' : 'Replier la navigation'"
+                matTooltipPosition="right"
+                (click)="toggleNavigationCollapsed()"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  @if (navigationCollapsed()) {
+                    <path d="M9 5l7 7-7 7" />
+                  } @else {
+                    <path d="M15 19l-7-7 7-7" />
+                  }
+                </svg>
+                @if (!railNavigation()) {
+                  <span class="collapse-btn-label">Replier</span>
+                }
+              </button>
+              <app-user-menu class="sidebar-user-menu" [collapsed]="true" />
+              <app-appearance-palette class="sidebar-appearance-palette" />
+            </div>
+          </div>
+        </div>
+      </aside>
+    }
+
+    <div class="page-transition-region">
+      @if (!authMode() && !workspaceMode() && isCompactNavigation()) {
+        <app-primary-navigation
+          #mobileNavigation
+          class="mobile-navigation-host"
+          [mobileDock]="true"
+          [activeExecutionCount]="activeExecutionCount()"
+          (mobileMenuOpenChange)="navigationSheetOpen.set($event)"
+          (openAssistant)="assistantHost()?.toggleAssistantPanel()"
+        />
+      }
+
+      @if (!authMode() && !workspaceMode()) {
+        <header
+          class="application-header"
+          [class.has-search-controls]="hasSearchControls()"
+          aria-label="Recherche et état du système"
+        >
+          <app-global-search-bar />
+          <app-page-system-actions />
+        </header>
+      }
+
+      <main
+        id="main-content"
+        class="main-content"
+        [class.is-full-width]="fullWidthContent()"
+        tabindex="-1"
+        [attr.inert]="navigationSheetOpen() ? '' : null"
+      >
+        <router-outlet />
+      </main>
+    </div>
+  </div>
+  @if (!authMode() && !shell.worker()) {
+    <app-assistant-host
+      #assistantHost
+      [authMode]="authMode()"
+      [workspaceMode]="workspaceMode()"
+      [isCompactNavigation]="isCompactNavigation()"
+      [navigationSheetOpen]="navigationSheetOpen()"
+      (focusMobileMenu)="focusMobileMenu()"
+    />
+  }
+</div>

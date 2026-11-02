@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Worker</title>
+  <style>
+    :root { color-scheme: light dark; font-family: sans-serif; }
+    body { margin: 0 auto; max-width: 40rem; padding: 2rem 1.25rem; line-height: 1.5; }
+    h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
+    p, li { margin: 0.4rem 0; }
+    a { color: inherit; }
+    .muted { opacity: 0.75; }
+    .card { border: 1px solid color-mix(in srgb, currentColor 25%, transparent); border-radius: 8px; padding: 1rem 1.1rem; margin-top: 1rem; }
+    dt { font-size: 0.8rem; opacity: 0.7; }
+    dd { margin: 0 0 0.7rem; }
+  </style>
+</head>
+<body>
+  <h1 id="title">Worker</h1>
+  <p class="muted" id="lead">Lecture de l’état local…</p>
+  <section class="card" aria-labelledby="state-title">
+    <h2 id="state-title">État</h2>
+    <dl>
+      <dt>Central</dt>
+      <dd id="central">—</dd>
+      <dt>Rattachement</dt>
+      <dd id="enrolled">—</dd>
+      <dt>Plugins</dt>
+      <dd id="plugins">—</dd>
+      <dt>Outils</dt>
+      <dd id="tools">—</dd>
+    </dl>
+  </section>
+  <section class="card">
+    <p>Le central attribue le travail, les bibliothèques et les réglages. Cette page ne les modifie pas.</p>
+    <p>Les plugins et les outils installés ici sont ceux du central. Un redémarrage ou un volume neuf les recharge. Rien n’est retiré si le central ne répond pas.</p>
+    <p id="central-link"></p>
+  </section>
+  <script>
+    const text = (id, value) => { document.getElementById(id).textContent = value; };
+    const when = (value) => value ? new Date(value).toLocaleString("fr") : "pas encore";
+    const sync = (state) => {
+      if (!state) return "en attente du central";
+      const error = state.error ? `, dernier échec : ${state.error}` : "";
+      return `${state.desired} paquet(s), aligné ${when(state.alignedAt)}${error}`;
+    };
+    fetch("/panel/status").then((response) => {
+      if (!response.ok) throw new Error("statut " + response.status);
+      return response.json();
+    }).then((status) => {
+      document.getElementById("title").textContent = status.displayName || status.name || "Worker";
+      text("lead", status.fixedWorker
+        ? "Image worker. Les fonctions ne se changent pas ici."
+        : "Agent de traitement.");
+      const central = status.centralUrl;
+      text("central", central || "Aucune adresse de central.");
+      text("enrolled", status.enrolled
+        ? "Rattaché. Le central pilote ce worker."
+        : "En attente. Ouvrez l’enrôlement sur le central.");
+      text("plugins", sync(status.plugins));
+      text("tools", sync(status.tools));
+      const link = document.getElementById("central-link");
+      if (central) {
+        const anchor = document.createElement("a");
+        anchor.href = central;
+        anchor.textContent = "Ouvrir le central";
+        link.replaceChildren(anchor);
+      }
+    }).catch(() => {
+      text("lead", "L’état du worker est indisponible.");
+    });
+  </script>
+</body>
+</html>

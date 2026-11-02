@@ -1,0 +1,189 @@
+<section class="log-viewer" [attr.aria-label]="title()">
+  <div class="view-toolbar">
+    <mat-button-toggle-group
+      aria-label="Présentation des journaux"
+      [value]="view()"
+      (change)="changeView($event.value)"
+      ><mat-button-toggle value="summary">Résumé</mat-button-toggle
+      ><mat-button-toggle value="console"
+        >Console détaillée</mat-button-toggle
+      ></mat-button-toggle-group
+    >
+    <span class="stream-status" role="status">
+      @if (isPaused()) {
+        Suivi en pause
+        @if (pendingCount()) {
+          · {{ pendingCount() }} en attente
+        }
+      } @else if (isConnected()) {
+        Flux connecté
+      } @else if (streamFailed()) {
+        Flux interrompu · nouvelle tentative…
+      } @else {
+        Connexion au flux…
+      }
+    </span>
+  </div>
+  @if (showToolbar()) {
+    <div class="log-filters">
+      <app-search-field
+        class="log-search"
+        variant="bar"
+        label="Rechercher dans les journaux"
+        placeholder="Message, exception, identifiant…"
+        [value]="searchText()"
+        (valueChange)="onSearchText($event)"
+        [filterCount]="activeFilterCount()"
+      >
+        <div search-filters class="log-filter-fields">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic"
+            ><mat-label>Niveau minimum</mat-label
+            ><mat-select [value]="selectedLevel()" (selectionChange)="setLevel($event.value)">
+              @for (level of levelOptions; track level.value) {
+                <mat-option [value]="level.value">{{ level.label }}</mat-option>
+              }
+            </mat-select></mat-form-field
+          >
+          <mat-form-field appearance="outline" subscriptSizing="dynamic"
+            ><mat-label>Service</mat-label
+            ><mat-select [value]="selectedCategory()" (selectionChange)="setCategory($event.value)"
+              ><mat-option value="">Tous les services</mat-option>
+              @for (category of categories(); track category) {
+                <mat-option [value]="category">{{ category }}</mat-option>
+              }
+            </mat-select></mat-form-field
+          >
+        </div>
+      </app-search-field>
+    </div>
+    <div class="action-toolbar">
+      <span class="export-scope"
+        >{{ filteredEntries().length }} événement(s) chargé(s) · Copie et export selon les
+        filtres</span
+      >
+      <div class="log-actions">
+        <button matButton="text" [attr.aria-pressed]="isPaused()" (click)="togglePause()">
+          {{ isPaused() ? 'Reprendre' : 'Mettre en pause' }}
+        </button>
+        @if (consoleSelection() && view() === 'console') {
+          <button matButton="tonal" (click)="copySelection()">Copier la sélection</button>
+        }
+        <button matButton="outlined" [disabled]="!filteredEntries().length" (click)="copyLogs()">
+          Copier</button
+        ><button
+          matButton="tonal"
+          [disabled]="!filteredEntries().length"
+          [matMenuTriggerFor]="exportMenu"
+        >
+          Exporter
+        </button>
+      </div>
+    </div>
+    <mat-menu #exportMenu="matMenu"
+      ><button mat-menu-item (click)="exportTxt()">Texte console (.txt)</button
+      ><button mat-menu-item (click)="exportJson()">Événements complets (.json)</button
+      ><button mat-menu-item (click)="exportCsv()">CSV (.csv)</button></mat-menu
+    >
+  }
+  @if (historyError()) {
+    <div class="history-error" role="alert">
+      Historique indisponible. Les événements reçus en direct restent affichés.<button
+        matButton="text"
+        (click)="retryHistory()"
+      >
+        Réessayer
+      </button>
+    </div>
+  }
+  @if (isLoadingHistory()) {
+    <p role="status">Chargement de l’historique…</p>
+  }
+  @if (view() === 'summary') {
+    @if (filteredEntries().length) {
+      <div class="summary-counts" aria-label="Bilan des événements chargés">
+        <span
+          ><strong>{{ errorCount() }}</strong> erreur(s) et critique(s)</span
+        ><span
+          ><strong>{{ warningCount() }}</strong> avertissement(s)</span
+        ><span>{{ groups().length }} message(s) distinct(s)</span>
+      </div>
+      <p class="summary-explanation">
+        Messages originaux, répétitions regroupées. Les erreurs apparaissent en premier.
+      </p>
+      <div class="summary-list">
+        @for (group of groups(); track group.key) {
+          <article class="summary-item">
+            <div class="summary-main">
+              <span
+                class="severity"
+                [class.error]="group.entry.level === 'Error' || group.entry.level === 'Critical'"
+                [class.warning]="group.entry.level === 'Warning'"
+                >{{ levelLabels[group.entry.level] }}</span
+              >
+              <h3>{{ group.entry.message }}</h3>
+            </div>
+            <p class="summary-service">
+              <code>{{ group.entry.category }}</code>
+              @if (group.entry.nodeName) {
+                · {{ group.entry.nodeName }}
+              }
+            </p>
+            <div class="summary-details">
+              <span
+                >{{ group.entries.length }} occurrence(s) · Dernière :
+                <time [attr.datetime]="group.lastSeen">{{ formatTime(group.lastSeen) }}</time></span
+              ><button matButton="text" (click)="showGroup(group)">Voir dans la console</button>
+            </div>
+          </article>
+        }
+      </div>
+    } @else if (!isLoadingHistory()) {
+      <div class="empty-state">
+        <h3>Aucun événement avec ces critères.</h3>
+        <p>Le résumé porte uniquement sur les événements chargés.</p>
+        <button matButton="text" (click)="resetFilters()">Réinitialiser les filtres</button>
+      </div>
+    }
+  } @else {
+    <div class="terminal-wrapper">
+      <pre
+        #terminalContainer
+        class="terminal-console"
+        [class.wrap-lines]="wrapLines()"
+        role="region"
+        aria-label="Sortie console des services"
+        aria-live="off"
+        tabindex="0"
+        (scroll)="onConsoleScroll()"
+        (mouseup)="captureSelection()"
+        (keyup)="captureSelection()"
+      >@for (entry of filteredEntries(); track entry.id; let last = $last) {<span class="console-entry" [attr.data-log-id]="entry.id" [class.error]="entry.level === 'Error' || entry.level === 'Critical'" [class.warning]="entry.level === 'Warning'" [class.is-focused]="isFocused(entry)" [textContent]="consoleLine(entry) + (last ? '' : '\n')"></span>}</pre>
+      @if (!filteredEntries().length && !isLoadingHistory()) {
+        <p class="console-empty">Aucun événement avec ces critères.</p>
+      }
+      <footer class="console-footer">
+        <div>
+          <mat-checkbox [checked]="wrapLines()" (change)="wrapLines.set($event.checked)"
+            >Retour à la ligne</mat-checkbox
+          ><button matButton="text" (click)="focusedGroup.set(null); scrollToBottom()">
+            {{ autoScrollEnabled() ? 'Fin du journal' : 'Suivre le flux' }}
+          </button>
+          @if (focusedGroup()) {
+            <button matButton="text" (click)="focusedGroup.set(null)">Effacer le repère</button>
+          }
+        </div>
+        <span>Ordre chronologique · Horodatage serveur</span>
+      </footer>
+    </div>
+  }
+  @if (showToolbar()) {
+    <div class="viewer-footer">
+      <span
+        >Fenêtre locale : jusqu’à {{ bufferLimit() }} événements. Les exceptions sont conservées
+        dans la console et les exports.</span
+      ><button matButton="text" [disabled]="!displayedEntries().length" (click)="clearLogs()">
+        Effacer l’affichage
+      </button>
+    </div>
+  }
+</section>

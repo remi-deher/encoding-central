@@ -1,0 +1,489 @@
+<app-assistant-workspace-template
+  [compact]="compact()"
+  [panelMode]="panelMode()"
+  [historyOpen]="historyOpen()"
+  [previewOpen]="previewOpen()"
+  (backdropClicked)="historyOpen.set(false); closePreview()"
+  (historyClosed)="historyOpen.set(false)"
+  (previewClosed)="closePreview()"
+>
+  <app-ai-conversation-history
+    assistant-history
+    [historyId]="
+      panelMode() ? 'assistant-conversation-history-panel' : 'assistant-conversation-history'
+    "
+    [conversations]="filteredConversations()"
+    [totalCount]="conversations().length"
+    [nodes]="aiNodes()"
+    [activeId]="detail()?.conversation?.id ?? null"
+    [deletingId]="deletingConversationId()"
+    [query]="searchQuery()"
+    [loading]="loadingConversations()"
+    [searching]="searchingConversations()"
+    [sending]="sending()"
+    (conversationSelected)="openConversation($event)"
+    (deleteRequested)="confirmDeleteConversation($event)"
+  />
+  <section assistant-context class="assistant-context-content">
+    <header class="preview-panel__header">
+      <h2>{{ previewFlow() ? previewTitle() : 'Espace de travail' }}</h2>
+      <button
+        mat-icon-button
+        type="button"
+        aria-label="Fermer l’espace de travail"
+        (click)="closePreview()"
+      >
+        ×
+      </button>
+    </header>
+    @if (!previewFlow()) {
+      <section class="workspace-files" aria-label="Fichiers joints au prochain message">
+        <section class="workspace-resource" aria-label="Joindre une ressource">
+          <div class="workspace-files__heading">
+            <div>
+              <h3>Joindre une ressource</h3>
+              <p class="muted">
+                Ajoutez un flow, une exécution, un nœud ou une bibliothèque au contexte.
+              </p>
+            </div>
+          </div>
+          <mat-form-field appearance="outline" subscriptSizing="dynamic" floatLabel="always">
+            <mat-label>Type de ressource</mat-label>
+            <mat-select
+              [ngModel]="selectedResourceType()"
+              (ngModelChange)="selectResourceType($event)"
+            >
+              <mat-option value="flow">Flows</mat-option>
+              <mat-option value="execution">Exécutions</mat-option>
+              <mat-option value="node">Nœuds</mat-option>
+              <mat-option value="library">Bibliothèques</mat-option>
+            </mat-select>
+          </mat-form-field>
+          <div class="resource-select-row">
+            <mat-form-field appearance="outline" subscriptSizing="dynamic" floatLabel="always">
+              <mat-label>Ressource</mat-label>
+              <mat-select
+                [ngModel]="selectedResourceId()"
+                (ngModelChange)="selectedResourceId.set($event)"
+              >
+                @for (resource of resourceOptions(); track resource.id) {
+                  <mat-option [value]="resource.id">{{ resource.label }}</mat-option>
+                }
+              </mat-select>
+              @if (!resourceOptions().length) {
+                <mat-hint>Aucune ressource disponible</mat-hint>
+              }
+            </mat-form-field>
+            <button
+              matButton="tonal"
+              type="button"
+              [disabled]="!selectedResourceId() || sending() || updatingSources()"
+              (click)="addResourceToContext()"
+            >
+              Joindre
+            </button>
+          </div>
+          @if (selectedResource(); as resource) {
+            <div class="selected-resource">
+              <span>{{ resource.label }}</span>
+              <button
+                mat-icon-button
+                type="button"
+                aria-label="Retirer la ressource"
+                (click)="removeSelectedResource()"
+              >
+                ×
+              </button>
+            </div>
+          }
+          @if (detail(); as resourceDetail) {
+            @if (visibleConversationSources(resourceDetail.conversation).length) {
+              <h4>Ressources jointes</h4>
+              <ul class="workspace-file-list">
+                @for (
+                  source of visibleConversationSources(resourceDetail.conversation);
+                  track source.kind + source.resourceId
+                ) {
+                  <li>
+                    <span aria-hidden="true"><app-icon name="outward" /></span
+                    ><span>{{ source.label }}</span>
+                  </li>
+                }
+              </ul>
+            }
+          }
+        </section>
+        <section class="workspace-resource" aria-label="Outils de lecture">
+          <div class="workspace-files__heading">
+            <div>
+              <h3>Outils de lecture</h3>
+              <p class="muted">Choisissez les informations à récupérer pour le prochain message.</p>
+            </div>
+          </div>
+          <mat-form-field class="read-tool-picker" appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Outils de lecture pour ce message</mat-label>
+            <mat-select
+              name="readTools"
+              multiple
+              [ngModel]="selectedReadTools()"
+              (ngModelChange)="setSelectedReadTools($event)"
+            >
+              @for (tool of readTools; track tool.name) {
+                <mat-option
+                  [value]="tool.name"
+                  [disabled]="tool.name === 'get_flow' && !hasFlowContext()"
+                  >{{ tool.label }}</mat-option
+                >
+              }
+            </mat-select>
+            <mat-hint
+              >Jusqu’à trois outils ; l’assistant peut aussi choisir un outil adapté. Les résultats
+              seront cités.</mat-hint
+            >
+          </mat-form-field>
+        </section>
+        <div class="workspace-files__heading">
+          <div>
+            <h3>Fichiers</h3>
+            <p class="muted">
+              Ajoutez des fichiers de configuration, flows, scripts ou sous-titres.
+            </p>
+          </div>
+          <button
+            matButton="tonal"
+            type="button"
+            [disabled]="sending() || hasPendingRequest()"
+            (click)="assistantFileInput.click()"
+          >
+            Ajouter
+          </button>
+        </div>
+        <input
+          #assistantFileInput
+          class="visually-hidden"
+          type="file"
+          multiple
+          [accept]="fileAccept"
+          aria-label="Choisir des fichiers texte à joindre"
+          (change)="selectAttachments($event)"
+        />
+        @if (attachments().length) {
+          <ul class="workspace-file-list">
+            @for (file of attachments(); track file.name) {
+              <li>
+                <span aria-hidden="true">📄</span>
+                <span>{{ file.name }}</span>
+                <button
+                  mat-icon-button
+                  type="button"
+                  [disabled]="sending() || hasPendingRequest()"
+                  [attr.aria-label]="'Retirer ' + file.name"
+                  (click)="removeAttachment(file.name)"
+                >
+                  ×
+                </button>
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="muted">
+            Aucun fichier joint. Limite : 8 Mo par fichier, 16 Mo au total (5 fichiers maximum).
+          </p>
+        }
+        <p class="muted">
+          Formats texte pris en charge : JSON/YAML/XML, SRT/ASS/SSA/VTT, flows, logs, scripts et
+          configurations.
+        </p>
+        <p class="muted">Les fichiers seront transmis au modèle avec votre prochain message.</p>
+      </section>
+    }
+    @if (previewLoading()) {
+      <p class="muted" role="status"><mat-spinner diameter="20" /> Chargement de l’aperçu…</p>
+    } @else if (previewError(); as error) {
+      <p class="error-message" role="alert">{{ error }}</p>
+    } @else if (previewFlow(); as flow) {
+      <app-flow-preview [flow]="flow" [components]="previewComponents()" mode="flow" />
+    }
+  </section>
+  <section assistant-chat class="assistant-chat-content" aria-labelledby="assistant-page-title">
+    <h1 id="assistant-page-title" class="visually-hidden">Assistant</h1>
+    @if (!panelMode()) {
+      <header class="chat-toolbar">
+        <button
+          class="history-toggle"
+          mat-icon-button
+          type="button"
+          [attr.aria-label]="
+            historyOpen() ? 'Masquer les conversations' : 'Afficher les conversations'
+          "
+          [attr.aria-expanded]="historyOpen()"
+          [attr.aria-controls]="
+            panelMode() ? 'assistant-conversation-history-panel' : 'assistant-conversation-history'
+          "
+          (click)="historyOpen.set(!historyOpen())"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            aria-hidden="true"
+          >
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <div class="chat-toolbar__copy">
+          <h2>{{ detail()?.conversation?.title ?? 'Nouvelle conversation' }}</h2>
+          @if (detail(); as current) {
+            @if (coordinatorLabel(current.conversation); as origin) {
+              <span
+                class="node-badge"
+                [title]="
+                  coordinatorLost(current.conversation)
+                    ? 'Ce nœud ne répond plus : le nœud courant reprendra la discussion à votre prochain message.'
+                    : 'Nœud qui coordonne cette discussion.'
+                "
+                >{{ origin }}{{ coordinatorLost(current.conversation) ? ' · injoignable' : '' }}</span
+              >
+            }
+          }
+        </div>
+        <button matButton="tonal" type="button" class="context-toggle" (click)="openWorkspace()">
+          <span>Contexte</span>
+        </button>
+      </header>
+    }
+    <div
+      #messageThread
+      class="message-list"
+      role="log"
+      aria-label="Messages"
+      aria-live="polite"
+      tabindex="0"
+      (scroll)="onThreadScroll()"
+    >
+      @if (detail(); as current) {
+        @for (turn of current.turns; track turn.requestId; let turnIndex = $index) {
+          <article
+            class="message user-message"
+            [class.search-match]="highlightedTurn()?.turnIndex === turnIndex && highlightedTurn()?.role === 'user'"
+            [attr.data-turn-index]="turnIndex"
+            data-message-role="user"
+          >
+            <h3>Vous</h3>
+            <p>{{ turn.userPrompt }}</p>
+          </article>
+          <article
+            class="message assistant-message"
+            [class.search-match]="highlightedTurn()?.turnIndex === turnIndex && highlightedTurn()?.role === 'assistant'"
+            [attr.data-turn-index]="turnIndex"
+            data-message-role="assistant"
+          >
+            <h3>Assistant</h3>
+            <p>{{ turn.content }}</p>
+            <details class="response-details">
+              <summary>Modèle et raisonnement</summary>
+              @if (turn.actualModel) {
+                <p class="muted">Modèle utilisé : {{ turn.actualModel }}</p>
+              } @else if (turn.selection?.model) {
+                <p class="muted">
+                  Modèle demandé : {{ turn.selection?.model }} · Modèle effectif non communiqué
+                </p>
+              } @else {
+                <p class="muted">Modèle non communiqué</p>
+              }
+              @if (turn.selection?.reasoningEffort; as effort) {
+                <p class="muted">Raisonnement demandé : {{ effortLabel(effort) }}</p>
+              }
+            </details>
+            @for (
+              source of turn.sources ?? [current.conversation.source];
+              track source.kind + source.resourceId
+            ) {
+              <div class="message-source">
+                <a [routerLink]="source.href">Source : {{ source.label }}</a>
+                @if (source.kind === 'flow' && source.version) {
+                  <button matButton="text" type="button" (click)="previewSource(source)">
+                    Aperçu
+                  </button>
+                }
+              </div>
+            }
+          </article>
+        }
+        @if (pendingActionProposal(); as proposal) {
+          <section class="assistant-action-confirmation" aria-label="Action à confirmer">
+            <h3>Action proposée</h3>
+            <p>{{ proposal.summary }}</p>
+            <p class="muted">
+              Cette action n’aura lieu qu’après votre confirmation. Le lien expire dans cinq
+              minutes.
+            </p>
+            <div class="assistant-action-confirmation__buttons">
+              <button
+                matButton="filled"
+                type="button"
+                [disabled]="confirmingAiAction()"
+                (click)="confirmAiAction()"
+              >
+                {{ confirmingAiAction() ? 'Application…' : 'Confirmer l’action' }}
+              </button>
+              <button
+                matButton="text"
+                type="button"
+                [disabled]="confirmingAiAction()"
+                (click)="dismissAiAction()"
+              >
+                Ignorer
+              </button>
+            </div>
+          </section>
+        }
+      } @else if (!pendingPrompt()) {
+        <div class="welcome">
+          <span aria-hidden="true">✦</span>
+          <h2>{{ panelMode() ? 'Comment puis-je vous aider ?' : 'Que souhaitez-vous faire ?' }}</h2>
+        </div>
+      }
+      @if (pendingPrompt(); as pending) {
+        <article class="message user-message">
+          <h3>Vous</h3>
+          <p>{{ pending }}</p>
+        </article>
+      }
+      @if (sending()) {
+        <div class="thinking" role="status">
+          <mat-spinner diameter="20" />
+          <span>{{ requestProgressDetail() ?? 'Réponse en cours…' }}</span>
+        </div>
+      }
+    </div>
+    <footer class="conversation-footer" [class.model-settings-open]="modelSettingsOpen()">
+      @if (detail(); as current) {
+        @if (visibleConversationSources(current.conversation).length) {
+          <div class="source-bar">
+            <mat-chip-set aria-label="Ressources jointes">
+              @for (
+                source of visibleConversationSources(current.conversation);
+                track source.kind + source.resourceId
+              ) {
+                <span class="source-item"
+                  ><mat-chip>{{ source.label }}</mat-chip
+                  ><button
+                    mat-icon-button
+                    [matMenuTriggerFor]="sourceMenu"
+                    [attr.aria-label]="'Actions pour ' + source.label"
+                  >
+                    ⋮
+                  </button></span
+                >
+                <mat-menu #sourceMenu="matMenu">
+                  <a mat-menu-item [routerLink]="source.href">Ouvrir la ressource</a>
+                  @if (isAdmin() && source.kind === 'flow' && source.version) {
+                    @if (hasDraftFor(source)) {
+                      <button
+                        mat-menu-item
+                        [disabled]="actionBusy()"
+                        (click)="publishFlowFromAssistant(source)"
+                      >
+                        Publier le brouillon…
+                      </button>
+                    }
+                    <button
+                      mat-menu-item
+                      [disabled]="actionBusy()"
+                      (click)="deleteFlowFromAssistant(source)"
+                    >
+                      Supprimer le flow…
+                    </button>
+                  }
+                  @if (isAdmin() && canStartLibrary(source)) {
+                    <button
+                      mat-menu-item
+                      [disabled]="actionBusy()"
+                      (click)="startLibraryFromAssistant(source)"
+                    >
+                      Lancer les traitements…
+                    </button>
+                  }
+                  @if (isAdmin() && isCancelableExecution(source)) {
+                    <button
+                      mat-menu-item
+                      [disabled]="actionBusy()"
+                      (click)="cancelExecutionFromAssistant(source)"
+                    >
+                      Annuler l’exécution…
+                    </button>
+                  }
+                  @if (conversationSources(current.conversation).length > 1) {
+                    <button
+                      mat-menu-item
+                      [disabled]="sending() || updatingSources() || hasPendingRequest()"
+                      (click)="removeConversationSource(source)"
+                    >
+                      Retirer
+                    </button>
+                  }
+                </mat-menu>
+              }
+            </mat-chip-set>
+          </div>
+        }
+      }
+      @if (actionMessage(); as message) {
+        <p class="muted" role="status">{{ message }}</p>
+      }
+      @if (errorMessage(); as error) {
+        <div class="error-message" role="alert">{{ error }}</div>
+      }
+      @if (loadingAssistantOptions()) {
+        <p class="muted" role="status">Chargement des modèles…</p>
+      } @else if (!selectedModelOption() && !hasPendingRequest()) {
+        <p class="muted" role="status">
+          Modèle indisponible ou désactivé. Choisissez un modèle disponible.
+        </p>
+      }
+      @for (node of assistantOptions()?.catalogs ?? []; track node.nodeId) {
+        @for (catalog of node.providers; track catalog.provider) {
+          @if (catalog.state !== 'available') {
+            <p class="muted" role="status">
+              {{ node.name }} · {{ catalog.provider }} :
+              {{ catalog.message ?? 'Catalogue indisponible' }}
+            </p>
+          }
+        }
+      }
+      <app-ai-conversation-composer
+        [(text)]="prompt"
+        [options]="assistantOptions()?.models ?? []"
+        [selectedKey]="selectedModelKey()"
+        [provider]="detail()?.conversation?.provider ?? ''"
+        [unavailableModel]="detail()?.conversation?.model ?? null"
+        [effort]="selectedReasoningEffort()"
+        [locked]="sending() || hasPendingRequest()"
+        [loading]="loadingAssistantOptions()"
+        [busy]="sending()"
+        [cancelling]="cancelling()"
+        [resuming]="resumingRequest()"
+        [canSend]="canSend()"
+        [attachmentName]="attachmentName()"
+        (settingsOpenChange)="modelSettingsOpen.set($event)"
+        (typeChange)="selectType($event)"
+        (modelChange)="selectModel($event)"
+        (effortChange)="selectEffort($event)"
+        (send)="send()"
+        (cancel)="cancelRequest()"
+        (resourceChosen)="chooseResource($event)"
+        (fileRemoved)="removeAttachment()"
+        (filesChosen)="selectAttachments($event)"
+      />
+    </footer>
+  </section>
+</app-assistant-workspace-template>
+@if (draggingFiles()) {
+  <div class="drop-overlay" aria-hidden="true">
+    <span>Déposez vos fichiers pour les joindre</span>
+  </div>
+}

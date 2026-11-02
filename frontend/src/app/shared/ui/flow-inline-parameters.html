@@ -1,0 +1,71 @@
+@if (fields.length) {
+  <div class="inline-parameters" [formGroup]="form">
+    @for (field of fields; track field.id) {
+      @if (visible(field)) {
+        @if (field.type === 'condition-tree') {
+          <p
+            class="condition-summary"
+            [attr.aria-label]="field.label"
+            [title]="conditionSummary(field)"
+          >
+            {{ conditionSummary(field) }}
+          </p>
+        } @else {
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>{{ field.label }}</mat-label>
+            @switch (field.type) {
+              @case ('select') {
+                <mat-select [formControlName]="field.id">
+                  @if (!field.required) {
+                    <mat-option [value]="null">Non défini</mat-option>
+                  }
+                  @for (option of field.options; track option.value) {
+                    <mat-option [value]="option.value">{{ option.label }}</mat-option>
+                  }
+                </mat-select>
+              }
+              @case ('boolean') {
+                <mat-select [formControlName]="field.id"
+                  ><mat-option [value]="true">Oui</mat-option
+                  ><mat-option [value]="false">Non</mat-option></mat-select
+                >
+              }
+              @case ('number') {
+                @if (field.suggestions?.length) {
+                  <mat-select [formControlName]="field.id">
+                    @if (!field.required) {
+                      <mat-option [value]="null">Non défini</mat-option>
+                    }
+                    @for (option of numberOptions(field); track option) {
+                      <mat-option [value]="option">{{ option }}</mat-option>
+                    }
+                  </mat-select>
+                } @else {
+                  <input
+                    matInput
+                    type="number"
+                    [formControlName]="field.id"
+                    [attr.min]="field.min ?? null"
+                    [attr.max]="field.max ?? null"
+                    [attr.step]="field.step ?? 'any'"
+                  />
+                }
+              }
+              @case ('text') {
+                <input
+                  matInput
+                  type="text"
+                  [formControlName]="field.id"
+                  [placeholder]="field.placeholder ?? ''"
+                />
+              }
+            }
+            @if (form.controls[field.id].invalid) {
+              <mat-error>{{ form.controls[field.id].errors?.['configuration'] }}</mat-error>
+            }
+          </mat-form-field>
+        }
+      }
+    }
+  </div>
+}

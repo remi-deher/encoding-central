@@ -1,0 +1,223 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+.log-viewer {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+.view-toolbar,
+.action-toolbar,
+.summary-details,
+.console-footer,
+.viewer-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.stream-status,
+.export-scope,
+.viewer-footer,
+.summary-explanation,
+.summary-service,
+.summary-details,
+.console-footer {
+  font-size: var(--font-label);
+  color: var(--text-secondary);
+}
+.log-filters {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.log-filter-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.log-filter-fields mat-form-field {
+  width: 210px;
+  max-width: 100%;
+}
+.log-filters .log-search {
+  flex: 1;
+  min-width: min(100%, 230px);
+  max-width: 640px;
+  margin-inline: auto;
+}
+.log-actions,
+.console-footer > div {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.action-toolbar {
+  background: var(--surface-container-low);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+}
+h3,
+p {
+  margin: 0;
+}
+.summary-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  padding-block: var(--space-2);
+  color: var(--text-secondary);
+}
+.summary-counts strong {
+  font-size: var(--font-title);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.summary-list {
+  display: grid;
+  gap: var(--space-1);
+}
+.summary-item {
+  padding: var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--surface-container-low);
+  min-width: 0;
+}
+.summary-item:first-child {
+  border-start-start-radius: var(--radius-lg);
+  border-start-end-radius: var(--radius-lg);
+}
+.summary-item:last-child {
+  border-end-start-radius: var(--radius-lg);
+  border-end-end-radius: var(--radius-lg);
+}
+.summary-main {
+  display: flex;
+  gap: var(--space-3);
+  align-items: start;
+  flex-wrap: wrap;
+}
+.summary-main h3 {
+  flex: 1;
+  min-width: min(100%, 230px);
+  font-size: var(--font-body);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.summary-service {
+  margin-block: var(--space-2);
+  overflow-wrap: anywhere;
+}
+.summary-service code {
+  font-family: ui-monospace, Consolas, monospace;
+}
+.severity {
+  font-size: var(--font-label);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  background: var(--surface-container-high);
+}
+.severity.error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.severity.warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.terminal-wrapper {
+  overflow: hidden;
+  background: var(--surface-container-low);
+  border-radius: var(--radius-lg);
+}
+.terminal-console {
+  margin: 0;
+  padding: var(--space-5);
+  min-height: 320px;
+  max-height: 560px;
+  overflow: auto;
+  white-space: pre;
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: var(--font-body);
+  line-height: 1.85;
+  color: var(--text-primary);
+  background: var(--surface-container-lowest);
+  user-select: text;
+  position: relative;
+  tab-size: 4;
+}
+.terminal-console.wrap-lines {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.terminal-console:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: -2px;
+}
+.console-entry.error {
+  color: var(--danger);
+}
+.console-entry.warning {
+  color: var(--warning);
+}
+.console-entry.is-focused {
+  background: var(--accent-soft);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
+.console-footer {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-container);
+}
+.console-empty,
+.empty-state {
+  padding: var(--space-5);
+  color: var(--text-secondary);
+}
+.empty-state h3 {
+  font-size: var(--font-body);
+  color: var(--text-primary);
+  margin-bottom: var(--space-2);
+}
+.empty-state button {
+  margin-top: var(--space-3);
+}
+.history-error {
+  background: var(--warning-soft);
+  color: var(--warning);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+}
+.viewer-footer {
+  line-height: 1.6;
+}
+.log-actions button,
+.console-footer button {
+  color: var(--text-primary);
+}
+@media (max-width: 640px) {
+  .log-filter-fields mat-form-field,
+  .log-filters .log-search {
+    width: 100%;
+  }
+  .log-actions {
+    width: 100%;
+  }
+  .terminal-console {
+    padding: var(--space-3);
+    font-size: var(--font-label);
+  }
+  .summary-details {
+    gap: var(--space-1);
+  }
+  .summary-counts {
+    gap: var(--space-3);
+    font-size: var(--font-label);
+  }
+}

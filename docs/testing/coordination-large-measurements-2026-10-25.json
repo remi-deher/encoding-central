@@ -1,0 +1,95 @@
+{
+  "scope": "one SQLite server, two synthetic worker nodes, repository methods, no HTTP/media/other benchmark running",
+  "observations": [
+    {
+      "concurrent_capture": false,
+      "clients": 8,
+      "active_worker_nodes": 2,
+      "queued": 7000,
+      "claims_per_client": 16,
+      "setup_ms": 27232.442,
+      "elapsed_ms": 9547.318,
+      "idle_capture_8_ms": 27.008,
+      "idle_writer_admissions": 0,
+      "claim": {
+        "count": 128,
+        "p50_ms": 326.877,
+        "p95_ms": 433.932,
+        "p99_ms": 735.675,
+        "max_ms": 811.919
+      },
+      "renew": {
+        "count": 512,
+        "p50_ms": 64.643,
+        "p95_ms": 117.521,
+        "p99_ms": 140.834,
+        "max_ms": 175.575
+      },
+      "overview": {
+        "count": 64,
+        "p50_ms": 73.382,
+        "p95_ms": 140.827,
+        "p99_ms": 168.508,
+        "max_ms": 168.508
+      },
+      "detail_and_events": {
+        "count": 64,
+        "p50_ms": 24.524,
+        "p95_ms": 75.452,
+        "p99_ms": 81.697,
+        "max_ms": 81.697
+      },
+      "writer_admissions": 640,
+      "writer_wait_ms": 43195.723,
+      "writer_hold_ms": 9376.978,
+      "writer_long_holds": 0,
+      "writer_rejections": 0,
+      "writer_expirations": 0
+    },
+    {
+      "concurrent_capture": true,
+      "clients": 8,
+      "active_worker_nodes": 2,
+      "queued": 7000,
+      "claims_per_client": 16,
+      "setup_ms": 27231.991,
+      "elapsed_ms": 9658.938,
+      "idle_capture_8_ms": 25.865,
+      "idle_writer_admissions": 0,
+      "claim": {
+        "count": 128,
+        "p50_ms": 311.213,
+        "p95_ms": 477.613,
+        "p99_ms": 518.89,
+        "max_ms": 539.439
+      },
+      "renew": {
+        "count": 512,
+        "p50_ms": 69.745,
+        "p95_ms": 114.069,
+        "p99_ms": 129.232,
+        "max_ms": 151.322
+      },
+      "overview": {
+        "count": 64,
+        "p50_ms": 82.124,
+        "p95_ms": 150.782,
+        "p99_ms": 168.878,
+        "max_ms": 168.878
+      },
+      "detail_and_events": {
+        "count": 64,
+        "p50_ms": 30.837,
+        "p95_ms": 71.192,
+        "p99_ms": 78.573,
+        "max_ms": 78.573
+      },
+      "writer_admissions": 672,
+      "writer_wait_ms": 49600.406,
+      "writer_hold_ms": 9574.904,
+      "writer_long_holds": 0,
+      "writer_rejections": 0,
+      "writer_expirations": 0
+    }
+  ]
+}

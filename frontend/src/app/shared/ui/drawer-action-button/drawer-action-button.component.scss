@@ -1,0 +1,24 @@
+:host {
+  display: inline-flex;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.drawer-action-button {
+  max-width: 260px;
+  min-height: var(--touch-target);
+  white-space: normal;
+  text-align: center;
+  line-height: 1.25;
+}
+
+@media (max-width: 700px) {
+  .drawer-action-button {
+    max-width: 220px;
+  }
+}
+
+.drawer-action-button_danger {
+  --mat-button-filled-container-color: var(--danger-strong);
+  --mat-button-filled-label-text-color: var(--on-danger);
+}

@@ -1,4 +1,0 @@
-<Solution>
-  <Project Path="src/Encoding.Server/Encoding.Server.csproj" />
-  <Project Path="tests/Encoding.Server.Tests/Encoding.Server.Tests.csproj" />
-</Solution>

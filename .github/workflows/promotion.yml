@@ -1,0 +1,45 @@
+name: Promotion CI
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+permissions:
+  contents: read
+  checks: read
+concurrency:
+  group: promotion-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  promotion-ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Require dev from this repository
+        env:
+          SOURCE: ${{ github.event.pull_request.head.ref }}
+          SOURCE_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: test "$SOURCE" = dev && test "$SOURCE_REPO" = "$GITHUB_REPOSITORY"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require main to carry no change absent from dev
+        run: |
+          # Les fusions de promotion précédentes (merge commits) sont attendues sur main et absentes de dev ;
+          # tout autre commit de main absent de dev (commit direct, hotfix) doit d'abord être reporté dans dev.
+          git fetch --no-tags origin main
+          missing="$(git rev-list --no-merges origin/main ^HEAD)"
+          if [ -n "$missing" ]; then
+            echo "$missing"
+            echo "::error::main contient des commits (listés ci-dessus) absents de dev : les reporter dans dev (fusionner main dans dev), puis relancer la promotion."
+            exit 1
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Require successful CI for the exact dev commit and all unchanged domains
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_TARGET_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node .github/scripts/wait-ci.mjs

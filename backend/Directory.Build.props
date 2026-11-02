@@ -1,8 +1,25 @@
 <Project>
-  <PropertyGroup>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <InvariantGlobalization>true</InvariantGlobalization>
+  <!--
+    Analyseurs Roslyn recommandés sur les projets de production uniquement.
+    Directory.Build.props est importé avant le corps du csproj : IsTestProject
+    n'y est pas encore lisible, d'où le nom de projet. La sévérité reste
+    « suggestion » dans .editorconfig, sinon -warnaserror de la CI casse le build.
+    La vérification dotnet format reste hors CI jusqu'à un commit de format dédié.
+  -->
+  <PropertyGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').EndsWith('.Tests'))">
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(IsTestProject)' != 'true'">
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <AnalysisMode>Default</AnalysisMode>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!--
+      La CI passe -warnaserror à MSBuild, qui élève chaque avertissement.
+      La sévérité suggestion des CA est dans .editorconfig (par identifiant).
+      Ce drapeau évite en plus le globalconfig *_warnaserror si TreatWarningsAsErrors
+      est vrai.
+    -->
+    <CodeAnalysisTreatWarningsAsErrors>false</CodeAnalysisTreatWarningsAsErrors>
   </PropertyGroup>
 </Project>

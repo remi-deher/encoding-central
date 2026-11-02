@@ -1,10 +1,10 @@
 .git
-frontend/node_modules
-frontend/dist
-frontend/.angular
+**/node_modules
+**/dist
+**/.angular
 **/bin
 **/obj
-**/*.db
-**/*.db-*
-**/*.db-wal
-**/*.db-shm
+**/.vs
+**/.vscode
+**/.env
+**/coverage

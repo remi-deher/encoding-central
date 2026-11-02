@@ -1,0 +1,22 @@
+import { readFile, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+
+// Pour cette entrée sans chargement différé, Angular produit un seul script et une feuille de style.
+const root = resolve(process.argv[2] ?? 'dist/node-cluster/browser');
+let html = await readFile(resolve(root, 'index.html'), 'utf8');
+const css = await readFile(resolve(root, 'styles.css'), 'utf8');
+const js = await readFile(resolve(root, 'main.js'), 'utf8');
+if (!html.includes('href="styles.css"') || !html.includes('src="main.js"'))
+  throw new Error('Unexpected build structure');
+html = html.replace(
+  /<link rel="stylesheet" href="styles.css"[^>]*>/,
+  () => `<style>${css.replace(/<\/style/gi, '<\\/style')}</style>`,
+);
+html = html.replace(
+  /<script src="main.js"[^>]*><\/script>/,
+  () => `<script type="module">${js.replace(/<\/script/gi, '<\\/script')}</script>`,
+);
+html = html.replace(/<base href="\/">/, '<base href="./">');
+const output = resolve(root, 'maquette-noeuds-cluster.html');
+await writeFile(output, html);
+console.log(output);

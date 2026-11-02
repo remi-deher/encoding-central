@@ -1,0 +1,2130 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Maquette — Nœuds</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --page: #111416;
+        --sidebar: #1b1e20;
+        --surface: #1b2022;
+        --surface-raised: #22282a;
+        --surface-soft: #161a1c;
+        --line: #30383a;
+        --line-strong: #485254;
+        --text: #edf2f3;
+        --muted: #a3afb1;
+        --subtle: #788588;
+        --accent: #69d1b4;
+        --accent-soft: #163f35;
+        --accent-on: #09271f;
+        --ok: #68d6a7;
+        --ok-soft: #17392d;
+        --warn: #edbd68;
+        --warn-soft: #3b301d;
+        --danger: #f18b83;
+        --danger-soft: #452421;
+        --radius: 18px;
+        --radius-sm: 12px;
+        --shadow: 0 18px 60px rgb(0 0 0 / 42%);
+        font-family: Inter, "Segoe UI", system-ui, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-width: 360px;
+        min-height: 100vh;
+        background: var(--page);
+        color: var(--text);
+      }
+      button,
+      input {
+        font: inherit;
+      }
+      button {
+        color: inherit;
+        cursor: pointer;
+      }
+      .shell {
+        min-height: 100vh;
+      }
+      .sidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        z-index: 5;
+        display: flex;
+        flex-direction: column;
+        width: 248px;
+        padding: 18px 16px 14px;
+        background: var(--sidebar);
+        border-right: 1px solid #252a2c;
+      }
+      .nav {
+        display: grid;
+        gap: 5px;
+      }
+      .nav-label {
+        margin: 15px 14px 5px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-height: 46px;
+        padding: 0 14px;
+        border: 0;
+        border-radius: 14px;
+        background: transparent;
+        color: #d6dfe0;
+        text-align: left;
+        font-weight: 600;
+      }
+      .nav-item svg {
+        width: 20px;
+        height: 20px;
+        flex: 0 0 auto;
+      }
+      .nav-item.selected {
+        background: var(--accent-soft);
+        color: #a5f1d9;
+      }
+      .nav-item:hover:not(.selected) {
+        background: #272d2f;
+      }
+      .sidebar-spacer {
+        flex: 1;
+        min-height: 28px;
+      }
+      .appearance {
+        position: absolute;
+        left: 14px;
+        bottom: 76px;
+        z-index: 2;
+        width: 220px;
+        margin: 0;
+        padding: 14px;
+        border: 1px solid var(--line-strong);
+        border-radius: 16px;
+        background: #171b1d;
+        display: none;
+        gap: 12px;
+        box-shadow: var(--shadow);
+      }
+      .sidebar.appearance-open .appearance {
+        display: grid;
+      }
+      .appearance-title {
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .theme-switch {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        padding: 3px;
+        border-radius: 999px;
+        background: var(--surface-raised);
+      }
+      .theme-switch button {
+        display: flex;
+        justify-content: center;
+        gap: 7px;
+        padding: 8px 4px;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .theme-switch button.active {
+        background: #34423e;
+        color: var(--text);
+      }
+      .palette {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .palette button {
+        width: 23px;
+        height: 23px;
+        padding: 0;
+        border: 2px solid transparent;
+        border-radius: 50%;
+        background: var(--dot);
+      }
+      .palette button.active {
+        outline: 2px solid var(--dot);
+        outline-offset: 3px;
+      }
+      .sidebar-footer {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border-top: 1px solid var(--line);
+        padding-top: 12px;
+      }
+      .sidebar-footer .collapse {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-right: auto;
+        padding: 8px 10px;
+        border: 0;
+        border-radius: 10px;
+        background: transparent;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .icon-button,
+      .profile {
+        display: grid;
+        place-items: center;
+        width: 40px;
+        height: 40px;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--muted);
+      }
+      .icon-button:hover {
+        background: var(--surface-raised);
+        color: var(--text);
+      }
+      .profile {
+        background: #176854;
+        color: #effff9;
+        font-weight: 700;
+      }
+      .icon-button svg {
+        width: 20px;
+        height: 20px;
+      }
+      .main {
+        min-height: 100vh;
+        margin-left: 248px;
+      }
+      .global-header {
+        position: sticky;
+        top: 0;
+        z-index: 4;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(420px, 710px) minmax(
+            0,
+            1fr
+          );
+        align-items: center;
+        gap: 22px;
+        height: 84px;
+        padding: 0 34px;
+        background: color-mix(in srgb, var(--page) 93%, transparent);
+        backdrop-filter: blur(16px);
+        border-bottom: 1px solid rgb(255 255 255 / 3%);
+      }
+      .searchbar {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        height: 48px;
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        background: #0d1012;
+        overflow: hidden;
+        box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+      }
+      .search-input {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex: 1 1 auto;
+        min-width: 70px;
+        padding: 0 18px;
+      }
+      .search-input svg {
+        width: 20px;
+        height: 20px;
+        flex: 0 0 auto;
+        color: var(--accent);
+      }
+      .search-input input {
+        width: 100%;
+        min-width: 0;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: var(--text);
+        font-size: 14px;
+      }
+      .search-input input::placeholder {
+        color: #a4adaf;
+      }
+      .search-action {
+        height: 100%;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 0 16px;
+        border: 0;
+        border-left: 1px solid var(--line);
+        background: transparent;
+        color: #b0f4df;
+        white-space: nowrap;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .search-action:hover {
+        background: #18352e;
+      }
+      .search-action svg {
+        width: 17px;
+        height: 17px;
+      }
+      .search-action.filter {
+        color: var(--text);
+        padding-inline: 14px 17px;
+      }
+      .system-status {
+        display: flex;
+        justify-content: flex-end;
+        gap: 9px;
+        white-space: nowrap;
+      }
+      .status-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 38px;
+        padding: 0 13px;
+        border-radius: 999px;
+        background: #202527;
+        color: #dbe2e3;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .status-chip .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--ok);
+      }
+      .status-chip.jobs {
+        background: #163f35;
+        color: #a5f1d9;
+      }
+      .content {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 0 38px 48px;
+      }
+      .subnav-row {
+        position: sticky;
+        top: 84px;
+        z-index: 3;
+        display: grid;
+        grid-template-columns: minmax(190px, 1fr) auto minmax(190px, 1fr);
+        align-items: center;
+        gap: 18px;
+        min-height: 86px;
+        margin-bottom: 12px;
+        background: color-mix(in srgb, var(--page) 96%, transparent);
+        backdrop-filter: blur(12px);
+      }
+      .cluster-context {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        color: var(--muted);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .cluster-context strong {
+        color: var(--text);
+        font-size: 13px;
+      }
+      .cluster-context .cluster-mark {
+        display: grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 10px;
+        background: var(--surface-raised);
+        color: var(--accent);
+      }
+      .cluster-mark svg {
+        width: 16px;
+        height: 16px;
+      }
+      .subnav {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 5px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--surface-soft);
+      }
+      .subnav button {
+        min-height: 38px;
+        padding: 0 18px;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: #b5c0c1;
+        font-size: 13px;
+        font-weight: 650;
+        white-space: nowrap;
+      }
+      .subnav button.active {
+        background: #353b3e;
+        color: var(--text);
+      }
+      .subnav-actions {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 8px;
+      }
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 38px;
+        padding: 0 14px;
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        background: transparent;
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+      .button:hover {
+        background: var(--surface-raised);
+      }
+      .button.soft {
+        border-color: transparent;
+        background: var(--surface-raised);
+      }
+      .button .count {
+        display: grid;
+        place-items: center;
+        min-width: 19px;
+        height: 19px;
+        padding: 0 5px;
+        border-radius: 999px;
+        background: #343c3e;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .cluster-banner {
+        display: grid;
+        grid-template-columns: minmax(210px, 1.2fr) repeat(
+            4,
+            minmax(120px, 0.8fr)
+          );
+        align-items: center;
+        gap: 0;
+        margin: 4px 0 26px;
+        padding: 17px 20px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: linear-gradient(110deg, #192220, #1b2022 42%);
+      }
+      .cluster-name {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        min-width: 0;
+        padding-right: 18px;
+      }
+      .cluster-icon {
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        width: 46px;
+        height: 46px;
+        border-radius: 14px;
+        background: #173c33;
+        color: var(--accent);
+      }
+      .cluster-icon svg {
+        width: 23px;
+        height: 23px;
+      }
+      .cluster-name h1 {
+        margin: 0;
+        font-size: 17px;
+        line-height: 1.2;
+        letter-spacing: -0.02em;
+      }
+      .cluster-name p {
+        margin: 5px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .metric {
+        min-height: 50px;
+        padding: 2px 16px;
+        border-left: 1px solid var(--line);
+        display: grid;
+        align-content: center;
+        gap: 4px;
+      }
+      .metric .label {
+        color: var(--muted);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .metric .value {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        font-size: 17px;
+        font-weight: 750;
+        letter-spacing: -0.02em;
+      }
+      .metric .value small {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 550;
+        letter-spacing: 0;
+      }
+      .metric .value.ok {
+        color: var(--ok);
+      }
+      .list-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: end;
+        gap: 18px;
+        margin: 4px 0 15px;
+      }
+      .list-heading h2 {
+        margin: 0;
+        font-size: 19px;
+        letter-spacing: -0.02em;
+      }
+      .list-heading p {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .list-tools {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .select-tools {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-bottom: 16px;
+      }
+      .filter-chip {
+        min-height: 31px;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: transparent;
+        color: #bac5c6;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .filter-chip.active {
+        border-color: #317764;
+        background: #17382f;
+        color: #a6efda;
+      }
+      .node-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .node-card {
+        min-width: 0;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface);
+        transition:
+          border-color 0.15s,
+          transform 0.15s,
+          background 0.15s;
+      }
+      .node-card:hover {
+        border-color: #536360;
+        background: #1d2425;
+        transform: translateY(-1px);
+      }
+      .card-top {
+        display: flex;
+        align-items: flex-start;
+        gap: 13px;
+      }
+      .node-glyph {
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        width: 42px;
+        height: 42px;
+        border-radius: 13px;
+        background: #252d2f;
+        color: #cbd5d6;
+      }
+      .node-glyph svg {
+        width: 21px;
+        height: 21px;
+      }
+      .node-title {
+        flex: 1;
+        min-width: 0;
+      }
+      .node-title h3 {
+        margin: 2px 0 5px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 15px;
+      }
+      .node-id {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .node-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 11px;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 24px;
+        padding: 0 9px;
+        border-radius: 999px;
+        background: #2b3234;
+        color: #d2dcdd;
+        font-size: 11px;
+        font-weight: 650;
+        white-space: nowrap;
+      }
+      .badge.online {
+        background: var(--ok-soft);
+        color: var(--ok);
+      }
+      .badge.online::before {
+        content: "";
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+      .kebab {
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        width: 34px;
+        height: 34px;
+        margin: -5px -5px 0 0;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--muted);
+      }
+      .kebab:hover {
+        background: #2a3234;
+        color: var(--text);
+      }
+      .kebab svg {
+        width: 19px;
+        height: 19px;
+      }
+      .node-facts {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(120px, 0.8fr);
+        gap: 13px 18px;
+        margin-top: 18px;
+        padding-top: 15px;
+        border-top: 1px solid var(--line);
+      }
+      .fact {
+        min-width: 0;
+        display: grid;
+        gap: 5px;
+      }
+      .fact .fact-label {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .fact .fact-value {
+        overflow: hidden;
+        color: #e0e7e8;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 12px;
+        font-weight: 560;
+      }
+      .fact .fact-value.secondary {
+        color: #c5d0d1;
+      }
+      .card-bottom {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        margin-top: 17px;
+      }
+      .signal {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .signal svg {
+        width: 15px;
+        height: 15px;
+        color: var(--subtle);
+      }
+      .open-details {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 6px 2px 6px 9px;
+        border: 0;
+        background: transparent;
+        color: #a5efd9;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .open-details svg {
+        width: 15px;
+        height: 15px;
+      }
+      .drawer-scrim {
+        position: fixed;
+        inset: 0;
+        z-index: 8;
+        background: rgb(0 0 0 / 58%);
+        opacity: 0;
+        visibility: hidden;
+        transition:
+          opacity 0.18s,
+          visibility 0.18s;
+      }
+      .drawer {
+        position: fixed;
+        z-index: 9;
+        inset: 0 0 0 auto;
+        display: grid;
+        grid-template-rows: auto auto 1fr auto;
+        width: min(540px, calc(100vw - 22px));
+        background: var(--surface);
+        border-left: 1px solid var(--line-strong);
+        box-shadow: var(--shadow);
+        transform: translateX(102%);
+        transition: transform 0.22s ease;
+      }
+      .drawer-open .drawer-scrim {
+        opacity: 1;
+        visibility: visible;
+      }
+      .drawer-open .drawer {
+        transform: none;
+      }
+      .drawer-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 14px;
+        padding: 23px 25px 18px;
+        border-bottom: 1px solid var(--line);
+      }
+      .drawer-head h2 {
+        margin: 0 0 7px;
+        font-size: 20px;
+      }
+      .drawer-head p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .drawer-tabs {
+        position: sticky;
+        top: 0;
+        display: flex;
+        gap: 4px;
+        padding: 0 20px;
+        overflow-x: auto;
+        border-bottom: 1px solid var(--line);
+        background: var(--surface);
+      }
+      .drawer-tabs button {
+        min-height: 49px;
+        padding: 0 13px;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        background: transparent;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 650;
+        white-space: nowrap;
+      }
+      .drawer-tabs button.active {
+        border-bottom-color: var(--accent);
+        color: var(--text);
+      }
+      .drawer-body {
+        overflow: auto;
+        padding: 22px 25px;
+      }
+      .drawer-section {
+        padding: 17px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .drawer-section:first-child {
+        padding-top: 0;
+      }
+      .drawer-section:last-child {
+        border-bottom: 0;
+      }
+      .drawer-section h3 {
+        margin: 0 0 13px;
+        font-size: 13px;
+      }
+      .detail-row {
+        display: grid;
+        grid-template-columns: minmax(130px, 0.8fr) 1fr;
+        gap: 16px;
+        padding: 8px 0;
+        font-size: 12px;
+      }
+      .detail-row span:first-child {
+        color: var(--muted);
+      }
+      .detail-row span:last-child {
+        text-align: right;
+        overflow-wrap: anywhere;
+      }
+      .drawer-foot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 14px 25px;
+        border-top: 1px solid var(--line);
+        background: var(--surface);
+      }
+      .toast {
+        position: fixed;
+        z-index: 10;
+        left: 50%;
+        bottom: 20px;
+        transform: translate(-50%, 20px);
+        opacity: 0;
+        pointer-events: none;
+        padding: 11px 16px;
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        background: #252d2f;
+        color: var(--text);
+        box-shadow: var(--shadow);
+        font-size: 12px;
+        transition: 0.18s;
+      }
+      .toast.visible {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+      .empty {
+        display: none;
+        grid-column: 1 / -1;
+        padding: 38px;
+        border: 1px dashed var(--line-strong);
+        border-radius: var(--radius);
+        color: var(--muted);
+        text-align: center;
+      }
+      .tab-content[hidden],
+      .subnav-actions[hidden],
+      .search-action[hidden] {
+        display: none !important;
+      }
+      .local-hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(130px, 0.7fr));
+        align-items: center;
+        gap: 0;
+        margin: 4px 0 18px;
+        padding: 18px 20px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: linear-gradient(110deg, #192220, #1b2022 42%);
+      }
+      .local-identity {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-width: 0;
+        padding-right: 18px;
+      }
+      .local-identity .cluster-icon {
+        width: 48px;
+        height: 48px;
+      }
+      .local-identity h1 {
+        margin: 0;
+        font-size: 18px;
+        letter-spacing: -0.02em;
+      }
+      .local-identity p {
+        margin: 5px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .local-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 15px;
+      }
+      .local-card {
+        min-width: 0;
+        padding: 18px 20px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .local-card-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        gap: 12px;
+        margin-bottom: 15px;
+      }
+      .local-card-head h2 {
+        margin: 0;
+        font-size: 15px;
+      }
+      .local-card-head p {
+        margin: 5px 0 0;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .role-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 13px 0;
+        border-top: 1px solid var(--line);
+      }
+      .role-icon {
+        display: grid;
+        place-items: center;
+        width: 36px;
+        height: 36px;
+        flex: 0 0 auto;
+        border-radius: 11px;
+        background: var(--surface-raised);
+        color: var(--accent);
+      }
+      .role-icon svg {
+        width: 18px;
+        height: 18px;
+      }
+      .role-copy {
+        min-width: 0;
+        flex: 1;
+      }
+      .role-copy strong {
+        display: block;
+        font-size: 13px;
+      }
+      .role-copy span {
+        display: block;
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .role-row .button {
+        min-height: 32px;
+        padding-inline: 11px;
+        font-size: 11px;
+      }
+      .hardware-rows {
+        display: grid;
+        gap: 0;
+      }
+      .hardware-row {
+        display: grid;
+        grid-template-columns: 145px minmax(0, 1fr);
+        gap: 12px;
+        padding: 13px 0;
+        border-top: 1px solid var(--line);
+        font-size: 12px;
+      }
+      .hardware-row span:first-child {
+        color: var(--muted);
+      }
+      .hardware-row span:last-child {
+        color: #e0e7e8;
+        font-weight: 560;
+      }
+      .local-footnote {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        margin-top: 15px;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.5;
+      }
+      .local-footnote svg {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 auto;
+        color: var(--accent);
+      }
+      @media (max-width: 1200px) {
+        .global-header {
+          grid-template-columns: minmax(0, 1fr) minmax(350px, 600px) auto;
+          gap: 12px;
+          padding-inline: 22px;
+        }
+        .content {
+          padding-inline: 24px;
+        }
+        .cluster-banner {
+          grid-template-columns: minmax(190px, 1.15fr) repeat(
+              4,
+              minmax(100px, 0.75fr)
+            );
+          padding-inline: 14px;
+        }
+        .metric {
+          padding-inline: 11px;
+        }
+        .subnav-row {
+          grid-template-columns: minmax(120px, 1fr) auto minmax(155px, 1fr);
+          gap: 10px;
+        }
+        .local-hero {
+          grid-template-columns: minmax(190px, 1.1fr) repeat(
+              3,
+              minmax(100px, 0.75fr)
+            );
+          padding-inline: 14px;
+        }
+      }
+      @media (max-width: 980px) {
+        .sidebar {
+          width: 88px;
+          align-items: center;
+          padding-inline: 10px;
+        }
+        .nav-item {
+          justify-content: center;
+          width: 58px;
+          padding: 0;
+          font-size: 0;
+        }
+        .nav-item svg {
+          width: 22px;
+          height: 22px;
+        }
+        .nav-label,
+        .appearance,
+        .sidebar-footer .collapse span {
+          display: none;
+        }
+        .sidebar-footer {
+          flex-wrap: wrap;
+          justify-content: center;
+        }
+        .sidebar-footer .collapse {
+          margin: 0;
+          padding: 8px;
+        }
+        .main {
+          margin-left: 88px;
+        }
+        .global-header {
+          grid-template-columns: minmax(0, 1fr) minmax(320px, 580px) minmax(
+              0,
+              1fr
+            );
+        }
+        .cluster-banner {
+          grid-template-columns: repeat(4, 1fr);
+          row-gap: 12px;
+        }
+        .cluster-name {
+          grid-column: 1 / -1;
+          padding-bottom: 12px;
+          border-bottom: 1px solid var(--line);
+        }
+        .cluster-banner .metric:nth-of-type(2),
+        .local-hero .metric:nth-of-type(2) {
+          border-left: 0;
+          padding-left: 0;
+        }
+        .subnav-row {
+          grid-template-columns: 1fr auto;
+          padding-block: 13px;
+        }
+        .cluster-context {
+          display: none;
+        }
+        .subnav {
+          grid-column: 1;
+          justify-self: start;
+        }
+        .subnav-actions {
+          grid-column: 2;
+          grid-row: 1;
+        }
+        .local-hero {
+          grid-template-columns: repeat(3, 1fr);
+          row-gap: 12px;
+        }
+        .local-identity {
+          grid-column: 1 / -1;
+          padding-bottom: 12px;
+          border-bottom: 1px solid var(--line);
+        }
+      }
+      @media (max-width: 720px) {
+        .global-header {
+          grid-template-columns: 1fr auto;
+          height: 72px;
+          padding-inline: 14px;
+        }
+        .searchbar {
+          grid-column: 1;
+          grid-row: 1;
+          height: 44px;
+        }
+        .search-action.add {
+          display: none;
+        }
+        .search-input {
+          padding-inline: 13px;
+        }
+        .search-action.filter {
+          padding-inline: 12px;
+        }
+        .system-status {
+          grid-column: 2;
+          grid-row: 1;
+        }
+        .status-chip {
+          min-height: 34px;
+          padding-inline: 10px;
+          font-size: 0;
+        }
+        .status-chip .dot {
+          width: 8px;
+        }
+        .status-chip.jobs {
+          font-size: 10px;
+        }
+        .content {
+          padding-inline: 14px;
+        }
+        .subnav-row {
+          top: 72px;
+          grid-template-columns: 1fr;
+          justify-items: center;
+          gap: 10px;
+          min-height: 102px;
+          padding-block: 10px;
+        }
+        .subnav {
+          grid-column: 1;
+          justify-self: center;
+          max-width: 100%;
+        }
+        .subnav button {
+          padding-inline: 12px;
+          font-size: 11px;
+        }
+        .subnav-actions {
+          grid-column: 1;
+          grid-row: 2;
+          justify-self: center;
+        }
+        .cluster-banner {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 12px 0;
+          margin-top: 3px;
+        }
+        .cluster-name {
+          grid-column: 1 / -1;
+        }
+        .metric:nth-of-type(2) {
+          border-left: 0;
+          padding-left: 0;
+        }
+        .metric {
+          min-height: 42px;
+        }
+        .node-list {
+          grid-template-columns: 1fr;
+        }
+        .local-grid {
+          grid-template-columns: 1fr;
+        }
+        .local-hero {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px 0;
+        }
+        .local-identity {
+          grid-column: 1 / -1;
+        }
+        .local-hero .metric:nth-of-type(2) {
+          border-left: 0;
+          padding-left: 0;
+        }
+        .hardware-row {
+          grid-template-columns: 115px minmax(0, 1fr);
+        }
+        .list-heading {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+        .list-tools {
+          width: 100%;
+          justify-content: space-between;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar" aria-label="Navigation principale">
+        <nav class="nav">
+          <button class="nav-item">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+            >
+              <rect x="3" y="3" width="7" height="7" rx="1.5" />
+              <rect x="14" y="3" width="7" height="7" rx="1.5" />
+              <rect x="3" y="14" width="7" height="7" rx="1.5" />
+              <rect x="14" y="14" width="7" height="7" rx="1.5" /></svg
+            >Vue d’ensemble
+          </button>
+          <div class="nav-label">Traitements</div>
+          <button class="nav-item">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+            >
+              <circle cx="6" cy="6" r="2.5" />
+              <circle cx="18" cy="6" r="2.5" />
+              <circle cx="12" cy="18" r="2.5" />
+              <path d="m8 7.5 2.7 7m5.3-7-2.7 7M8.5 6h7" /></svg
+            >Flows
+          </button>
+          <button class="nav-item">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+            >
+              <path d="M4 7h11M4 12h16M4 17h11" />
+              <circle cx="18" cy="7" r="1.5" /></svg
+            >Activité
+          </button>
+          <button class="nav-item">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+            >
+              <path d="m12 3 2 6 6 3-6 2-2 7-2-7-6-2 6-3z" /></svg
+            >Assistant
+          </button>
+          <button class="nav-item">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+            >
+              <path
+                d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+              /></svg
+            >Bibliothèques
+          </button>
+          <div class="nav-label">Infrastructure</div>
+          <button class="nav-item selected" aria-current="page">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+            >
+              <rect x="3" y="4" width="18" height="6" rx="2" />
+              <rect x="3" y="14" width="18" height="6" rx="2" />
+              <path d="M7 7h.01M7 17h.01M11 7h7M11 17h7" /></svg
+            >Nœuds
+          </button>
+          <button class="nav-item">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+            >
+              <rect x="5" y="7" width="14" height="14" rx="2" />
+              <path d="M9 7V4m6 3V4M12 11v6m-3-3h6" /></svg
+            >Plugins &amp; Outils
+          </button>
+          <div class="nav-label">Administration</div>
+          <button class="nav-item">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M12 2v3m0 14v3M4.9 4.9 7 7m10 10 2.1 2.1M2 12h3m14 0h3M4.9 19.1 7 17m10-10 2.1-2.1"
+              /></svg
+            >Paramètres
+          </button>
+          <button class="nav-item">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+            >
+              <path d="M20 7v5h-5M4 17v-5h5" />
+              <path d="M6 9a7 7 0 0 1 12-2l2 2M4 13l2 2a7 7 0 0 0 12-2" /></svg
+            >Mise à jour
+          </button>
+        </nav>
+        <div class="sidebar-spacer"></div>
+        <section class="appearance" aria-label="Apparence">
+          <div class="appearance-title">Apparence</div>
+          <div class="theme-switch">
+            <button>☼ Clair</button><button class="active">☾ Sombre</button>
+          </div>
+          <div style="font-size: 12px; color: var(--muted)">Couleur</div>
+          <div class="palette">
+            <button
+              class="active"
+              style="--dot: #69d1b4"
+              aria-label="Forêt"
+            ></button
+            ><button style="--dot: #45a7e7" aria-label="Océan"></button
+            ><button style="--dot: #a979ef" aria-label="Iris"></button
+            ><button style="--dot: #ed6d9c" aria-label="Rose"></button>
+          </div>
+        </section>
+        <div class="sidebar-footer">
+          <button class="collapse"><span>‹</span><span>Replier</span></button>
+          <button class="profile" aria-label="Profil">A</button>
+          <button
+            class="icon-button"
+            id="paletteToggle"
+            aria-label="Palette de couleur"
+            aria-expanded="false"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+            >
+              <path
+                d="M12 3a9 9 0 1 0 0 18h1.3a2 2 0 0 0 1.4-3.4 1.7 1.7 0 0 1 1.2-2.9H18a3 3 0 0 0 3-3c0-4.8-4-8.7-9-8.7Z"
+              />
+              <circle cx="7.5" cy="11" r="1" />
+              <circle cx="10" cy="7.5" r="1" />
+              <circle cx="14" cy="7.5" r="1" />
+              <circle cx="17" cy="10.5" r="1" />
+            </svg>
+          </button>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="global-header">
+          <div></div>
+          <div class="searchbar" role="search">
+            <label class="search-input">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="m16 16 4 4" />
+              </svg>
+              <input
+                id="search"
+                type="search"
+                placeholder="Rechercher dans Nœuds…"
+                aria-label="Rechercher dans Nœuds"
+              />
+            </label>
+            <button class="search-action add" id="addNode">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M12 5v14M5 12h14" /></svg
+              >Ajouter un nœud
+            </button>
+            <button
+              class="search-action filter"
+              id="filterButton"
+              aria-label="Filtres"
+              title="Filtres"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+              >
+                <path d="M4 5h16l-6 7v6l-4 2v-8z" /></svg
+              ><span>Filtres</span>
+            </button>
+          </div>
+          <div class="system-status">
+            <span class="status-chip"><i class="dot"></i>2 / 2 en ligne</span
+            ><span class="status-chip jobs">0 jobs en cours</span>
+          </div>
+        </header>
+        <div class="content">
+          <div class="subnav-row">
+            <div class="cluster-context" id="pageContext">
+              <span class="cluster-mark"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                >
+                  <rect x="3" y="4" width="18" height="6" rx="2" />
+                  <rect x="3" y="14" width="18" height="6" rx="2" /></svg></span
+              ><span id="contextLabel">Cluster actuel</span
+              ><strong id="contextValue">Maison</strong>
+            </div>
+            <nav class="subnav" role="tablist" aria-label="Gestion des nœuds">
+              <button role="tab" aria-selected="false" data-page-tab="node">
+                Ce nœud
+              </button>
+              <button
+                role="tab"
+                aria-selected="true"
+                class="active"
+                data-page-tab="cluster"
+              >
+                Cluster
+              </button>
+              <button role="tab" aria-selected="false" data-page-tab="groups">
+                Groupes
+              </button>
+            </nav>
+            <div class="subnav-actions" id="clusterTabActions">
+              <button class="button soft" id="requestsButton">
+                Demandes <span class="count">0</span></button
+              ><button class="button" id="clusterActions">
+                Actions du cluster⌄
+              </button>
+            </div>
+            <div class="subnav-actions" id="nodeTabActions" hidden>
+              <button class="button" id="nodeIdentity">
+                Nom et étiquettes
+              </button>
+            </div>
+          </div>
+          <section
+            class="tab-content"
+            id="clusterView"
+            aria-label="Vue du cluster"
+          >
+            <section class="cluster-banner" aria-label="Résumé du cluster">
+              <div class="cluster-name">
+                <div class="cluster-icon">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                  >
+                    <rect x="3" y="4" width="18" height="6" rx="2" />
+                    <rect x="3" y="14" width="18" height="6" rx="2" />
+                    <path d="M7 7h.01M7 17h.01M11 7h7m-7 10h7" />
+                  </svg>
+                </div>
+                <div>
+                  <h1>Cluster Maison</h1>
+                  <p>2 nœuds membres · Présence reçue</p>
+                </div>
+              </div>
+              <div class="metric">
+                <span class="label">Nœuds en ligne</span
+                ><span class="value ok">2 <small>/ 2</small></span>
+              </div>
+              <div class="metric">
+                <span class="label">Capacité configurée</span
+                ><span class="value">2 <small>traitements</small></span>
+              </div>
+              <div class="metric">
+                <span class="label">Demandes en attente</span
+                ><span class="value">0</span>
+              </div>
+              <div class="metric">
+                <span class="label">À surveiller</span
+                ><span class="value">0</span>
+              </div>
+            </section>
+            <section aria-labelledby="members-heading">
+              <div class="list-heading">
+                <div>
+                  <h2 id="members-heading">Membres du cluster</h2>
+                  <p>Matériel déclaré, rôles et dernier signal reçu</p>
+                </div>
+                <div class="list-tools">
+                  <label class="select-tools"
+                    ><input id="selectAll" type="checkbox" />
+                    Sélectionner</label
+                  >
+                </div>
+              </div>
+              <div class="filters" role="group" aria-label="Filtrer les nœuds">
+                <button class="filter-chip active" data-filter="all">
+                  Tous <span>2</span>
+                </button>
+                <button class="filter-chip" data-filter="online">
+                  En ligne <span>2</span>
+                </button>
+                <button class="filter-chip" data-filter="attention">
+                  À traiter <span>0</span>
+                </button>
+                <button class="filter-chip" data-filter="worker">
+                  Workers <span>2</span>
+                </button>
+                <button class="filter-chip" data-filter="server">
+                  Serveurs <span>1</span>
+                </button>
+              </div>
+              <div class="node-list" id="nodeList">
+                <article
+                  class="node-card"
+                  data-search="truenas encoding-50 serveur worker intel xeon amd firepro"
+                  data-roles="server worker"
+                  data-state="online"
+                  tabindex="0"
+                  aria-label="Détails de TRUENAS"
+                >
+                  <div class="card-top">
+                    <span class="node-glyph"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                      >
+                        <rect x="3" y="4" width="18" height="6" rx="2" />
+                        <rect x="3" y="14" width="18" height="6" rx="2" />
+                        <path d="M7 7h.01M7 17h.01M11 7h7m-7 10h7" /></svg
+                    ></span>
+                    <div class="node-title">
+                      <h3>TRUENAS</h3>
+                      <span class="node-id">encoding-50</span>
+                      <div class="node-badges">
+                        <span class="badge online">En ligne</span
+                        ><span class="badge">Serveur</span
+                        ><span class="badge">Worker</span>
+                      </div>
+                    </div>
+                    <button class="kebab" aria-label="Actions pour TRUENAS">
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="12" cy="5" r="1.8" />
+                        <circle cx="12" cy="12" r="1.8" />
+                        <circle cx="12" cy="19" r="1.8" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div class="node-facts">
+                    <div class="fact">
+                      <span class="fact-label">Processeur</span
+                      ><span class="fact-value"
+                        >Intel Xeon E5620 · 2,40 GHz</span
+                      >
+                    </div>
+                    <div class="fact">
+                      <span class="fact-label">Traitements configurés</span
+                      ><span class="fact-value">1 simultané</span>
+                    </div>
+                    <div class="fact">
+                      <span class="fact-label">Accélérateur détecté</span
+                      ><span class="fact-value secondary"
+                        >AMD FirePro V4900</span
+                      >
+                    </div>
+                    <div class="fact">
+                      <span class="fact-label">Dernier signal</span
+                      ><span class="fact-value">26/10 · 17:01</span>
+                    </div>
+                  </div>
+                  <div class="card-bottom">
+                    <span class="signal"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                      >
+                        <path
+                          d="M3 12a9 9 0 0 1 18 0M6 12a6 6 0 0 1 12 0m-9 0a3 3 0 0 1 6 0"
+                        />
+                        <circle
+                          cx="12"
+                          cy="17"
+                          r="1"
+                          fill="currentColor"
+                        /></svg
+                      >Signal reçu</span
+                    ><button class="open-details" data-open="TRUENAS">
+                      Voir la fiche
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="m9 18 6-6-6-6" />
+                      </svg>
+                    </button>
+                  </div>
+                </article>
+                <article
+                  class="node-card"
+                  data-search="artemis encoding-51 serveur worker intel core i5 uhd graphics"
+                  data-roles="server worker"
+                  data-state="online"
+                  tabindex="0"
+                  aria-label="Détails de ARTEMIS"
+                >
+                  <div class="card-top">
+                    <span class="node-glyph"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                      >
+                        <rect x="3" y="4" width="18" height="6" rx="2" />
+                        <rect x="3" y="14" width="18" height="6" rx="2" />
+                        <path d="M7 7h.01M7 17h.01M11 7h7m-7 10h7" /></svg
+                    ></span>
+                    <div class="node-title">
+                      <h3>ARTEMIS</h3>
+                      <span class="node-id">encoding-51</span>
+                      <div class="node-badges">
+                        <span class="badge online">En ligne</span
+                        ><span class="badge">Serveur</span
+                        ><span class="badge">Worker</span>
+                      </div>
+                    </div>
+                    <button class="kebab" aria-label="Actions pour ARTEMIS">
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="12" cy="5" r="1.8" />
+                        <circle cx="12" cy="12" r="1.8" />
+                        <circle cx="12" cy="19" r="1.8" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div class="node-facts">
+                    <div class="fact">
+                      <span class="fact-label">Processeur</span
+                      ><span class="fact-value"
+                        >Intel Core i5-8500 · 3,00 GHz</span
+                      >
+                    </div>
+                    <div class="fact">
+                      <span class="fact-label">Traitements configurés</span
+                      ><span class="fact-value">1 simultané</span>
+                    </div>
+                    <div class="fact">
+                      <span class="fact-label">Accélérateur détecté</span
+                      ><span class="fact-value secondary"
+                        >Intel UHD Graphics 630</span
+                      >
+                    </div>
+                    <div class="fact">
+                      <span class="fact-label">Dernier signal</span
+                      ><span class="fact-value">26/10 · 17:01</span>
+                    </div>
+                  </div>
+                  <div class="card-bottom">
+                    <span class="signal"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                      >
+                        <path
+                          d="M3 12a9 9 0 0 1 18 0M6 12a6 6 0 0 1 12 0m-9 0a3 3 0 0 1 6 0"
+                        />
+                        <circle
+                          cx="12"
+                          cy="17"
+                          r="1"
+                          fill="currentColor"
+                        /></svg
+                      >Signal reçu</span
+                    ><button class="open-details" data-open="ARTEMIS">
+                      Voir la fiche
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="m9 18 6-6-6-6" />
+                      </svg>
+                    </button>
+                  </div>
+                </article>
+                <div class="empty" id="empty">
+                  Aucun nœud ne correspond à votre recherche.
+                </div>
+              </div>
+            </section>
+          </section>
+          <section
+            class="tab-content"
+            id="nodeView"
+            aria-label="Vue de ce nœud"
+            hidden
+          >
+            <section
+              class="local-hero"
+              aria-label="Identité et état du nœud local"
+            >
+              <div class="local-identity">
+                <div class="cluster-icon">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                  >
+                    <rect x="3" y="4" width="18" height="6" rx="2" />
+                    <rect x="3" y="14" width="18" height="6" rx="2" />
+                    <path d="M7 7h.01M7 17h.01M11 7h7m-7 10h7" />
+                  </svg>
+                </div>
+                <div>
+                  <h1>TRUENAS</h1>
+                  <p>Nœud local · encoding-50 · Membre de « Maison »</p>
+                </div>
+                <span class="badge online local-state">En ligne</span>
+              </div>
+              <div class="metric">
+                <span class="label">Fonctions actives</span
+                ><span class="value">Serveur <small>+ Worker</small></span>
+              </div>
+              <div class="metric">
+                <span class="label">Traitements actifs</span
+                ><span class="value">0 <small>/ 1 configuré</small></span>
+              </div>
+              <div class="metric">
+                <span class="label">Dernier signal</span
+                ><span class="value">17:01 <small>26 oct.</small></span>
+              </div>
+            </section>
+            <div class="local-grid">
+              <section class="local-card" aria-labelledby="roles-heading">
+                <div class="local-card-head">
+                  <div>
+                    <h2 id="roles-heading">Fonctions de cette installation</h2>
+                    <p>Les rôles appliqués au nœud local</p>
+                  </div>
+                  <span class="badge online">Agent joignable</span>
+                </div>
+                <div class="role-row">
+                  <span class="role-icon"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                    >
+                      <rect x="4" y="4" width="16" height="6" rx="2" />
+                      <rect x="4" y="14" width="16" height="6" rx="2" />
+                      <path d="M8 7h.01M8 17h.01M12 7h5m-5 10h5" /></svg
+                  ></span>
+                  <div class="role-copy">
+                    <strong>Serveur</strong
+                    ><span>Actif · gestion du cluster et des ressources</span>
+                  </div>
+                  <button class="button" data-role-action="Serveur">
+                    Désactiver
+                  </button>
+                </div>
+                <div class="role-row">
+                  <span class="role-icon"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                    >
+                      <path
+                        d="M5 5h14v14H5zM9 9h6v6H9zM2 9h3m14 0h3M2 15h3m14 0h3M9 2v3m6-3v3m-6 14v3m6-3v3"
+                      /></svg
+                  ></span>
+                  <div class="role-copy">
+                    <strong>Worker</strong
+                    ><span
+                      >Actif · limite configurée à 1 traitement simultané</span
+                    >
+                  </div>
+                  <button class="button" data-role-action="Worker">
+                    Désactiver
+                  </button>
+                </div>
+              </section>
+              <section class="local-card" aria-labelledby="hardware-heading">
+                <div class="local-card-head">
+                  <div>
+                    <h2 id="hardware-heading">Matériel déclaré</h2>
+                    <p>Informations remontées par l’agent du nœud</p>
+                  </div>
+                  <button class="button" id="localDetails">Détails</button>
+                </div>
+                <div class="hardware-rows">
+                  <div class="hardware-row">
+                    <span>Processeur</span
+                    ><span>Intel Xeon E5620 · 2,40 GHz</span>
+                  </div>
+                  <div class="hardware-row">
+                    <span>Accélérateur détecté</span
+                    ><span>AMD FirePro V4900</span>
+                  </div>
+                  <div class="hardware-row">
+                    <span>Concurrence worker</span
+                    ><span>1 traitement simultané configuré</span>
+                  </div>
+                </div>
+                <div class="local-footnote">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                  >
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 11v5m0-8h.01" /></svg
+                  ><span
+                    >Le matériel déclaré n’est pas une mesure de charge.
+                    L’utilisation d’un encodeur dépend de sa vérification par le
+                    nœud.</span
+                  >
+                </div>
+              </section>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+    <div class="drawer-scrim" id="scrim"></div>
+    <aside
+      class="drawer"
+      id="drawer"
+      aria-label="Fiche du nœud"
+      aria-modal="true"
+      role="dialog"
+    >
+      <header class="drawer-head">
+        <div>
+          <h2 id="drawerTitle">TRUENAS</h2>
+          <p id="drawerSubtitle">encoding-50 · En ligne · Serveur · Worker</p>
+        </div>
+        <button
+          class="icon-button"
+          id="closeDrawer"
+          aria-label="Fermer la fiche"
+        >
+          ✕
+        </button>
+      </header>
+      <nav class="drawer-tabs" aria-label="Sections de la fiche">
+        <button class="active">Général</button><button>Traitement</button
+        ><button>Capacités</button><button>Bibliothèques</button>
+      </nav>
+      <div class="drawer-body">
+        <section class="drawer-section">
+          <h3>Identité et état</h3>
+          <div class="detail-row">
+            <span>Nom d’affichage</span><span id="drawerName">TRUENAS</span>
+          </div>
+          <div class="detail-row">
+            <span>État du nœud</span
+            ><span style="color: var(--ok)">En ligne</span>
+          </div>
+          <div class="detail-row">
+            <span>Dernier signal</span><span>26/10 · 17:01</span>
+          </div>
+          <div class="detail-row">
+            <span>Rôles actifs</span><span>Serveur, Worker</span>
+          </div>
+        </section>
+        <section class="drawer-section">
+          <h3>Matériel déclaré</h3>
+          <div class="detail-row">
+            <span>Processeur</span
+            ><span id="drawerCpu">Intel Xeon E5620 · 2,40 GHz</span>
+          </div>
+          <div class="detail-row">
+            <span>Accélérateur détecté</span
+            ><span id="drawerGpu">AMD FirePro V4900</span>
+          </div>
+          <div class="detail-row">
+            <span>Concurrence configurée</span><span>1 traitement</span>
+          </div>
+        </section>
+        <section class="drawer-section">
+          <h3>État de traitement</h3>
+          <div class="detail-row">
+            <span>Tâches actives</span><span>0</span>
+          </div>
+          <div class="detail-row">
+            <span>Limite de ce nœud</span><span>1 simultanée</span>
+          </div>
+          <p
+            style="
+              margin: 8px 0 0;
+              color: var(--muted);
+              font-size: 11px;
+              line-height: 1.5;
+            "
+          >
+            Les capacités matérielles sont déclarées par le nœud. Aucun
+            indicateur de charge n’est présenté ici.
+          </p>
+        </section>
+      </div>
+      <footer class="drawer-foot">
+        <button class="button" id="drawerClose">Fermer</button
+        ><button class="button soft" id="editNode">Modifier le nœud</button>
+      </footer>
+    </aside>
+    <div class="toast" id="toast" role="status"></div>
+    <script>
+      const body = document.body;
+      const cards = [...document.querySelectorAll(".node-card")];
+      const search = document.querySelector("#search");
+      const toast = document.querySelector("#toast");
+      let selectedFilter = "all";
+      let toastTimer;
+      function announce(message) {
+        toast.textContent = message;
+        toast.classList.add("visible");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove("visible"), 1900);
+      }
+      function applyFilters() {
+        const query = search.value.trim().toLocaleLowerCase("fr");
+        let count = 0;
+        cards.forEach((card) => {
+          const textMatch = card.dataset.search.includes(query);
+          const filterMatch =
+            selectedFilter === "all" ||
+            (selectedFilter === "online" && card.dataset.state === "online") ||
+            (selectedFilter === "attention" &&
+              card.dataset.state === "attention") ||
+            (!["all", "online", "attention"].includes(selectedFilter) &&
+              card.dataset.roles.split(" ").includes(selectedFilter));
+          const visible = textMatch && filterMatch;
+          card.hidden = !visible;
+          if (visible) count++;
+        });
+        document.querySelector("#empty").style.display = count
+          ? "none"
+          : "block";
+      }
+      search.addEventListener("input", applyFilters);
+      document.querySelectorAll("[data-filter]").forEach((button) =>
+        button.addEventListener("click", () => {
+          document
+            .querySelectorAll("[data-filter]")
+            .forEach((item) =>
+              item.classList.toggle("active", item === button),
+            );
+          selectedFilter = button.dataset.filter;
+          applyFilters();
+        }),
+      );
+      const drawer = document.querySelector("#drawer");
+      function openDrawer(name) {
+        const card = cards.find(
+          (item) => item.querySelector("h3").textContent === name,
+        );
+        document.querySelector("#drawerTitle").textContent = name;
+        document.querySelector("#drawerSubtitle").textContent =
+          `${card.querySelector(".node-id").textContent} · En ligne · Serveur · Worker`;
+        document.querySelector("#drawerName").textContent = name;
+        const facts = card.querySelectorAll(".fact-value");
+        document.querySelector("#drawerCpu").textContent = facts[0].textContent;
+        document.querySelector("#drawerGpu").textContent = facts[2].textContent;
+        body.classList.add("drawer-open");
+        drawer.setAttribute("aria-hidden", "false");
+        document.querySelector("#closeDrawer").focus();
+      }
+      function closeDrawer() {
+        body.classList.remove("drawer-open");
+        drawer.setAttribute("aria-hidden", "true");
+      }
+      document.querySelectorAll("[data-open]").forEach((button) =>
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
+          openDrawer(button.dataset.open);
+        }),
+      );
+      cards.forEach((card) =>
+        card.addEventListener("click", (event) => {
+          if (!event.target.closest("button"))
+            openDrawer(card.querySelector("h3").textContent);
+        }),
+      );
+      document.querySelector("#scrim").addEventListener("click", closeDrawer);
+      document
+        .querySelector("#closeDrawer")
+        .addEventListener("click", closeDrawer);
+      document
+        .querySelector("#drawerClose")
+        .addEventListener("click", closeDrawer);
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") closeDrawer();
+      });
+      document
+        .querySelector("#addNode")
+        .addEventListener("click", () =>
+          announce("Ouverture du parcours « Ajouter un nœud »"),
+        );
+      document
+        .querySelector("#requestsButton")
+        .addEventListener("click", () =>
+          announce("Aucune demande de rattachement en attente"),
+        );
+      document
+        .querySelector("#clusterActions")
+        .addEventListener("click", () => announce("Actions du cluster"));
+      document
+        .querySelector("#filterButton")
+        .addEventListener("click", () =>
+          document.querySelector('[data-filter="all"]').focus(),
+        );
+      document
+        .querySelector("#selectAll")
+        .addEventListener("change", (event) =>
+          announce(
+            event.target.checked
+              ? "2 nœuds sélectionnés · actions groupées disponibles"
+              : "Sélection effacée",
+          ),
+        );
+      document.querySelectorAll("[data-page-tab]").forEach((tab) =>
+        tab.addEventListener("click", () => {
+          const selected = tab.dataset.pageTab;
+          if (selected === "groups") {
+            announce("L’onglet Groupes sera maquetté séparément");
+            return;
+          }
+          document.querySelectorAll("[data-page-tab]").forEach((item) => {
+            item.classList.toggle("active", item === tab);
+            item.setAttribute("aria-selected", String(item === tab));
+          });
+          document.querySelector("#clusterView").hidden =
+            selected !== "cluster";
+          document.querySelector("#nodeView").hidden = selected !== "node";
+          document.querySelector("#clusterTabActions").hidden =
+            selected !== "cluster";
+          document.querySelector("#nodeTabActions").hidden =
+            selected !== "node";
+          document.querySelector("#addNode").hidden = selected !== "cluster";
+          document.querySelector("#filterButton").hidden =
+            selected !== "cluster";
+          document.querySelector("#contextLabel").textContent =
+            selected === "node" ? "Nœud local" : "Cluster actuel";
+          document.querySelector("#contextValue").textContent =
+            selected === "node" ? "TRUENAS" : "Maison";
+        }),
+      );
+      document
+        .querySelector("#nodeIdentity")
+        .addEventListener("click", () =>
+          announce("Modification du nom et des étiquettes du nœud"),
+        );
+      document
+        .querySelector("#localDetails")
+        .addEventListener("click", () => openDrawer("TRUENAS"));
+      document
+        .querySelectorAll("[data-role-action]")
+        .forEach((button) =>
+          button.addEventListener("click", () =>
+            announce(
+              `Action « ${button.textContent.trim()} ${button.dataset.roleAction} »`,
+            ),
+          ),
+        );
+      const sidebar = document.querySelector(".sidebar");
+      const paletteToggle = document.querySelector("#paletteToggle");
+      paletteToggle.addEventListener("click", () => {
+        const expanded = sidebar.classList.toggle("appearance-open");
+        paletteToggle.setAttribute("aria-expanded", String(expanded));
+      });
+      document.addEventListener("click", (event) => {
+        if (!sidebar.contains(event.target)) {
+          sidebar.classList.remove("appearance-open");
+          paletteToggle.setAttribute("aria-expanded", "false");
+        }
+      });
+    </script>
+  </body>
+</html>

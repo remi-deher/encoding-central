@@ -1,0 +1,194 @@
+[
+  {
+    "repetition": 1,
+    "measurement": {
+      "concurrent_capture": false,
+      "clients": 8,
+      "active_worker_nodes": 1,
+      "queued": 128,
+      "elapsed_ms": 1630.093,
+      "idle_capture_8_ms": 39.577,
+      "idle_writer_admissions": 0,
+      "claim": {
+        "count": 32,
+        "p50_ms": 207.847,
+        "p95_ms": 359.379,
+        "p99_ms": 399.584,
+        "max_ms": 399.584
+      },
+      "renew": {
+        "count": 128,
+        "p50_ms": 43.669,
+        "p95_ms": 73.616,
+        "p99_ms": 86.509,
+        "max_ms": 122.295
+      },
+      "writer_admissions": 160,
+      "writer_wait_ms": 6146.944,
+      "writer_hold_ms": 1521.049,
+      "writer_long_holds": 0,
+      "writer_rejections": 0,
+      "writer_expirations": 0
+    }
+  },
+  {
+    "repetition": 2,
+    "measurement": {
+      "concurrent_capture": false,
+      "clients": 8,
+      "active_worker_nodes": 1,
+      "queued": 128,
+      "elapsed_ms": 1518.913,
+      "idle_capture_8_ms": 35.669,
+      "idle_writer_admissions": 0,
+      "claim": {
+        "count": 32,
+        "p50_ms": 185.086,
+        "p95_ms": 330.142,
+        "p99_ms": 393.212,
+        "max_ms": 393.212
+      },
+      "renew": {
+        "count": 128,
+        "p50_ms": 40.298,
+        "p95_ms": 77.179,
+        "p99_ms": 87.485,
+        "max_ms": 91.276
+      },
+      "writer_admissions": 160,
+      "writer_wait_ms": 5307.002,
+      "writer_hold_ms": 1441.898,
+      "writer_long_holds": 0,
+      "writer_rejections": 0,
+      "writer_expirations": 0
+    }
+  },
+  {
+    "repetition": 3,
+    "measurement": {
+      "concurrent_capture": false,
+      "clients": 8,
+      "active_worker_nodes": 1,
+      "queued": 128,
+      "elapsed_ms": 1720.236,
+      "idle_capture_8_ms": 29.229,
+      "idle_writer_admissions": 0,
+      "claim": {
+        "count": 32,
+        "p50_ms": 205.12,
+        "p95_ms": 353.864,
+        "p99_ms": 397.667,
+        "max_ms": 397.667
+      },
+      "renew": {
+        "count": 128,
+        "p50_ms": 51.799,
+        "p95_ms": 78.756,
+        "p99_ms": 87.794,
+        "max_ms": 104.139
+      },
+      "writer_admissions": 160,
+      "writer_wait_ms": 5693.996,
+      "writer_hold_ms": 1622.216,
+      "writer_long_holds": 0,
+      "writer_rejections": 0,
+      "writer_expirations": 0
+    }
+  },
+  {
+    "repetition": 1,
+    "measurement": {
+      "concurrent_capture": true,
+      "clients": 8,
+      "active_worker_nodes": 1,
+      "queued": 128,
+      "elapsed_ms": 1840.111,
+      "idle_capture_8_ms": 27.15,
+      "idle_writer_admissions": 0,
+      "claim": {
+        "count": 32,
+        "p50_ms": 210.801,
+        "p95_ms": 353.544,
+        "p99_ms": 412.077,
+        "max_ms": 412.077
+      },
+      "renew": {
+        "count": 128,
+        "p50_ms": 49.742,
+        "p95_ms": 83.622,
+        "p99_ms": 98.333,
+        "max_ms": 99.956
+      },
+      "writer_admissions": 192,
+      "writer_wait_ms": 7318.065,
+      "writer_hold_ms": 1676.905,
+      "writer_long_holds": 0,
+      "writer_rejections": 0,
+      "writer_expirations": 0
+    }
+  },
+  {
+    "repetition": 2,
+    "measurement": {
+      "concurrent_capture": true,
+      "clients": 8,
+      "active_worker_nodes": 1,
+      "queued": 128,
+      "elapsed_ms": 1797.228,
+      "idle_capture_8_ms": 30.678,
+      "idle_writer_admissions": 0,
+      "claim": {
+        "count": 32,
+        "p50_ms": 209.259,
+        "p95_ms": 313.501,
+        "p99_ms": 347.843,
+        "max_ms": 347.843
+      },
+      "renew": {
+        "count": 128,
+        "p50_ms": 45.681,
+        "p95_ms": 79.643,
+        "p99_ms": 97.646,
+        "max_ms": 108.715
+      },
+      "writer_admissions": 192,
+      "writer_wait_ms": 7494.769,
+      "writer_hold_ms": 1555.779,
+      "writer_long_holds": 0,
+      "writer_rejections": 0,
+      "writer_expirations": 0
+    }
+  },
+  {
+    "repetition": 3,
+    "measurement": {
+      "concurrent_capture": true,
+      "clients": 8,
+      "active_worker_nodes": 1,
+      "queued": 128,
+      "elapsed_ms": 1871.309,
+      "idle_capture_8_ms": 31.62,
+      "idle_writer_admissions": 0,
+      "claim": {
+        "count": 32,
+        "p50_ms": 254.792,
+        "p95_ms": 506.658,
+        "p99_ms": 567.4,
+        "max_ms": 567.4
+      },
+      "renew": {
+        "count": 128,
+        "p50_ms": 28.992,
+        "p95_ms": 60.796,
+        "p99_ms": 77.797,
+        "max_ms": 78.034
+      },
+      "writer_admissions": 192,
+      "writer_wait_ms": 9566.929,
+      "writer_hold_ms": 1623.15,
+      "writer_long_holds": 0,
+      "writer_rejections": 0,
+      "writer_expirations": 0
+    }
+  }
+]

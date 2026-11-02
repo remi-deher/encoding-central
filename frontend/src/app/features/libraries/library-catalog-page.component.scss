@@ -1,0 +1,35 @@
+.library-access-summary {
+  margin: 16px 0;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-muted);
+}
+
+.library-access-summary h3 {
+  margin: 0 0 4px;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.library-access-summary p,
+.library-access-empty {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.library-access-empty {
+  padding: 12px 0;
+}
+
+.library-execution-cards {
+  display: grid;
+  gap: 10px;
+}

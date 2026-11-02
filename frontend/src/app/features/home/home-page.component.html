@@ -1,0 +1,377 @@
+@if (flowActionOpen()) {
+  @defer (when flowActionOpen()) {
+    <app-detail-drawer
+      [opened]="true"
+      size="standard"
+      [modal]="true"
+      title="Créer un flow"
+      description="Choisissez un nom, un média et un point de départ avant d’ouvrir l’éditeur."
+      icon="+"
+      eyebrow="Nouveau"
+      [step]="flowStep()"
+      [content]="flowFormTemplate()"
+      [footerActions]="flowFooterTemplate()"
+      (closed)="closeFlowCreation()"
+    >
+      <div drawer-main>
+        <ng-container [ngTemplateOutlet]="homeContentTemplate()" />
+      </div>
+    </app-detail-drawer>
+  } @placeholder {
+    <ng-container [ngTemplateOutlet]="homeContentTemplate()" />
+  }
+} @else {
+  <ng-container [ngTemplateOutlet]="homeContentTemplate()" />
+}
+
+<ng-template #homeContent>
+  <app-monitor-template
+    title="Vue d’ensemble"
+    [metadata]="clusterName()"
+    [views]="overviewTabs"
+    [selectedView]="overviewView()"
+    [state]="state().status"
+    [hasKnownData]="observedAt() !== null"
+    [layout]="monitorLayout()"
+    (selectedViewChange)="onOverviewViewChanged($event)"
+  >
+    @if (overviewView() === 'ai') {
+      <a monitor-subnav-actions class="ai-primary-link" routerLink="/ai/assistant">
+        Ouvrir l’assistant <span aria-hidden="true"><app-icon name="outward" /></span>
+      </a>
+    }
+
+    <app-summary-tiles
+      monitor-summary
+      [hidden]="overviewView() !== 'general'"
+      [label]="standalone() ? 'Indicateurs de ce nœud' : 'Indicateurs du cluster'"
+      [tiles]="metrics()"
+    />
+
+    <section
+      monitor-primary
+      class="tasks-panel"
+      aria-labelledby="active-tasks-heading"
+      [hidden]="overviewView() === 'infrastructure'"
+    >
+      @if (overviewView() !== 'infrastructure') {
+        <div class="panel-heading">
+          <div>
+            <h2 id="active-tasks-heading">
+              Traitements en cours
+              <span class="count">{{ count(executionState().data?.activeCount) }}</span>
+            </h2>
+          </div>
+          <a class="subtle-link" routerLink="/activity"
+            >Toutes les tâches <span aria-hidden="true"><app-icon name="forward" /></span
+          ></a>
+        </div>
+
+        @if (executionState().status === 'loading' || homeExecutionState().status === 'loading') {
+          <p role="status">Chargement des exécutions…</p>
+        }
+        @if (executionState().status === 'error' || homeExecutionState().status === 'error') {
+          <p role="alert">
+            Le suivi n’a pas pu être actualisé. Les dernières valeurs reçues peuvent être obsolètes.
+          </p>
+        }
+        <div class="execution-card-list">
+          @for (task of activePreview(); track task.id) {
+            <app-overview-execution [execution]="task" />
+          } @empty {
+            @if (homeExecutionState().status === 'ready') {
+              <p class="empty-panel-message">Aucune exécution en cours.</p>
+            }
+          }
+        </div>
+        @if (remainingActive() > 0) {
+          <a class="remaining-link" routerLink="/activity" [queryParams]="{ view: 'active' }"
+            >{{ remainingActive() }}
+            {{ remainingActive() === 1 ? 'autre traitement' : 'autres traitements' }} en cours
+            <app-icon name="outward"
+          /></a>
+        }
+      }
+    </section>
+
+    <section
+      monitor-context
+      class="nodes-panel"
+      aria-labelledby="nodes-heading"
+      [hidden]="overviewView() === 'activity'"
+    >
+      @if (overviewView() !== 'activity') {
+        <div class="panel-heading">
+          <div>
+            <h2 id="nodes-heading">{{ standalone() ? 'Ce nœud' : 'Nœuds du cluster' }}</h2>
+          </div>
+          <a class="subtle-link" routerLink="/nodes"
+            >{{ standalone() ? 'Gérer ce nœud' : 'Voir les nœuds' }}
+            <span aria-hidden="true"><app-icon name="forward" /></span
+          ></a>
+        </div>
+
+        <div class="node-list">
+          @for (node of nodes(); track node.id) {
+            <article
+              class="node-row"
+              [class.is-stale]="node.status === 'offline' || state().status === 'error'"
+            >
+              <div class="node-heading">
+                <h3>{{ formatNodeLabel(node.name, node.displayName) }}</h3>
+                <app-status-badge [label]="lifecycleLabel(node)" [tone]="lifecycleTone(node)" />
+              </div>
+              <p class="node-hardware">
+                {{ roleLabel(node.roles) }}
+                @if (node.inventory?.processorModel; as processor) {
+                  · {{ processor }}
+                }
+              </p>
+              @if (node.inventory?.gpus?.length) {
+                <p class="node-hardware">
+                  @for (gpu of node.inventory?.gpus; track $index) {
+                    {{ gpu.name }}{{ $last ? '' : ' · ' }}
+                  }
+                </p>
+              }
+              <div class="node-facts">
+                <span
+                  >Concurrence configurée
+                  <strong>{{ count(node.maxConcurrentTasks) }}</strong></span
+                ><span
+                  >Dernier signal <strong>{{ node.lastSeenAt | date: 'dd/MM HH:mm' }}</strong></span
+                >
+              </div>
+            </article>
+          } @empty {
+            @if (state().status === 'ready') {
+              <p class="empty-panel-message">
+                {{
+                  standalone()
+                    ? 'Aucune information sur ce nœud.'
+                    : 'Aucun nœud enregistré dans le cluster.'
+                }}
+              </p>
+            }
+          }
+        </div>
+        @if (failedCount() > 0) {
+          <aside class="attention">
+            <strong
+              >{{ failedCount() }} {{ failedCount() === 1 ? 'tâche' : 'tâches' }} à examiner</strong
+            >
+            <p>Consultez les erreurs avant de relancer les traitements.</p>
+            <a routerLink="/activity" [queryParams]="{ view: 'errors' }"
+              >Examiner les échecs <app-icon name="outward"
+            /></a>
+          </aside>
+        }
+        @if (deferredCount(); as count) {
+          <p class="deferred-note">
+            {{ count }} {{ count === 1 ? 'exécution' : 'exécutions' }} en attente de reprise.
+          </p>
+        }
+        @if (health(); as health) {
+          @if (health.issues.length > 0) {
+            <div class="health-banner-section">
+              <app-health-banner
+                [title]="health.title"
+                [tone]="health.tone"
+                [issues]="health.issues"
+              />
+            </div>
+          }
+        }
+      }
+    </section>
+
+    <section
+      monitor-activity
+      class="activity-panel"
+      aria-labelledby="activity-heading"
+      [hidden]="overviewView() === 'infrastructure'"
+    >
+      @if (overviewView() !== 'infrastructure') {
+        <div class="panel-heading">
+          <div>
+            <h2 id="activity-heading">Derniers traitements terminés</h2>
+          </div>
+          <a class="subtle-link" routerLink="/activity" [queryParams]="{ view: 'history' }"
+            >Historique <span aria-hidden="true"><app-icon name="forward" /></span
+          ></a>
+        </div>
+        @if (homeExecutionState().status === 'error') {
+          <p role="alert">
+            Les derniers traitements terminés n’ont pas pu être actualisés. Les valeurs conservées
+            peuvent être obsolètes.
+          </p>
+        }
+        <div class="execution-card-list">
+          @for (execution of publications(); track execution.id) {
+            <article class="publication">
+              <span class="publication-icon" aria-hidden="true">✓</span>
+              <div>
+                <h3>{{ execution.media }}</h3>
+                <p>{{ execution.library }} · {{ execution.flow }}</p>
+              </div>
+              <span class="publication-state">Réussi</span
+              ><time [attr.datetime]="execution.finishedAt ?? execution.updatedAt">{{
+                execution.finishedAt ?? execution.updatedAt | date: 'dd/MM HH:mm'
+              }}</time>
+            </article>
+          } @empty {
+            @if (homeExecutionState().status === 'ready') {
+              <p class="empty-panel-message">Aucun traitement terminé.</p>
+            }
+          }
+        </div>
+      }
+    </section>
+
+    <section
+      monitor-supporting
+      class="surface-panel matrix-panel"
+      aria-labelledby="matrix-heading"
+      [hidden]="overviewView() === 'activity' || !matrixColumns().length || !matrixRows().length"
+    >
+      @if (overviewView() !== 'activity' && matrixColumns().length && matrixRows().length) {
+        <div class="panel-heading">
+          <div>
+            <h2 id="matrix-heading">Accès aux bibliothèques</h2>
+            <p>
+              {{
+                standalone()
+                  ? 'Comment ce nœud atteint chaque bibliothèque.'
+                  : 'Comment chaque nœud atteint chaque bibliothèque.'
+              }}
+            </p>
+          </div>
+          <a class="subtle-link" routerLink="/libraries"
+            >Bibliothèques <span aria-hidden="true"><app-icon name="forward" /></span
+          ></a>
+        </div>
+        <app-matrix-table
+          [caption]="
+            standalone()
+              ? 'Accès de ce nœud à chaque bibliothèque'
+              : 'Accès de chaque nœud à chaque bibliothèque'
+          "
+          cornerLabel="Nœud"
+          [rows]="matrixRows()"
+          [columns]="matrixColumns()"
+          [cells]="matrixCells()"
+        />
+      }
+    </section>
+
+    <section
+      monitor-special
+      class="ai-overview"
+      aria-label="Vue d’ensemble de l’intelligence artificielle"
+      [hidden]="overviewView() !== 'ai'"
+    >
+      @if (overviewView() === 'ai') {
+        @if (aiOverviewLoading()) {
+          <p class="ai-feedback" role="status">Chargement des données IA…</p>
+        } @else if (aiOverviewPartial()) {
+          <p class="ai-feedback" role="status">
+            Certaines données IA ne sont pas disponibles pour le moment.
+          </p>
+        }
+
+        <app-summary-tiles label="Indicateurs IA" [tiles]="aiMetrics()" />
+
+        <app-ai-provider-overview />
+
+        <div class="ai-overview-grid">
+          <section class="ai-overview-panel surface-panel" aria-labelledby="ai-activity-heading">
+            <div class="panel-heading">
+              <h2 id="ai-activity-heading">Activité récente</h2>
+              <a class="subtle-link" routerLink="/activity" [queryParams]="{ type: 'ai' }"
+                >Toute l’activité <span aria-hidden="true"><app-icon name="forward" /></span
+              ></a>
+            </div>
+            <ul class="ai-overview-list">
+              @for (activity of recentAiActivity(); track activity.requestId) {
+                <li>
+                  <span
+                    class="ai-status-dot"
+                    [class.is-running]="activity.status === 'running'"
+                    [class.is-failed]="activity.status === 'failed'"
+                    aria-hidden="true"
+                  ></span>
+                  <div>
+                    <strong
+                      >{{ providerLabel(activity.provider) }} ·
+                      {{ activityStatusLabel(activity.status) }}</strong
+                    >
+                    <small>{{
+                      activity.progressDetail || activity.operation || 'Assistant'
+                    }}</small>
+                  </div>
+                  <time [attr.datetime]="activity.updatedAt">{{
+                    activity.updatedAt | date: 'dd/MM HH:mm'
+                  }}</time>
+                </li>
+              } @empty {
+                <li class="ai-empty-row">Aucune activité IA récente.</li>
+              }
+            </ul>
+          </section>
+
+          <section
+            class="ai-overview-panel surface-panel"
+            aria-labelledby="ai-conversations-heading"
+          >
+            <div class="panel-heading">
+              <h2 id="ai-conversations-heading">Conversations récentes</h2>
+              <a class="subtle-link" routerLink="/ai/assistant"
+                >Ouvrir le chat <span aria-hidden="true"><app-icon name="forward" /></span
+              ></a>
+            </div>
+            <ul class="ai-overview-list">
+              @for (conversation of recentAiConversations(); track conversation.id) {
+                <li>
+                  <span class="ai-conversation-icon" aria-hidden="true">✦</span>
+                  <div>
+                    <strong>{{ conversation.title }}</strong>
+                    <small
+                      >{{ providerLabel(conversation.provider) }} ·
+                      {{ conversation.source.label }}</small
+                    >
+                  </div>
+                  <time [attr.datetime]="conversation.updatedAt">{{
+                    conversation.updatedAt | date: 'dd/MM HH:mm'
+                  }}</time>
+                </li>
+              } @empty {
+                <li class="ai-empty-row">Aucune conversation enregistrée.</li>
+              }
+            </ul>
+          </section>
+        </div>
+      }
+    </section>
+  </app-monitor-template>
+</ng-template>
+
+<ng-template #flowForm>
+  @defer (when flowCreationForm()) {
+    @if (flowCreationForm(); as form) {
+      <app-record-form
+        [data]="form"
+        [embedded]="true"
+        (submitted)="startFlow($event)"
+        (cancelled)="closeFlowCreation()"
+      />
+    }
+  } @placeholder {
+    <p role="status">Préparation du formulaire…</p>
+  }
+</ng-template>
+
+<ng-template #flowFooter>
+  @if (flowRecordForm(); as form) {
+    <app-record-form-actions [form]="form" />
+  }
+</ng-template>
