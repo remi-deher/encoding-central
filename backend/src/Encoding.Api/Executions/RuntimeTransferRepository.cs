@@ -4,7 +4,7 @@ using Encoding.Contracts.Executions;
 
 namespace Encoding.Api.Executions;
 
-public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionStreamBroadcaster? broadcaster=null,SourceWriteGuard? sourceWrites=null,TaskOwnershipRepository? ownership=null,
+public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionStreamBroadcaster? broadcaster=null,TaskOwnershipRepository? ownership=null,
     Encoding.Api.Flows.FlowComponentRegistry? components=null)
 {
     public async Task<IReadOnlyList<RuntimeTransfer>> ListAsync(Guid node,CancellationToken ct)
