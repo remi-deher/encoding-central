@@ -49,9 +49,6 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
       place-items: center;
       min-height: 100%;
       padding: var(--space-5) var(--space-4);
-      background: radial-gradient(ellipse at 50% 0, var(--accent-soft), transparent 65%);
-    }
-    .access-stage_setup {
       background: var(--page-background);
     }
     .access-frame {

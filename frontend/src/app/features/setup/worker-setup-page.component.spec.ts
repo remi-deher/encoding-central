@@ -53,6 +53,26 @@ describe('WorkerSetupPageComponent', () => {
     });
   });
 
+  it('starts on a welcome screen that is not counted as a step and can be reached again', () => {
+    const fixture = TestBed.createComponent(WorkerSetupPageComponent);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    expect(el.textContent).toContain('Bienvenue');
+    expect(el.textContent).toContain('Commencer');
+    expect(el.textContent).toContain('Configuration détectée');
+    expect(el.textContent).not.toContain('Étape');
+
+    fixture.componentInstance['start']();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Étape 1 sur 3');
+    expect(el.textContent).not.toContain('Configuration détectée');
+
+    fixture.componentInstance['back']();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Bienvenue');
+  });
+
   it('authenticates with the central before preparing enrollment', async () => {
     const fixture = TestBed.createComponent(WorkerSetupPageComponent);
     const component = fixture.componentInstance;

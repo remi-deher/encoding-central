@@ -17,13 +17,13 @@ app-shell {
   font-size: var(--font-body);
   font-weight: 700;
   text-decoration: none;
-  box-shadow: var(--elevation-2);
   transform: translateY(-160%);
   transition: transform 180ms var(--motion-spring-fast);
 
   &:focus,
   &:focus-visible {
     transform: translateY(0);
+    box-shadow: var(--elevation-2);
     outline: 3px solid var(--surface);
     outline-offset: 2px;
   }
@@ -143,20 +143,6 @@ button.assistant-launcher {
   .assistant-widget-panel {
     transition: none;
   }
-}
-
-/* Auth Header */
-.auth-header {
-  height: 64px;
-  min-height: 64px;
-  box-sizing: border-box;
-  width: min(100%, 1440px);
-  margin-inline: auto;
-  padding-inline: clamp(16px, 3vw, 40px);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: transparent;
 }
 
 .brand {
@@ -440,7 +426,7 @@ button.assistant-launcher {
   min-height: 100dvh;
 
   .application-navigation-layout {
-    height: calc(100dvh - 64px);
+    height: 100dvh;
   }
 
   .main-content {

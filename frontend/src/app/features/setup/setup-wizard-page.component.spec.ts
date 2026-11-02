@@ -101,9 +101,8 @@ describe('SetupWizardPageComponent', () => {
     });
   });
 
-  it('shows the detected node info and hardware on the review step', () => {
+  it('shows the detected node info and hardware on the welcome step', () => {
     const fixture = TestBed.createComponent(SetupWizardPageComponent);
-    fixture.componentInstance['currentStep'].set(2);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
 
@@ -118,7 +117,6 @@ describe('SetupWizardPageComponent', () => {
   it('displays anonymous setup node sheet with IP address, announced URL and hardware when session is not yet created', () => {
     statusSignal.set(null);
     const fixture = TestBed.createComponent(SetupWizardPageComponent);
-    fixture.componentInstance['currentStep'].set(2);
     fixture.componentInstance['setupSheet'].set({
       name: 'encoding-host',
       displayName: 'Nœud Salon',
@@ -151,7 +149,6 @@ describe('SetupWizardPageComponent', () => {
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
 
-    expect(el.textContent).toContain('Nœud Salon');
     expect(el.textContent).toContain('encoding-host · Ubuntu 24.04 LTS (X64)');
     const addresses = Array.from(el.querySelectorAll('.network-addresses li')).map((item) =>
       item.textContent?.trim(),
@@ -174,7 +171,6 @@ describe('SetupWizardPageComponent', () => {
 
   it('keeps the browser host and published port as access fallback in bridge mode', () => {
     const fixture = TestBed.createComponent(SetupWizardPageComponent);
-    fixture.componentInstance['currentStep'].set(2);
     fixture.componentInstance['setupSheet'].set({
       name: 'container',
       displayName: null,
@@ -193,7 +189,6 @@ describe('SetupWizardPageComponent', () => {
   it('shows browser access even when no interface address can be detected', () => {
     statusSignal.set(null);
     const fixture = TestBed.createComponent(SetupWizardPageComponent);
-    fixture.componentInstance['currentStep'].set(2);
     fixture.componentInstance['setupSheet'].set({
       name: null,
       displayName: null,
@@ -211,12 +206,34 @@ describe('SetupWizardPageComponent', () => {
 
   it('renders the central review step', () => {
     const fixture = TestBed.createComponent(SetupWizardPageComponent);
+    fixture.componentInstance['welcome'].set(false);
     fixture.componentInstance['currentStep'].set(2);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
 
     expect(el.textContent).toContain('Vérifier le central');
     expect(el.textContent).toContain('Initialiser le central');
+  });
+
+  it('starts on a welcome screen that is not counted as a step', () => {
+    const fixture = TestBed.createComponent(SetupWizardPageComponent);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    expect(el.textContent).toContain('Bienvenue');
+    expect(el.textContent).toContain('Commencer');
+    expect(el.textContent).not.toContain('Étape');
+    expect(el.querySelector('#admin-username-input')).toBeNull();
+
+    fixture.componentInstance['start']();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Étape 1 sur 3');
+    expect(el.textContent).not.toContain('Configuration détectée');
+
+    fixture.componentInstance['previousStep']();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Bienvenue');
+    expect(el.textContent).toContain('Configuration détectée');
   });
 
   it('only advances after the administrator form is valid', () => {
@@ -256,6 +273,7 @@ describe('SetupWizardPageComponent', () => {
 
   it('refuses to finish without a valid administrator account', async () => {
     const fixture = TestBed.createComponent(SetupWizardPageComponent);
+    fixture.componentInstance['welcome'].set(false);
     fixture.detectChanges();
     const component = fixture.componentInstance;
     const el = fixture.nativeElement as HTMLElement;

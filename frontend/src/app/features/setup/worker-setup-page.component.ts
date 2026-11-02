@@ -8,6 +8,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { formatMemory } from '../../shared/models/node-hardware';
 import { LocalNodeController } from '../../shared/services/local-node-controller';
 import { AccessTemplateComponent } from '../../shared/templates/access-template.component';
+import { IconComponent } from '../../shared/ui/icon.component';
 import { DetectedConfigurationComponent } from './detected-configuration.component';
 import { SETUP_SURFACE_STYLES } from './setup-surface.styles';
 
@@ -15,7 +16,13 @@ import { SETUP_SURFACE_STYLES } from './setup-surface.styles';
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-worker-setup-page',
   providers: [LocalNodeController],
-  imports: [AccessTemplateComponent, DetectedConfigurationComponent, FormsModule, MatButtonModule],
+  imports: [
+    AccessTemplateComponent,
+    DetectedConfigurationComponent,
+    FormsModule,
+    IconComponent,
+    MatButtonModule,
+  ],
   template: `
     <app-access-template
       view="setup"
@@ -26,12 +33,41 @@ import { SETUP_SURFACE_STYLES } from './setup-surface.styles';
       progressLabel="Configuration du worker"
     >
       <div access-content class="setup-stack">
-        <p class="progress" aria-live="polite">Étape {{ step() + 1 }} sur 3</p>
+        @if (!welcome()) {
+          <p class="progress" aria-live="polite">Étape {{ step() + 1 }} sur 3</p>
+        }
 
         @if (errorMessage() || local.error()) {
           <p class="error" role="alert">{{ errorMessage() || local.error() }}</p>
         }
 
+        @if (welcome()) {
+          <section class="card" aria-labelledby="welcome-heading">
+            <div class="heading">
+              <h2 id="welcome-heading">Bienvenue</h2>
+              <p>
+                Ce guide en trois étapes rattache cette machine à un central : choisir le central,
+                s’y connecter, puis envoyer la demande. Vérifiez d’abord que la machine détectée
+                ci-dessous est la bonne.
+              </p>
+            </div>
+            <div class="actions">
+              <button matButton="filled" type="button" (click)="start()">
+                Commencer
+                <app-icon name="forward" matButtonIcon iconPositionEnd />
+              </button>
+            </div>
+          </section>
+
+          <app-detected-configuration
+            [system]="workerSystem()"
+            [cpu]="workerCpu()"
+            [memory]="workerMemory()"
+            [gpu]="workerGpu()"
+            [acceleration]="workerAcceleration()"
+            [address]="workerAddress()"
+          />
+        } @else {
         @if (step() === 0) {
           <section class="card" aria-labelledby="central-address-heading">
             <div class="heading">
@@ -51,6 +87,9 @@ import { SETUP_SURFACE_STYLES } from './setup-surface.styles';
               required
             />
             <div class="actions">
+              <button matButton="outlined" type="button" [disabled]="busy()" (click)="back()">
+                Retour
+              </button>
               <button matButton="filled" type="button" [disabled]="busy()" (click)="connect()">
                 Vérifier et continuer
               </button>
@@ -153,15 +192,7 @@ import { SETUP_SURFACE_STYLES } from './setup-surface.styles';
             }
           </section>
         }
-
-        <app-detected-configuration
-          [system]="workerSystem()"
-          [cpu]="workerCpu()"
-          [memory]="workerMemory()"
-          [gpu]="workerGpu()"
-          [acceleration]="workerAcceleration()"
-          [address]="workerAddress()"
-        />
+        }
       </div>
     </app-access-template>
   `,
@@ -178,6 +209,8 @@ export class WorkerSetupPageComponent {
   protected username = '';
   protected password = '';
   protected readonly step = signal(0);
+  /** Accueil : n'est pas une étape, il présente la machine détectée avant de commencer. */
+  protected readonly welcome = signal(true);
   protected readonly busy = signal(false);
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly workerSystem = computed(() => {
@@ -270,9 +303,17 @@ export class WorkerSetupPageComponent {
     await this.local.sendRequest();
   }
 
+  protected start(): void {
+    this.welcome.set(false);
+  }
+
   protected back(): void {
     this.errorMessage.set(null);
-    this.step.update((step) => Math.max(0, step - 1));
+    if (this.step() === 0) {
+      this.welcome.set(true);
+      return;
+    }
+    this.step.update((step) => step - 1);
   }
 
   protected openNodes(): void {

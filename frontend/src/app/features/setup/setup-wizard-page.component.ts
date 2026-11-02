@@ -19,6 +19,7 @@ import { LocalNodeController } from '../../shared/services/local-node-controller
 import { NotificationService } from '../../shared/services/notification.service';
 import { formatMemory } from '../../shared/models/node-hardware';
 import { AccessTemplateComponent } from '../../shared/templates/access-template.component';
+import { IconComponent } from '../../shared/ui/icon.component';
 import { DetectedConfigurationComponent } from './detected-configuration.component';
 import { SETUP_SURFACE_STYLES } from './setup-surface.styles';
 
@@ -36,6 +37,7 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
     MatButtonModule,
     AccessTemplateComponent,
     DetectedConfigurationComponent,
+    IconComponent,
   ],
   template: `
     <app-access-template
@@ -47,12 +49,43 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
       progressLabel="Action en cours"
     >
       <div access-content class="setup-stack">
-        <p class="progress" aria-live="polite">Étape {{ currentStep() + 1 }} sur 3</p>
+        @if (!welcome()) {
+          <p class="progress" aria-live="polite">Étape {{ currentStep() + 1 }} sur 3</p>
+        }
 
         @if (errorMessage() || localController.error()) {
           <p class="error" role="alert">{{ errorMessage() || localController.error() }}</p>
         }
 
+        @if (welcome()) {
+          <section class="card" aria-labelledby="welcome-heading">
+            <div class="heading">
+              <h2 id="welcome-heading">Bienvenue</h2>
+              <p>
+                Ce guide en trois étapes crée l’administrateur, nomme le central et l’initialise.
+                Vérifiez d’abord que la machine détectée ci-dessous est la bonne.
+              </p>
+            </div>
+            <div class="actions">
+              <button matButton="filled" type="button" (click)="start()">
+                Commencer
+                <app-icon name="forward" matButtonIcon iconPositionEnd />
+              </button>
+            </div>
+          </section>
+
+          <app-detected-configuration
+            [system]="hostPlatformLabel()"
+            [cpu]="cpuInfo()"
+            [memory]="memoryInfo()"
+            [gpu]="gpuInfo()"
+            [acceleration]="gpuAccelerationInfo()"
+            [address]="networkAccessUrls().join(' · ')"
+            [addressLabel]="announcedUrls().length ? 'Adresse annoncée' : 'Adresse utilisée par ce navigateur'"
+            [interfaces]="interfaceAddresses()"
+            [interfacesEmpty]="setupSheet() ? 'Aucune adresse détectée' : 'Détection en cours…'"
+          />
+        } @else {
         @switch (currentStep()) {
           @case (0) {
             <section class="card" aria-labelledby="step-admin-heading">
@@ -121,6 +154,9 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
               }
 
               <div class="actions">
+                <button matButton="outlined" type="button" [disabled]="busy()" (click)="previousStep()">
+                  Retour
+                </button>
                 <button matButton="filled" type="button" [disabled]="busy()" (click)="nextFromAccount()">
                   Continuer
                 </button>
@@ -207,18 +243,7 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
             </section>
           }
         }
-
-        <app-detected-configuration
-          [system]="hostPlatformLabel()"
-          [cpu]="cpuInfo()"
-          [memory]="memoryInfo()"
-          [gpu]="gpuInfo()"
-          [acceleration]="gpuAccelerationInfo()"
-          [address]="networkAccessUrls().join(' · ')"
-          [addressLabel]="announcedUrls().length ? 'Adresse annoncée' : 'Adresse utilisée par ce navigateur'"
-          [interfaces]="interfaceAddresses()"
-          [interfacesEmpty]="setupSheet() ? 'Aucune adresse détectée' : 'Détection en cours…'"
-        />
+        }
       </div>
     </app-access-template>
   `,
@@ -235,6 +260,8 @@ export class SetupWizardPageComponent {
   protected readonly setupSheet = signal<SetupNodeSheet | null>(null);
 
   protected readonly currentStep = signal(0);
+  /** Accueil : n'est pas une étape, il présente la machine détectée avant de commencer. */
+  protected readonly welcome = signal(true);
   protected readonly busy = signal(false);
   protected readonly errorMessage = signal('');
 
@@ -302,8 +329,16 @@ export class SetupWizardPageComponent {
     this.currentStep.set(1);
   }
 
+  protected start(): void {
+    this.welcome.set(false);
+  }
+
   protected previousStep(): void {
-    this.currentStep.update((step) => Math.max(0, step - 1));
+    if (this.currentStep() === 0) {
+      this.welcome.set(true);
+      return;
+    }
+    this.currentStep.update((step) => step - 1);
   }
 
   protected advanceToReview(): void {

@@ -8,16 +8,6 @@
   [class.rail-navigation-shell]="!authMode() && !workspaceMode() && railNavigation()"
   [class.compact-navigation-shell]="!authMode() && !workspaceMode() && isCompactNavigation()"
 >
-  @if (authHeaderVisible()) {
-    <header class="auth-header">
-      <a class="brand header-brand" routerLink="/" aria-label="Encoding, accueil">
-        <span class="brand-mark" aria-hidden="true">E</span>
-        <span class="brand-name">Encoding</span>
-      </a>
-      <app-appearance-palette class="auth-appearance-palette" />
-    </header>
-  }
-
   <div
     class="application-navigation-layout"
     [class.workspace-navigation-layout]="workspaceMode()"
