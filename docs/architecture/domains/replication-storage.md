@@ -11,7 +11,7 @@ tags: [sqlite, migrations, sauvegarde, registres, clé de données]
 
 # Stockage
 
-Le central est l'unique serveur ([ADR 0036](../adr/0036-separation-stricte-central-worker.md)) : sa base SQLite est la seule. Il n'y a **plus de réplication** entre serveurs (maillage, journal, capture des changements, projections) ; la migration 0066 retire les déclencheurs de capture. La migration 0067 supprime les tables et colonnes de la réplication (journal, pairs, projections, capture, transferts, neutralisation, sauvegarde miroir, `desired_roles`). Restent `cluster_sync_registers` (registres locaux : activation des plugins et des outils, sessions IA chiffrées), `task_ownership` et `task_server_identity` (le central y est l'unique propriétaire).
+Le central est l'unique serveur ([ADR 0036](../adr/0036-separation-stricte-central-worker.md)) : sa base SQLite est la seule. Il n'y a **plus de réplication** entre serveurs (maillage, journal, capture des changements, projections) ; la migration 0066 retire les déclencheurs de capture. La migration 0067 supprime les tables et colonnes de la réplication (journal, pairs, projections, capture, transferts, neutralisation, sauvegarde miroir, `desired_roles`). La migration 0071 remplace `cluster_sync_registers` par `registers` (clé, valeur JSON, `updated_at`), registre local sans colonnes de synchronisation. Restent `registers` (registres locaux : activation des plugins et des outils, sessions IA chiffrées), `task_ownership` et `task_server_identity` (le central y est l'unique propriétaire).
 
 ## État courant
 

@@ -7,7 +7,7 @@ using Encoding.Api.Infrastructure.Data;
 namespace Encoding.Api.Tools;
 
 /// <summary>Points de reprise IA chiffrés (Data Protection) dans les registres locaux du central. Ne stocke jamais les identifiants des CLI.</summary>
-public sealed class AiCentralStore(DbDataSource database, CentralRegisterRepository registers, IDataProtectionProvider protection)
+public sealed class AiCentralStore(DbDataSource database, RegisterRepository registers, IDataProtectionProvider protection)
 {
     private readonly IDataProtector protector = protection.CreateProtector("Encoding.Ai.v2");
 
@@ -35,7 +35,7 @@ public sealed class AiCentralStore(DbDataSource database, CentralRegisterReposit
         if (offset < 0 || limit is < 1 or > 1000) throw new ArgumentOutOfRangeException(nameof(limit));
         // Bounded pagination over the existing encrypted registers, ordered by their last observed update.
         var rows = new List<(string Key, string Value)>();
-        await using (var command = database.CreateCommand("SELECT s.register_key, s.value FROM cluster_sync_registers s WHERE s.register_key LIKE 'ai/session/%' AND s.value <> 'null' " + (includeAssistant ? "" : "AND NOT EXISTS (SELECT 1 FROM cluster_sync_registers owner WHERE owner.register_key = 'ai/assistant/session-owner/' || substr(s.register_key, 12) AND owner.value <> 'null') ") + "ORDER BY s.occurred_at DESC, s.register_key LIMIT @limit OFFSET @offset"))
+        await using (var command = database.CreateCommand("SELECT s.register_key, s.value FROM registers s WHERE s.register_key LIKE 'ai/session/%' AND s.value <> 'null' " + (includeAssistant ? "" : "AND NOT EXISTS (SELECT 1 FROM registers owner WHERE owner.register_key = 'ai/assistant/session-owner/' || substr(s.register_key, 12) AND owner.value <> 'null') ") + "ORDER BY s.updated_at DESC, s.register_key LIMIT @limit OFFSET @offset"))
         {
             command.Parameters.AddWithValue("limit", limit);
             command.Parameters.AddWithValue("offset", offset);
@@ -59,8 +59,8 @@ public sealed class AiCentralStore(DbDataSource database, CentralRegisterReposit
         if (limit is < 1 or > 1000) throw new ArgumentOutOfRangeException(nameof(limit));
         var rows = new List<(string Key, string Value)>();
         var sql = afterRegisterKey is null
-            ? "SELECT register_key,value FROM cluster_sync_registers WHERE register_key LIKE @prefix AND value <> 'null' ORDER BY register_key LIMIT @limit"
-            : "SELECT register_key,value FROM cluster_sync_registers WHERE register_key LIKE @prefix AND value <> 'null' AND register_key > @afterKey ORDER BY register_key LIMIT @limit";
+            ? "SELECT register_key,value FROM registers WHERE register_key LIKE @prefix AND value <> 'null' ORDER BY register_key LIMIT @limit"
+            : "SELECT register_key,value FROM registers WHERE register_key LIKE @prefix AND value <> 'null' AND register_key > @afterKey ORDER BY register_key LIMIT @limit";
         await using (var command = database.CreateCommand(sql))
         {
             command.Parameters.AddWithValue("prefix", "ai/" + prefix + "%");
@@ -85,7 +85,7 @@ public sealed class AiCentralStore(DbDataSource database, CentralRegisterReposit
     {
         if (limit is < 1 or > 1000) throw new ArgumentOutOfRangeException(nameof(limit));
         var rows = new List<(string Key, string Value)>();
-        await using (var command = database.CreateCommand("SELECT register_key,value FROM cluster_sync_registers WHERE register_key LIKE @prefix AND value <> 'null' ORDER BY occurred_at DESC, register_key DESC LIMIT @limit"))
+        await using (var command = database.CreateCommand("SELECT register_key,value FROM registers WHERE register_key LIKE @prefix AND value <> 'null' ORDER BY updated_at DESC, register_key DESC LIMIT @limit"))
         {
             command.Parameters.AddWithValue("prefix", "ai/" + prefix + "%");
             command.Parameters.AddWithValue("limit", limit);
@@ -104,7 +104,7 @@ public sealed class AiCentralStore(DbDataSource database, CentralRegisterReposit
     }
     public async Task<T?> ReadAsync<T>(string key, CancellationToken ct)
     {
-        await using var command = database.CreateCommand("SELECT value FROM cluster_sync_registers WHERE register_key=@key");
+        await using var command = database.CreateCommand("SELECT value FROM registers WHERE register_key=@key");
         command.Parameters.AddWithValue("key", "ai/" + key);
         var value = await command.ExecuteScalarAsync(ct);
         if (value is null or DBNull) return default;
@@ -114,7 +114,7 @@ public sealed class AiCentralStore(DbDataSource database, CentralRegisterReposit
 
     public async Task<IReadOnlyList<T>> ReadPrefixAsync<T>(string prefix, CancellationToken ct)
     {
-        await using var command = database.CreateCommand("SELECT register_key,value FROM cluster_sync_registers WHERE register_key LIKE @prefix AND value <> 'null' ORDER BY register_key LIMIT 1000");
+        await using var command = database.CreateCommand("SELECT register_key,value FROM registers WHERE register_key LIKE @prefix AND value <> 'null' ORDER BY register_key LIMIT 1000");
         command.Parameters.AddWithValue("prefix", "ai/" + prefix + "%");
         var values = new List<(string Key, string Encoded)>();
         await using (var reader = await command.ExecuteReaderAsync(ct))

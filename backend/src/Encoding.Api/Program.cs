@@ -32,6 +32,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddOperations();
 var pluginKeyDirectory = KeyDirectory.Resolve(builder.Configuration, builder.Environment.ContentRootPath);
 Directory.CreateDirectory(pluginKeyDirectory);
+KeyDirectory.RemoveObsolete(pluginKeyDirectory);
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(pluginKeyDirectory))
     .SetApplicationName("Encoding.PluginSettings");
@@ -169,7 +170,7 @@ builder.Services.AddHostedService<LibraryMonitoringService>();
 builder.Services.AddSingleton<LibraryWorkerAccessRepository>();
 builder.Services.AddSingleton<CentralIdentityRepository>();
 builder.Services.AddSingleton<CentralId>();
-builder.Services.AddSingleton<CentralRegisterRepository>();
+builder.Services.AddSingleton<RegisterRepository>();
 builder.Services.AddHostedService<CentralDiscoveryPublisher>();
 builder.Services.AddSingleton<RuntimeExecutionCoordinator>();
 builder.Services.AddSingleton<WorkerManagementService>();

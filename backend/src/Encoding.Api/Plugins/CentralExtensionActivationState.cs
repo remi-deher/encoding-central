@@ -11,7 +11,7 @@ namespace Encoding.Api.Plugins;
 /// </summary>
 public sealed class CentralExtensionActivationState(
     DbDataSource database,
-    CentralRegisterRepository journal,
+    RegisterRepository journal,
     FlowComponentRegistry registry,
     ILogger<CentralExtensionActivationState> logger) : BackgroundService
 {
@@ -83,7 +83,7 @@ public sealed class CentralExtensionActivationState(
         var disabledTools = new HashSet<string>(StringComparer.Ordinal);
         await using var command = database.CreateCommand("""
             SELECT register_key, value
-            FROM cluster_sync_registers
+            FROM registers
             WHERE register_key LIKE 'extensions/plugins/%' OR register_key LIKE 'extensions/tools/%'
             """);
         await using var reader = await command.ExecuteReaderAsync(ct);

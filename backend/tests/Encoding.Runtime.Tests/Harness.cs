@@ -255,7 +255,7 @@ internal static partial class Harness
             await DatabaseMigrator.ApplyAsync(db,RepositoryRoot(),CancellationToken.None);
             var extensionActivation = new CentralExtensionActivationState(
                 db,
-                new CentralRegisterRepository(db),
+                new RegisterRepository(db),
                 registry,
                 NullLogger<CentralExtensionActivationState>.Instance);
             await extensionActivation.InitializeAsync(CancellationToken.None);
