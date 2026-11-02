@@ -1,5 +1,7 @@
 # Écarts constatés et décisions en attente
 
+Point de reprise du 2026-11-02 : [../reprise.md](../reprise.md) (état, reste à faire, environnement).
+
 Dressé le 2026-10-21 en relisant les anciens ADR contre le code de `dev`. Cette liste conserve les constats et décisions en attente ; un point marqué « décision prise » est désormais suivi dans sa fiche de domaine et son ADR.
 
 ## À traiter en priorité (production)
