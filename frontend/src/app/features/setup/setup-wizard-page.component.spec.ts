@@ -232,119 +232,22 @@ describe('SetupWizardPageComponent', () => {
     expect(component['currentStep']()).toBe(1);
   });
 
-  it('uses the central cluster mode by default', () => {
-    const fixture = TestBed.createComponent(SetupWizardPageComponent);
-    fixture.detectChanges();
-    const component = fixture.componentInstance;
-
-    expect(component['selectedMode']()).toBe('createCluster');
-  });
-
-  it('submits standalone mode and redirects to root', async () => {
-    const fixture = TestBed.createComponent(SetupWizardPageComponent);
-    fixture.detectChanges();
-    const component = fixture.componentInstance;
-    fillAdmin(component);
-
-    await component['submitStandalone']();
-
-    expect(setupFn).toHaveBeenCalledWith({
-      nodeDisplayName: 'Serveur Salon',
-      mode: 'standalone',
-      username: 'admin',
-      password: VALID_PASSWORD,
-    });
-    expect(navigateFn).toHaveBeenCalledWith(['/']);
-  });
-
-  it('submits createCluster mode with cluster name', async () => {
+  it('submits the central initialisation with the cluster name', async () => {
     const fixture = TestBed.createComponent(SetupWizardPageComponent);
     fixture.detectChanges();
     const component = fixture.componentInstance;
 
     fillAdmin(component);
-    component['selectedMode'].set('createCluster');
     component['clusterName'].set('Mon Cluster Maison');
     await component['submitCreateCluster']();
 
     expect(setupFn).toHaveBeenCalledWith({
       nodeDisplayName: 'Serveur Salon',
-      mode: 'createCluster',
       clusterName: 'Mon Cluster Maison',
       username: 'admin',
       password: VALID_PASSWORD,
     });
     expect(navigateFn).toHaveBeenCalledWith(['/']);
-  });
-
-  it('creates the administrator before joining and does not submit setup again when finishing', async () => {
-    const fixture = TestBed.createComponent(SetupWizardPageComponent);
-    fixture.detectChanges();
-    const component = fixture.componentInstance;
-    const localController = fixture.debugElement.injector.get(LocalNodeController);
-
-    component['nodeName'].set('Worker Garage');
-    component['selectedMode'].set('joinCluster');
-    await component['requestClusterJoin']();
-    expect(localController.sendRequest).not.toHaveBeenCalled();
-
-    fillAdmin(component);
-    await component['prepareClusterJoin']();
-    expect(setupFn).toHaveBeenCalledWith({
-      nodeDisplayName: 'Worker Garage',
-      mode: 'joinCluster',
-      username: 'admin',
-      password: VALID_PASSWORD,
-    });
-    expect(navigateFn).not.toHaveBeenCalled();
-    expect(localController.refresh).toHaveBeenCalled();
-    expect(component['adminPassword']()).toBe('');
-    expect(component['adminErrors']()).toEqual({ username: '', password: '', confirm: '' });
-
-    await component['requestClusterJoin']();
-    expect(localController.sendRequest).toHaveBeenCalledWith('Worker Garage');
-    await component['submitJoinFinish']();
-    expect(navigateFn).not.toHaveBeenCalled();
-    localController.joinIndex.set(3);
-    await component['submitJoinFinish']();
-    expect(navigateFn).toHaveBeenCalledWith(['/']);
-    expect(setupFn).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps protected operations disabled when account validation or creation fails', async () => {
-    const fixture = TestBed.createComponent(SetupWizardPageComponent);
-    const component = fixture.componentInstance;
-    const local = fixture.debugElement.injector.get(LocalNodeController);
-    component['selectedMode'].set('joinCluster');
-    component['clusterAddress'].set('http://192.168.1.50:8090');
-    await component['verifyClusterAddress']();
-    await component['prepareClusterJoin']();
-    expect(local.verifyAddress).not.toHaveBeenCalled();
-    expect(setupFn).not.toHaveBeenCalled();
-    fillAdmin(component);
-    setupFn.mockRejectedValueOnce(new Error('unavailable'));
-    await component['prepareClusterJoin']();
-    expect(component['accountCreated']()).toBe(false);
-    expect(component['errorMessage']()).toContain('L’initialisation a échoué');
-    expect(component['adminPassword']()).toBe(VALID_PASSWORD);
-    await component['prepareClusterJoin']();
-    await component['verifyClusterAddress']();
-    expect(local.verifyAddress).toHaveBeenCalledWith({ address: 'http://192.168.1.50:8090' });
-  });
-
-  it('opens the existing request in Nodes without claiming approval or recreating the account', async () => {
-    const fixture = TestBed.createComponent(SetupWizardPageComponent);
-    const component = fixture.componentInstance;
-    const local = fixture.debugElement.injector.get(LocalNodeController);
-    fillAdmin(component);
-    component['selectedMode'].set('joinCluster');
-    await component['prepareClusterJoin']();
-    component['selectMode']('createCluster');
-    expect(component['selectedMode']()).toBe('joinCluster');
-    pendingSignal.set(true);
-    await component['submitJoinFinish']();
-    expect(navigateFn).toHaveBeenCalledWith(['/nodes']);
-    expect(setupFn).toHaveBeenCalledTimes(1);
   });
 
   it('refuses to finish without a valid administrator account', async () => {
@@ -353,26 +256,26 @@ describe('SetupWizardPageComponent', () => {
     const component = fixture.componentInstance;
     const el = fixture.nativeElement as HTMLElement;
 
-    await component['submitStandalone']();
+    await component['submitCreateCluster']();
     fixture.detectChanges();
     expect(setupFn).not.toHaveBeenCalled();
     expect(el.textContent).toContain('au moins 12 caractères');
 
     component['adminPassword'].set('court');
     component['adminConfirm'].set('court');
-    await component['submitStandalone']();
+    await component['submitCreateCluster']();
     expect(setupFn).not.toHaveBeenCalled();
 
     component['adminPassword'].set(VALID_PASSWORD);
     component['adminConfirm'].set('autre-mot-de-passe');
-    await component['submitStandalone']();
+    await component['submitCreateCluster']();
     fixture.detectChanges();
     expect(setupFn).not.toHaveBeenCalled();
     expect(el.textContent).toContain('Les deux mots de passe sont différents.');
 
     component['adminConfirm'].set(VALID_PASSWORD);
     component['adminUsername'].set('nom invalide!');
-    await component['submitStandalone']();
+    await component['submitCreateCluster']();
     expect(setupFn).not.toHaveBeenCalled();
   });
 });

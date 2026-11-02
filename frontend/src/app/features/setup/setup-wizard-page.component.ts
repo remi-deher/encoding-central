@@ -1,4 +1,3 @@
-import { JoinUserCollisionsComponent } from '../settings/tabs/join-user-collisions.component';
 import { IconComponent } from '../../shared/ui/icon.component';
 import {
   ChangeDetectionStrategy,
@@ -26,14 +25,11 @@ const MINIMUM_PASSWORD_LENGTH = 12;
 const MAXIMUM_PASSWORD_LENGTH = 256;
 const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
 
-export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
-
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-setup-wizard-page',
   providers: [LocalNodeController],
   imports: [
-    JoinUserCollisionsComponent,
     IconComponent,
     CommonModule,
     FormsModule,
@@ -308,121 +304,6 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
           </div>
         </section>
 
-        @if (showModeChoice()) {
-        <!-- Section 3 : Choix de l'architecture -->
-        <section class="workbench-card" aria-labelledby="step-mode-heading">
-          <div class="section-heading">
-            <span class="step-pill" aria-hidden="true">3</span>
-            <div>
-              <h2 id="step-mode-heading">Comment souhaitez-vous utiliser cette machine ?</h2>
-              <p>Sélectionnez l’organisation initiale de votre installation.</p>
-            </div>
-          </div>
-
-          <div class="mode-grid" role="radiogroup" aria-labelledby="step-mode-heading">
-            <!-- Mode 1 : Autonome -->
-            <button
-              type="button"
-              class="mode-card"
-              [disabled]="busy() || accountCreated()"
-              [class.selected]="selectedMode() === 'standalone'"
-              (click)="selectMode('standalone')"
-              role="radio"
-              [attr.aria-checked]="selectedMode() === 'standalone'"
-            >
-              <div class="mode-card-top">
-                <span class="mode-icon" aria-hidden="true">
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="20"
-                    height="20"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                    <line x1="8" y1="21" x2="16" y2="21" />
-                    <line x1="12" y1="17" x2="12" y2="21" />
-                  </svg>
-                </span>
-                <span class="mode-badge primary">Recommandé</span>
-              </div>
-              <strong class="mode-title">Machine autonome</strong>
-              <p class="mode-description">
-                Serveur et worker réunis sur cette machine. Idéal pour démarrer immédiatement sans
-                cluster.
-              </p>
-            </button>
-
-            <!-- Mode 2 : Créer un cluster -->
-            <button
-              type="button"
-              class="mode-card"
-              [disabled]="busy() || accountCreated()"
-              [class.selected]="selectedMode() === 'createCluster'"
-              (click)="selectMode('createCluster')"
-              role="radio"
-              [attr.aria-checked]="selectedMode() === 'createCluster'"
-            >
-              <div class="mode-card-top">
-                <span class="mode-icon" aria-hidden="true">
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="20"
-                    height="20"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <circle cx="18" cy="5" r="3" />
-                    <circle cx="6" cy="12" r="3" />
-                    <circle cx="18" cy="19" r="3" />
-                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-                  </svg>
-                </span>
-                <span class="mode-badge neutral">Multi-machines</span>
-              </div>
-              <strong class="mode-title">Créer un cluster</strong>
-              <p class="mode-description">
-                Initialise un nouveau maillage prêt à accueillir d’autres serveurs ou workers.
-              </p>
-            </button>
-
-            <!-- Mode 3 : Rejoindre un cluster -->
-            <button
-              type="button"
-              class="mode-card"
-              [disabled]="busy() || accountCreated()"
-              [class.selected]="selectedMode() === 'joinCluster'"
-              (click)="selectMode('joinCluster')"
-              role="radio"
-              [attr.aria-checked]="selectedMode() === 'joinCluster'"
-            >
-              <div class="mode-card-top">
-                <span class="mode-icon" aria-hidden="true">
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="20"
-                    height="20"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                  </svg>
-                </span>
-                <span class="mode-badge accent">Worker / Pair</span>
-              </div>
-              <strong class="mode-title">Rejoindre un cluster</strong>
-              <p class="mode-description">
-                Rattache cette machine à un cluster Encoding déjà actif sur votre réseau.
-              </p>
-            </button>
-          </div>
-        </section>
-        }
         <div class="workbench-actions">
           <button matButton="outlined" type="button" [disabled]="busy()" (click)="previousStep()">
             Retour
@@ -435,41 +316,13 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
         }
 
         @if (currentStep() === 2) {
-        <!-- Section 4 : Finalisation contextuelle selon le mode choisi -->
+        <!-- Section 3 : Vérification et initialisation du central -->
         <section class="workbench-card workbench-card--Contextual" aria-live="polite">
           <div class="workbench-actions workbench-actions--start">
             <button matButton="outlined" type="button" [disabled]="busy()" (click)="previousStep()">
               Retour
             </button>
           </div>
-          @if (selectedMode() === 'standalone') {
-            <div class="contextual-summary">
-              <div class="contextual-summary-head">
-                <span class="status-check" aria-hidden="true">✓</span>
-                <div>
-                  <h3>Prêt à démarrer en mode autonome</h3>
-                  <p>
-                    <strong>{{ effectiveNodeName() }}</strong> assurera l’interface serveur et
-                    l’encodage local. Vous vous connecterez avec le compte administrateur créé
-                    ci-dessus.
-                  </p>
-                </div>
-              </div>
-              <div class="workbench-actions">
-                <button
-                  matButton="filled"
-                  type="button"
-                  [disabled]="busy()"
-                  (click)="submitStandalone()"
-                >
-                  Accéder au tableau de bord
-                  <app-icon name="forward" matButtonIcon iconPositionEnd />
-                </button>
-              </div>
-            </div>
-          }
-
-          @if (selectedMode() === 'createCluster') {
             <div class="section-heading">
               <span class="step-pill" aria-hidden="true">3</span>
               <div>
@@ -493,153 +346,6 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
                 Initialiser le central <app-icon name="forward" />
               </button>
             </div>
-          }
-
-          @if (selectedMode() === 'joinCluster') {
-            @if (!accountCreated()) {
-              <p>
-                Créez le compte administrateur de cette machine pour rechercher un cluster et
-                envoyer une demande. La jonction devra ensuite être approuvée sur le cluster
-                d’accueil.
-              </p>
-              <div class="workbench-actions">
-                <button
-                  matButton="filled"
-                  type="button"
-                  [disabled]="busy()"
-                  (click)="prepareClusterJoin()"
-                >
-                  Créer le compte et continuer
-                </button>
-              </div>
-            } @else {
-              <p role="status">
-                Compte administrateur local créé. Vous pouvez rejoindre un cluster.
-              </p>
-            }
-            <div class="section-heading">
-              <span class="step-pill" aria-hidden="true">4</span>
-              <div>
-                <h3>Connexion au cluster d’accueil</h3>
-                <p>
-                  Sélectionnez un cluster découvert sur le réseau local ou indiquez son adresse URL.
-                </p>
-              </div>
-            </div>
-
-            @if (availableClusters().length > 0) {
-              <div class="discovered-clusters">
-                <span class="list-label">Clusters détectés automatiquement (mDNS) :</span>
-                <div class="cluster-cards-list">
-                  @for (cluster of availableClusters(); track cluster.id) {
-                    <div class="cluster-card">
-                      <div class="cluster-info">
-                        <strong>{{ cluster.name }}</strong>
-                        <span class="cluster-address">{{ cluster.apiBaseUrl }}</span>
-                      </div>
-                      <button
-                        matButton="outlined"
-                        type="button"
-                        [disabled]="
-                          !accountCreated() || busy() || localController.pending() || joinApproved()
-                        "
-                        (click)="selectClusterAddress(cluster.apiBaseUrl)"
-                      >
-                        Sélectionner
-                      </button>
-                    </div>
-                  }
-                </div>
-              </div>
-            }
-
-            <div class="form-group">
-              <label for="cluster-address-input" class="field-label">
-                Adresse du cluster d’accueil
-              </label>
-              <div class="input-with-button">
-                <input
-                  id="cluster-address-input"
-                  [disabled]="
-                    !accountCreated() || busy() || localController.pending() || joinApproved()
-                  "
-                  type="url"
-                  class="text-input"
-                  placeholder="http://192.168.1.50:8090"
-                  [ngModel]="clusterAddress()"
-                  (ngModelChange)="clusterAddress.set($event)"
-                />
-                <button
-                  matButton="outlined"
-                  type="button"
-                  [disabled]="
-                    !accountCreated() ||
-                    !clusterAddress() ||
-                    busy() ||
-                    localController.pending() ||
-                    joinApproved()
-                  "
-                  (click)="verifyClusterAddress()"
-                >
-                  Vérifier
-                </button>
-              </div>
-              <span class="field-hint">
-                Adresse complète avec port (ex. http://192.168.1.50:8090).
-              </span>
-            </div>
-
-            @if (localController.target(); as target) {
-              <div class="target-confirmed-box">
-                <div class="target-badge">Cluster joignable</div>
-                <h4>{{ target.name }}</h4>
-                <p class="target-url">{{ target.apiBaseUrl }} ({{ target.id }})</p>
-
-                @if (joinApproved()) {
-                  <p role="status">Ce nœud a rejoint {{ target.name }}.</p>
-                } @else if (pairingCode(); as code) {
-                  <div class="hero-code-box">
-                    <span class="code-label">Code de confirmation à comparer</span>
-                    <div class="hero-digits">{{ code }}</div>
-                    <p class="code-helper">
-                      Un administrateur du cluster <strong>{{ target.name }}</strong> doit valider
-                      ce code depuis sa page Nœuds.
-                    </p>
-                  </div>
-                } @else if (localController.pending()) {
-                  <p role="status">
-                    Demande envoyée. En attente de confirmation du cluster d’accueil.
-                  </p>
-                } @else {
-                  <button
-                    matButton="outlined"
-                    type="button"
-                    [disabled]="busy() || !localController.canJoin()"
-                    (click)="requestClusterJoin()"
-                  >
-                    Envoyer la demande de rattachement
-                  </button>
-                }
-              </div>
-            }
-
-            @if (accountCreated()) {
-              <app-join-user-collisions />
-            }
-            <div class="workbench-actions">
-              <button
-                matButton="filled"
-                type="button"
-                [disabled]="
-                  busy() || !accountCreated() || (!localController.pending() && !joinApproved())
-                "
-                (click)="submitJoinFinish()"
-              >
-                {{ joinApproved() ? 'Ouvrir l’application' : 'Suivre la demande dans Nœuds' }}
-                <app-icon name="forward" matButtonIcon iconPositionEnd />
-              </button>
-            </div>
-          }
         </section>
         }
       </div>
@@ -722,21 +428,6 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
       background: var(--success-soft);
       color: var(--success);
     }
-    .mode-badge {
-      padding: 2px 8px;
-      border-radius: var(--radius-pill);
-      font-size: 12px;
-      font-weight: 700;
-      background: var(--accent-soft);
-      color: var(--accent);
-    }
-    .section-heading p,
-    .contextual-summary-head p {
-      margin: 0;
-      font-size: var(--font-body);
-      color: var(--text-secondary);
-      line-height: 1.5;
-    }
     .hardware-bento {
       padding: var(--space-4);
       border-radius: var(--radius-lg);
@@ -779,13 +470,6 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
       font-size: var(--font-label);
       font-weight: 700;
     }
-    .hardware-bento-header,
-    .section-heading,
-    .contextual-summary-head {
-      display: flex;
-      align-items: flex-start;
-      gap: var(--space-3);
-    }
     .live-dot {
       width: 10px;
       height: 10px;
@@ -807,15 +491,6 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-    }
-    .hardware-host-meta,
-    .field-hint,
-    .cluster-address,
-    .target-url,
-    .code-helper {
-      font-size: 12px;
-      color: var(--text-secondary);
-      margin: 0;
     }
     .hardware-tiles {
       display: grid;
@@ -853,45 +528,6 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
       font-size: 12px;
       color: var(--text-secondary);
       word-break: break-all;
-    }
-    .workbench-card--Contextual {
-      background: color-mix(in srgb, var(--surface-container) 85%, var(--accent-soft));
-    }
-    .step-pill,
-    .status-check {
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      display: grid;
-      place-items: center;
-      background: var(--accent-soft);
-      color: var(--accent);
-      font-size: 13px;
-      font-weight: 800;
-      flex-shrink: 0;
-    }
-    .status-check {
-      background: var(--success-soft);
-      color: var(--success);
-    }
-    .section-heading h2,
-    .section-heading h3,
-    .contextual-summary-head h3,
-    .target-confirmed-box h4 {
-      margin: 0 0 4px;
-      font-size: var(--font-title-md);
-      font-weight: 750;
-    }
-    .form-group,
-    .discovered-clusters,
-    .cluster-cards-list {
-      display: grid;
-      gap: 8px;
-    }
-    .field-label,
-    .list-label {
-      font-size: 13px;
-      font-weight: 700;
     }
     .text-input {
       min-height: 44px;
@@ -937,71 +573,6 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
       background: var(--accent-soft);
       color: var(--accent);
     }
-    .mode-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: var(--space-3);
-    }
-    .mode-card {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 10px;
-      text-align: left;
-      padding: var(--space-4);
-      border-radius: var(--radius-lg);
-      background: var(--surface-container-low);
-      border: 2px solid transparent;
-      color: inherit;
-      cursor: pointer;
-    }
-    .mode-card:focus-visible {
-      outline: 3px solid var(--tertiary);
-      outline-offset: 2px;
-    }
-    .mode-card.selected {
-      background: var(--accent-soft);
-      border-color: var(--accent);
-    }
-    .mode-card-top,
-    .cluster-card {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: var(--space-3);
-    }
-    .contextual-summary {
-      display: grid;
-      gap: var(--space-3);
-    }
-    .mode-icon {
-      width: 36px;
-      height: 36px;
-      border-radius: 10px;
-      display: grid;
-      place-items: center;
-      background: var(--surface-container-high);
-      color: var(--accent);
-    }
-    .mode-badge.primary {
-      background: var(--success-soft);
-      color: var(--success);
-    }
-    .mode-badge.neutral {
-      background: var(--surface-container-high);
-      color: var(--text-secondary);
-    }
-    .mode-title {
-      font-size: var(--font-body);
-      font-weight: 750;
-    }
-    .mode-description {
-      margin: 0;
-      font-size: 12px;
-      color: var(--text-secondary);
-      line-height: 1.45;
-    }
     .workbench-actions,
     .input-with-button {
       display: flex;
@@ -1019,41 +590,7 @@ export type SetupOperationMode = 'standalone' | 'createCluster' | 'joinCluster';
       min-height: var(--mat-button-filled-container-height, 40px);
       padding-block: var(--space-2);
     }
-    .cluster-card,
-    .target-confirmed-box {
-      padding: var(--space-3) var(--space-4);
-      background: var(--surface-container-low);
-      border-radius: var(--radius-md);
-    }
-    .target-confirmed-box {
-      display: grid;
-      gap: 8px;
-      outline: 1px solid var(--accent);
-    }
-    .target-badge,
-    .code-label {
-      font-size: 12px;
-      text-transform: uppercase;
-      font-weight: 700;
-      color: var(--success);
-    }
-    .hero-code-box {
-      text-align: center;
-      padding: var(--space-4);
-      border-radius: var(--radius-lg);
-      background: var(--accent-soft);
-    }
-    .hero-digits {
-      font-size: 32px;
-      font-weight: 800;
-      letter-spacing: 0.14em;
-      margin: 8px 0;
-      font-family: ui-monospace, monospace;
-    }
     @media (max-width: 900px) {
-      .mode-grid {
-        grid-template-columns: 1fr;
-      }
       .hardware-summary {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
@@ -1082,21 +619,17 @@ export class SetupWizardPageComponent {
   protected readonly setupSheet = signal<SetupNodeSheet | null>(null);
 
   protected readonly currentStep = signal(0);
-  protected readonly showModeChoice = signal(false);
   protected readonly busy = signal(false);
   protected readonly errorMessage = signal('');
 
   protected readonly nodeName = signal('');
-  protected readonly selectedMode = signal<SetupOperationMode>('createCluster');
   protected readonly clusterName = signal('');
-  protected readonly clusterAddress = signal('');
   protected readonly adminUsername = signal('admin');
   protected readonly adminPassword = signal('');
   protected readonly adminConfirm = signal('');
   protected readonly passwordVisible = signal(false);
   protected readonly adminSubmitted = signal(false);
   protected readonly accountCreated = signal(false);
-  protected readonly joinApproved = computed(() => this.localController.joinIndex() === 3);
   protected readonly minimumPasswordLength = MINIMUM_PASSWORD_LENGTH;
 
   constructor() {
@@ -1269,120 +802,24 @@ export class SetupWizardPageComponent {
     return ordered.map((id) => ACCEL_DISPLAY[id] ?? id.toUpperCase()).join(' · ');
   });
 
-  protected readonly availableClusters = computed(() => this.localController.joinableClusters());
-
-  protected readonly pairingCode = computed(
-    () =>
-      this.localController.pairing()?.verificationCode ||
-      this.localController.status()?.verificationCode ||
-      null,
-  );
-
-  protected selectMode(mode: SetupOperationMode): void {
-    if (this.busy() || this.accountCreated()) return;
-    this.errorMessage.set('');
-    this.selectedMode.set(mode);
-  }
-
   protected goToStep(index: number): void {
     this.errorMessage.set('');
     this.currentStep.set(index);
-  }
-
-  protected selectClusterAddress(url: string): void {
-    this.clusterAddress.set(url);
-    const known = this.availableClusters().find((c) => c.apiBaseUrl === url);
-    if (known) {
-      this.localController.target.set(known);
-    }
-    void this.verifyClusterAddress();
-  }
-
-  protected async verifyClusterAddress(): Promise<void> {
-    if (
-      !this.accountCreated() ||
-      this.busy() ||
-      this.localController.pending() ||
-      this.joinApproved()
-    )
-      return;
-    const addr = this.clusterAddress().trim();
-    if (!addr) return;
-    this.errorMessage.set('');
-    this.busy.set(true);
-    try {
-      await this.localController.verifyAddress({ address: addr });
-      if (this.localController.error()) {
-        this.errorMessage.set(this.localController.error());
-      }
-    } catch {
-      this.errorMessage.set(
-        'La vérification de l’adresse a échoué. Vérifiez que le serveur est allumé.',
-      );
-    } finally {
-      this.busy.set(false);
-    }
-  }
-
-  protected async requestClusterJoin(): Promise<void> {
-    if (!this.accountCreated() || this.busy() || !this.localController.canJoin()) return;
-    this.errorMessage.set('');
-    this.busy.set(true);
-    try {
-      await this.localController.sendRequest(this.effectiveNodeName());
-      if (this.localController.error()) {
-        this.errorMessage.set(this.localController.error());
-      }
-    } catch {
-      this.errorMessage.set('L’envoi de la demande a échoué. Réessayez.');
-    } finally {
-      this.busy.set(false);
-    }
-  }
-
-  protected async submitStandalone(): Promise<void> {
-    await this.completeSetup({
-      nodeDisplayName: this.effectiveNodeName(),
-      mode: 'standalone',
-    });
   }
 
   protected async submitCreateCluster(): Promise<void> {
     const name = this.clusterName().trim() || this.defaultClusterName();
     await this.completeSetup({
       nodeDisplayName: this.effectiveNodeName(),
-      mode: 'createCluster',
       clusterName: name,
     });
-  }
-
-  protected async prepareClusterJoin(): Promise<void> {
-    await this.completeSetup(
-      {
-        nodeDisplayName: this.effectiveNodeName(),
-        mode: 'joinCluster',
-      },
-      false,
-    );
-  }
-
-  protected async submitJoinFinish(): Promise<void> {
-    if (
-      this.busy() ||
-      !this.accountCreated() ||
-      (!this.localController.pending() && !this.joinApproved())
-    )
-      return;
-    await this.router.navigate([this.joinApproved() ? '/' : '/nodes']);
   }
 
   private async completeSetup(
     payload: {
       nodeDisplayName: string;
-      mode: SetupOperationMode;
       clusterName?: string;
     },
-    openApplication = true,
   ): Promise<void> {
     if (this.busy() || this.accountCreated()) return;
     this.errorMessage.set('');
@@ -1402,12 +839,8 @@ export class SetupWizardPageComponent {
       this.accountCreated.set(true);
       this.adminPassword.set('');
       this.adminConfirm.set('');
-      if (openApplication) {
-        this.notifications.show('Initialisation terminée avec succès !');
-        await this.router.navigate(['/']);
-      } else {
-        this.localController.refresh();
-      }
+      this.notifications.show('Initialisation terminée avec succès !');
+      await this.router.navigate(['/']);
     } catch (error) {
       this.errorMessage.set(
         AuthService.errorMessage(error, 'L’initialisation a échoué. Veuillez réessayer.'),

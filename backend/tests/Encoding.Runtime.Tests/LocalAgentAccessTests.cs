@@ -216,7 +216,7 @@ public sealed class LocalAgentAccessTests
                     "/api/v1/auth/setup",
                     new Encoding.Contracts.Auth.SetupRequest(
                         NodeDisplayName: "Serveur Principal",
-                        Mode: "createCluster",
+                        
                         ClusterName: "Cluster Salon"));
                 Assert.Equal(HttpStatusCode.Created, setupResponse.StatusCode);
 

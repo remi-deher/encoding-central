@@ -13,7 +13,6 @@ public sealed record SetupRequest(
     string? Password = null,
     string? SetupToken = null,
     string? NodeDisplayName = null,
-    string? Mode = null,
     string? ClusterName = null);
 
 /// <summary>
