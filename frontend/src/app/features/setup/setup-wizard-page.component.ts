@@ -19,6 +19,8 @@ import { LocalNodeController } from '../../shared/services/local-node-controller
 import { NotificationService } from '../../shared/services/notification.service';
 import { formatMemory } from '../../shared/models/node-hardware';
 import { AccessTemplateComponent } from '../../shared/templates/access-template.component';
+import { DetectedConfigurationComponent } from './detected-configuration.component';
+import { SETUP_SURFACE_STYLES } from './setup-surface.styles';
 
 const MINIMUM_PASSWORD_LENGTH = 12;
 const MAXIMUM_PASSWORD_LENGTH = 256;
@@ -33,6 +35,7 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
     FormsModule,
     MatButtonModule,
     AccessTemplateComponent,
+    DetectedConfigurationComponent,
   ],
   template: `
     <app-access-template
@@ -43,91 +46,81 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
       [busy]="busy()"
       progressLabel="Action en cours"
     >
-      <div access-content class="wizard">
+      <div access-content class="setup-stack">
         <p class="progress" aria-live="polite">Étape {{ currentStep() + 1 }} sur 3</p>
 
         @if (errorMessage() || localController.error()) {
-          <p class="setup-error" role="alert">{{ errorMessage() || localController.error() }}</p>
+          <p class="error" role="alert">{{ errorMessage() || localController.error() }}</p>
         }
 
         @switch (currentStep()) {
           @case (0) {
-            <section aria-labelledby="step-admin-heading">
-              <h2 id="step-admin-heading">Créer l’administrateur</h2>
-              <p class="lead">Ce compte protège l’accès au central. Vous pourrez en ajouter d’autres.</p>
-
-              <div class="form-group">
-                <label for="admin-username-input" class="field-label">Nom d’utilisateur</label>
-                <input
-                  id="admin-username-input"
-                  [disabled]="busy() || accountCreated()"
-                  type="text"
-                  class="text-input"
-                  [class.invalid]="adminErrors().username"
-                  [ngModel]="adminUsername()"
-                  (ngModelChange)="adminUsername.set($event)"
-                  maxlength="64"
-                  autocomplete="username"
-                  [attr.aria-invalid]="adminErrors().username ? 'true' : null"
-                  aria-describedby="admin-username-error"
-                />
-                @if (adminErrors().username) {
-                  <span id="admin-username-error" class="field-error">{{ adminErrors().username }}</span>
-                }
+            <section class="card" aria-labelledby="step-admin-heading">
+              <div class="heading">
+                <h2 id="step-admin-heading">Créer l’administrateur</h2>
+                <p>Ce compte protège l’accès au central. Vous pourrez en ajouter d’autres.</p>
               </div>
 
-              <div class="form-group">
-                <label for="admin-password-input" class="field-label">Mot de passe</label>
-                <div class="input-with-button">
-                  <input
-                    id="admin-password-input"
-                    [disabled]="busy() || accountCreated()"
-                    class="text-input"
-                    [class.invalid]="adminErrors().password"
-                    [type]="passwordVisible() ? 'text' : 'password'"
-                    [ngModel]="adminPassword()"
-                    (ngModelChange)="adminPassword.set($event)"
-                    autocomplete="new-password"
-                    [attr.aria-invalid]="adminErrors().password ? 'true' : null"
-                    aria-describedby="admin-password-hint"
-                  />
-                  <button
-                    matButton="text"
-                    type="button"
-                    [attr.aria-pressed]="passwordVisible()"
-                    (click)="passwordVisible.set(!passwordVisible())"
-                  >
-                    {{ passwordVisible() ? 'Masquer' : 'Afficher' }}
-                  </button>
-                </div>
-                <span
-                  id="admin-password-hint"
-                  [class]="adminErrors().password ? 'field-error' : 'field-hint'"
-                >
-                  {{ adminErrors().password || minimumPasswordLength + ' caractères minimum.' }}
-                </span>
-              </div>
+              <label for="admin-username-input">Nom d’utilisateur</label>
+              <input
+                id="admin-username-input"
+                type="text"
+                [disabled]="busy() || accountCreated()"
+                [ngModel]="adminUsername()"
+                (ngModelChange)="adminUsername.set($event)"
+                maxlength="64"
+                autocomplete="username"
+                [attr.aria-invalid]="adminErrors().username ? 'true' : null"
+                aria-describedby="admin-username-error"
+              />
+              @if (adminErrors().username) {
+                <span id="admin-username-error" class="field-error">{{ adminErrors().username }}</span>
+              }
 
-              <div class="form-group">
-                <label for="admin-confirm-input" class="field-label">Confirmer le mot de passe</label>
+              <label for="admin-password-input">Mot de passe</label>
+              <div class="field-row">
                 <input
-                  id="admin-confirm-input"
-                  [disabled]="busy() || accountCreated()"
-                  class="text-input"
-                  [class.invalid]="adminErrors().confirm"
+                  id="admin-password-input"
                   [type]="passwordVisible() ? 'text' : 'password'"
-                  [ngModel]="adminConfirm()"
-                  (ngModelChange)="adminConfirm.set($event)"
+                  [disabled]="busy() || accountCreated()"
+                  [ngModel]="adminPassword()"
+                  (ngModelChange)="adminPassword.set($event)"
                   autocomplete="new-password"
-                  [attr.aria-invalid]="adminErrors().confirm ? 'true' : null"
-                  aria-describedby="admin-confirm-error"
+                  [attr.aria-invalid]="adminErrors().password ? 'true' : null"
+                  aria-describedby="admin-password-hint"
                 />
-                @if (adminErrors().confirm) {
-                  <span id="admin-confirm-error" class="field-error">{{ adminErrors().confirm }}</span>
-                }
+                <button
+                  matButton="text"
+                  type="button"
+                  [attr.aria-pressed]="passwordVisible()"
+                  (click)="passwordVisible.set(!passwordVisible())"
+                >
+                  {{ passwordVisible() ? 'Masquer' : 'Afficher' }}
+                </button>
               </div>
+              <span
+                id="admin-password-hint"
+                [class]="adminErrors().password ? 'field-error' : 'field-hint'"
+              >
+                {{ adminErrors().password || minimumPasswordLength + ' caractères minimum.' }}
+              </span>
 
-              <div class="workbench-actions">
+              <label for="admin-confirm-input">Confirmer le mot de passe</label>
+              <input
+                id="admin-confirm-input"
+                [type]="passwordVisible() ? 'text' : 'password'"
+                [disabled]="busy() || accountCreated()"
+                [ngModel]="adminConfirm()"
+                (ngModelChange)="adminConfirm.set($event)"
+                autocomplete="new-password"
+                [attr.aria-invalid]="adminErrors().confirm ? 'true' : null"
+                aria-describedby="admin-confirm-error"
+              />
+              @if (adminErrors().confirm) {
+                <span id="admin-confirm-error" class="field-error">{{ adminErrors().confirm }}</span>
+              }
+
+              <div class="actions">
                 <button matButton="filled" type="button" [disabled]="busy()" (click)="nextFromAccount()">
                   Continuer
                 </button>
@@ -136,41 +129,37 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
           }
 
           @case (1) {
-            <section aria-labelledby="step-identity-heading">
-              <h2 id="step-identity-heading">Nommer le central</h2>
-              <p class="lead">Ces noms s’affichent dans l’interface et chez les workers.</p>
-
-              <div class="form-group">
-                <label for="node-name-input" class="field-label">Nom du central</label>
-                <input
-                  id="node-name-input"
-                  [disabled]="busy() || accountCreated()"
-                  type="text"
-                  class="text-input"
-                  [placeholder]="defaultNodeName()"
-                  [ngModel]="nodeName()"
-                  (ngModelChange)="nodeName.set($event)"
-                  maxlength="128"
-                  autocomplete="off"
-                />
+            <section class="card" aria-labelledby="step-identity-heading">
+              <div class="heading">
+                <h2 id="step-identity-heading">Nommer le central</h2>
+                <p>Ces noms s’affichent dans l’interface et chez les workers.</p>
               </div>
 
-              <div class="form-group">
-                <label for="cluster-name-input" class="field-label">Nom du cluster</label>
-                <input
-                  id="cluster-name-input"
-                  type="text"
-                  class="text-input"
-                  [placeholder]="defaultClusterName()"
-                  [ngModel]="clusterName()"
-                  (ngModelChange)="clusterName.set($event)"
-                  maxlength="128"
-                  autocomplete="off"
-                />
-              </div>
+              <label for="node-name-input">Nom du central</label>
+              <input
+                id="node-name-input"
+                type="text"
+                [disabled]="busy() || accountCreated()"
+                [placeholder]="defaultNodeName()"
+                [ngModel]="nodeName()"
+                (ngModelChange)="nodeName.set($event)"
+                maxlength="128"
+                autocomplete="off"
+              />
 
-              <div class="workbench-actions">
-                <button matButton="text" type="button" [disabled]="busy()" (click)="previousStep()">
+              <label for="cluster-name-input">Nom du cluster</label>
+              <input
+                id="cluster-name-input"
+                type="text"
+                [placeholder]="defaultClusterName()"
+                [ngModel]="clusterName()"
+                (ngModelChange)="clusterName.set($event)"
+                maxlength="128"
+                autocomplete="off"
+              />
+
+              <div class="actions">
+                <button matButton="outlined" type="button" [disabled]="busy()" (click)="previousStep()">
                   Retour
                 </button>
                 <button matButton="filled" type="button" [disabled]="busy()" (click)="advanceToReview()">
@@ -181,8 +170,12 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
           }
 
           @case (2) {
-            <section aria-labelledby="step-review-heading" aria-live="polite">
-              <h2 id="step-review-heading">Vérifier le central</h2>
+            <section class="card" aria-labelledby="step-review-heading" aria-live="polite">
+              <div class="heading">
+                <h2 id="step-review-heading">Vérifier le central</h2>
+                <p>Le central sera prêt à accueillir des workers après son initialisation.</p>
+              </div>
+
               <dl class="summary">
                 <div>
                   <dt>Central</dt>
@@ -196,54 +189,10 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
                   <dt>Administrateur</dt>
                   <dd>{{ adminUsername().trim() }}</dd>
                 </div>
-                <div>
-                  <dt>{{ announcedUrls().length ? 'Adresse annoncée' : 'Adresse utilisée par ce navigateur' }}</dt>
-                  <dd>
-                    @for (url of networkAccessUrls(); track url; let last = $last) {
-                      {{ url }}{{ last ? '' : ' · ' }}
-                    }
-                  </dd>
-                </div>
               </dl>
 
-              <details class="hardware">
-                <summary>Matériel détecté · {{ hostPlatformLabel() }}</summary>
-                <dl class="summary">
-                  <div>
-                    <dt>CPU</dt>
-                    <dd>{{ cpuInfo() }}</dd>
-                  </div>
-                  <div>
-                    <dt>RAM</dt>
-                    <dd>{{ memoryInfo() }}</dd>
-                  </div>
-                  <div>
-                    <dt>GPU</dt>
-                    <dd>{{ gpuInfo() }}</dd>
-                  </div>
-                  <div>
-                    <dt>Accélération GPU</dt>
-                    <dd>{{ gpuAccelerationInfo() }}</dd>
-                  </div>
-                  <div>
-                    <dt>Interfaces</dt>
-                    <dd>
-                      @if (setupSheet()?.addresses?.length) {
-                        <ul class="network-addresses" aria-label="Adresses des interfaces">
-                          @for (item of setupSheet()!.addresses; track item.interface + '/' + item.address) {
-                            <li class="mono">{{ item.address }} ({{ item.interface }})</li>
-                          }
-                        </ul>
-                      } @else {
-                        {{ setupSheet() ? 'Aucune adresse détectée' : 'Détection en cours…' }}
-                      }
-                    </dd>
-                  </div>
-                </dl>
-              </details>
-
-              <div class="workbench-actions">
-                <button matButton="text" type="button" [disabled]="busy()" (click)="previousStep()">
+              <div class="actions">
+                <button matButton="outlined" type="button" [disabled]="busy()" (click)="previousStep()">
                   Retour
                 </button>
                 <button
@@ -258,118 +207,22 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
             </section>
           }
         }
+
+        <app-detected-configuration
+          [system]="hostPlatformLabel()"
+          [cpu]="cpuInfo()"
+          [memory]="memoryInfo()"
+          [gpu]="gpuInfo()"
+          [acceleration]="gpuAccelerationInfo()"
+          [address]="networkAccessUrls().join(' · ')"
+          [addressLabel]="announcedUrls().length ? 'Adresse annoncée' : 'Adresse utilisée par ce navigateur'"
+          [interfaces]="interfaceAddresses()"
+          [interfacesEmpty]="setupSheet() ? 'Aucune adresse détectée' : 'Détection en cours…'"
+        />
       </div>
     </app-access-template>
   `,
-  styles: `
-    :host {
-      display: block;
-      min-height: 100%;
-    }
-    .wizard {
-      display: grid;
-      gap: var(--space-4);
-      width: min(100%, 460px);
-      margin-inline: auto;
-    }
-    .progress {
-      margin: 0;
-      color: var(--text-secondary);
-      font-size: var(--font-label);
-    }
-    h2 {
-      margin: 0;
-      font-size: var(--font-title-lg);
-    }
-    .lead {
-      margin: var(--space-1) 0 var(--space-4);
-      color: var(--text-secondary);
-    }
-    .form-group {
-      display: grid;
-      gap: var(--space-1);
-      margin-bottom: var(--space-4);
-    }
-    .field-label {
-      font-weight: 600;
-    }
-    .text-input {
-      width: 100%;
-      min-height: 44px;
-      padding: 0 var(--space-3);
-      border: 1px solid var(--outline);
-      border-radius: var(--radius-md);
-      background: var(--surface-container-lowest);
-      color: inherit;
-      font: inherit;
-    }
-    .text-input.invalid {
-      border-color: var(--danger);
-    }
-    .input-with-button {
-      display: flex;
-      gap: var(--space-2);
-      align-items: center;
-    }
-    .input-with-button .text-input {
-      flex: 1;
-    }
-    .field-hint {
-      color: var(--text-secondary);
-      font-size: var(--font-label);
-    }
-    .field-error,
-    .setup-error {
-      color: var(--danger);
-      font-size: var(--font-label);
-    }
-    .setup-error {
-      margin: 0;
-      padding: var(--space-3);
-      border-radius: var(--radius-md);
-      background: var(--danger-soft);
-    }
-    .summary {
-      display: grid;
-      gap: var(--space-3);
-      margin: var(--space-4) 0;
-    }
-    .summary > div {
-      display: grid;
-      grid-template-columns: 9rem 1fr;
-      gap: var(--space-3);
-    }
-    .summary dt {
-      color: var(--text-secondary);
-    }
-    .summary dd {
-      margin: 0;
-      overflow-wrap: anywhere;
-    }
-    .hardware {
-      margin-bottom: var(--space-4);
-      color: var(--text-secondary);
-    }
-    .hardware summary {
-      cursor: pointer;
-    }
-    .network-addresses {
-      display: grid;
-      gap: var(--space-1);
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    .mono {
-      display: block;
-      font-family: ui-monospace, 'JetBrains Mono', Consolas, monospace;
-    }
-    .workbench-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: var(--space-2);
-    }
-  `,
+  styles: SETUP_SURFACE_STYLES,
 })
 export class SetupWizardPageComponent {
   private readonly document = inject(DOCUMENT);
@@ -485,6 +338,10 @@ export class SetupWizardPageComponent {
   // The browser retains the Docker host and published port, unlike the container's
   // interfaces or default gateway. Configured public/advertised URLs take precedence.
   protected readonly announcedUrls = computed(() => this.setupSheet()?.urls ?? []);
+
+  protected readonly interfaceAddresses = computed(() =>
+    (this.setupSheet()?.addresses ?? []).map((item) => `${item.address} (${item.interface})`),
+  );
 
   protected readonly networkAccessUrls = computed(() => {
     const urls = this.setupSheet()?.urls ?? [];

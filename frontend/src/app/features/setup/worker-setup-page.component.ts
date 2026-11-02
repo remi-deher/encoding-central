@@ -8,12 +8,14 @@ import { AuthService } from '../../core/auth/auth.service';
 import { formatMemory } from '../../shared/models/node-hardware';
 import { LocalNodeController } from '../../shared/services/local-node-controller';
 import { AccessTemplateComponent } from '../../shared/templates/access-template.component';
+import { DetectedConfigurationComponent } from './detected-configuration.component';
+import { SETUP_SURFACE_STYLES } from './setup-surface.styles';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-worker-setup-page',
   providers: [LocalNodeController],
-  imports: [AccessTemplateComponent, FormsModule, MatButtonModule],
+  imports: [AccessTemplateComponent, DetectedConfigurationComponent, FormsModule, MatButtonModule],
   template: `
     <app-access-template
       view="setup"
@@ -23,7 +25,7 @@ import { AccessTemplateComponent } from '../../shared/templates/access-template.
       [busy]="busy()"
       progressLabel="Configuration du worker"
     >
-      <div access-content class="worker-setup">
+      <div access-content class="setup-stack">
         <p class="progress" aria-live="polite">Étape {{ step() + 1 }} sur 3</p>
 
         @if (errorMessage() || local.error()) {
@@ -152,191 +154,18 @@ import { AccessTemplateComponent } from '../../shared/templates/access-template.
           </section>
         }
 
-        <section class="detected-configuration" aria-labelledby="detected-configuration-heading">
-          <div class="detected-heading">
-            <span class="live-dot" aria-hidden="true"></span>
-            <div>
-              <h2 id="detected-configuration-heading">Configuration détectée</h2>
-            </div>
-          </div>
-          <dl class="detected-grid">
-            <div>
-              <dt>Système</dt>
-              <dd>{{ workerSystem() }}</dd>
-            </div>
-            <div>
-              <dt>CPU</dt>
-              <dd>{{ workerCpu() }}</dd>
-            </div>
-            <div>
-              <dt>RAM</dt>
-              <dd>{{ workerMemory() }}</dd>
-            </div>
-            <div>
-              <dt>GPU</dt>
-              <dd>{{ workerGpu() }}</dd>
-            </div>
-            <div>
-              <dt>Encodage GPU</dt>
-              <dd>{{ workerAcceleration() }}</dd>
-            </div>
-            <div>
-              <dt>Adresse IP / accès</dt>
-              <dd>{{ workerAddress() }}</dd>
-            </div>
-          </dl>
-        </section>
+        <app-detected-configuration
+          [system]="workerSystem()"
+          [cpu]="workerCpu()"
+          [memory]="workerMemory()"
+          [gpu]="workerGpu()"
+          [acceleration]="workerAcceleration()"
+          [address]="workerAddress()"
+        />
       </div>
     </app-access-template>
   `,
-  styles: `
-    .progress {
-      margin: 0;
-      color: var(--text-secondary);
-      font-size: var(--font-label);
-    }
-    .worker-setup,
-    .card {
-      display: grid;
-      gap: var(--space-4);
-    }
-    .detected-configuration {
-      display: grid;
-      gap: var(--space-3);
-      padding: var(--space-4);
-      border-radius: var(--radius-xl);
-      background: var(--surface-container-low);
-    }
-    .detected-heading {
-      display: flex;
-      align-items: flex-start;
-      gap: var(--space-3);
-    }
-    .live-dot {
-      width: 10px;
-      height: 10px;
-      flex: 0 0 auto;
-      margin-top: 5px;
-      border-radius: 50%;
-      background: var(--success);
-      box-shadow: 0 0 0 4px var(--success-soft);
-    }
-    dt {
-      color: var(--text-muted);
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-    }
-    .detected-heading h2 {
-      margin: 2px 0 0;
-      font-size: var(--font-title-md);
-    }
-    .detected-grid {
-      display: grid;
-      margin: 0;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: var(--space-2);
-    }
-    .detected-grid > div {
-      display: grid;
-      gap: 2px;
-      padding: var(--space-3);
-      border-radius: var(--radius-md);
-      background: var(--surface-container-low);
-    }
-    dd {
-      margin: 0;
-      color: var(--text-primary);
-      font-size: var(--font-body);
-      font-weight: 700;
-      overflow-wrap: anywhere;
-    }
-
-    .step > span,
-
-
-
-    .card {
-      padding: var(--space-5);
-      border-radius: var(--radius-xl);
-      background: var(--surface-container);
-      box-shadow: var(--elevation-2);
-    }
-    .heading {
-      display: flex;
-      align-items: flex-start;
-      gap: var(--space-3);
-    }
-    h2,
-    p {
-      margin: 0;
-    }
-    h2 {
-      font-size: var(--font-title-lg);
-    }
-    .heading p,
-    .notice {
-      color: var(--text-secondary);
-      line-height: 1.5;
-    }
-    label {
-      margin-bottom: calc(var(--space-3) * -1);
-      font-size: var(--font-label);
-      font-weight: 700;
-    }
-    input {
-      min-height: 48px;
-      box-sizing: border-box;
-      padding: 10px 14px;
-      border: 1px solid var(--border-strong);
-      border-radius: var(--radius-md);
-      background: transparent;
-      color: var(--text-primary);
-      font: inherit;
-    }
-    input:focus {
-      outline: 2px solid var(--accent);
-      outline-offset: 1px;
-    }
-    .notice {
-      padding: var(--space-3) var(--space-4);
-      border-radius: var(--radius-lg);
-      background: var(--surface-container-low);
-    }
-    .actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: var(--space-2);
-      margin-top: var(--space-2);
-    }
-    .error {
-      margin: 0;
-      padding: var(--space-3) var(--space-4);
-      border-radius: var(--radius-lg);
-      background: var(--danger-soft);
-      color: var(--danger);
-    }
-    @media (max-width: 560px) {
-      .steps {
-        justify-content: space-between;
-      }
-      .step {
-        padding-inline: var(--space-2);
-      }
-      .card {
-        padding: var(--space-4);
-      }
-      .detected-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-    }
-    @media (max-width: 380px) {
-      .detected-grid {
-        grid-template-columns: minmax(0, 1fr);
-      }
-    }
-  `,
+  styles: SETUP_SURFACE_STYLES,
 })
 export class WorkerSetupPageComponent {
   private readonly http = inject(HttpClient);

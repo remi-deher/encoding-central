@@ -8,7 +8,7 @@
   [class.rail-navigation-shell]="!authMode() && !workspaceMode() && railNavigation()"
   [class.compact-navigation-shell]="!authMode() && !workspaceMode() && isCompactNavigation()"
 >
-  @if (authMode()) {
+  @if (authHeaderVisible()) {
     <header class="auth-header">
       <a class="brand header-brand" routerLink="/" aria-label="Encoding, accueil">
         <span class="brand-mark" aria-hidden="true">E</span>

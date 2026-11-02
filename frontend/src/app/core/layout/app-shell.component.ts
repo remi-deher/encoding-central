@@ -108,6 +108,8 @@ export class AppShellComponent {
 
   protected readonly workspaceMode = computed(() => this.navigationEnd().workspaceMode);
   protected readonly authMode = computed(() => this.navigationEnd().authMode);
+  /** Les assistants de premier démarrage n'ont pas de barre d'en-tête ; la page de connexion la garde. */
+  protected readonly authHeaderVisible = computed(() => this.navigationEnd().authMode && !this.navigationEnd().setupMode);
   protected readonly fullWidthContent = computed(
     () => this.navigationEnd().contentWidth === 'full',
   );
@@ -158,6 +160,7 @@ export class AppShellComponent {
     url: string;
     workspaceMode: boolean;
     authMode: boolean;
+    setupMode: boolean;
     contentWidth: string;
   } {
     let route = this.router.routerState.snapshot.root;
@@ -170,6 +173,7 @@ export class AppShellComponent {
       url: this.router.url,
       workspaceMode: route.data['layout'] === 'workspace',
       authMode: route.data['authPage'] !== undefined,
+      setupMode: route.data['authPage'] === 'setup',
       contentWidth: route.data['contentWidth'] === 'full' ? 'full' : 'standard',
     };
   }
