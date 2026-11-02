@@ -15,7 +15,15 @@ public static class PluginStoreEndpoints
     public static void MapPluginStoreEndpoints(this WebApplication app)
     {
         var store = app.MapGroup("/api/v1/store").WithTags("Store");
+        MapRepositoryRoutes(store);
+        MapCatalogRoutes(store);
+        MapInstallRoutes(store);
+        MapImportAndDistributionRoutes(store);
+    }
 
+    /// <summary>Dépôts : liste, ajout, synchronisation, activation et retrait.</summary>
+    private static void MapRepositoryRoutes(RouteGroupBuilder store)
+    {
         store.MapGet("/repositories", (PluginRepositoryService repositories) =>
             Results.Ok(repositories.List().Select(item => new
             {
@@ -48,7 +56,11 @@ public static class PluginStoreEndpoints
             try { return await repositories.RemoveAsync(repositoryId, ct) ? Results.NoContent() : Results.NotFound(); }
             catch (PluginRepositoryException exception) { return Results.UnprocessableEntity(new { title = exception.Message }); }
         }).WithName("RemoveStoreRepository");
+    }
 
+    /// <summary>Catalogue : paquets, outils, ressources et modèles proposés par les dépôts.</summary>
+    private static void MapCatalogRoutes(RouteGroupBuilder store)
+    {
         store.MapGet("/packages", async (PluginRepositoryService repositories, PluginStoreService plugins, ToolStoreService tools, ResourceRepository resources, FlowRepository flows, CancellationToken ct) =>
         {
             var installed = plugins.Installed().ToDictionary(item => item.Id, StringComparer.Ordinal);
@@ -162,7 +174,11 @@ public static class PluginStoreEndpoints
             }
             return Results.Ok(result);
         }).AllowViewer().WithName("ListStorePackages");
+    }
 
+    /// <summary>Installation de paquets, d'outils, de ressources et de flows du catalogue.</summary>
+    private static void MapInstallRoutes(RouteGroupBuilder store)
+    {
         store.MapPost("/packages/install", async (InstallPackageRequest request, PluginRepositoryService repositories, CancellationToken ct) =>
         {
             try { return Results.Ok(await repositories.InstallAsync(request.RepositoryId, request.Id, request.Version, ct)); }
@@ -240,7 +256,11 @@ public static class PluginStoreEndpoints
             }
             catch (PluginRepositoryException exception) { return Results.UnprocessableEntity(new { title = exception.Message }); }
         }).WithName("InstallStoreFlow");
+    }
 
+    /// <summary>Import d'archive, désinstallation, liste des éléments installés et téléchargement par les workers.</summary>
+    private static void MapImportAndDistributionRoutes(RouteGroupBuilder store)
+    {
         // Import d'une archive .zip (développement local, environnement isolé). Corps brut : 32 Mo au plus.
         store.MapPost("/packages/import", async (HttpRequest request, PluginStoreService plugins, CancellationToken ct) =>
         {

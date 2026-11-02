@@ -928,7 +928,7 @@
         "1.1.0",
         "1.2.0"
       ],
-      "minimumRuntimePluginVersion": "1.4.0",
+      "minimumRuntimePluginVersion": "1.3.0",
       "producesFiles": false,
       "category": "text"
     },

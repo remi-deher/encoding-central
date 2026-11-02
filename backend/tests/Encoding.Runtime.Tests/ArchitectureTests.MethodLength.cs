@@ -14,7 +14,6 @@ public sealed partial class ArchitectureTests
         ["Encoding.Api/Executions/RuntimeRepository.Claim.cs::ClaimAvailableAsync(Guid,ClaimCursor?,CancellationToken)"] = 312,
         ["Encoding.Api/Flows/FlowDefinitionValidator.cs::Validate(FlowDefinition,bool,bool)"] = 257,
         ["Encoding.Api/Infrastructure/ClusterEntityReconciliation.cs::CaptureLocalChangesAsync(CancellationToken)"] = 214,
-        ["Encoding.Api/Plugins/PluginStoreEndpoints.cs::MapPluginStoreEndpoints(WebApplication)"] = 199,
         ["Encoding.Api/Tools/AiAssistantEndpoints.cs::MapAiAssistantEndpoints(WebApplication)"] = 197,
         ["Encoding.NodeAgent/Runtime/RuntimeTransferService.cs::TransferAsync(RuntimeTransfer,RuntimeClient,CancellationToken)"] = 166,
         ["Encoding.Api/Flows/FlowSimulator.cs::Simulate(FlowSimulationRequest,IReadOnlyDictionary<string, JsonElement>?)"] = 162,
