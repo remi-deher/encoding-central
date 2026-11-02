@@ -249,11 +249,10 @@ export class LocalNodeController {
     await this.run(
       this.http.post<DiscoveredCluster>('/api/v1/local-node/clusters', { apiBaseUrl: address }),
       (cluster) => {
+        // Seul le rattachement déjà établi de l'agent compte : l'identité relayée par l'interface est celle du central lui-même.
         const localClusterId = this.status()?.clusterId?.toLowerCase();
-        const localIdentityId = this.identity()?.id?.toLowerCase();
         if (
           (localClusterId && cluster.id.toLowerCase() === localClusterId) ||
-          (localIdentityId && cluster.id.toLowerCase() === localIdentityId) ||
           cluster.source === 'configured'
         ) {
           this.error.set(

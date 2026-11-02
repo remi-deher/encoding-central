@@ -21,6 +21,8 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     WebRootPath = Path.GetFullPath("../api/wwwroot", AppContext.BaseDirectory)
 });
 var options = NodeAgentOptions.FromConfiguration(builder.Configuration);
+if (options.WorkerImage && options.LocalEnrollmentSecretFile is { } localSecretFile)
+    LocalEnrollment.Create(localSecretFile);
 Environment.SetEnvironmentVariable(ManagedToolCatalog.DirectoryEnvironmentVariable,
     builder.Configuration["Runtime:ManagedToolDirectory"] is { Length: > 0 } managedToolDirectory ? managedToolDirectory : ManagedToolCatalog.DefaultDirectory);
 builder.WebHost.ConfigureKestrel(server =>
@@ -32,7 +34,7 @@ builder.WebHost.ConfigureKestrel(server =>
 });
 builder.Services.AddSingleton(options);
 builder.Services.AddHttpClient(CentralUiProxy.ClientName, client => client.Timeout = Timeout.InfiniteTimeSpan)
-    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+    .ConfigurePrimaryHttpMessageHandler(CentralUiProxy.CreateHandler);
 builder.Services.AddSingleton<WorkerIdentityStore>();
 builder.Services.AddSingleton<ISystemLogNodeContext>(sp =>
 {

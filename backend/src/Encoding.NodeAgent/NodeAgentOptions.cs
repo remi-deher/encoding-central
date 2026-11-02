@@ -40,16 +40,22 @@ public sealed record NodeAgentOptions(
         var localApiPort = configuration.GetValue("WorkerUi:Port", 8081);
         if (localApiPort is < 1 or > 65535) throw new InvalidOperationException("WorkerUi:Port est invalide.");
 
+        var dataDirectory = Path.GetFullPath(configuration["Node:DataDirectory"] ?? ".encoding-node");
+        var configuredSecretFile = configuration[Encoding.Core.Nodes.LocalEnrollment.SecretFileSetting];
+        // Dans l'image worker, aucun lanceur ne crée le secret local : l'agent le garde dans son dossier de données.
+        var secretFile = !string.IsNullOrWhiteSpace(configuredSecretFile) ? configuredSecretFile
+            : workerImage ? Path.Combine(dataDirectory, Encoding.Core.Nodes.LocalEnrollment.FileName) : null;
+
         return new NodeAgentOptions(
             name,
             roles,
             maxConcurrentTasks,
-            Path.GetFullPath(configuration["Node:DataDirectory"] ?? ".encoding-node"),
+            dataDirectory,
             NormalizeOptionalUrl(configuration["Cluster:ApiBaseUrl"]),
             configuration.GetValue("Worker:AutoAcceptEnrollment", false),
             TimeSpan.FromSeconds(intervalSeconds),
             localApiPort,
-            string.IsNullOrWhiteSpace(configuration[Encoding.Core.Nodes.LocalEnrollment.SecretFileSetting]) ? null : configuration[Encoding.Core.Nodes.LocalEnrollment.SecretFileSetting],
+            secretFile,
             string.IsNullOrWhiteSpace(configuration["Node:DisplayName"]) ? null : configuration["Node:DisplayName"]!.Trim(),
             workerImage);
     }

@@ -17,6 +17,12 @@ internal static class CentralUiProxy
     };
     /// <summary>Client nommé du relais : pas de redirection suivie (le navigateur les voit), pas de délai (flux SSE).</summary>
     public const string ClientName = "CentralProxy";
+
+    /// <summary>
+    /// Pas de conteneur de cookies : le client est partagé par tous les visiteurs, donc la session du central d'une personne
+    /// serait réappliquée à toutes les suivantes. Les en-têtes <c>Cookie</c> et <c>Set-Cookie</c> sont relayés tels quels.
+    /// </summary>
+    public static SocketsHttpHandler CreateHandler() => new() { AllowAutoRedirect = false, UseCookies = false };
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     public static void Use(WebApplication app, Func<HttpContext, Task<string?>> resolveCentral, int localPort, string? secretFile)
