@@ -178,7 +178,6 @@ export interface AiAssistantConversation {
   /** `ai` (généré), `fallback` (début du message) ou `user` (renommé). */
   readonly titleSource?: 'ai' | 'fallback' | 'user' | null;
   /** Worker qui coordonne la discussion (reprise comprise). */
-  readonly coordinatorId?: string | null;
 }
 
 export interface AiAssistantModelOption {

@@ -33,8 +33,6 @@ public sealed class AiAssistantConversationsService(AiAssistantSupportService su
             .OrderByDescending(conversation => conversation.UpdatedAt)
             .Take(100)
             .ToArray();
-        for (var index = 0; index < page.Length; index++)
-            page[index] = page[index] with { CoordinatorId = await support.Cluster.CoordinatorAsync(page[index].Id, ct) };
         return page;
     }
 
@@ -136,7 +134,6 @@ public sealed class AiAssistantConversationsService(AiAssistantSupportService su
         await support.Store.DeleteAsync(AiAssistantSupportService.ConversationKey(stored.OwnerId, stored.Conversation.Id), ct);
         await support.Store.DeleteAsync(AiAssistantSupportService.SessionOwnerKey(stored.Conversation.Id), ct);
         await support.Store.DeleteAsync("session/" + stored.Conversation.Id, ct);
-            await support.Store.DeleteAsync(AiCentralService.CoordinatorKey(stored.Conversation.Id), ct);
         for (var attempt = 1; attempt <= AiAssistantSupportService.MaxTitleAttemptTurns; attempt++)
         {
             var titleSessionId = $"{stored.Conversation.Id.Split('.')[0]}.{AiAssistantSupportService.TitleRequestId(stored.Conversation.Id, attempt):N}";
@@ -174,13 +171,6 @@ public sealed class AiAssistantConversationsService(AiAssistantSupportService su
         if (activity?.ConversationId is { } id && AiAssistantSupportService.IsSessionId(id) && await support.ReadConversationAsync(ownerId, id, ct) is { } stored)
             activity = activity with { ConversationTitle = stored.Conversation.Title };
         return activity;
-    }
-
-    public async Task<Guid?> GetRequestCoordinatorIdAsync(Guid requestId, ClaimsPrincipal user, CancellationToken ct)
-    {
-        if (requestId == Guid.Empty) return null;
-        var activity = await ReadActivityAsync(AiAssistantSupportService.OwnerId(user), requestId, ct);
-        return await support.Cluster.CoordinatorAsync(activity?.ConversationId, ct);
     }
 
     public async Task<AiAssistantActivity?> ReadActivityAsync(string ownerId, Guid requestId, CancellationToken ct) =>
@@ -243,7 +233,7 @@ public sealed class AiAssistantConversationsService(AiAssistantSupportService su
         if (!AiAssistantSupportService.IsSessionId(id)) return null;
         var stored = await support.ReadConversationAsync(ownerId: AiAssistantSupportService.OwnerId(user), id, ct);
         if (stored is null) return null;
-        var conversation = stored.Conversation with { CoordinatorId = await support.Cluster.CoordinatorAsync(id, ct) };
+        var conversation = stored.Conversation;
 
         var session = await support.Cluster.GetSessionAsync(id, ct);
         var turns = session?.Turns.Select(turn => new AiAssistantTurn(

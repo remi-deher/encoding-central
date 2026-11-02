@@ -14,7 +14,6 @@
     "
     [conversations]="filteredConversations()"
     [totalCount]="conversations().length"
-    [nodes]="aiNodes()"
     [activeId]="detail()?.conversation?.id ?? null"
     [deletingId]="deletingConversationId()"
     [query]="searchQuery()"
@@ -236,19 +235,6 @@
         </button>
         <div class="chat-toolbar__copy">
           <h2>{{ detail()?.conversation?.title ?? 'Nouvelle conversation' }}</h2>
-          @if (detail(); as current) {
-            @if (coordinatorLabel(current.conversation); as origin) {
-              <span
-                class="node-badge"
-                [title]="
-                  coordinatorLost(current.conversation)
-                    ? 'Ce worker ne répond plus : le worker courant reprendra la discussion à votre prochain message.'
-                    : 'Worker qui coordonne cette discussion.'
-                "
-                >{{ origin }}{{ coordinatorLost(current.conversation) ? ' · injoignable' : '' }}</span
-              >
-            }
-          }
         </div>
         <button matButton="tonal" type="button" class="context-toggle" (click)="openWorkspace()">
           <span>Contexte</span>

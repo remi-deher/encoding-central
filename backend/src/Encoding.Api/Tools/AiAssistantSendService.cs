@@ -431,7 +431,6 @@ public sealed class AiAssistantSendService(AiAssistantSupportService support, Ai
                 conversation.Id + "/" + request.RequestId.ToString("N"), "assistant-read-tool-planner");
             var plannerSessionId = $"{conversation.Id.Split('.')[0]}.{plannerRequestId:N}";
             await support.Store.SaveAsync(AiAssistantSupportService.SessionOwnerKey(plannerSessionId), ownerId, ct);
-            await support.Cluster.AdoptSessionAsync(plannerSessionId, ct);
             var planner = await support.Cluster.GenerateAsync(
                 conversation.Provider,
                 new AiPrompt(AiAssistantSupportService.BuildToolPlannerPrompt(user.IsInRole("admin")), contextualPrompt,

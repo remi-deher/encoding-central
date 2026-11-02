@@ -35,7 +35,6 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDialog } from '@angular/material/dialog';
 import {
-  AiNodeAvailability,
   AiAssistantConversation,
   AiAssistantConversationSearchResult,
   AiAssistantConversationDetail,
@@ -193,7 +192,6 @@ export class AiAssistantPageComponent implements OnDestroy {
         ),
     );
   });
-  protected readonly aiNodes = signal<readonly AiNodeAvailability[]>([]);
   protected readonly detail = signal<AiAssistantConversationDetail | null>(null);
   readonly conversationId = computed(() => this.detail()?.conversation.id ?? null);
   protected readonly assistantOptions = signal<AiAssistantOptions | null>(null);
@@ -331,7 +329,6 @@ export class AiAssistantPageComponent implements OnDestroy {
     this.loadNodes();
     this.loadLibraries();
     this.loadConversations();
-    this.loadAiNodes();
     this.loadAssistantOptions();
     afterNextRender(() => {
       if (this.panelMode()) return;
@@ -1355,29 +1352,6 @@ export class AiAssistantPageComponent implements OnDestroy {
       },
       error: () => this.loadingLibraries.set(false),
     });
-  }
-
-  private loadAiNodes(): void {
-    this.aiTools.getCluster().subscribe({
-      next: (view) => this.aiNodes.set(view.nodes),
-      error: () => this.aiNodes.set([]),
-    });
-  }
-
-  /** Worker qui coordonne la discussion, pour l'indication « Discussion du worker … ». */
-  protected coordinatorLabel(conversation: AiAssistantConversation): string | null {
-    if (!conversation.coordinatorId) return null;
-    const node = this.aiNodes().find(
-      (candidate) => candidate.nodeId === conversation.coordinatorId,
-    );
-    return node ? `Discussion du worker ${node.name}` : 'Discussion d’un autre worker';
-  }
-
-  /** Vrai quand le coordinateur ne répond plus : le worker courant reprendra la discussion au prochain message. */
-  protected coordinatorLost(conversation: AiAssistantConversation): boolean {
-    return this.aiNodes().some(
-      (candidate) => candidate.nodeId === conversation.coordinatorId && !candidate.reachable,
-    );
   }
 
   private loadConversations(): void {

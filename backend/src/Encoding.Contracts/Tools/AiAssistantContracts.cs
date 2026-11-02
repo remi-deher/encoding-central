@@ -19,9 +19,7 @@ public sealed record AiAssistantConversation(
     IReadOnlyList<AiAssistantSource>? AdditionalSources = null,
     string? Model = null,
     string? ReasoningEffort = null, Guid? NodeId = null,
-    string? TitleSource = null,
-    /// <summary>Worker qui coordonne la discussion (reprise comprise), renseigné à la lecture.</summary>
-    Guid? CoordinatorId = null);
+    string? TitleSource = null);
 
 public sealed record AiAssistantRenameRequest(string Title);
 

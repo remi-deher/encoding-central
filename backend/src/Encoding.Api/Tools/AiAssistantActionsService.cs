@@ -205,10 +205,6 @@ public sealed class AiAssistantActionsService(AiAssistantSupportService support,
     {
         EnsureAdmin(user);
         var action = ReadAction(request, user, "business-operation");
-        if (action.CoordinatorId is null || action.CoordinatorId == Guid.Empty)
-            throw new ArgumentException("Ce jeton de confirmation ne contient pas de coordinateur valide. Préparez à nouveau l’action.");
-        if (action.CoordinatorId != support.LocalId)
-            throw new ArgumentException("Ce jeton de confirmation a été préparé par un autre serveur. Préparez à nouveau l’action.");
         var gate = support.actionGates.GetOrAdd(action.ActionId, _ => new SemaphoreSlim(1, 1));
         await gate.WaitAsync(ct);
         try { return await ConfirmBusinessOperationCoreAsync(request, user, action, ct); }
@@ -266,15 +262,15 @@ public sealed class AiAssistantActionsService(AiAssistantSupportService support,
     public sealed record ProtectedAssistantAction(string OwnerId, string Action, Guid ResourceId, int ExpectedVersion,
         Guid ActionId, string? ParameterHash, DateTimeOffset ExpiresAt,
         Guid? RelatedResourceId = null, int? RelatedVersion = null, string? Text = null,
-        string? OperationName = null, string? OperationArguments = null, Guid? CoordinatorId = null);
+        string? OperationName = null, string? OperationArguments = null);
 
     private AiAssistantPreparedAction PrepareAction(ClaimsPrincipal user, string action, Guid resourceId, int expectedVersion,
         string? parameterHash, string summary, Guid? relatedResourceId = null, int? relatedVersion = null, string? text = null,
-        string? operationName = null, string? operationArguments = null, Guid? coordinatorId = null)
+        string? operationName = null, string? operationArguments = null)
     {
         var expiresAt = DateTimeOffset.UtcNow.AddMinutes(5);
         var payload = new ProtectedAssistantAction(AiAssistantSupportService.OwnerId(user), action, resourceId, expectedVersion, Guid.NewGuid(), parameterHash, expiresAt,
-            relatedResourceId, relatedVersion, text, operationName, operationArguments, coordinatorId);
+            relatedResourceId, relatedVersion, text, operationName, operationArguments);
         return new(support.actionProtector.Protect(JsonSerializer.Serialize(payload)), summary, expiresAt);
     }
 
@@ -329,7 +325,7 @@ public sealed class AiAssistantActionsService(AiAssistantSupportService support,
         var preview = PreviewOperationArguments(arguments);
         return Task.FromResult<AiAssistantPreparedAction?>(PrepareAction(user, "business-operation", Guid.Empty, 0,
             hash, $"{descriptor.Description}\n\nParamètres proposés : {preview}",
-            operationName: action.Name, operationArguments: serialized, coordinatorId: support.LocalId));
+            operationName: action.Name, operationArguments: serialized));
     }
 
     public static string PreviewOperationArguments(JsonElement arguments)

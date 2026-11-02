@@ -139,7 +139,6 @@ public sealed class AiAssistantSupportService(
             await store.DeleteAsync(ConversationKey(stored.OwnerId, stored.Conversation.Id), ct);
             await store.DeleteAsync(SessionOwnerKey(stored.Conversation.Id), ct);
             await store.DeleteAsync("session/" + stored.Conversation.Id, ct);
-        await store.DeleteAsync(AiCentralService.CoordinatorKey(stored.Conversation.Id), ct);
             foreach (var requestId in stored.TurnPromptSnapshots?.Keys ?? Array.Empty<Guid>())
             {
                 var plannerRequestId = DeriveRequestId(
@@ -257,7 +256,6 @@ public sealed class AiAssistantSupportService(
     public async Task DeleteHelperSessionAsync(string id, CancellationToken ct)
     {
         await store.DeleteAsync("session/" + id, ct);
-        await store.DeleteAsync(AiCentralService.CoordinatorKey(id), ct);
     }
 
     public Task<StoredConversation?> ReadConversationAsync(string ownerId, string id, CancellationToken ct) =>
@@ -375,7 +373,6 @@ public sealed class AiAssistantSupportService(
             var requestId = TitleRequestId(conversation.Id, attempt);
             var sessionId = $"{conversation.Id.Split('.')[0]}.{requestId:N}";
             await store.SaveAsync(SessionOwnerKey(sessionId), ownerId, ct);
-            await cluster.AdoptSessionAsync(sessionId, ct);
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(TitleTimeout);
             var exchange = $"Message de l’utilisateur :\n{Truncate(userPrompt, 600)}\n\nRéponse de l’assistant :\n{Truncate(answer, 600)}"

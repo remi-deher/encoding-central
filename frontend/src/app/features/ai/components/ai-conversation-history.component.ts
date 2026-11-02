@@ -3,7 +3,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import {
   AiAssistantConversation,
-  AiNodeAvailability,
 } from '../../../shared/models/ai-tools';
 
 @Component({
@@ -53,9 +52,6 @@ import {
                       <span aria-hidden="true">·</span>
                       <time [attr.datetime]="conversation.updatedAt">{{ timeLabel(conversation.updatedAt) }}</time>
                     </span>
-                    @if (coordinatorLabel(conversation); as origin) {
-                      <span class="node-origin">{{ origin }}</span>
-                    }
                   </span>
                 </button>
                 <button
@@ -100,7 +96,6 @@ export class AiConversationHistoryComponent {
   readonly historyId = input('assistant-conversation-history');
   readonly conversations = input<readonly AiAssistantConversation[]>([]);
   readonly totalCount = input(0);
-  readonly nodes = input<readonly AiNodeAvailability[]>([]);
   readonly activeId = input<string | null>(null);
   readonly deletingId = input<string | null>(null);
   readonly query = input('');
@@ -144,9 +139,4 @@ export class AiConversationHistoryComponent {
     return new Intl.DateTimeFormat('fr-FR', options).format(date);
   }
 
-  protected coordinatorLabel(conversation: AiAssistantConversation): string | null {
-    if (!conversation.coordinatorId) return null;
-    const node = this.nodes().find((candidate) => candidate.nodeId === conversation.coordinatorId);
-    return node ? `Discussion du worker ${node.name}` : 'Discussion d’un autre worker';
-  }
 }

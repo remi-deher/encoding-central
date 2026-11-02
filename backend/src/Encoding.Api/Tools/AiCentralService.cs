@@ -8,7 +8,7 @@ using Encoding.Contracts.Auth;
 
 namespace Encoding.Api.Tools;
 
-/// <summary>A stable session coordinator owns writes; inference may move between connected peers without moving secrets.</summary>
+/// <summary>Sessions IA du central : l'historique et les secrets restent sur le central, l'inférence s'exécute sur ce même central.</summary>
 public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralPeerIdentityStore identity, AiCentralStore store, DeviceCodeAuthService auth,
     AiSettingsService settings, AiClientFactory factory, IConfiguration configuration, LocalWorkerRegistry localNode, AiQuotaService? quotaService = null,
         AiModelCatalogService? modelCatalog = null, IServiceProvider? services = null)
@@ -116,7 +116,7 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralPeerIden
     public async Task<ApiTokenReplicationView> ApiTokenReplicationAsync(CancellationToken ct) => new([await LocalApiTokenStateAsync(ct)]);
     public async Task<AiSessionState?> GetSessionAsync(string id, CancellationToken ct)
     {
-        _ = Owner(id);
+        ValidateSessionId(id);
         return await store.ReadAsync<AiSessionState>("session/" + id, ct);
     }
 
@@ -219,9 +219,7 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralPeerIden
         if (prompt.Scope is { } scope && (string.IsNullOrWhiteSpace(scope.Operation) || scope.Operation.Length > 80
             || new[] { scope.LibraryId, scope.FlowId, scope.MediaId, scope.ExecutionId }.Any(value => value == Guid.Empty)))
             throw new ArgumentException("Périmètre de session IA invalide.");
-        // Une session préparée par un autre serveur (ancienne installation) est reprise par le central si son historique est présent.
-        if (await OwnerAsync(id, ct) != identity.PeerId && !await TryTakeOverAsync(id, ct))
-            return new(false, "", "Session introuvable sur le central.", SessionId: id, RequestId: requestId);
+        ValidateSessionId(id);
         var gate = gates.GetOrAdd(id, _ => new(1));
         if (!await gate.WaitAsync(0, ct)) return new(false, "", "Une demande est déjà en cours dans cette session.", SessionId: id, RequestId: requestId);
         try
@@ -323,7 +321,7 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralPeerIden
     }
     public async Task<AiSessionState> ForkSessionAsync(string id, CancellationToken ct)
     {
-        var saved = await GetSessionAsync(id, ct) ?? throw new ArgumentException("Checkpoint encore indisponible sur ce worker. Réessayez après réconciliation.");
+        var saved = await GetSessionAsync(id, ct) ?? throw new ArgumentException("Session introuvable sur le central.");
         if (saved.AttemptDeadline is { } deadline && deadline.AddSeconds(5) > DateTimeOffset.UtcNow)
             throw new InvalidOperationException("Attendez la fin du bail de la tentative précédente avant de créer une nouvelle session.");
         var fork = saved with { Id = $"{identity.PeerId:N}.{Guid.NewGuid():N}", PendingRequest = null, PendingPrompt = null, AttemptDeadline = null,
@@ -331,41 +329,12 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralPeerIden
         await store.SaveAsync("session/" + fork.Id, fork, ct);
         return fork;
     }
-    /// <summary>Coordinateur courant de la session (reprise comprise) ; null si l'identifiant n'est pas celui d'une session.</summary>
-    public async Task<Guid?> CoordinatorAsync(string? id, CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(id)) return null;
-        try { return await OwnerAsync(id, ct); }
-        catch (ArgumentException) { return null; }
-    }
-    /// <summary>
-    /// Fait de ce worker le coordinateur d'une session dont le coordinateur est injoignable. Refuse sans checkpoint validé présent
-    /// localement, pour ne jamais repartir d'un contexte vide ; l'appelant doit avoir constaté que le coordinateur ne répond pas.
-    /// </summary>
-    public async Task<bool> TryTakeOverAsync(string id, CancellationToken ct)
-    {
-        var previous = await OwnerAsync(id, ct);
-        if (previous == identity.PeerId) return true;
-        if (await GetSessionAsync(id, ct) is null) return false;
-        await store.SaveAsync(CoordinatorKey(id), identity.PeerId.ToString("N"), ct);
-        services?.GetService<ILogger<AiCentralService>>()?.LogWarning("Session IA {Session} reprise par ce worker : son coordinateur {Coordinator} est injoignable.", id, previous);
-        return true;
-    }
-    /// <summary>Une session auxiliaire (titre, planification) créée par le coordinateur courant le suit, même après une reprise.</summary>
-    public async Task AdoptSessionAsync(string id, CancellationToken ct)
-    {
-        if (await OwnerAsync(id, ct) != identity.PeerId) await store.SaveAsync(CoordinatorKey(id), identity.PeerId.ToString("N"), ct);
-    }
-    public static string CoordinatorKey(string id) => "session-coordinator/" + id;
-    /// <summary>Coordinateur de la session : celui de son identifiant, sauf reprise explicite par un autre worker (la plus récente gagne).</summary>
-    private async Task<Guid> OwnerAsync(string id, CancellationToken ct) =>
-        await store.ReadAsync<string>(CoordinatorKey(id), ct) is { } taken && Guid.TryParseExact(taken, "N", out var node) && node != Guid.Empty ? node : Owner(id);
-    private static Guid Owner(string id)
+    /// <summary>Un identifiant de session a la forme <c>{identifiant du central}.{demande}</c> (deux GUID au format N).</summary>
+    private static void ValidateSessionId(string id)
     {
         var parts = id.Split('.');
         if (parts.Length != 2 || !Guid.TryParseExact(parts[0], "N", out var owner) || owner == Guid.Empty || !Guid.TryParseExact(parts[1], "N", out _))
             throw new ArgumentException("Identifiant de session invalide.");
-        return owner;
     }
     public async Task<AiSettingsDto> GetSettingsAsync(CancellationToken ct)
     {

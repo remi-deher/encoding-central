@@ -58,14 +58,9 @@ public static class AiAssistantEndpoints
             }))
         .AllowAssistantConversation();
 
-        group.MapPost("/messages", async (AiAssistantMessageRequest request, HttpContext http, AiAssistantService service, CentralPeerIdentityStore identity,
-            AiCentralService cluster, CancellationToken ct) =>
+        group.MapPost("/messages", async (AiAssistantMessageRequest request, HttpContext http, AiAssistantService service, CancellationToken ct) =>
             await GuardAsync(async () =>
             {
-                // Une discussion préparée par un autre serveur (ancienne installation) est reprise par le central.
-                if (await cluster.CoordinatorAsync(request.ConversationId, ct) is { } coordinatorId && coordinatorId != identity.PeerId
-                    && !await cluster.TryTakeOverAsync(request.ConversationId!, ct))
-                    return Results.Conflict(new { title = "Cette discussion n’est plus disponible sur le central." });
                 var result = await service.SendAsync(request, http.User, ct);
                 return result is null ? Results.NotFound() : Results.Ok(result);
             }))
@@ -74,14 +69,9 @@ public static class AiAssistantEndpoints
         .RequireRateLimiting(AuthExtensions.HeavyOperationsPolicy);
 
         group.MapPost("/requests/{requestId:guid}/cancel", async (Guid requestId, HttpContext http, AiAssistantService service,
-            AiCentralService cluster, CancellationToken ct) =>
+            CancellationToken ct) =>
             await GuardAsync(async () =>
             {
-                var coordinatorId = await cluster.CoordinatorAsync(http.Request.Query["conversationId"].ToString(), ct)
-                    ?? await service.GetRequestCoordinatorIdAsync(requestId, http.User, ct);
-                if (coordinatorId is null)
-                    return Results.Conflict(new { title = "Aucune demande active ne correspond à cet identifiant." });
-
                 var cancelled = await service.CancelRequestAsync(requestId, http.User, ct);
                 return cancelled
                     ? Results.Accepted(value: new { requestId, state = "cancellation-requested" })

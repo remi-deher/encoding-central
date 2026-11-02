@@ -60,7 +60,6 @@ public sealed class AiAssistantService(
     public Task<bool> DeleteConversationAsync(string id, ClaimsPrincipal user, CancellationToken ct) => conversations.DeleteConversationAsync(id, user, ct);
     public Task<IReadOnlyList<AiAssistantActivity>> ActivityAsync(ClaimsPrincipal user, CancellationToken ct) => conversations.ActivityAsync(user, ct);
     public Task<AiAssistantActivity?> GetActivityAsync(Guid requestId, ClaimsPrincipal user, CancellationToken ct) => conversations.GetActivityAsync(requestId, user, ct);
-    public Task<Guid?> GetRequestCoordinatorIdAsync(Guid requestId, ClaimsPrincipal user, CancellationToken ct) => conversations.GetRequestCoordinatorIdAsync(requestId, user, ct);
     public Task RecordOperationActivityAsync(
         ClaimsPrincipal user, Guid requestId, string operation, string provider, string status,
         DateTimeOffset startedAt, string? errorCategory, CancellationToken ct) =>
