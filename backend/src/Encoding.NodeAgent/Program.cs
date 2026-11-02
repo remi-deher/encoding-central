@@ -98,7 +98,7 @@ app.Use(async (context, next) =>
     // Canal interne du nœud : aucune dépendance aux en-têtes d'un navigateur.
     // Les lectures sont aussi protégées : l'état contient les clés de jumelage.
     // Seule exception : choisir le central au premier accès. Une fois le worker relié, l'adresse ne se change plus sans le secret local.
-    var configuringCentral = options.FixedWorker
+    var configuringCentral = options.WorkerImage
         && HttpMethods.IsPost(context.Request.Method)
         && context.Request.Path.Equals("/api/v1/worker/clusters", StringComparison.OrdinalIgnoreCase)
         && string.IsNullOrWhiteSpace((await context.RequestServices.GetRequiredService<WorkerIdentityStore>()

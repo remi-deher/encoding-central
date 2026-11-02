@@ -108,7 +108,6 @@ COPY --from=build /app/agent ./agent
 COPY --from=build /app/launcher ./launcher
 COPY --from=frontend-build /frontend/dist/frontend/browser ./api/wwwroot
 ENV Node__Roles=server,worker \
-    Cluster__FixedAuthority=true \
     ConnectionStrings__Cluster="Data Source=/var/lib/encoding-node/cluster.db" \
     Node__DataDirectory=/var/lib/encoding-node \
     PluginSettings__KeyDirectory=/var/lib/encoding-node/plugin-keys \
@@ -123,7 +122,7 @@ FROM runtime-common AS worker
 COPY --from=build /app/agent ./agent
 COPY --from=frontend-build /frontend/dist/worker/browser ./api/wwwroot
 ENV Node__Roles=worker \
-    Node__FixedWorker=true \
+    Node__WorkerImage=true \
     WorkerUi__Expose=true \
     PluginSettings__KeyDirectory=/var/lib/encoding-node/plugin-keys \
     PluginStore__Directory=/var/lib/encoding-node/plugin-store

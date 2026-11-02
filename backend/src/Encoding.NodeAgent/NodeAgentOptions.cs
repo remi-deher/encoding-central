@@ -11,7 +11,7 @@ public sealed record NodeAgentOptions(
     int LocalApiPort,
     string? LocalEnrollmentSecretFile = null,
     string? DisplayName = null,
-    bool FixedWorker = false)
+    bool WorkerImage = false)
 {
     public static NodeAgentOptions FromConfiguration(IConfiguration configuration)
     {
@@ -19,7 +19,8 @@ public sealed record NodeAgentOptions(
         if (string.IsNullOrWhiteSpace(name)) name = Environment.MachineName;
         if (name.Length > 128) throw new InvalidOperationException("Node:Name ne peut pas dépasser 128 caractères.");
 
-        var fixedWorker = configuration.GetValue("Node:FixedWorker", false);
+        // Image `worker` : l'agent n'a qu'un rôle, il n'est jamais serveur et choisit son central depuis son interface.
+        var workerImage = configuration.GetValue("Node:WorkerImage", false);
         var configuredRoles = (configuration["Node:Roles"] ?? "worker")
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(value => Enum.TryParse<Encoding.Contracts.Nodes.NodeRole>(value, true, out var role)
@@ -27,7 +28,7 @@ public sealed record NodeAgentOptions(
                 : throw new InvalidOperationException($"Rôle de nœud inconnu : {value}."))
             .Distinct()
             .ToArray();
-        var roles = fixedWorker
+        var roles = workerImage
             ? [Encoding.Contracts.Nodes.NodeRole.Worker]
             : configuredRoles;
         if (roles.Length == 0) throw new InvalidOperationException("Node:Roles doit déclarer au moins un rôle.");
@@ -50,7 +51,7 @@ public sealed record NodeAgentOptions(
             localApiPort,
             string.IsNullOrWhiteSpace(configuration[Encoding.Core.Nodes.LocalEnrollment.SecretFileSetting]) ? null : configuration[Encoding.Core.Nodes.LocalEnrollment.SecretFileSetting],
             string.IsNullOrWhiteSpace(configuration["Node:DisplayName"]) ? null : configuration["Node:DisplayName"]!.Trim(),
-            fixedWorker);
+            workerImage);
     }
 
     private static string? NormalizeOptionalUrl(string? value)

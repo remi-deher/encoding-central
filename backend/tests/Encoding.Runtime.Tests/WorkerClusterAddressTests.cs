@@ -93,16 +93,16 @@ public sealed class WorkerClusterAddressTests
         await Assert.ThrowsAsync<HttpRequestException>(() => Discovery().AddByAddressAsync($"http://127.0.0.1:{FreePort()}/", CancellationToken.None));
 
     [Fact]
-    public void FixedWorkerForcesTheWorkerRole()
+    public void WorkerImageForcesTheWorkerRole()
     {
         var options = NodeAgentOptions.FromConfiguration(new ConfigurationBuilder().AddInMemoryCollection(
             new Dictionary<string, string?>
             {
-                ["Node:FixedWorker"] = "true",
+                ["Node:WorkerImage"] = "true",
                 ["Node:Roles"] = "server,worker"
             }).Build());
 
-        Assert.True(options.FixedWorker);
+        Assert.True(options.WorkerImage);
         Assert.Equal([Encoding.Contracts.Nodes.NodeRole.Worker], options.Roles);
     }
 
