@@ -124,17 +124,6 @@ public sealed class ApiTokenRepository(DbDataSource dataSource)
         return list;
     }
 
-    /// <summary>Identifiants et états de révocation connus de ce worker, pour contrôler la propagation du central.</summary>
-    public async Task<IReadOnlyList<ApiTokenReplicationEntry>> ReplicationStateAsync(CancellationToken ct)
-    {
-        await using var connection = await dataSource.OpenConnectionAsync(ct);
-        await using var command = Sql.Command("SELECT id, is_active, revoked_at FROM api_tokens ORDER BY id", connection);
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        var list = new List<ApiTokenReplicationEntry>();
-        while (await reader.ReadAsync(ct)) list.Add(new(reader.GetGuid(0), !reader.GetBoolean(1) || !reader.IsDBNull(2)));
-        return list;
-    }
-
     public async Task<bool> RevokeAsync(Guid id, CancellationToken ct)
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);

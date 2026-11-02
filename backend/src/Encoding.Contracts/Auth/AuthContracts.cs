@@ -87,8 +87,3 @@ public sealed record CreatedApiTokenResponse(
     IReadOnlyList<string>? Scopes = null);
 
 
-/// <summary>Jeton connu d'un worker : identifiant et état de révocation seulement, jamais de valeur ni de condensat.</summary>
-public sealed record ApiTokenReplicationEntry(Guid Id, bool Revoked);
-/// <summary>État des jetons déclaré par un worker ; <c>Tokens</c> vaut null pour un worker injoignable (état inconnu).</summary>
-public sealed record ApiTokenReplicationNode(Guid NodeId, string Name, bool Reachable, IReadOnlyList<ApiTokenReplicationEntry>? Tokens);
-public sealed record ApiTokenReplicationView(IReadOnlyList<ApiTokenReplicationNode> Nodes);

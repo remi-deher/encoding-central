@@ -2,7 +2,6 @@ import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import {
-  ApiTokenReplicationView,
   ApiTokenResponse,
   CreateApiTokenRequest,
   CreatedApiTokenResponse,
@@ -16,9 +15,6 @@ export class ApiTokenService {
     return this.http.get<readonly ApiTokenResponse[]>('/api/v1/tokens');
   }
 
-  replication(): Observable<ApiTokenReplicationView> {
-    return this.http.get<ApiTokenReplicationView>('/api/v1/tokens/replication');
-  }
 
   create(request: CreateApiTokenRequest): Observable<CreatedApiTokenResponse> {
     return this.http.post<CreatedApiTokenResponse>('/api/v1/tokens', request);

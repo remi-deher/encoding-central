@@ -136,14 +136,14 @@ public sealed class RuntimeExecutionCoordinator(
         var requestId = DeriveBatchRequestId(id, request.InvocationId, request.FlowNodeId, request.BatchIndex);
         var sessionKey = $"runtime-ai/subtitles/{id:N}/{request.InvocationId:N}/{request.BatchIndex:D5}";
         var store = Get<AiCentralStore>();
-        var identity = Get<Encoding.Api.Infrastructure.CentralPeerIdentityStore>();
+        var identity = Get<Encoding.Api.Infrastructure.CentralId>();
         string? sessionId = null;
         if (store is not null)
         {
             sessionId = await store.ReadAsync<string>(sessionKey, ct);
             if (string.IsNullOrWhiteSpace(sessionId) && identity is not null)
             {
-                sessionId = $"{identity.PeerId:N}.{requestId:N}";
+                sessionId = $"{await identity.GetAsync(ct):N}.{requestId:N}";
                 await store.SaveAsync(sessionKey, sessionId, ct);
             }
         }

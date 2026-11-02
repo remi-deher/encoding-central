@@ -1,47 +1,28 @@
 using System.Data.Common;
-using System.Security.Cryptography;
+using Microsoft.AspNetCore.DataProtection;
 using System.Text.Json;
 using Encoding.Api.Infrastructure;
 using Encoding.Api.Infrastructure.Data;
 
 namespace Encoding.Api.Tools;
 
-/// <summary>Encrypted application checkpoints in the local registers. Never stores CLI credentials.</summary>
-public sealed class AiCentralStore(DbDataSource database, CentralRegisterRepository registers,
-    CentralIdentityRepository cluster, CentralDataKeyStore keys)
+/// <summary>Points de reprise IA chiffrés (Data Protection) dans les registres locaux du central. Ne stocke jamais les identifiants des CLI.</summary>
+public sealed class AiCentralStore(DbDataSource database, CentralRegisterRepository registers, IDataProtectionProvider protection)
 {
-    public async Task<string> ProtectAsync<T>(T value, string purpose, CancellationToken ct)
+    private readonly IDataProtector protector = protection.CreateProtector("Encoding.Ai.v2");
+
+    public Task<string> ProtectAsync<T>(T value, string purpose, CancellationToken ct)
     {
-        var identity = await cluster.GetAsync(ct);
-        var key = keys.GetOrCreate(identity.Id);
-        try
-        {
-            var plain = JsonSerializer.SerializeToUtf8Bytes(value);
-            if (plain.Length > 512 * 1024) throw new ArgumentException("Le contexte IA dépasse la limite de 512 Kio. Ouvrez une nouvelle session.");
-            var nonce = RandomNumberGenerator.GetBytes(12);
-            var encrypted = new byte[plain.Length];
-            var tag = new byte[16];
-            using var aes = new AesGcm(key, 16);
-            aes.Encrypt(nonce, plain, encrypted, tag, System.Text.Encoding.UTF8.GetBytes("Encoding.Ai.v1/" + identity.Id + "/" + purpose));
-            return Convert.ToBase64String([.. nonce, .. tag, .. encrypted]);
-        }
-        finally { CryptographicOperations.ZeroMemory(key); }
+        var plain = JsonSerializer.SerializeToUtf8Bytes(value);
+        if (plain.Length > 512 * 1024) throw new ArgumentException("Le contexte IA dépasse la limite de 512 Kio. Ouvrez une nouvelle session.");
+        return Task.FromResult(Convert.ToBase64String(protector.CreateProtector(purpose).Protect(plain)));
     }
-    public async Task<T> UnprotectAsync<T>(string encoded, string purpose, CancellationToken ct)
+    public Task<T> UnprotectAsync<T>(string encoded, string purpose, CancellationToken ct)
     {
-        var identity = await cluster.GetAsync(ct);
-        var key = keys.GetRequired(identity.Id);
-        try
-        {
-            var bytes = Convert.FromBase64String(encoded);
-            if (bytes.Length < 28 || bytes.Length > 1024 * 1024) throw new ArgumentException("Message IA invalide.");
-            var plain = new byte[bytes.Length - 28];
-            using var aes = new AesGcm(key, 16);
-            aes.Decrypt(bytes.AsSpan(0, 12), bytes.AsSpan(28), bytes.AsSpan(12, 16), plain,
-                System.Text.Encoding.UTF8.GetBytes("Encoding.Ai.v1/" + identity.Id + "/" + purpose));
-            return JsonSerializer.Deserialize<T>(plain) ?? throw new ArgumentException("Message IA vide.");
-        }
-        finally { CryptographicOperations.ZeroMemory(key); }
+        var bytes = Convert.FromBase64String(encoded);
+        if (bytes.Length > 1024 * 1024) throw new ArgumentException("Message IA invalide.");
+        var plain = protector.CreateProtector(purpose).Unprotect(bytes);
+        return Task.FromResult(JsonSerializer.Deserialize<T>(plain) ?? throw new ArgumentException("Message IA vide."));
     }
     public async Task SaveAsync<T>(string key, T value, CancellationToken ct) =>
         await registers.SetAsync("ai/" + key, JsonSerializer.Serialize(await ProtectAsync(value, key, ct)), ct);

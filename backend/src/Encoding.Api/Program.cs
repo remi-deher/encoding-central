@@ -30,7 +30,7 @@ if (args.FirstOrDefault() == "--isolated-process")
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddOperations();
-var pluginKeyDirectory = CentralPeerIdentityStore.ResolveKeyDirectory(builder.Configuration, builder.Environment.ContentRootPath);
+var pluginKeyDirectory = KeyDirectory.Resolve(builder.Configuration, builder.Environment.ContentRootPath);
 Directory.CreateDirectory(pluginKeyDirectory);
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(pluginKeyDirectory))
@@ -168,9 +168,8 @@ builder.Services.AddSingleton<LibraryProcessingRepository>();
 builder.Services.AddHostedService<LibraryMonitoringService>();
 builder.Services.AddSingleton<LibraryWorkerAccessRepository>();
 builder.Services.AddSingleton<CentralIdentityRepository>();
-builder.Services.AddSingleton<CentralPeerIdentityStore>();
+builder.Services.AddSingleton<CentralId>();
 builder.Services.AddSingleton<CentralRegisterRepository>();
-builder.Services.AddSingleton<CentralDataKeyStore>();
 builder.Services.AddHostedService<CentralDiscoveryPublisher>();
 builder.Services.AddSingleton<RuntimeExecutionCoordinator>();
 builder.Services.AddSingleton<WorkerManagementService>();

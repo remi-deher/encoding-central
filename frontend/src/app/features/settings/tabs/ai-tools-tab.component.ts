@@ -1,6 +1,5 @@
 import { AiModelCatalogComponent } from './ai-model-catalog.component';
 import { AiQuotaPanelComponent } from './ai-quota-panel.component';
-import { AiReplicationPanelComponent } from './ai-replication-panel.component';
 import { AiUsagePanelComponent } from './ai-usage-panel.component';
 import { AiSessionHistoryComponent } from './ai-session-history.component';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -62,7 +61,6 @@ import { aiEffortLabel, aiTypeLabel } from '../../ai/components/ai-model-selecti
     SettingsNoticeComponent,
     SettingsSaveBarComponent,
     AiQuotaPanelComponent,
-    AiReplicationPanelComponent,
     AiUsagePanelComponent,
     AiModelCatalogComponent,
     AiSessionHistoryComponent,
@@ -640,18 +638,14 @@ export class AiToolsTabComponent implements OnInit, OnDestroy {
   }
   revoke(id: string): void {
     if (!this.isAdmin()) return;
-    const count = this.cluster()?.nodes.length ?? 1;
     const message =
       id === 'codex-cli' || id === 'claude-cli'
-        ? count > 1
-          ? `La connexion sera supprimée sur les ${count} workers du central, y compris ceux qui sont injoignables : ils la perdront à leur retour. Les flows qui utilisent ce fournisseur échoueront tant qu’une nouvelle connexion n’est pas enregistrée.`
-          : 'La connexion sera supprimée. Les flows qui utilisent ce fournisseur échoueront tant qu’une nouvelle connexion n’est pas enregistrée.'
+        ? 'La connexion sera supprimée. Les flows qui utilisent ce fournisseur échoueront tant qu’une nouvelle connexion n’est pas enregistrée.'
         : 'La connexion sera supprimée.';
     this.dialog
       .open(ConfirmationDialogComponent, {
         data: {
           title: `Déconnecter ${this.providerName(id)} ?`,
-          eyebrow: count > 1 ? 'Action sur le central' : undefined,
           message,
           confirmLabel: 'Déconnecter',
           variant: 'danger',

@@ -238,7 +238,7 @@
 
     <app-configuration-section
       title="Fournisseurs"
-      description="Les connexions Codex, Claude Code et les clés OpenAI et Anthropic sont copiées chiffrées sur tous les workers : si le serveur tombe, les flows IA continuent."
+      description="Les connexions Codex, Claude Code et les clés OpenAI et Anthropic sont enregistrées sur le central, qui exécute les demandes IA."
       icon="api"
     >
       <app-setting-group>
@@ -282,12 +282,6 @@
           </app-setting-row>
         }
       </app-setting-group>
-      @if (cluster(); as view) {
-        <h3 class="subheading">Réplication par worker</h3>
-        <app-ai-replication-panel [view]="view" />
-      } @else {
-        <p class="muted">Disponibilité du central indisponible.</p>
-      }
     </app-configuration-section>
   </form>
 }
@@ -318,18 +312,9 @@
 <ng-template #providerEditor>
   <form #providerForm="ngForm" class="provider-editor" (ngSubmit)="saveSettings()">
     <p>
-      Les connexions Codex, Claude Code et les clés OpenAI et Anthropic sont partagées avec tout le
-      cluster : les modifier ici les modifie sur chaque worker. Les adresses et modèles Ollama et
-      OpenAI restent propres à ce worker.
+      Les connexions Codex, Claude Code et les clés OpenAI et Anthropic sont enregistrées sur le
+      central. Les adresses et modèles Ollama et OpenAI sont propres à cette installation.
     </p>
-    @if (cluster(); as view) {
-      <section class="drawer-replication" aria-label="Réplication par worker">
-        <h4>
-          {{ selectedProvider() === 'ollama' ? 'Disponibilité par worker' : 'Réplication par worker' }}
-        </h4>
-        <app-ai-replication-panel [view]="view" [only]="selectedProvider()" />
-      </section>
-    }
     @switch (selectedProvider()) {
       @case ('ollama') {
         <div class="fields">
@@ -453,13 +438,12 @@
             }
             <p class="help">
               @if (tool.id === 'codex-cli') {
-                Le lien et le code sont fournis par Codex. Une fois connecté, le compte est copié
-                chiffré sur tous les workers du central ; un renouvellement ou une déconnexion s’y
-                propage aussi.
+                Le lien et le code sont fournis par Codex. Une fois connecté, le compte est enregistré
+                sur le central.
               } @else {
                 Claude Code ouvre une connexion navigateur. Le lien est affiché ici ; si la CLI
-                demande un code, vous pourrez le coller. La connexion est ensuite copiée chiffrée
-                sur tous les workers.
+                demande un code, vous pourrez le coller. La connexion est ensuite enregistrée
+                sur le central.
               }
             </p>
           }

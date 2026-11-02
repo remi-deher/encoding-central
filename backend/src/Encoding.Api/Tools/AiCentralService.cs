@@ -9,7 +9,7 @@ using Encoding.Contracts.Auth;
 namespace Encoding.Api.Tools;
 
 /// <summary>Sessions IA du central : l'historique et les secrets restent sur le central, l'inférence s'exécute sur ce même central.</summary>
-public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralPeerIdentityStore identity, AiCentralStore store, DeviceCodeAuthService auth,
+public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralId centralId, AiCentralStore store, DeviceCodeAuthService auth,
     AiSettingsService settings, AiClientFactory factory, IConfiguration configuration, LocalWorkerRegistry localNode, AiQuotaService? quotaService = null,
         AiModelCatalogService? modelCatalog = null, IServiceProvider? services = null)
 {
@@ -66,7 +66,7 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralPeerIden
             catalogs = modelCatalog is null ? null : providers.Select(provider => new AiModelCatalog(provider, "unavailable", [], null,
                 DateTimeOffset.UtcNow, "Préparation du catalogue dépassée." )).ToArray();
         }
-        return new(identity.PeerId, name ?? configuration["Worker:Name"] ?? Environment.MachineName,
+        return new(await centralId.GetAsync(ct), name ?? configuration["Worker:Name"] ?? Environment.MachineName,
             providers.Distinct(StringComparer.Ordinal).ToArray(), Models: models, Catalogs: catalogs);
     }
     public async Task<AiCentralView> ViewAsync(CancellationToken ct) => new([await LocalAsync(ct)]);
@@ -104,16 +104,12 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralPeerIden
     public async Task<AiWorkerQuotas> LocalQuotasAsync(CancellationToken ct)
     {
         var displayName = await localNode.ResolveDisplayNameAsync(ct) ?? configuration["Worker:Name"] ?? Environment.MachineName;
-        if (quotaService is null) return new(identity.PeerId, displayName, []);
+        var id = await centralId.GetAsync(ct);
+        if (quotaService is null) return new(id, displayName, []);
         var quotas = await Task.WhenAll(new[] { "codex-cli", "claude-cli" }.Select(provider => quotaService.ReadAsync(provider, ct)));
-        return new(identity.PeerId, displayName, quotas);
+        return new(id, displayName, quotas);
     }
     public async Task<AiCentralQuotas> QuotasAsync(CancellationToken ct) => new([await LocalQuotasAsync(ct)]);
-    private async Task<ApiTokenReplicationNode> LocalApiTokenStateAsync(CancellationToken ct) =>
-        new(identity.PeerId, await localNode.ResolveDisplayNameAsync(ct) ?? configuration["Worker:Name"] ?? Environment.MachineName, true,
-            services is null ? [] : await services.GetRequiredService<Encoding.Api.Auth.ApiTokenRepository>().ReplicationStateAsync(ct));
-    /// <summary>Jetons connus du central (identifiant et révocation).</summary>
-    public async Task<ApiTokenReplicationView> ApiTokenReplicationAsync(CancellationToken ct) => new([await LocalApiTokenStateAsync(ct)]);
     public async Task<AiSessionState?> GetSessionAsync(string id, CancellationToken ct)
     {
         ValidateSessionId(id);
@@ -213,7 +209,7 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralPeerIden
         if (localOnly && (!Uri.TryCreate(settings.GetSettings().OllamaBaseUrl, UriKind.Absolute, out var localUri) || !localUri.IsLoopback))
             return new(false, "", "Ollama doit être configuré sur une adresse de boucle locale pour cette politique.");
         var requestId = prompt.RequestId ?? Guid.NewGuid();
-        var id = prompt.SessionId ?? $"{identity.PeerId:N}.{requestId:N}";
+        var id = prompt.SessionId ?? $"{await centralId.GetAsync(ct):N}.{requestId:N}";
         if (requestId == Guid.Empty || string.IsNullOrWhiteSpace(prompt.UserPrompt) || prompt.UserPrompt.Length + prompt.SystemPrompt.Length > MaximumPromptCharacters)
             throw new ArgumentException("Demande IA invalide ou trop volumineuse.");
         if (prompt.Scope is { } scope && (string.IsNullOrWhiteSpace(scope.Operation) || scope.Operation.Length > 80
@@ -315,7 +311,7 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralPeerIden
                 return new(false, "", "Ce fournisseur est désactivé dans le central.");
             settings.UpdateSettings(new(DefaultProvider: shared.DefaultProvider, TimeoutSeconds: shared.TimeoutSeconds,
                 SubtitleBatchSize: shared.SubtitleBatchSize, CodexEnabled: shared.CodexEnabled, ClaudeEnabled: shared.ClaudeEnabled));
-            return (await factory.CreateLocalClient(request.Provider).GenerateTextAsync(request.Prompt, deadline.Token)) with { ExecutorNodeId = identity.PeerId };
+            return (await factory.CreateLocalClient(request.Provider).GenerateTextAsync(request.Prompt, deadline.Token)) with { ExecutorNodeId = await centralId.GetAsync(ct) };
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return new(false, "", "Bail d’exécution IA expiré."); }
     }
@@ -324,7 +320,7 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralPeerIden
         var saved = await GetSessionAsync(id, ct) ?? throw new ArgumentException("Session introuvable sur le central.");
         if (saved.AttemptDeadline is { } deadline && deadline.AddSeconds(5) > DateTimeOffset.UtcNow)
             throw new InvalidOperationException("Attendez la fin du bail de la tentative précédente avant de créer une nouvelle session.");
-        var fork = saved with { Id = $"{identity.PeerId:N}.{Guid.NewGuid():N}", PendingRequest = null, PendingPrompt = null, AttemptDeadline = null,
+        var fork = saved with { Id = $"{await centralId.GetAsync(ct):N}.{Guid.NewGuid():N}", PendingRequest = null, PendingPrompt = null, AttemptDeadline = null,
             Attempt = 0, UpdatedAt = DateTimeOffset.UtcNow, LastError = null };
         await store.SaveAsync("session/" + fork.Id, fork, ct);
         return fork;

@@ -25,7 +25,7 @@ namespace Encoding.Api.Tools;
 public sealed class AiAssistantSupportService(
     AiCentralStore store,
     AiCentralService cluster,
-    Encoding.Api.Infrastructure.CentralPeerIdentityStore identity,
+    Encoding.Api.Infrastructure.CentralId centralId,
     FlowRepository flows,
     ExecutionRepository executions,
     LibraryWorkflowRepository libraryWorkflows,
@@ -38,7 +38,7 @@ public sealed class AiAssistantSupportService(
 {
     public AiCentralStore Store => store;
     public AiCentralService Cluster => cluster;
-    public Guid LocalId => identity.PeerId;
+    public ValueTask<Guid> LocalIdAsync(CancellationToken ct) => centralId.GetAsync(ct);
     public FlowRepository Flows => flows;
     public ExecutionRepository Executions => executions;
     public LibraryWorkflowRepository LibraryWorkflows => libraryWorkflows;
