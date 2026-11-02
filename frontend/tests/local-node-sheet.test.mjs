@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadModel } from './model-loader.mjs';
-const { localNodeSheet, formatLastSignal, clusterJoinSteps } =
-  await loadModel('node-management');
+const { localNodeSheet, formatLastSignal, clusterJoinSteps } = await loadModel('node-management');
 const { formatNodeLabel } = await loadModel('cluster');
 
 const NOW = Date.parse('2026-10-15T12:00:00Z');
