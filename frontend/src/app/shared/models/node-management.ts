@@ -10,7 +10,6 @@ import {
 import { RecordFormData } from '../ui/record-form.component';
 import { GuidedStep } from '../ui/guided-setup.component';
 import { DiscoveredCluster, LocalNodePairing, LocalNodeStatus } from './local-node';
-import { NodeModeStatus } from './node-mode';
 import { NodeResponse } from './cluster';
 import { ClusterReconciliationHealthStatus, ClusterTaskStatus } from '../services/cluster-api';
 
@@ -209,7 +208,6 @@ export function memberNodeOverviewSections(
 export interface LocalNodeSheetInput {
   readonly status: LocalNodeStatus | null;
   readonly node: NodeResponse | null;
-  readonly mode: NodeModeStatus | null;
   readonly standalone: boolean;
   readonly clusterName: string | null;
   readonly agentUnavailable: boolean;
@@ -229,12 +227,9 @@ export function localNodeSheet(input: LocalNodeSheetInput): {
   readonly sections: readonly ResourceSheetSection[];
 } {
   const { status, node, standalone, agentUnavailable } = input;
-  const roles =
-    input.mode ??
-    (status
-      ? { server: status.roles.includes('server'), worker: status.roles.includes('worker') }
-      : null);
-  const desired = node?.desiredRoles ?? null;
+  const roles = status
+    ? { server: status.roles.includes('server'), worker: status.roles.includes('worker') }
+    : null;
   const roleBadges = (role: 'server' | 'worker'): readonly ResourceSheetBadge[] => {
     const enabled = roles ? roles[role] : undefined;
     const badges: ResourceSheetBadge[] =
@@ -243,11 +238,6 @@ export function localNodeSheet(input: LocalNodeSheetInput): {
         : agentUnavailable
           ? [{ label: `Dernier état connu : ${enabled ? 'actif' : 'inactif'}`, tone: 'warning' }]
           : [{ label: enabled ? 'Actif' : 'Inactif', tone: enabled ? 'success' : 'neutral' }];
-    if (desired && desired.includes(role) !== (enabled ?? false))
-      badges.push({
-        label: `Demandé : ${desired.includes(role) ? 'actif' : 'inactif'}`,
-        tone: 'accent',
-      });
     return badges;
   };
   const workerOff = roles?.worker === false;
@@ -297,16 +287,6 @@ export function localNodeSheet(input: LocalNodeSheetInput): {
       tone: 'danger',
       title: 'Rattachement annulé',
       description: status.switchFailure,
-    });
-  if (
-    desired &&
-    roles &&
-    (desired.includes('server') !== roles.server || desired.includes('worker') !== roles.worker)
-  )
-    notices.push({
-      tone: 'accent',
-      title: 'Changement de fonctions en attente',
-      description: 'Les fonctions appliquées ne changent qu’après confirmation du nœud.',
     });
   const sections: ResourceSheetSection[] = [
     {

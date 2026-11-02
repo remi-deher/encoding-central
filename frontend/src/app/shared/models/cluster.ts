@@ -24,7 +24,6 @@ export interface NodeResponse {
   readonly displayName?: string | null;
   readonly labels?: Readonly<Record<string, string | null>>;
   /** Mode demandé par un administrateur et pas encore appliqué par le nœud. */
-  readonly desiredRoles?: readonly NodeRole[] | null;
   /** État de cycle de vie ; le plus restrictif l'emporte (ADR 0041). */
   readonly lifecycle?: 'online' | 'offline' | 'draining' | 'incompatible' | 'quarantined' | null;
   readonly lifecycleReason?: string | null;

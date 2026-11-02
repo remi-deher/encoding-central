@@ -172,29 +172,4 @@ export class ClusterApi {
   disableFirstLinkAcceptance() {
     return this.http.delete<void>('/api/v1/nodes/first-link');
   }
-  leadershipStatus() {
-    return this.http.get<{
-      readonly isMaster: boolean;
-      readonly masterNodeId: string | null;
-      readonly masterNodeName: string | null;
-      readonly masterUrl: string | null;
-      readonly isDraining: boolean;
-      readonly lastBackupAt: string | null;
-      readonly backupIntervalMinutes: number | null;
-    }>('/api/v1/cluster/leadership/status');
-  }
-  transferLeadership(targetNodeId: string, targetNodeUrl?: string, drainTimeoutSeconds = 30) {
-    return this.http.post<{
-      readonly success: boolean;
-      readonly message: string;
-      readonly newMasterUrl: string | null;
-    }>('/api/v1/cluster/leadership/transfer', {
-      targetNodeId,
-      targetNodeUrl: targetNodeUrl || null,
-      drainTimeoutSeconds,
-    });
-  }
-  setBackupInterval(minutes: number) {
-    return this.http.put<void>('/api/v1/cluster/leadership/backup-interval', { minutes });
-  }
 }

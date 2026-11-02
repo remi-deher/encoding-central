@@ -9,7 +9,7 @@ import {
   FlowResourceVersion,
 } from '../models/flow-resources';
 
-/** Catalogue des ressources du cluster : un fichier, une ressource, une version par contenu (ADR 0032). */
+/** Catalogue des ressources du cluster : un fichier, une ressource, une version par contenu (ADR 0037). */
 @Injectable({ providedIn: 'root' })
 export class FlowResources {
   private readonly http = inject(HttpClient);

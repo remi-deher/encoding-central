@@ -30,7 +30,6 @@ const node = {
   id: 'n1',
   displayName: 'NAS principal',
   lastSeenAt: '2026-10-15T11:59:56Z',
-  desiredRoles: null,
   inventory: {
     operatingSystem: 'Linux',
     architecture: 'X64',
@@ -43,7 +42,6 @@ const node = {
 const base = {
   status,
   node,
-  mode: { server: true, worker: true },
   standalone: false,
   clusterName: 'Maison',
   agentUnavailable: false,
@@ -76,7 +74,7 @@ test('a healthy member shows load, hardware, CPU model, GPU and tools', () => {
 test('a disabled worker has no processing metric and no tools', () => {
   const sheet = localNodeSheet({
     ...base,
-    mode: { server: true, worker: false },
+    status: { ...status, roles: ['server'] },
     activeTasks: null,
   });
   assert.equal(section(sheet, 'state').metrics[0].value, 'Non applicable');
@@ -95,13 +93,6 @@ test('an unreachable agent keeps last known values and never shows zero', () => 
   assert.equal(section(sheet, 'state').metrics[0].value, 'Indisponible');
   const stale = localNodeSheet({ ...base, agentUnavailable: true });
   assert.equal(section(stale, 'state').metrics[0].meter.stale, true);
-});
-
-test('a pending role change is shown apart from the applied roles', () => {
-  const sheet = localNodeSheet({ ...base, node: { ...node, desiredRoles: ['server'] } });
-  assert.equal(sheet.notices[0].title, 'Changement de fonctions en attente');
-  const worker = section(sheet, 'state').items[1].badges.map((b) => b.label);
-  assert.deepEqual(worker, ['Actif', 'Demandé : inactif']);
 });
 
 test('an old agent without GPU data says so instead of claiming none', () => {
