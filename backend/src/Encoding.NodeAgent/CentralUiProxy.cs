@@ -15,14 +15,12 @@ internal static class CentralUiProxy
     {
         "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade", "te", "trailer", "host"
     };
+    /// <summary>Client nommé du relais : pas de redirection suivie (le navigateur les voit), pas de délai (flux SSE).</summary>
+    public const string ClientName = "CentralProxy";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     public static void Use(WebApplication app, Func<HttpContext, Task<string?>> resolveCentral, int localPort, string? secretFile)
     {
-        var client = new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false })
-        {
-            Timeout = Timeout.InfiniteTimeSpan
-        };
         app.Use(async (context, next) =>
         {
             if (!context.Request.Path.StartsWithSegments("/api")
@@ -31,6 +29,7 @@ internal static class CentralUiProxy
                 await next();
                 return;
             }
+            var client = context.RequestServices.GetRequiredService<IHttpClientFactory>().CreateClient(ClientName);
 
             var resolved = await resolveCentral(context);
             if (string.IsNullOrWhiteSpace(resolved))

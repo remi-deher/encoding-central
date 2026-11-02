@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
-# Image unique : serveur (API et interface web), worker et lanceur. Contexte de construction : racine du dépôt.
-# Le lanceur démarre et arrête le serveur et l'agent selon le mode du nœud (architecture 0036).
+# Deux images : `central` (API, interface web et worker intégré, autonome, seule autorité du cluster) et `worker`
+# (agent et interface seulement, sans base de données, toujours relié à un central). Contexte de construction : racine du dépôt.
+# Dans `central`, le lanceur démarre et surveille l'API et l'agent ; aucun mode ne se change à chaud.
 ARG DOTNET_VERSION=10.0
 
 FROM node:24-bookworm-slim AS ai-cli-build

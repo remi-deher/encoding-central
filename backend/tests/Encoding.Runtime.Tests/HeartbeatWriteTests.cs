@@ -58,24 +58,6 @@ public sealed class HeartbeatWriteTests
         Assert.Equal(NodeLifecycle.Online, recovered?.Lifecycle);
     }
 
-    [Fact]
-    public async Task AcknowledgingRequestedRolesStillClearsTheRequest()
-    {
-        await using var database = await TestDatabase.CreateSqliteAsync("heartbeat-roles");
-        await DatabaseMigrator.ApplyAsync(database.Db, Harness.RepositoryRoot(), CancellationToken.None);
-        var nodes = new NodeRepository(database.Db);
-        var id = Guid.NewGuid();
-        Assert.NotNull(await nodes.EnrollAsync(new(id, "worker", [NodeRole.Worker], 1, [], "roles-token"), true, CancellationToken.None));
-        await using (var desired = database.Db.CreateCommand("UPDATE cluster_nodes SET desired_roles='[\"worker\"]' WHERE id=@id"))
-        {
-            desired.Parameters.AddWithValue("id", id);
-            await desired.ExecuteNonQueryAsync();
-        }
-        var node = await nodes.RecordHeartbeatAsync(id, "roles-token", new("worker", [NodeRole.Worker], 1, []), CancellationToken.None);
-        Assert.NotNull(node);
-        Assert.Null(node.DesiredRoles);
-    }
-
     private static async Task ExecuteAsync(TestDatabase database, string sql)
     {
         await using var command = database.Db.CreateCommand(sql);

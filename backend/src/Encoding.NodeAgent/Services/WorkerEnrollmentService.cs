@@ -12,8 +12,7 @@ public sealed class WorkerEnrollmentService(
     WorkerClusterDiscovery discovery,
     IToolCapabilityProbe capabilityProbe,
     ILogger<WorkerEnrollmentService> logger,
-    Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions> jsonOptions,
-    LauncherControlClient? launcher = null)
+    Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions> jsonOptions)
 {
     /// <summary>Délai laissé au cluster d'accueil pour approuver un changement de cluster : la clé de jumelage vit 10 minutes, avec une marge.</summary>
     public static readonly TimeSpan SwitchTimeout = TimeSpan.FromMinutes(12);
@@ -103,10 +102,6 @@ public sealed class WorkerEnrollmentService(
             return;
         }
         await ForgetClusterAsync(cancellationToken);
-        if (launcher is null) return;
-        var current = await launcher.GetAsync(cancellationToken);
-        if (current is { Server: false })
-            await launcher.SetAsync(new NodeMode(true, current.Worker || options.Roles.Contains(NodeRole.Worker)), cancellationToken);
     }
 
     /// <summary>Le cluster a retiré cette identité : repart d'une identité neuve, sans prévenir un cluster qui ne la connaît plus. Ignoré si l'identité a déjà changé.</summary>
@@ -158,7 +153,6 @@ public sealed class WorkerEnrollmentService(
         var previous = await identityStore.CommitSwitchAsync(cancellationToken);
         if (previous is { HasCredentials: true } && await NotifyLeaveAsync(previous, cancellationToken) == System.Net.HttpStatusCode.Conflict)
             logger.LogWarning("L'ancien cluster {ClusterName} n'a pas retiré ce nœud (traitement en cours) ; ses tâches seront reprises à l'expiration des baux.", previous.ClusterName);
-        await KeepLocalServerActiveAsync(cancellationToken);
     }
 
     /// <summary>
@@ -177,22 +171,6 @@ public sealed class WorkerEnrollmentService(
         var abandoned = await identityStore.AbandonPendingAsync($"{target} n'a pas approuvé l'arrivée à temps", cancellationToken);
         if (abandoned) logger.LogWarning("Rattachement annulé : {Target} n'a pas approuvé l'arrivée à temps ; retour à {Previous}.", target, identity.Previous?.ClusterName ?? "l'état autonome");
         return abandoned;
-    }
-
-    /// <summary>Un nœud rattaché conserve son serveur local actif ; le maillage réconcilie sa copie SQLite du cluster (0049).</summary>
-    public async Task KeepLocalServerActiveAsync(CancellationToken cancellationToken)
-    {
-        if (options.FixedWorker) return;
-        if (launcher is null) return;
-        var current = await launcher.GetAsync(cancellationToken);
-        if (current is null)
-        {
-            logger.LogWarning("Le lanceur local ne répond pas ; le mode serveur n'a pas pu être vérifié après le rattachement.");
-            return;
-        }
-        if (current.Server) return;
-        await launcher.SetAsync(new NodeMode(true, current.Worker), cancellationToken);
-        logger.LogInformation("Le serveur local reste actif après le rattachement ; vérifiez que sa base est celle du cluster rejoint.");
     }
 
     /// <summary>Vrai pour le serveur du même conteneur : l'agent est configuré avec un secret local et le cluster est joignable en boucle locale.</summary>

@@ -196,49 +196,11 @@ public sealed class NodeManagementService(
                 }
             }
 
-            var leadership = Get<Encoding.Api.Cluster.LeadershipRepository>();
-            Encoding.Contracts.Cluster.LeadershipHandoffInstruction? handoff = null;
-            var desiredRoles = node.DesiredRoles;
-            if (leadership is not null)
-            {
-                var activeTransfer = await leadership.GetActiveTransferForNodeAsync(nodeId, ct);
-                if (activeTransfer is not null)
-                {
-                    handoff = new Encoding.Contracts.Cluster.LeadershipHandoffInstruction(
-                        activeTransfer.Id,
-                        $"/api/v1/cluster/leadership/snapshot/{activeTransfer.Id:D}",
-                        activeTransfer.SnapshotSha256 ?? string.Empty,
-                        activeTransfer.CreatedAt);
-                    desiredRoles = [NodeRole.Server, NodeRole.Worker];
-                }
-            }
-
-            Encoding.Contracts.Cluster.ClusterDatabaseBackupNotification? backupNotification = null;
-            if (leadership is not null)
-            {
-                var latestBackup = await leadership.GetLatestBackupAsync(ct);
-                if (latestBackup is not null)
-                {
-                    backupNotification = new(
-                        latestBackup.Digest,
-                        latestBackup.SizeBytes,
-                        latestBackup.CreatedAt,
-                        "/api/v1/cluster/leadership/backup/latest");
-                }
-            }
-
-            string? masterUrl = null;
-            if (leadership is not null)
-                masterUrl = await leadership.GetMasterUrlAsync(ct);
-            if (string.IsNullOrWhiteSpace(masterUrl) && config is not null)
-                masterUrl = config["Cluster:AdvertisedApiBaseUrl"];
+            var masterUrl = config?["Cluster:AdvertisedApiBaseUrl"];
 
             return new(HeartbeatOutcomeKind.Ok, null, node with
             {
                 ClusterServerUrls = serverUrls,
-                DesiredRoles = desiredRoles,
-                LatestBackup = backupNotification,
-                LeadershipHandoff = handoff,
                 MasterUrl = masterUrl
             });
         }
@@ -257,14 +219,6 @@ public sealed class NodeManagementService(
 
     public Task<NodeResponse?> GetAsync(Guid nodeId, TimeSpan offlineAfter, CancellationToken ct) =>
         repository.GetAsync(nodeId, offlineAfter, ct);
-
-    public Task<NodeRepository.ModeRequestResult> RequestModeAsync(
-        Guid nodeId,
-        bool server,
-        bool worker,
-        TimeSpan offlineAfter,
-        CancellationToken ct) =>
-        repository.RequestModeAsync(nodeId, server, worker, offlineAfter, ct);
 
     public Task<bool> SetDrainingAsync(Guid nodeId, bool draining, CancellationToken ct) =>
         repository.SetDrainingAsync(nodeId, draining, ct);

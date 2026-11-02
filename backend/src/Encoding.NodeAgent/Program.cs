@@ -31,6 +31,8 @@ builder.WebHost.ConfigureKestrel(server =>
         server.ListenLocalhost(options.LocalApiPort);
 });
 builder.Services.AddSingleton(options);
+builder.Services.AddHttpClient(CentralUiProxy.ClientName, client => client.Timeout = Timeout.InfiniteTimeSpan)
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 builder.Services.AddSingleton<WorkerIdentityStore>();
 builder.Services.AddSingleton<ISystemLogNodeContext>(sp =>
 {
@@ -63,14 +65,11 @@ builder.Services.AddSingleton<ToolCapabilityProbe>();
 builder.Services.AddSingleton<IToolCapabilityProbe>(provider => provider.GetRequiredService<ToolCapabilityProbe>());
 builder.Services.AddSingleton<WorkerClusterDiscovery>();
 builder.Services.AddSingleton<WorkerEnrollmentService>();
-if (!options.FixedWorker)
-    builder.Services.AddSingleton<LeadershipReceiverService>();
 builder.Services.AddHostedService<WorkerClusterDiscovery>(provider => provider.GetRequiredService<WorkerClusterDiscovery>());
 builder.Services.AddHostedService<WorkerAutoEnrollmentService>();
 builder.Services.AddHostedService<NodeHeartbeatService>();
 builder.Services.AddHostedService<PluginSyncService>();
 builder.Services.AddHostedService<ToolPackageSyncService>();
-builder.Services.AddNodeModeControl(builder.Configuration[NodeModeEndpoints.ControlUrlSetting]);
 builder.Services.ConfigureHttpJsonOptions(json =>
     json.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
 
@@ -98,9 +97,12 @@ app.Use(async (context, next) =>
 {
     // Canal interne du nœud : aucune dépendance aux en-têtes d'un navigateur.
     // Les lectures sont aussi protégées : l'état contient les clés de jumelage.
+    // Seule exception : choisir le central au premier accès. Une fois le worker relié, l'adresse ne se change plus sans le secret local.
     var configuringCentral = options.FixedWorker
         && HttpMethods.IsPost(context.Request.Method)
-        && context.Request.Path.Equals("/api/v1/worker/clusters", StringComparison.OrdinalIgnoreCase);
+        && context.Request.Path.Equals("/api/v1/worker/clusters", StringComparison.OrdinalIgnoreCase)
+        && string.IsNullOrWhiteSpace((await context.RequestServices.GetRequiredService<WorkerIdentityStore>()
+            .GetAsync(context.RequestAborted)).ApiBaseUrl);
     if (!configuringCentral
         && context.Request.Path.StartsWithSegments("/api/v1/worker")
         && !LocalEnrollment.Matches(options.LocalEnrollmentSecretFile,
@@ -117,7 +119,6 @@ app.MapGet("/health/ready", (HttpContext context) =>
     context.Response.Headers.AccessControlAllowOrigin = "*";
     return Results.Ok(new { status = "ready" });
 });
-app.MapNodeMode("/api/v1/worker/mode");
 app.MapGet("/api/v1/worker/clusters", (WorkerClusterDiscovery discovery) => Results.Ok(discovery.List()));
 app.MapPost("/api/v1/worker/clusters", async (WorkerClusterAddress request, WorkerClusterDiscovery discovery, CancellationToken cancellationToken) =>
 {
@@ -238,24 +239,6 @@ app.MapPost("/api/v1/worker/leave", async (WorkerEnrollmentService enrollment, C
         return Results.Problem(statusCode: StatusCodes.Status502BadGateway, title: exception.Message);
     }
 }).WithName("LeaveWorkerCluster");
-
-if (!options.FixedWorker)
-{
-    app.MapGet("/api/v1/worker/backup-status", async (LeadershipReceiverService leadershipReceiver, CancellationToken cancellationToken) =>
-    {
-        var info = await leadershipReceiver.GetLocalBackupInfoAsync(cancellationToken);
-        return info is null ? Results.NotFound(new { title = "Aucune sauvegarde miroir locale disponible." }) : Results.Ok(info);
-    }).WithName("GetWorkerBackupStatus");
-
-    app.MapPost("/api/v1/worker/emergency-promote", async (
-        [FromBody] Encoding.Contracts.Cluster.EmergencyPromotionRequest? request,
-        LeadershipReceiverService leadershipReceiver,
-        CancellationToken cancellationToken) =>
-    {
-        var response = await leadershipReceiver.EmergencyPromoteAsync(request?.Force ?? false, cancellationToken);
-        return response.Success ? Results.Ok(response) : Results.Conflict(response);
-    }).WithName("EmergencyPromoteWorker");
-}
 
 app.MapFallbackToFile("index.html");
 

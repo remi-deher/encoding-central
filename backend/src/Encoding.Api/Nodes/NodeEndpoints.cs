@@ -188,26 +188,6 @@ public static class NodeEndpoints
             return node is null ? (IResult)Results.NotFound() : Results.Ok(node);
         }).WithName("GetNode");
 
-        nodes.MapPut("/{nodeId:guid}/mode", async (
-            Guid nodeId, ChangeNodeModeRequest request, NodeManagementService service, NodePresenceOptions options, CancellationToken ct) =>
-        {
-            if (!request.Server && !request.Worker)
-                return (IResult)Results.BadRequest(new { title = "Le nœud doit garder au moins une fonction : serveur ou worker." });
-            return await service.RequestModeAsync(nodeId, request.Server, request.Worker, options.OfflineAfter, ct) switch
-            {
-                NodeRepository.ModeRequestResult.NotFound => Results.NotFound(),
-                NodeRepository.ModeRequestResult.CoordinationUnavailable => Results.Conflict(new
-                {
-                    title = "Modification de topologie différée : réconcilier les serveurs et vider les files possédées."
-                }),
-                NodeRepository.ModeRequestResult.LastServer => Results.Conflict(new
-                {
-                    title = "Ce nœud est le dernier serveur en ligne : sa fonction serveur ne peut pas être retirée."
-                }),
-                _ => Results.Accepted()
-            };
-        }).WithName("RequestNodeMode");
-
         nodes.MapPut("/{nodeId:guid}/draining", async (
             Guid nodeId, DrainNodeRequest request, NodeManagementService service, CancellationToken ct) =>
             await service.SetDrainingAsync(nodeId, request.Draining, ct) ? Results.Accepted() : Results.NotFound())

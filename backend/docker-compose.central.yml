@@ -1,4 +1,5 @@
-# Le central est autonome ; le worker est une image distincte sans API ni base SQLite d'autorité.
+# Le central embarque API, interface et worker : il est autonome et reste l'autorité du cluster.
+# Le worker est une image distincte (worker et interface seulement), sans base de données ; il ne peut pas être autonome.
 name: encoding-central
 
 services:
@@ -11,7 +12,6 @@ services:
     hostname: encoding-central
     environment:
       Node__Name: encoding-central
-      Node__Roles: server
     ports:
       - "${CENTRAL_API_PORT:-5080}:8080"
     volumes:

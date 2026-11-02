@@ -90,17 +90,13 @@ public sealed record NodeResponse(
     NodeInventory? Inventory = null,
     string? DisplayName = null,
     IReadOnlyDictionary<string, string?>? Labels = null,
-    IReadOnlyList<NodeRole>? DesiredRoles = null,
     NodeLifecycle? Lifecycle = null,
     string? LifecycleReason = null,
     ClusterJoinBootstrap? ClusterBootstrap = null,
     IReadOnlyList<string>? ClusterServerUrls = null,
-    ClusterDatabaseBackupNotification? LatestBackup = null,
-    LeadershipHandoffInstruction? LeadershipHandoff = null,
     string? MasterUrl = null);
 
 /// <summary>Demande d'un administrateur : mode de fonctionnement voulu pour un nœud, appliqué par le nœud à son prochain signal de présence (architecture 0036).</summary>
-public sealed record ChangeNodeModeRequest(bool Server, bool Worker);
 
 public sealed record NodeEnrollmentRequest(
     Guid Id,

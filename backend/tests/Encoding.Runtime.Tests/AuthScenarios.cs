@@ -238,7 +238,7 @@ internal static class AuthScenarios
         }
         Check(await anonymous.StatusAsync(get, "/health/live") == HttpStatusCode.OK, "Liveness stays public.");
         Check(await anonymous.StatusAsync(get, "/api/v1/cluster") == HttpStatusCode.OK, "Cluster identity stays public for worker discovery.");
-        foreach (var url in new[] { "/api/v1/system/version", "/api/v1/system/updates", "/api/v1/tools/ai/quotas", "/api/v1/tools/ai/sessions", "/api/v1/libraries", "/api/v1/flows", "/api/v1/nodes", "/api/v1/executions", "/api/v1/plugins/base/configuration", "/api/v1/users", "/api/v1/nodes/enrollment-requests", "/api/v1/node/mode", "/api/v1/local-node/status" })
+        foreach (var url in new[] { "/api/v1/system/version", "/api/v1/system/updates", "/api/v1/tools/ai/quotas", "/api/v1/tools/ai/sessions", "/api/v1/libraries", "/api/v1/flows", "/api/v1/nodes", "/api/v1/executions", "/api/v1/plugins/base/configuration", "/api/v1/users", "/api/v1/nodes/enrollment-requests", "/api/v1/local-node/status" })
             Check(await anonymous.StatusAsync(get, url) == HttpStatusCode.Unauthorized, "Anonymous reads of " + url + " are refused.");
         Check(await anonymous.StatusAsync(post, "/api/v1/libraries", new { name = "x" }) == HttpStatusCode.Unauthorized, "Anonymous writes are refused.");
         // Fiche du nœud pour l'assistant : lisible sans compte tant qu'aucun admin n'existe, sans aucun secret.
@@ -280,7 +280,6 @@ internal static class AuthScenarios
         Check(await admin.StatusAsync(get, "/api/v1/tools/ai/sessions") == HttpStatusCode.OK, "An administrator reads AI session summaries.");
         // Administrateur : lecture, écriture avec protection CSRF.
         Check(await admin.StatusAsync(get, "/api/v1/libraries") == HttpStatusCode.OK, "An administrator reads.");
-        Check(await admin.StatusAsync(put, "/api/v1/node/mode", new { server = true, worker = true }) == HttpStatusCode.Conflict, "Without a launcher, an administrator gets a clear refusal to change the node mode.");
         Check(await admin.StatusAsync(post, "/api/v1/libraries", new { name = "sans-csrf" }, csrf: false) == HttpStatusCode.Forbidden, "Cookie-authenticated writes need the anti-CSRF header.");
         Check(await admin.StatusAsync(post, "/api/v1/libraries", new { name = "films" }) == HttpStatusCode.Created, "An administrator writes.");
         Check(await admin.StatusAsync(get, "/api/v1/users") == HttpStatusCode.OK, "Administrators list users.");
@@ -302,8 +301,6 @@ internal static class AuthScenarios
         Check(await viewer.StatusAsync(get, "/api/v1/tools/ai/quotas") == HttpStatusCode.Forbidden, "A viewer cannot read account subscription quotas.");
         Check(await viewer.StatusAsync(get, "/api/v1/tools/ai/sessions") == HttpStatusCode.Forbidden, "A viewer cannot list private AI sessions.");
         Check(await viewer.StatusAsync(get, "/api/v1/users") == HttpStatusCode.Forbidden, "A viewer cannot list users.");
-        Check(await viewer.StatusAsync(get, "/api/v1/node/mode") == HttpStatusCode.OK, "A viewer reads the node mode.");
-        Check(await viewer.StatusAsync(put, "/api/v1/node/mode", new { server = false, worker = true }) == HttpStatusCode.Forbidden, "A viewer cannot change the node mode.");
         // Nœud autonome (0045) : seul et sans cluster créé, il n'est pas dans un cluster ; le nommer en crée un.
         using (var identity = await anonymous.SendAsync(get, "/api/v1/cluster"))
             Check((await identity.Content.ReadFromJsonAsync<JsonElement>(Json)).GetProperty("standalone").GetBoolean(), "A node alone and without a created cluster is standalone.");
@@ -496,18 +493,11 @@ internal static class AuthScenarios
         Check(await anonymous.StatusAsync(put, $"/api/v1/nodes/{requests[0].Node.Id}/heartbeat", new NodeHeartbeatRequest(requests[0].Node.Name, requests[0].Node.Roles, 1, requests[0].Node.Capabilities), csrf: false, nodeToken: requests[0].Node.NodeToken) == HttpStatusCode.OK,
             "A paired worker heartbeats with the secret it generated.");
 
-        // Changement de mode à distance : route fermée par défaut, demande enregistrée puis livrée par le heartbeat.
-        var mode = $"/api/v1/nodes/{first.Id}/mode";
-        Check(await anonymous.StatusAsync(put, mode, new ChangeNodeModeRequest(true, true), csrf: false) == HttpStatusCode.Unauthorized, "Anonymous callers cannot change a node mode.");
-        Check(await anonymous.StatusAsync(put, mode, new ChangeNodeModeRequest(true, true), csrf: false, nodeToken: token) == HttpStatusCode.Unauthorized, "A node token cannot change a node mode.");
-        Check(await viewer.StatusAsync(put, mode, new ChangeNodeModeRequest(true, true)) == HttpStatusCode.Forbidden, "A viewer cannot change a node mode.");
-        Check(await admin.StatusAsync(put, mode, new ChangeNodeModeRequest(false, false)) == HttpStatusCode.BadRequest, "A node keeps at least one function.");
-        Check(await admin.StatusAsync(put, $"/api/v1/nodes/{Guid.NewGuid()}/mode", new ChangeNodeModeRequest(true, true)) == HttpStatusCode.NotFound, "An unknown node is reported.");
-        async Task<NodeResponse?> Beat() => await (await anonymous.SendAsync(put, $"/api/v1/nodes/{first.Id}/heartbeat", heartbeat, csrf: false, nodeToken: token)).Content.ReadFromJsonAsync<NodeResponse>(Json);
-        Check((await Beat())?.DesiredRoles is null, "Without a request, the heartbeat carries no desired mode.");
-        Check(await admin.StatusAsync(put,mode,new ChangeNodeModeRequest(true,true))==HttpStatusCode.Conflict,"The bootstrapped peer is unreachable: topology changes are refused during isolation.");
-        Check((await Beat())?.DesiredRoles is null,"A refused topology change is never delivered by a heartbeat.");
-        await StandaloneModeAsync();
+        // Le mode d'un nœud ne se change plus à distance : le central est fixe, un worker reste worker.
+        var removed = new[] { await admin.StatusAsync(put, $"/api/v1/nodes/{first.Id}/mode", new { server = true, worker = true }), await admin.StatusAsync(post, "/api/v1/cluster/leadership/transfer", new { targetNodeId = first.Id }) };
+        Check(removed.All(status => status is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed), "The remote node-mode route no longer exists: " + string.Join(",", removed));
+        Check(await anonymous.StatusAsync(get, "/api/v1/cluster/leadership/backup/latest", csrf: false, nodeToken: token) == HttpStatusCode.NotFound, "A node token can no longer download the database backup.");
+        Check(await anonymous.StatusAsync(get, "/api/v1/cluster/leadership/keys", csrf: false, nodeToken: token) == HttpStatusCode.NotFound, "A node token can no longer download data protection keys.");
 
         // Départ volontaire d'un cluster (0039) : authentifié par le jeton du nœud lui-même, jamais par celui d'un autre.
         var leaving = requests[1].Node;
@@ -570,31 +560,6 @@ internal static class AuthScenarios
         Console.WriteLine("PASS: enrollment window, capped pairing requests, admin-only approval and node-token isolation.");
     }
 
-    private static async Task StandaloneModeAsync()
-    {
-        await using var database=await TestDatabase.CreateSqliteAsync("auth-standalone-mode");
-        var directory=Path.Combine(Path.GetTempPath(),"standalone-mode-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(directory);
-        try
-        {
-            await using var factory=CreateFactory(database,directory,new(){["Auth:AnonymousRequestsPerMinute"]="1000"});
-            var admin=new Client(factory.CreateClient());var anonymous=new Client(factory.CreateClient());
-            using(var setup=await admin.SendAsync(HttpMethod.Post,"/api/v1/auth/setup",new SetupRequest("root",AdminPassword),csrf:false)) {Check(setup.StatusCode==HttpStatusCode.Created,"Standalone mode fixture setup succeeds.");admin.Cookie=ReadCookie(setup);}
-            var node=NewNode(Guid.NewGuid(),NodeToken());
-            Check(await admin.StatusAsync(HttpMethod.Put,"/api/v1/nodes/enrollment-window",new OpenEnrollmentWindowRequest(5))==HttpStatusCode.OK,"Standalone enrollment opens.");
-            Check(await anonymous.StatusAsync(HttpMethod.Post,"/api/v1/nodes/enroll",node,csrf:false)==HttpStatusCode.OK,"Standalone worker enrolls.");
-            var mode=$"/api/v1/nodes/{node.Id}/mode";
-            async Task<NodeResponse?> Beat(NodeRole[]? roles=null)=>(await (await anonymous.SendAsync(HttpMethod.Put,$"/api/v1/nodes/{node.Id}/heartbeat",new NodeHeartbeatRequest(node.Name,roles??node.Roles,1,node.Capabilities),csrf:false,nodeToken:node.NodeToken)).Content.ReadFromJsonAsync<NodeResponse>(Json));
-            Check(await admin.StatusAsync(HttpMethod.Put,mode,new ChangeNodeModeRequest(true,true))==HttpStatusCode.Accepted,"A standalone administrator requests both functions.");
-            Check((await Beat())?.DesiredRoles?.Contains(NodeRole.Server)==true,"Heartbeat delivers the desired roles.");
-            Check(await admin.StatusAsync(HttpMethod.Put,mode,new ChangeNodeModeRequest(false,true))==HttpStatusCode.Accepted,"Requesting current roles cancels a pending change.");
-            Check((await Beat())?.DesiredRoles is null,"Cancelled roles are not delivered.");
-            Check(await admin.StatusAsync(HttpMethod.Put,mode,new ChangeNodeModeRequest(true,true))==HttpStatusCode.Accepted,"Both functions can be requested again.");
-            Check((await Beat([NodeRole.Worker,NodeRole.Server]))?.DesiredRoles is null,"Applied roles acknowledge the request.");
-            Check(await admin.StatusAsync(HttpMethod.Put,mode,new ChangeNodeModeRequest(false,true))==HttpStatusCode.Conflict,"The last server cannot lose its server role.");
-        }
-        finally {if(Directory.Exists(directory)) Directory.Delete(directory,true);}
-    }
-
     private static Task EndpointCatalogueAsync(WebApplicationFactory<ApiAssembly> factory)
     {
         var endpoints = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>().ToArray();
@@ -624,11 +589,6 @@ internal static class AuthScenarios
             "POST /api/v1/nodes/{nodeId:guid}/leave",
             "GET /api/v1/nodes/{nodeId:guid}/cluster-bootstrap",
             "PUT /api/v1/nodes/{nodeId:guid}/heartbeat",
-            "GET /api/v1/cluster/leadership/status",
-            "GET /api/v1/cluster/leadership/snapshot/{transferId:guid}",
-            "POST /api/v1/cluster/leadership/transfer/{transferId:guid}/ack",
-            "GET /api/v1/cluster/leadership/backup/latest",
-            "GET /api/v1/cluster/leadership/keys",
         };
         var runtime = anonymous.Where(item => item.Contains("/api/v1/runtime/nodes/{nodeId:guid}")).ToArray();
         var rest = anonymous.Except(runtime).ToArray();

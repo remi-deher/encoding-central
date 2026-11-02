@@ -1,13 +1,11 @@
 using Haukcode.Mdns;
-using Encoding.Core.Nodes;
 
 namespace Encoding.Api.Infrastructure;
 
 public sealed class ClusterDiscoveryPublisher(
     ClusterIdentityRepository identityRepository,
     IConfiguration configuration,
-    ILogger<ClusterDiscoveryPublisher> logger,
-    LauncherControlClient? launcher = null) : BackgroundService
+    ILogger<ClusterDiscoveryPublisher> logger) : BackgroundService
 {
     private MdnsAdvertiser? advertiser;
     private string? announcedIdentity;
@@ -19,24 +17,13 @@ public sealed class ClusterDiscoveryPublisher(
             try
             {
                 var identity = await identityRepository.GetAsync(stoppingToken);
-                var mode = launcher is null
-                    ? NodeMode.Parse(configuration["Node:Roles"])
-                    : await launcher.GetAsync(stoppingToken);
-                if (mode is null || !mode.Server)
-                {
-                    advertiser?.Dispose();
-                    advertiser = null;
-                    announcedIdentity = null;
-                    await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
-                    continue;
-                }
                 var configuredPort = configuration.GetValue("Cluster:DiscoveryPort", 8080);
                 if (configuredPort is < 1 or > 65535) throw new InvalidOperationException("Cluster:DiscoveryPort doit être compris entre 1 et 65535.");
                 var apiUrl = configuration["Cluster:AdvertisedApiBaseUrl"];
                 var reconciliationApiUrl = configuration["Cluster:Reconciliation:AdvertisedApiBaseUrl"];
                 var instanceName = configuration["Cluster:DiscoveryInstanceName"]?.Trim();
                 if (string.IsNullOrWhiteSpace(instanceName)) instanceName = Environment.MachineName;
-                var signature = $"{identity.Id:D}|{identity.Name}|{instanceName}|{configuredPort}|{apiUrl}|{reconciliationApiUrl}|{mode.Server}";
+                var signature = $"{identity.Id:D}|{identity.Name}|{instanceName}|{configuredPort}|{apiUrl}|{reconciliationApiUrl}";
                 if (!string.Equals(signature, announcedIdentity, StringComparison.Ordinal))
                 {
                     advertiser?.Dispose();
@@ -44,7 +31,7 @@ public sealed class ClusterDiscoveryPublisher(
                     {
                         ["clusterId"] = identity.Id.ToString("D"),
                         ["clusterName"] = identity.Name,
-                        ["roles"] = mode.ToRoles()
+                        ["roles"] = "server"
                     };
                     if (!string.IsNullOrWhiteSpace(apiUrl)) properties["apiUrl"] = apiUrl;
                     if (!string.IsNullOrWhiteSpace(reconciliationApiUrl)) properties["reconciliationApiUrl"] = reconciliationApiUrl;

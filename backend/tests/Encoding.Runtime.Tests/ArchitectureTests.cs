@@ -38,7 +38,6 @@ public sealed partial class ArchitectureTests
     // Dette connue : endpoints qui injectent encore un *Repository. Ne jamais agrandir la liste.
     private static readonly string[] EndpointRepositoryDebt =
     [
-        "Encoding.Api/Cluster/LeadershipEndpoints.cs",
         "Encoding.Api/Executions/ExecutionEndpoints.cs",
         "Encoding.Api/Flows/FlowAiEndpoints.cs",
         "Encoding.Api/Flows/FlowScriptEndpoints.cs",
