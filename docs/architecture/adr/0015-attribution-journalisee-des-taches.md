@@ -1,12 +1,12 @@
 ---
 id: 0015
 title: Attribution initiale journalisée des tâches
-status: implemented
+status: superseded
 domain: runtime
 date: 2026-10-25
 decided_by: Rémi (proposition D3–D5, 2026-10-25)
 supersedes: []
-superseded_by: []
+superseded_by: [0036]
 tags: [propriété, attribution, signature, redémarrage]
 ---
 

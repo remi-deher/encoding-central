@@ -1,12 +1,12 @@
 ---
 id: 0014
 title: Attente durable des écritures sur les sources en cluster
-status: implemented
+status: superseded
 domain: runtime
 date: 2026-10-25
 decided_by: Rémi (2026-10-25)
 supersedes: []
-superseded_by: []
+superseded_by: [0036]
 tags: [partition, source, attente, publication]
 ---
 

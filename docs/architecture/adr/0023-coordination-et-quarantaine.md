@@ -1,11 +1,11 @@
 ---
 id: 0023
 title: Coordination des tâches en quarantaine sans blocage global
-status: implemented
+status: superseded
 domain: runtime
 date: 2026-10-27
 supersedes: []
-superseded_by: []
+superseded_by: [0036]
 ---
 
 # 0023 — Coordination des tâches en quarantaine

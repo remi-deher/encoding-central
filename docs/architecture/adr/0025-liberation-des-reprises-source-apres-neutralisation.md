@@ -1,11 +1,11 @@
 ---
 id: 0025
 title: Libération d'une reprise source après neutralisation
-status: implemented
+status: superseded
 domain: runtime
 date: 2026-10-29
 supersedes: []
-superseded_by: []
+superseded_by: [0036]
 ---
 
 # 0025 — Libération d'une reprise source après neutralisation

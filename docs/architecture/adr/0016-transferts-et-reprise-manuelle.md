@@ -1,12 +1,12 @@
 ---
 id: 0016
 title: Transferts inter-serveurs et reprise manuelle sans quorum
-status: implemented
+status: superseded
 domain: runtime
 date: 2026-10-25
 decided_by: Rémi (proposition D3–D5 et neutralisation explicite)
 supersedes: []
-superseded_by: []
+superseded_by: [0036]
 tags: [propriété, transfert, checkpoint, partition, reprise, gossip]
 ---
 
