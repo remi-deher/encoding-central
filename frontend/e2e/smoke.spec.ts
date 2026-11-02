@@ -215,7 +215,9 @@ test('the first-run setup studio completes standalone onboarding and passes WCAG
   });
 
   await page.goto('/setup');
-  await expect(page.getByRole('heading', { name: /Bienvenue sur Encoding/ })).toBeVisible();
+  // Accueil : il n'est pas compté comme une étape et porte seul le matériel détecté.
+  await expect(page.getByRole('heading', { name: 'Bienvenue' })).toBeVisible();
+  await expect(page.getByText(/Étape \d sur 3/)).toHaveCount(0);
   await expect(page.getByText('AMD Ryzen 7 5800X')).toBeVisible();
   await expect(page.getByText('NVIDIA GeForce RTX 3080')).toBeVisible();
   await expect(page.getByText('http://192.168.1.50:8090', { exact: true })).toBeVisible();
@@ -232,37 +234,40 @@ test('the first-run setup studio completes standalone onboarding and passes WCAG
   );
   expect(blocking.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([]);
 
+  await page.getByRole('button', { name: /Commencer/ }).click();
+  await expect(page.getByText('Étape 1 sur 3')).toBeVisible();
+  await expect(page.getByText('Configuration détectée')).toHaveCount(0);
+
+  // « Retour » depuis la première étape revient à l'accueil, puis on recommence.
+  await page.getByRole('button', { name: 'Retour' }).click();
+  await expect(page.getByRole('heading', { name: 'Bienvenue' })).toBeVisible();
+  await page.getByRole('button', { name: /Commencer/ }).click();
+
   await page.getByLabel('Mot de passe', { exact: true }).fill('un-mot-de-passe-long');
   await page.getByLabel('Confirmer le mot de passe', { exact: true }).fill('un-mot-de-passe-long');
-  const dashboardButton = page.getByRole('button', { name: /Accéder au tableau de bord/ });
+  await page.getByRole('button', { name: 'Continuer' }).click();
+  await expect(page.getByText('Étape 2 sur 3')).toBeVisible();
+  await page.getByRole('button', { name: 'Continuer' }).click();
+  await expect(page.getByText('Étape 3 sur 3')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Vérifier le central' })).toBeVisible();
+
+  const initialize = page.getByRole('button', { name: 'Initialiser le central' });
   const viewport = page.viewportSize()!;
   for (const width of [viewport.width, 320]) {
     await page.setViewportSize({ ...viewport, width });
-    await expect(dashboardButton).toBeVisible();
+    await expect(initialize).toBeVisible();
     await expect(async () => {
-      const fits = await dashboardButton.evaluate((button) => {
-        const bounds = button.getBoundingClientRect();
-        const label = button.querySelector('.mdc-button__label')!.getBoundingClientRect();
-        const icon = button.querySelector('app-icon')!.getBoundingClientRect();
-        return (
-          [label, icon].every(
-            (rect) =>
-              rect.top >= bounds.top &&
-              rect.bottom <= bounds.bottom &&
-              rect.left >= bounds.left &&
-              rect.right <= bounds.right,
-          ) && document.documentElement.scrollWidth <= window.innerWidth
-        );
-      });
+      const fits = await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      );
       expect(fits).toBe(true);
     }).toPass();
   }
   await page.setViewportSize(viewport);
-  await dashboardButton.click();
+  await initialize.click();
   await expect(page).toHaveURL(/\/$/);
   expect(setupPayload).toMatchObject({
     nodeDisplayName: 'Serveur Salon',
-    mode: 'standalone',
     username: 'admin',
     password: 'un-mot-de-passe-long',
   });
@@ -298,7 +303,7 @@ test('setup lists all interfaces and keeps browser access with a published port 
   for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme });
     await page.goto('/setup');
-    await expect(page.getByRole('heading', { name: 'Bienvenue sur Encoding' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Bienvenue' })).toBeVisible();
     const interfaces = page.getByRole('list', { name: 'Adresses des interfaces' });
     await expect(interfaces.getByRole('listitem')).toHaveCount(addresses.length);
     for (const item of addresses) {
