@@ -47,5 +47,10 @@ Une décision structurante : nouveau principe, changement d'un invariant des fic
 | [0029](0029-store-plugins-outils-hashes.md) | Store commun pour plugins et outils, identifiés par hash | accepted | plugins |
 | [0030](0030-migration-composants-et-plugins-historiques-au-store.md) | Migration des composants et plugins historiques vers le Store | accepted | plugins |
 | [0031](0031-frontieres-backend-verifiees-par-tests.md) | Frontières du backend vérifiées par des tests d'architecture | accepted | runtime |
-| [0032](0032-ressources-a-plat.md) | Ressources de flow à plat, une version par fichier | implemented | flows |
-| [0033](0033-profils-et-depot-complet.md) | Profils de sous-titres et dépôt complet | implemented | plugins |
+| [0032](0032-serveur-central-fixe.md) | Serveur central fixe et workers qui ne deviennent pas serveurs | superseded | cluster |
+| [0033](0033-images-central-et-worker.md) | Image centrale autonome et image worker sans base | superseded | cluster |
+| [0034](0034-rattachement-par-compte-administrateur.md) | Rattachement du worker par compte administrateur | implemented | cluster |
+| [0035](0035-depot-officiel-et-activation.md) | Dépôt officiel fixe et activation explicite | implemented | plugins |
+| [0036](0036-separation-stricte-central-worker.md) | Séparation stricte du central et du worker | accepted | cluster |
+| [0037](0037-ressources-a-plat.md) | Ressources de flow à plat, une version par fichier | implemented | flows |
+| [0038](0038-profils-et-depot-complet.md) | Profils de sous-titres et dépôt complet | implemented | plugins |

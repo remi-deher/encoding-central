@@ -34,6 +34,13 @@ Résolue par l'ADR [0003](adr/0003-publication-etape-de-flow.md) : le bloc `base
 ### 9. Compatibilité entre versions de nœuds
 Seule la version de protocole (`Current = 1`) est contrôlée. Pas de plage de schéma, pas de règle « serveurs avant workers ». Les migrations doivent rester additives en attendant.
 
+### 10. Séparation stricte central / worker : suites (2026-11-02)
+Décidée par l'[ADR 0036](adr/0036-separation-stricte-central-worker.md) : central autonome et unique autorité, worker sans base, aucune passation. Reste à décider :
+- **Maillage entre serveurs** (`ClusterReconciliation*`, mDNS, gossip, reprise à deux serveurs, groupes de reprise) : conservé mais inutilisé avec un central unique. Le supprimer ou le garder pour un futur multi-central ? `AGENTS.md` cite encore la haute disponibilité comme objectif ; sans passation, la reprise après sinistre repose sur la restauration d'une sauvegarde.
+- **Données héritées** : colonne `cluster_nodes.desired_roles` et tables de passation (`leadership_*`), laissées en base (migrations additives) et plus lues.
+- **Assistant `/setup` du central** : propose encore « Rejoindre un cluster », contraire au modèle cible ; à refaire avec l'interface.
+- **Worker et SSE** : l'interface du worker doit consommer le SSE du central ; l'attribution des tâches reste par heartbeat et baux.
+
 ## Hygiène du dépôt
 
 - `backend/migrations/0036_library_cluster_tombstones.sql` (racine) n'est pas chargé par le migrateur (seul `migrations/sqlite/` l'est) : reliquat à supprimer.

@@ -1,5 +1,5 @@
 ---
-id: 0033
+id: 0038
 title: Profils de sous-titres et dépôt complet
 status: implemented
 domain: plugins
@@ -10,7 +10,7 @@ superseded_by: []
 tags: [sous-titre, ressource, depot, flow]
 ---
 
-# 0033 — Profils de sous-titres et dépôt complet
+# 0038 — Profils de sous-titres et dépôt complet
 
 ## Contexte
 Le moteur écrit quatre styles ASS en dur (référence 640×360, mise à l’échelle sur la hauteur affichée). Les blocs convertir et styliser ne savent choisir que ce jeu, « aucun », ou un instantané de police. L’ADR 0032 laisse les types autres que `font` fermés. L’index `repository.json` 1.x ne publie que `plugins[]` et `tools[]` : un dépôt ne peut pas embarquer le flow, les polices, un profil ou un fichier de sous-titres.

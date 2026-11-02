@@ -1,5 +1,5 @@
 ---
-id: 0032
+id: 0037
 title: Ressources de flow à plat, une version par fichier
 status: implemented
 domain: flows
@@ -10,7 +10,7 @@ superseded_by: []
 tags: [ressource, police, catalogue, version]
 ---
 
-# 0032 — Ressources de flow à plat, une version par fichier
+# 0037 — Ressources de flow à plat, une version par fichier
 
 ## Contexte
 L'ADR 0006 range plusieurs fichiers dans une seule ressource (« Polices ASS » contient Arial, Times et Trebuchet). Une nouvelle version remplace le paquet entier. Un flow qui n'a besoin que d'une police embarque les autres, et la même police ne se réutilise pas d'un paquet à l'autre sans la dupliquer.

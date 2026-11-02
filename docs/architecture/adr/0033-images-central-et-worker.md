@@ -1,12 +1,12 @@
 ---
 id: 0033
 title: Image centrale autonome et image worker sans base
-status: implemented
+status: superseded
 domain: cluster
 date: 2026-11-02
 decided_by: Rémi (2026-11-02)
 supersedes: []
-superseded_by: []
+superseded_by: [0036]
 tags: [serveur, worker, image, plugins]
 ---
 

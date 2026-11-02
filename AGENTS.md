@@ -14,9 +14,9 @@ Application auto-hébergée pour gérer et distribuer le traitement de biblioth�
 
 ## Modèle de nœud
 
-- Le système est un cluster de nœuds configurables ; **aucun serveur central permanent**. Chaque installation héberge les fonctions serveur, worker, ou les deux (une seule image `encoding`, mode changeable à chaud).
-- « Nœud » est le terme unique ; serveur et worker sont des rôles. Un nœud seul est **autonome** ; un cluster n'existe que s'il est créé ou rejoint, avec approbation du cluster d'accueil. Détails : [cluster](docs/architecture/domains/cluster.md).
-- Les serveurs gardent chacun leur stockage et réconcilient par le maillage ; cohérence **éventuelle, sans quorum**. Les instances ne doivent pas créer d'états divergents ni attribuer simultanément une même tâche. Les baux et réservations sont locaux au serveur qui attribue.
+- Deux images distinctes. Le **central** embarque l'API, l'interface web, la base et un worker intégré ; il est autonome et reste l'**unique autorité** du cluster : il pilote les workers. Le **worker** embarque seulement l'agent et une interface web, sans base de données ; il n'est jamais autonome, alimenté par l'API et le SSE du central, enrôlé à son setup avec un compte administrateur du central. **Aucune passation** de la fonction serveur pour l'instant ([ADR 0036](docs/architecture/adr/0036-separation-stricte-central-worker.md)).
+- « Nœud » est le terme unique ; serveur et worker sont des rôles fixés par l'image. Un central seul est **autonome** ; un worker rejoint un central, avec un compte administrateur de celui-ci. Détails : [cluster](docs/architecture/domains/cluster.md).
+- Tant qu'un seul central existe, il est l'unique détenteur de la base. Le maillage de réconciliation entre serveurs reste dans le code mais n'est pas utilisé ; sa suppression ou sa réactivation est à décider. S'il est réactivé : cohérence **éventuelle, sans quorum**. Les instances ne doivent pas créer d'états divergents ni attribuer simultanément une même tâche. Les baux et réservations sont locaux au serveur qui attribue.
 
 ## Bibliothèques et accès aux médias
 
