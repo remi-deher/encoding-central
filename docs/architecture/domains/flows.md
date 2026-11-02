@@ -1,6 +1,6 @@
 ---
 domain: flows
-updated: 2026-10-30
+updated: 2026-11-02
 legacy_adr: [0003, 0004, 0006, 0007, 0011, 0012, 0013, 0014, 0015, 0022, 0023, 0024, 0025, 0026, 0027, 0060-api, 0079, 0080, 0081]
 code:
   - backend/src/Encoding.Contracts/Flows/
@@ -51,7 +51,7 @@ L'exécution d'un flow (baux, workers, publication) est dans [runtime.md](runtim
 - **Modèles** ([ADR 0017](../adr/0017-parametres-de-configuration-des-modeles-de-flow.md)) : créés depuis une version publiée et modifiables en révisions optimistes. Chaque modèle garde une configuration guidée qui référence les blocs et champs configurables; les valeurs dans sa définition sont les valeurs par défaut. Les chemins, fichiers, secrets et références d’artefacts locaux ne peuvent pas être exposés et sont retirés du brouillon créé, puis renseignés dans l’éditeur. À la création d’un flow, seuls les champs autorisés peuvent être ajustés avec les options/validations du composant; le nouveau flow est une copie indépendante, donc les mises à jour du modèle n’altèrent pas les flows déjà créés.
 - **Packs de composants** : fragment d'une version publiée (entrée = premier composant relié à `success`, sorties = sorties non utilisées en interne) ; inséré **aplati** dans le graphe avec métadonnées d'instance ; le runtime ne lit jamais la bibliothèque de packs.
 - **Profils d'encodage** : un profil = une cible de qualité par encodeur (catalogue `VideoEncoderCatalog`), brouillon + versions immuables, profil intégré « Équilibré » en lecture seule ; le flow embarque l'instantané. Mode automatique : filtre par codec puis premier encodeur *vérifié utilisable* par priorité (NVENC, QSV, VAAPI, CPU). Les nombres de qualité ne sont pas comparables entre encodeurs.
-- **Ressources** : l'API REST et le MCP listent, consultent, créent, renomment, versionnent et suppriment les ressources. Les outils MCP qui créent une ressource ou une version reçoivent des empreintes de fichiers déjà téléversés via l'API REST. Une ressource référencée par un flow ne peut pas être supprimée.
+- **Ressources** ([ADR 0032](../adr/0032-ressources-a-plat.md), [ADR 0033](../adr/0033-profils-et-depot-complet.md)) : une ressource est un fichier, avec une version immuable par contenu. Types : police, profil de sous-titres, fichier de sous-titres. L'API REST et le MCP listent, consultent, créent, renomment, versionnent et suppriment ces fichiers. Créer ou versionner prend une seule empreinte déjà téléversée. Un bloc cite `identifiant:version` (plusieurs polices séparées par des virgules ; un profil ou un fichier de sous-titres, une seule référence). Une ressource référencée par un flow ne peut pas être supprimée. Les paquets historiques restent résolubles et sont absents du catalogue ; la migration 0064 en a extrait un fichier par ressource. Un dépôt peut embarquer ces ressources et des flows : l'installation depuis le catalogue crée la ressource ou importe la définition publiée.
 
 ## Invariants
 1. Le backend valide tout document de flow ; l'UI ne fait que guider.
@@ -60,7 +60,7 @@ L'exécution d'un flow (baux, workers, publication) est dans [runtime.md](runtim
 4. Un flow historique reste exécutable : toute évolution de composant garde les références anciennes résolubles (`compatiblePluginVersions`).
 
 ## Non livré / limites
-- Boucles, bloc de comparaison de qualité VMAF/PSNR/SSIM (proposition), import automatique de sauvegardes, rétention des sauvegardes, éditeur de profils de style ASS.
+- Boucles, bloc de comparaison de qualité VMAF/PSNR/SSIM (proposition), import automatique de sauvegardes, rétention des sauvegardes.
 - Le preflight de la fiche n'atteste pas l'accès à une bibliothèque cible.
 
 ## Création guidée vidéo
@@ -72,7 +72,7 @@ L'exécution d'un flow (baux, workers, publication) est dans [runtime.md](runtim
 ## Builder FFmpeg explicite
 L'assistant vidéo génère désormais **Début FFmpeg → réglages → Exécuter FFmpeg → publication** (base 1.10.0, compatible avec les références 1.9.0). Les anciens flows ne sont pas réécrits. La validation de publication vérifie chaque chemin : début obligatoire avant Executor, pas de portée imbriquée ou laissée ouverte, pas de script ni d'opération autonome dans la portée. Conditions, variables, lectures natives de métadonnées et blocs de nœud peuvent la traverser. Les brouillons restent enregistrables pendant la construction.
 
-La simulation demande les métadonnées de sortie d'un Executor supposé réussi avant d'évaluer les conditions suivantes ; elle ne propage pas les métadonnées supposées en cas d'échec. **Assembler le résultat MKV** regroupe sous-titres/polices/noms après l'Executor. Sémantique média, secours et compatibilité : [runtime](runtime.md), ADR [0012](../adr/0012-builder-ffmpeg-et-assemblage.md).
+La simulation demande les métadonnées de sortie d'un Executor supposé réussi avant d'évaluer les conditions suivantes ; elle ne propage pas les métadonnées supposées en cas d'échec. **Assembler le résultat MKV** regroupe sous-titres/polices/noms après l'Executor. Un MP4 est réécrit par FFmpeg et reste un MP4 ; le profil ASS et les polices jointes ne s'appliquent qu'à un Matroska. Les autres blocs média conservent aussi le conteneur de la source : seul le remux en choisit un autre, et un bloc Matroska reçoit un MKV. Sémantique média, secours et compatibilité : [runtime](runtime.md), ADR [0012](../adr/0012-builder-ffmpeg-et-assemblage.md).
 
 ### Contrôle d’intégrité facultatif (ADR 0027)
 Le plugin `probe` 1.1.0 conserve les références 1.0.0 et ajoute `probe-check-integrity` (rapide/approfondi, automatique/CPU/GPU obligatoire). Seul ce bloc demande le décodage d’intégrité ; son absence laisse les scans structurels et vérifications d’empreinte obligatoires, sans décodage média complet, y compris pour les flows déjà publiés. Les flows guidés et modèles standards ne l’ajoutent pas par défaut ; il reste disponible dans le catalogue pour les flows qui le demandent explicitement. Les modèles système installés évoluent par une nouvelle version source, sans modifier les flows utilisateurs créés depuis ces modèles. Un flow avec ce bloc exige `media-integrity-policy/v1` sur tous ses segments. Le simulateur demande une hypothèse de résultat, sans lecture réelle. Détails et preuve par empreinte : [ADR 0027](../adr/0027-controle-integrite-optionnel.md).

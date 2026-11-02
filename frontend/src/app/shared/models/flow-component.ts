@@ -132,6 +132,7 @@ interface FlowComponentConfigurationFieldBase {
     | 'artifact'
     | 'font-set'
     | 'resource';
+  readonly resourceKind?: string;
   readonly visibleWhenFieldId?: string;
   readonly visibleWhenValue?: string;
   readonly visibleWhenEmpty?: boolean;

@@ -17,7 +17,7 @@ public sealed class FlowOperationTests
     public void FocusedSubtitleOperationsCannotAcquireUnrelatedEffects(string id)
     {
         var options = SubtitleOptions.From(FlowOperationConfiguration.Resolve(id,
-            Values(new { frenchDefault = true, setTitles = true, removeDuplicates = true, styleProfile = "crunchyroll" })));
+            Values(new { frenchDefault = true, setTitles = true, removeDuplicates = true, styleProfile = "none" })));
         Assert.False(options.FrenchDefault);
         Assert.False(options.SetTitles);
         Assert.Equal(id == "subtitles-remove-duplicates", options.RemoveDuplicates);
@@ -40,12 +40,40 @@ public sealed class FlowOperationTests
     [Fact]
     public void NamingAndDefaultSelectionAreIndependent()
     {
-        var names = TrackNameOptions.From(FlowOperationConfiguration.Resolve("subtitles-name-tracks", Values(new { singleDefaultAudio = true })));
+        var names = TrackNameOptions.From(FlowOperationConfiguration.Resolve("subtitles-name-tracks", Values(new { singleDefaultAudio = true, singleDefaultSubtitle = true })));
         Assert.True(names.RenameTracks);
         Assert.False(names.SingleDefaultAudio);
-        var defaults = TrackNameOptions.From(FlowOperationConfiguration.Resolve("subtitles-default-audio", Values(new { renameTracks = true })));
+        Assert.False(names.SingleDefaultSubtitle);
+        var defaults = TrackNameOptions.From(FlowOperationConfiguration.Resolve("subtitles-default-audio", Values(new { renameTracks = true, singleDefaultSubtitle = true })));
         Assert.False(defaults.RenameTracks);
         Assert.True(defaults.SingleDefaultAudio);
+        Assert.False(defaults.SingleDefaultSubtitle);
+        var subtitle = TrackNameOptions.From(FlowOperationConfiguration.Resolve("subtitles-default-subtitle", Values(new { renameTracks = true, singleDefaultAudio = true, defaultSubtitleLanguage = "fra" })));
+        Assert.False(subtitle.RenameTracks);
+        Assert.False(subtitle.SingleDefaultAudio);
+        Assert.True(subtitle.SingleDefaultSubtitle);
+        Assert.Equal("fra", subtitle.DefaultSubtitleLanguage);
+    }
+
+    [Fact]
+    public void DefaultSubtitleChangesOnlyTheDefaultFlag()
+    {
+        var identification = JsonSerializer.SerializeToElement(new
+        {
+            tracks = new object[]
+            {
+                new { id = 0, type = "audio", properties = new { uid = 1, language = "jpn", track_name = "JP", default_track = true, forced_track = false } },
+                new { id = 1, type = "subtitles", properties = new { uid = 10, language = "eng", track_name = "EN", default_track = true, forced_track = false } },
+                new { id = 2, type = "subtitles", properties = new { uid = 11, language = "fre", track_name = "FR", default_track = false, forced_track = false } },
+                new { id = 3, type = "subtitles", properties = new { uid = 12, language = "fre", track_name = "FR forcé", default_track = false, forced_track = true } },
+            }
+        });
+        var options = TrackNameOptions.From(FlowOperationConfiguration.Resolve("subtitles-default-subtitle", Values(new { defaultSubtitleLanguage = "fr" })));
+        var edits = TrackNaming.Plan(identification, JsonSerializer.SerializeToElement(new { streams = Array.Empty<object>() }), null, options);
+        Assert.Equal(2, edits.Count);
+        Assert.Contains(edits, edit => edit.Uid == 10 && edit.DefaultFlag == false && edit.Name == "EN");
+        Assert.Contains(edits, edit => edit.Uid == 11 && edit.DefaultFlag == true && edit.Name == "FR");
+        Assert.DoesNotContain(edits, edit => edit.Uid == 12 || edit.Uid == 1);
     }
 
     [Fact]

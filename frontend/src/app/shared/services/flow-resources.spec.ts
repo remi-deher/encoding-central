@@ -27,13 +27,14 @@ describe('FlowResources', () => {
     request.flush(stored);
     expect(await upload).toEqual(stored);
 
-    const created = service.create('Crunchyroll', '', [
-      { name: stored.name, sha256: stored.sha256 },
-    ]);
+    const created = service.create(stored.name, '', {
+      name: stored.name,
+      sha256: stored.sha256,
+    });
     const creation = http.expectOne('/api/v1/resources');
     expect(creation.request.body).toEqual({
       kind: 'font',
-      name: 'Crunchyroll',
+      name: stored.name,
       description: '',
       files: [{ name: stored.name, sha256: stored.sha256 }],
     });

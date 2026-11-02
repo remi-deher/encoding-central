@@ -13,7 +13,8 @@ public sealed partial class MediaActions
     public async Task<MediaActionOutcome> TrackNamesAsync(IReadOnlyDictionary<string,JsonElement> c,JsonElement probe,JsonElement? origin,string current,
         string directory,string node,CancellationToken ct,bool editWorkingCopy=false,bool planOnly=false)
     {
-        if(Path.GetExtension(current)!=".mkv") return new(null,[]);
+        if(IsMp4(current)) return await Mp4TrackNamesAsync(c,probe,origin,current,directory,node,ct,planOnly);
+        if(!IsMatroska(current)) return new(null,[],JsonSerializer.SerializeToElement(new[]{"Le conteneur est conservé. Les noms de pistes modifient un Matroska ou un MP4."}));
         using var identification=JsonDocument.Parse(await tools.CheckedAsync("mkvmerge",["-J",current],directory,ct));
         if(Text(c,"mode","apply")=="snapshot") return new(null,[],TrackNaming.Snapshot(identification.RootElement).Clone());
         var edits=TrackNaming.Plan(identification.RootElement,probe,origin,TrackNameOptions.From(c));
@@ -36,7 +37,8 @@ public sealed partial class MediaActions
     public async Task<MediaActionOutcome> SubtitleManageAsync(IReadOnlyDictionary<string,JsonElement> c,JsonElement probe,string current,string directory,
         string node,CancellationToken ct,bool planOnly=false)
     {
-        if(Path.GetExtension(current)!=".mkv") return new(null,[]);
+        if(IsMp4(current)) return await Mp4SubtitlesAsync(c,probe,current,directory,node,ct,planOnly);
+        if(!IsMatroska(current)) return new(null,[],JsonSerializer.SerializeToElement(new[]{"Le conteneur est conservé. Les sous-titres détaillés modifient un Matroska ou un MP4."}));
         var options=SubtitleOptions.From(c);
         var streams=probe.GetProperty("streams").EnumerateArray().ToArray();
         string Kind(JsonElement s)=>s.TryGetProperty("codec_type",out var t)?t.GetString()??"":"";
@@ -142,7 +144,7 @@ public sealed partial class MediaActions
             var codecId=properties.TryGetProperty("codec_id",out var id)?id.GetString()??"":"";
             if(!codecId.StartsWith("S_TEXT/ASS",StringComparison.Ordinal)&&!codecId.StartsWith("S_TEXT/SSA",StringComparison.Ordinal)) continue;
             if(!properties.TryGetProperty("codec_private_data",out var hex)||hex.ValueKind!=JsonValueKind.String) continue;
-            try { if(System.Text.Encoding.UTF8.GetString(Convert.FromHexString(hex.GetString()!)).Contains("SubtitleProfileVersion: "+AssProfile.Version,StringComparison.Ordinal)) return true; }
+            try { if(System.Text.Encoding.UTF8.GetString(Convert.FromHexString(hex.GetString()!)).Contains("SubtitleProfileVersion:",StringComparison.Ordinal)) return true; }
             catch(FormatException) { }
         }
         return false;
@@ -152,7 +154,8 @@ public sealed partial class MediaActions
     public async Task<MediaActionOutcome> AddFontsAsync(IReadOnlyDictionary<string,JsonElement> c,string current,string directory,string node,
         CancellationToken ct,string? resourceFolder=null,bool editWorkingCopy=false)
     {
-        if(Path.GetExtension(current)!=".mkv") return new(null,[]);
+        if(IsMp4(current)) return new(null,[],JsonSerializer.SerializeToElement(new[]{"Le MP4 conserve son conteneur : les polices jointes sont propres au Matroska."}));
+        if(!IsMatroska(current)) return new(null,[],JsonSerializer.SerializeToElement(new[]{"Le conteneur est conservé. Les polices jointes sont propres au Matroska."}));
         var extensions = new[] { ".ttf", ".otf", ".ttc" };
         string folder,set; List<string> names;
         if(resourceFolder is not null)

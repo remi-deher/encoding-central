@@ -8,7 +8,7 @@ public static class FlowOperationConfiguration
     public static bool IsSubtitleOperation(string id) => id is "subtitles-convert-ass" or "subtitles-style-ass"
         or "subtitles-remove-duplicates" or "subtitles-detect-forced";
     public static bool IsNamingOperation(string id) => id is "subtitles-name-tracks" or "subtitles-default-audio"
-        or "subtitles-snapshot-track-titles";
+        or "subtitles-default-subtitle" or "subtitles-snapshot-track-titles";
 
     public static IReadOnlyDictionary<string, JsonElement> Resolve(string id, IReadOnlyDictionary<string, JsonElement> configuration)
     {
@@ -30,6 +30,14 @@ public static class FlowOperationConfiguration
             Set("mode", id == "subtitles-snapshot-track-titles" ? "snapshot" : "apply");
             Set("renameTracks", id == "subtitles-name-tracks");
             Set("singleDefaultAudio", id == "subtitles-default-audio");
+            Set("singleDefaultSubtitle", id == "subtitles-default-subtitle");
+            if (id == "subtitles-default-subtitle")
+            {
+                var language = "fr";
+                if (configuration.TryGetValue("defaultSubtitleLanguage", out var chosen) && chosen.ValueKind == JsonValueKind.String
+                    && !string.IsNullOrWhiteSpace(chosen.GetString())) language = chosen.GetString()!.Trim();
+                Set("defaultSubtitleLanguage", language);
+            }
         }
         return values;
     }

@@ -96,6 +96,26 @@ export class ClusterExtensionsService {
     );
   }
 
+  installCatalogResource(repositoryId: string, id: string, version?: string): Promise<unknown> {
+    return firstValueFrom(
+      this.http.post('/api/v1/store/resources/install', {
+        repositoryId,
+        id,
+        version: version ? Number(version) : null,
+      }),
+    );
+  }
+
+  installCatalogFlow(repositoryId: string, id: string, version?: string): Promise<unknown> {
+    return firstValueFrom(
+      this.http.post('/api/v1/store/flows/install', {
+        repositoryId,
+        id,
+        version: version ? Number(version) : null,
+      }),
+    );
+  }
+
   importArchive(archive: File): Promise<unknown> {
     return firstValueFrom(
       this.http.post('/api/v1/store/packages/import', archive, {

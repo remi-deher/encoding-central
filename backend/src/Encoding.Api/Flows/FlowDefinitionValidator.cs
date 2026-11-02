@@ -109,6 +109,13 @@ public sealed class FlowDefinitionValidator(
                 try { AssStyleSettings.From(node.Configuration); }
                 catch (SubtitleException error) { Issue("field.invalid", path + "/configuration/fontFamily", error.Message); }
             }
+            if (node.Component?.ComponentId is "subtitles-add-track" or "base-add-subtitle-track")
+            {
+                var hasFile = node.Configuration.TryGetValue("sourceFile", out var sourceFile) && sourceFile.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(sourceFile.GetString());
+                var hasResource = node.Configuration.TryGetValue("resource", out var subtitleResource) && subtitleResource.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(subtitleResource.GetString());
+                if (!hasFile && !hasResource) Issue("field.invalid", path + "/configuration/sourceFile", "Indiquez un fichier produit par le flow ou une ressource de sous-titres.");
+                if (hasFile && hasResource) Issue("field.invalid", path + "/configuration/resource", "Choisissez soit un fichier produit par le flow, soit une ressource de sous-titres.");
+            }
             if ((node.Component?.PluginId is "base" or "video") && (node.Component.ComponentId is "base-transcode-video" or "video-transcode"))
             {
                 var profile = TryGetEncodingProfile(node.Configuration);

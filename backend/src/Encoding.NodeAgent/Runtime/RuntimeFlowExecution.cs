@@ -274,11 +274,12 @@ internal sealed partial class RuntimeFlowExecution(NodeAgentOptions options, Med
         try
         {
             state.Observed!.Verify(state.Original);
+            var prepared = subtitles ? await WithProfileDocumentAsync(configuration) : configuration;
             var outcome = naming
                 ? await actions.TrackNamesAsync(configuration, metadata,
                     state.Variables.TryGetValue("tracks.origin", out var saved) ? saved : null,
                     state.Original, directory, nodeId, job.Token, planOnly: true)
-                : await actions.SubtitleManageAsync(configuration, metadata, state.Original, directory, nodeId, job.Token, planOnly: true);
+                : await actions.SubtitleManageAsync(prepared, metadata, state.Original, directory, nodeId, job.Token, planOnly: true);
             state.Observed.Verify(state.Original);
             if (outcome.NeedsChanges || outcome.Primary is not null) return false;
             state.ConformingNodes.Add(nodeId); return true;
@@ -300,6 +301,14 @@ internal sealed partial class RuntimeFlowExecution(NodeAgentOptions options, Med
     }
     private async Task<string> ExtraAsync(string path)
     {
+        if (Path.IsPathRooted(path))
+        {
+            var full = Path.GetFullPath(path);
+            var root = Path.GetFullPath(directory) + Path.DirectorySeparatorChar;
+            if (!full.StartsWith(root, StringComparison.Ordinal) || !File.Exists(full))
+                throw new SubtitleException("Le fichier de sous-titres n'est pas dans le dossier de travail.");
+            return full;
+        }
         if (FlowArtifactReference.TryParse(path, out var reference))
         {
             await EnsureFilesAsync();

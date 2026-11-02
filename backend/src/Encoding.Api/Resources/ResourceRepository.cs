@@ -12,7 +12,13 @@ public sealed class ResourceRepository(DbDataSource dataSource, ResourceBlobStor
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         var resources = new List<(Guid Id, string Kind, string Name, string Description, DateTimeOffset UpdatedAt)>();
-        await using (var command = Sql.Command("SELECT id,kind,name,description,updated_at FROM flow_resources ORDER BY lower(name),id", connection))
+        await using (var command = Sql.Command("""
+            SELECT id,kind,name,description,updated_at FROM flow_resources r
+            WHERE NOT EXISTS (
+                SELECT 1 FROM flow_resource_versions v
+                WHERE v.resource_id=r.id AND json_array_length(v.files)>1)
+            ORDER BY lower(name),id
+            """, connection))
         {
             await using var reader = await command.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
@@ -203,8 +209,8 @@ public sealed class ResourceRepository(DbDataSource dataSource, ResourceBlobStor
 
     private IReadOnlyList<ResourceFile> Resolve(string kind, IReadOnlyList<ResourceFileReference> files)
     {
-        if (files.Count is 0 or > ResourceBlobStore.MaxFilesPerVersion)
-            throw new ResourceException($"Une version contient entre 1 et {ResourceBlobStore.MaxFilesPerVersion} fichiers.");
+        if (files.Count != 1)
+            throw new ResourceException("Une ressource contient un seul fichier. Créez une ressource par fichier.");
         var resolved = new List<ResourceFile>();
         foreach (var file in files)
         {

@@ -90,7 +90,7 @@ internal sealed partial class RuntimeFlowExecution
 
     private async Task<StepOutcome> ManageSubtitlesAsync(StepContext ctx)
     {
-        var node = ctx.Node; var c = ctx.Config;
+        var node = ctx.Node; var c = await WithProfileDocumentAsync(ctx.Config);
         await EnsureScanAsync();
         var outcome = await actions.SubtitleManageAsync(c, state.Context.CurrentMetadata!.Value, state.Current, directory, node.Id, job.Token);
         if (outcome.Primary is null) ctx.Output = "unchanged";
@@ -107,17 +107,29 @@ internal sealed partial class RuntimeFlowExecution
     {
         var node = ctx.Node; var id = ctx.Id; var c = ctx.Config;
         await EnsureScanAsync();
+        if (id == "base-assemble-media" && MediaActions.Flag(c, "manageSubtitles")) c = await WithProfileDocumentAsync(c);
         string? resourceFolder = null;
         if ((id != "base-assemble-media" || MediaActions.Flag(c, "addFonts")) && MediaActions.Text(c, "resource") is { Length: > 0 } resourceText)
         {
-            if (!Encoding.Contracts.Flows.ResourceReference.TryParse(resourceText, out var resourceReference)) throw new SubtitleException("Référence de ressource de polices invalide.");
-            try
+            if (!Encoding.Contracts.Flows.ResourceReference.TryParseList(resourceText, out var references) || references.Count == 0)
+                throw new SubtitleException("Référence de ressource de polices invalide.");
+            resourceFolder = Path.Combine(directory, "resources", "fonts");
+            var missing = new List<string>();
+            foreach (var reference in references)
             {
-                var info = await client.ResourceVersionAsync(resourceReference, job.Token);
-                resourceFolder = Path.Combine(directory, "resources", resourceReference.Id.ToString("N") + "-" + resourceReference.Version);
-                await client.EnsureResourceAsync(info, ResourceCache.Root(options), resourceFolder, job.Token);
+                Encoding.Contracts.Flows.ResourceVersionInfo? info = null;
+                try
+                {
+                    info = await client.ResourceVersionAsync(reference, job.Token);
+                    await client.EnsureResourceAsync(info, ResourceCache.Root(options), resourceFolder, job.Token);
+                }
+                catch (Exception exception) when (exception is HttpRequestException or IOException)
+                {
+                    var names = info is null ? "" : string.Join(", ", info.Files.Select(file => file.Name));
+                    missing.Add(names.Length == 0 ? $"{reference} : {exception.Message}" : $"{names} ({reference}) : {exception.Message}");
+                }
             }
-            catch (Exception exception) when (exception is HttpRequestException or IOException) { throw new SubtitleException("Ressource de polices indisponible : " + exception.Message); }
+            if (missing.Count > 0) throw new SubtitleException("Ressource de polices indisponible : " + string.Join(" ; ", missing));
         }
         var outcome = id == "base-assemble-media"
             ? await actions.AssembleAsync(c, state.Context.CurrentMetadata!.Value, state.Variables.TryGetValue("tracks.origin", out var origin) ? origin : null, state.Current,
@@ -326,7 +338,7 @@ internal sealed partial class RuntimeFlowExecution
                         knownMetadata: state.Context.CurrentMetadata);
                     await ApplyOutcomeAsync(outcome, node.Id);
                 }
-                else { var step = plan[index++]; await ApplyOutcomeAsync(await actions.ExecuteAsync(step.ComponentId, step.Configuration, state.Current, directory,
+                else { var step = plan[index++]; var configuration = await WithSubtitleFileAsync(step.ComponentId, step.Configuration); await ApplyOutcomeAsync(await actions.ExecuteAsync(step.ComponentId, configuration, state.Current, directory,
                     node.Id + index, ExtraAsync, client.NodeId, job.Token), node.Id); }
             }
             state.Context = state.Context with { Plan = [] };
@@ -355,12 +367,57 @@ internal sealed partial class RuntimeFlowExecution
         }
         else
         {
-            var outcome = await actions.ExecuteAsync(id, c, state.Current, directory, node.Id, ExtraAsync, client.NodeId, job.Token, state.Context.CurrentMetadata);
+            var prepared = await WithSubtitleFileAsync(id, c);
+            var outcome = await actions.ExecuteAsync(id, prepared, state.Current, directory, node.Id, ExtraAsync, client.NodeId, job.Token, state.Context.CurrentMetadata);
             if (outcome.Value is { } value) state.Variables[MediaActions.Text(c, "resultVariable", "result")] = value;
             await ApplyOutcomeAsync(outcome, node.Id);
             if (outcome.Primary is null && MediaActions.Flag(c, "refreshMetadata")) state.Context = state.Context with { CurrentMetadata = await scanner.ScanAsync(state.Current, job.Token) };
         }
 
         return StepOutcome.Continue();
+    }
+
+    private async Task<IReadOnlyDictionary<string, JsonElement>> WithProfileDocumentAsync(IReadOnlyDictionary<string, JsonElement> configuration)
+    {
+        if (MediaActions.Text(configuration, "profile") is not { Length: > 0 } text) return configuration;
+        if (!ResourceReference.TryParse(text, out var reference))
+            throw new SubtitleException("Référence de profil de sous-titres invalide (attendu identifiant:version).");
+        var folder = await DownloadResourceFolderAsync(reference, "profiles");
+        var files = Directory.EnumerateFiles(folder).ToArray();
+        if (files.Length != 1) throw new SubtitleException("Le profil de sous-titres doit contenir un seul fichier.");
+        var copy = configuration.ToDictionary(item => item.Key, item => item.Value);
+        copy["profileDocument"] = JsonSerializer.SerializeToElement(await File.ReadAllTextAsync(files[0], job.Token));
+        return copy;
+    }
+
+    private async Task<IReadOnlyDictionary<string, JsonElement>> WithSubtitleFileAsync(string id, IReadOnlyDictionary<string, JsonElement> configuration)
+    {
+        if (id is not ("subtitles-add-track" or "base-add-subtitle-track") || MediaActions.Text(configuration, "resource") is not { Length: > 0 } text)
+            return configuration;
+        if (!ResourceReference.TryParse(text, out var reference))
+            throw new SubtitleException("Référence de fichier de sous-titres invalide (attendu identifiant:version).");
+        var folder = await DownloadResourceFolderAsync(reference, "subtitles");
+        var files = Directory.EnumerateFiles(folder).ToArray();
+        if (files.Length != 1) throw new SubtitleException("La ressource de sous-titres doit contenir un seul fichier.");
+        var copy = configuration.ToDictionary(item => item.Key, item => item.Value);
+        copy["sourceFile"] = JsonSerializer.SerializeToElement(files[0]);
+        return copy;
+    }
+
+    private async Task<string> DownloadResourceFolderAsync(ResourceReference reference, string folderName)
+    {
+        var folder = Path.Combine(directory, "resources", folderName, reference.Id.ToString("N") + "-" + reference.Version.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Encoding.Contracts.Flows.ResourceVersionInfo? info = null;
+        try
+        {
+            info = await client.ResourceVersionAsync(reference, job.Token);
+            await client.EnsureResourceAsync(info, ResourceCache.Root(options), folder, job.Token);
+            return folder;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or IOException)
+        {
+            var names = info is null ? "" : string.Join(", ", info.Files.Select(file => file.Name));
+            throw new SubtitleException("Ressource indisponible : " + (names.Length == 0 ? $"{reference} : {exception.Message}" : $"{names} ({reference}) : {exception.Message}"));
+        }
     }
 }

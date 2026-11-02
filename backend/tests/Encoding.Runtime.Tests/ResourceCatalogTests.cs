@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Encoding.Api.Infrastructure;
+using Encoding.Api.Plugins;
 using Encoding.Api.Infrastructure.Data;
 using Encoding.Api.Infrastructure.Data.Sqlite;
 using Encoding.Api.Resources;
@@ -156,5 +157,110 @@ public sealed class ResourceCatalogTests
         Assert.Contains("n'a pas de version 2", Assert.Single(await ResourceReferenceCheck.ProblemsAsync(Flow($"{id}:2"), scope.Repository, CancellationToken.None)));
         Assert.Contains("n'a pas de version 1", Assert.Single(await ResourceReferenceCheck.ProblemsAsync(Flow($"{Guid.NewGuid()}:1"), scope.Repository, CancellationToken.None)));
         Assert.Contains("invalide", Assert.Single(await ResourceReferenceCheck.ProblemsAsync(Flow("n'importe quoi"), scope.Repository, CancellationToken.None)));
+        var other = Guid.NewGuid();
+        await scope.Repository.CreateAsync(other, "font", "Autre.ttf", "", [new(file.Name, file.Sha256)], CancellationToken.None);
+        Assert.Empty(await ResourceReferenceCheck.ProblemsAsync(Flow($"{id}:1, {other}:1"), scope.Repository, CancellationToken.None));
+        Assert.Contains("n'a pas de version 2", Assert.Single(await ResourceReferenceCheck.ProblemsAsync(Flow($"{id}:1, {other}:2"), scope.Repository, CancellationToken.None)));
+    }
+
+    [Fact]
+    public async Task ABundleIsCopiedIntoOneResourcePerFileAndHiddenFromTheCatalog()
+    {
+        await using var scope = await Scope.CreateAsync();
+        var bundle = Guid.Parse("45a83fc2-376a-4c58-9d7d-e06fe567c19f");
+        var files = """
+            [{"name":"Arial Bold.ttf","sha256":"893af24f334b23a68f0233ccfa5b19a1c87b9fc6050ba01c34e91fc8e8f62a77","bytes":751104},{"name":"Trebuchet MS Bold.ttf","sha256":"23a470ae5174e63654ecd69d5e1c128ddcaabd43653c06fc9c1835f02a956933","bytes":143336}]
+            """;
+        await using (var connection = await scope.Source.OpenConnectionAsync(CancellationToken.None))
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                INSERT INTO flow_resources(id,kind,name,description) VALUES(@id,'font','Polices ASS','lot');
+                INSERT INTO flow_resource_versions(resource_id,version,files,total_bytes) VALUES(@id,1,@files,894440);
+                DELETE FROM schema_migrations WHERE version='0064_flat_flow_resources';
+                """;
+            var id = command.CreateParameter(); id.ParameterName = "id"; id.Value = bundle.ToString(); command.Parameters.Add(id);
+            var document = command.CreateParameter(); document.ParameterName = "files"; document.Value = files; command.Parameters.Add(document);
+            await command.ExecuteNonQueryAsync();
+        }
+
+        await DatabaseMigrator.ApplyAsync(scope.Source, Harness.RepositoryRoot(), CancellationToken.None);
+        await DatabaseMigrator.ApplyAsync(scope.Source, Harness.RepositoryRoot(), CancellationToken.None);
+
+        var listed = await scope.Repository.ListAsync(CancellationToken.None);
+        Assert.DoesNotContain(listed, item => item.Id == bundle);
+        Assert.Contains(listed, item => item.Name == "Arial Bold.ttf");
+        Assert.Contains(listed, item => item.Name == "Trebuchet MS Bold.ttf");
+        var arial = await scope.Repository.GetAsync(listed.Single(item => item.Name == "Arial Bold.ttf").Id, CancellationToken.None);
+        Assert.Equal("893af24f334b23a68f0233ccfa5b19a1c87b9fc6050ba01c34e91fc8e8f62a77", Assert.Single(Assert.Single(arial!.Versions).Files).Sha256);
+        var kept = await scope.Repository.GetVersionAsync(bundle, 1, CancellationToken.None);
+        Assert.Equal(2, kept!.Files.Count);
+        await Assert.ThrowsAsync<ResourceException>(() => scope.Repository.CreateAsync(Guid.NewGuid(), "font", "Deux", "", [new("A.ttf", new string('a', 64)), new("B.ttf", new string('b', 64))], CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task AProfileAndASubtitleFileAreStoredAndCitedByKind()
+    {
+        await using var scope = await Scope.CreateAsync();
+        var profile = """{"formatVersion":1,"profileVersion":"1","reference":{"width":640,"height":360},"styles":[{"name":"Default","fontName":"Arial","fontSize":23,"primaryColour":"&H00FFFFFF","secondaryColour":"&H000000FF","outlineColour":"&H00000000","backColour":"&H00000000"}]}""";
+        var file = await scope.Blobs.PutAsync(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(profile)), "Profil.json", "subtitle-profile", CancellationToken.None);
+        await Assert.ThrowsAsync<ResourceException>(() => scope.Blobs.PutAsync(new MemoryStream("{}"u8.ToArray()), "Mauvais.json", "subtitle-profile", CancellationToken.None));
+        var subtitle = await scope.Blobs.PutAsync(new MemoryStream("1\n00:00:00,000 --> 00:00:01,000\nBonjour\n"u8.ToArray()), "Francais.srt", "subtitle", CancellationToken.None);
+        await Assert.ThrowsAsync<ResourceException>(() => scope.Blobs.PutAsync(new MemoryStream([0, 1, 2]), "Binaire.srt", "subtitle", CancellationToken.None));
+
+        var profileId = Guid.NewGuid();
+        var subtitleId = Guid.NewGuid();
+        await scope.Repository.CreateAsync(profileId, "subtitle-profile", "Profil", "", [new(file.Name, file.Sha256)], CancellationToken.None);
+        await scope.Repository.CreateAsync(subtitleId, "subtitle", "Francais.srt", "", [new(subtitle.Name, subtitle.Sha256)], CancellationToken.None);
+        var (registry, _, _) = Harness.Services();
+        FlowDefinition Flow(string component, string field, string value) => new(1, Guid.NewGuid(), 1, "Flow", "video", [
+            new("input", null, registry.FindReference("base-input-file")!, new Dictionary<string, JsonElement>()),
+            new("node", "Sous-titres", registry.FindReference(component)!, new Dictionary<string, JsonElement> { [field] = JsonSerializer.SerializeToElement(value) })
+        ], [new("next", "input", "success", "node")]);
+
+        Assert.Empty(await ResourceReferenceCheck.ProblemsAsync(Flow("subtitles-convert-ass", "profile", $"{profileId}:1"), scope.Repository, CancellationToken.None));
+        Assert.Contains("font", Assert.Single(await ResourceReferenceCheck.ProblemsAsync(Flow("subtitles-add-fonts", "resource", $"{profileId}:1"), scope.Repository, CancellationToken.None)));
+        Assert.Empty(await ResourceReferenceCheck.ProblemsAsync(Flow("subtitles-add-track", "resource", $"{subtitleId}:1"), scope.Repository, CancellationToken.None));
+        Assert.Contains("subtitle", Assert.Single(await ResourceReferenceCheck.ProblemsAsync(Flow("subtitles-add-track", "resource", $"{profileId}:1"), scope.Repository, CancellationToken.None)));
+    }
+
+    [Fact]
+    public void RepositoryIndexKeepsContiguousResourcesAndFlows()
+    {
+        var profileId = Guid.NewGuid();
+        var flowId = Guid.NewGuid();
+        var sha = new string('a', 64);
+        var json = $$"""
+            {
+              "schemaVersion": "1.0.0",
+              "name": "Dépôt",
+              "resources": [
+                {
+                  "id": "{{profileId}}", "name": "Profil", "kind": "subtitle-profile", "summary": "Styles", "latestVersion": 2,
+                  "versions": [
+                    { "version": 1, "fileName": "a.json", "downloadUrl": "https://example.com/a.json", "sha256": "{{sha}}" },
+                    { "version": 2, "fileName": "b.json", "downloadUrl": "https://example.com/b.json", "sha256": "{{sha}}" }
+                  ]
+                },
+                {
+                  "id": "{{Guid.NewGuid()}}", "name": "Trou", "kind": "subtitle", "summary": "", "latestVersion": 2,
+                  "versions": [ { "version": 2, "fileName": "x.srt", "downloadUrl": "https://example.com/x.srt", "sha256": "{{sha}}" } ]
+                }
+              ],
+              "flows": [
+                {
+                  "id": "{{flowId}}", "name": "Flow", "summary": "Import", "latestVersion": 1,
+                  "versions": [ { "version": 1, "downloadUrl": "https://example.com/flow.json", "sha256": "{{sha}}" } ]
+                }
+              ]
+            }
+            """;
+        var parsed = PluginRepositoryService.ParseIndex(
+            new PluginRepository("depot", "Dépôt", "https://example.com/repository.json", "", false, true, null, null, []), json);
+        var resource = Assert.Single(parsed.Resources!);
+        Assert.Equal(profileId, resource.Id);
+        Assert.Equal(2, resource.Versions.Count);
+        Assert.Equal(flowId, Assert.Single(parsed.Flows!).Id);
+        Assert.Contains("ignorée", parsed.LastError);
     }
 }

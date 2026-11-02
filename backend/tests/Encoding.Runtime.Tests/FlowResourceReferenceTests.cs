@@ -98,6 +98,10 @@ public sealed class FlowResourceReferenceTests
         Assert.True(ResourceReference.TryParse($"{id}:3", out var parsed));
         Assert.Equal(new ResourceReference(id, 3), parsed);
         Assert.Equal($"{id:D}:3", parsed.ToString());
+        Assert.True(ResourceReference.TryParseList($"{id}:1, {id}:3", out var list));
+        Assert.Equal([new ResourceReference(id, 1), new ResourceReference(id, 3)], list);
+        Assert.True(ResourceReference.TryParseList("  ", out var none) && none.Count == 0);
+        Assert.False(ResourceReference.TryParseList($"{id}:1, paquet", out _));
         foreach (var bad in new[] { "", $"{id}", $"{id}:0", $"{id}:-1", $"{id}:1:2", "nope:1", $"{Guid.Empty}:1", $"{id}:x" })
             Assert.False(ResourceReference.TryParse(bad, out _), bad);
     }

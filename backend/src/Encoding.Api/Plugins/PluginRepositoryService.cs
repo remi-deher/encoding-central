@@ -15,8 +15,14 @@ public sealed record RepositoryTool(string Id, string Name, string Summary, stri
 public sealed record RepositoryPlugin(string Id, string Name, string Summary, string Category, string CategoryLabel, string? Author,
     string LatestVersion, IReadOnlyList<string> RequiredTools, IReadOnlyList<RepositoryVersion> Versions);
 
+public sealed record RepositoryResourceVersion(int Version, string FileName, string DownloadUrl, string Sha256);
+public sealed record RepositoryResource(Guid Id, string Name, string Kind, string Summary, int LatestVersion, IReadOnlyList<RepositoryResourceVersion> Versions);
+public sealed record RepositoryFlowVersion(int Version, string DownloadUrl, string Sha256);
+public sealed record RepositoryFlow(Guid Id, string Name, string Summary, int LatestVersion, IReadOnlyList<RepositoryFlowVersion> Versions);
+
 public sealed record PluginRepository(string Id, string Name, string Url, string Description, bool IsOfficial, bool Enabled,
-    DateTimeOffset? LastSyncAt, string? LastError, IReadOnlyList<RepositoryPlugin> Packages, IReadOnlyList<RepositoryTool>? Tools = null);
+    DateTimeOffset? LastSyncAt, string? LastError, IReadOnlyList<RepositoryPlugin> Packages, IReadOnlyList<RepositoryTool>? Tools = null,
+    IReadOnlyList<RepositoryResource>? Resources = null, IReadOnlyList<RepositoryFlow>? Flows = null);
 
 public sealed class PluginRepositoryException(string message) : Exception(message);
 
@@ -174,6 +180,8 @@ public sealed partial class PluginRepositoryService(IConfiguration configuration
                     if (Text(category, "id") is { } categoryId) categories[categoryId] = Text(category, "name") ?? categoryId;
             var packages = new List<RepositoryPlugin>();
             var tools = new List<RepositoryTool>();
+            var resources = new List<RepositoryResource>();
+            var flows = new List<RepositoryFlow>();
             var skipped = 0;
             if (root.TryGetProperty("plugins", out var list) && list.ValueKind == JsonValueKind.Array)
             {
@@ -194,6 +202,24 @@ public sealed partial class PluginRepositoryService(IConfiguration configuration
                     else tools.Add(tool);
                 }
             }
+            if (root.TryGetProperty("resources", out var resourceList) && resourceList.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in resourceList.EnumerateArray())
+                {
+                    var resource = ParseResource(item);
+                    if (resource is null || resources.Any(existing => existing.Id == resource.Id)) skipped++;
+                    else resources.Add(resource);
+                }
+            }
+            if (root.TryGetProperty("flows", out var flowList) && flowList.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in flowList.EnumerateArray())
+                {
+                    var flow = ParseFlow(item);
+                    if (flow is null || flows.Any(existing => existing.Id == flow.Id)) skipped++;
+                    else flows.Add(flow);
+                }
+            }
             return repository with
             {
                 Name = Text(root, "name") ?? repository.Name,
@@ -201,9 +227,64 @@ public sealed partial class PluginRepositoryService(IConfiguration configuration
                 LastSyncAt = DateTimeOffset.UtcNow,
                 LastError = skipped > 0 ? $"{skipped} entrée(s) invalide(s) ignorée(s)." : null,
                 Packages = packages,
-                Tools = tools
+                Tools = tools,
+                Resources = resources,
+                Flows = flows
             };
         }
+    }
+
+    private static RepositoryResource? ParseResource(JsonElement item)
+    {
+        if (item.ValueKind != JsonValueKind.Object || !Guid.TryParse(Text(item, "id"), out var id) || id == Guid.Empty) return null;
+        var kind = Text(item, "kind");
+        if (kind is not ("font" or "subtitle-profile" or "subtitle")) return null;
+        var versions = new List<RepositoryResourceVersion>();
+        if (item.TryGetProperty("versions", out var versionList) && versionList.ValueKind == JsonValueKind.Array)
+            foreach (var entry in versionList.EnumerateArray())
+            {
+                if (!entry.TryGetProperty("version", out var versionValue) || versionValue.ValueKind != JsonValueKind.Number || !versionValue.TryGetInt32(out var version) || version < 1)
+                    continue;
+                var url = Text(entry, "downloadUrl");
+                var sha = Text(entry, "sha256");
+                var fileName = Text(entry, "fileName");
+                if (sha is null || !Sha256Pattern().IsMatch(sha) || fileName is null
+                    || !Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(uri.UserInfo)
+                    || versions.Any(existing => existing.Version == version)) continue;
+                try { fileName = Encoding.Api.Resources.ResourceBlobStore.NormalizeName(fileName, kind); }
+                catch (Encoding.Api.Resources.ResourceException) { continue; }
+                versions.Add(new RepositoryResourceVersion(version, fileName, uri.ToString(), sha.ToLowerInvariant()));
+            }
+        if (!item.TryGetProperty("latestVersion", out var latestValue) || latestValue.ValueKind != JsonValueKind.Number || !latestValue.TryGetInt32(out var latest)) return null;
+        var ordered = versions.Select(version => version.Version).Order().ToArray();
+        if (ordered.Length == 0 || latest != ordered[^1] || !ordered.SequenceEqual(Enumerable.Range(1, ordered.Length))) return null;
+        var name = Text(item, "name") ?? "";
+        if (name.Length is < 1 or > 128) return null;
+        return new RepositoryResource(id, name, kind, Text(item, "summary") ?? "", latest, versions);
+    }
+
+    private static RepositoryFlow? ParseFlow(JsonElement item)
+    {
+        if (item.ValueKind != JsonValueKind.Object || !Guid.TryParse(Text(item, "id"), out var id) || id == Guid.Empty) return null;
+        var versions = new List<RepositoryFlowVersion>();
+        if (item.TryGetProperty("versions", out var versionList) && versionList.ValueKind == JsonValueKind.Array)
+            foreach (var entry in versionList.EnumerateArray())
+            {
+                if (!entry.TryGetProperty("version", out var versionValue) || versionValue.ValueKind != JsonValueKind.Number || !versionValue.TryGetInt32(out var version) || version < 1)
+                    continue;
+                var url = Text(entry, "downloadUrl");
+                var sha = Text(entry, "sha256");
+                if (sha is null || !Sha256Pattern().IsMatch(sha)
+                    || !Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(uri.UserInfo)
+                    || versions.Any(existing => existing.Version == version)) continue;
+                versions.Add(new RepositoryFlowVersion(version, uri.ToString(), sha.ToLowerInvariant()));
+            }
+        if (!item.TryGetProperty("latestVersion", out var latestValue) || latestValue.ValueKind != JsonValueKind.Number || !latestValue.TryGetInt32(out var latest)) return null;
+        var ordered = versions.Select(version => version.Version).Order().ToArray();
+        if (ordered.Length == 0 || latest != ordered[^1] || !ordered.SequenceEqual(Enumerable.Range(1, ordered.Length))) return null;
+        var name = Text(item, "name") ?? "";
+        if (name.Length is < 1 or > 128) return null;
+        return new RepositoryFlow(id, name, Text(item, "summary") ?? "", latest, versions);
     }
 
     private static RepositoryTool? ParseTool(JsonElement item)
@@ -352,5 +433,45 @@ public sealed partial class PluginRepositoryService(IConfiguration configuration
             return await toolStore.ImportAsync(archive, "repo:" + repository.Id, wanted.Sha256, tool.Id, wanted.Version, wanted.Platform, ct);
         }
         catch (ToolPackageException exception) { throw new PluginRepositoryException(exception.Message); }
+    }
+
+    /// <summary>Télécharge un fichier de ressource annoncé par le dépôt et contrôle son empreinte. L'appelant le range dans le catalogue.</summary>
+    public async Task<(RepositoryResource Resource, RepositoryResourceVersion Version, byte[] Bytes)> DownloadResourceAsync(string repositoryId, Guid resourceId, int? version, CancellationToken ct)
+    {
+        var repository = List().SingleOrDefault(item => item.Id == repositoryId) ?? throw new PluginRepositoryException("Dépôt inconnu.");
+        if (!repository.Enabled) throw new PluginRepositoryException("Ce dépôt est désactivé.");
+        var resource = repository.Resources?.SingleOrDefault(item => item.Id == resourceId) ?? throw new PluginRepositoryException("Cette ressource n'existe pas dans le dépôt.");
+        var wanted = resource.Versions.SingleOrDefault(item => item.Version == (version ?? resource.LatestVersion)) ?? throw new PluginRepositoryException("Cette version n'existe pas dans le dépôt.");
+        var bytes = await DownloadAsync(wanted.DownloadUrl, Encoding.Api.Resources.ResourceBlobStore.MaxFileBytes, "Le fichier de ressource dépasse 20 Mio.", ct);
+        if (!string.Equals(Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(), wanted.Sha256, StringComparison.Ordinal))
+            throw new PluginRepositoryException("L'empreinte SHA-256 du fichier ne correspond pas à celle annoncée par le dépôt.");
+        return (resource, wanted, bytes);
+    }
+
+    /// <summary>Télécharge une définition de flow annoncée par le dépôt et contrôle son empreinte.</summary>
+    public async Task<(RepositoryFlow Flow, RepositoryFlowVersion Version, byte[] Bytes)> DownloadFlowAsync(string repositoryId, Guid flowId, int? version, CancellationToken ct)
+    {
+        var repository = List().SingleOrDefault(item => item.Id == repositoryId) ?? throw new PluginRepositoryException("Dépôt inconnu.");
+        if (!repository.Enabled) throw new PluginRepositoryException("Ce dépôt est désactivé.");
+        var flow = repository.Flows?.SingleOrDefault(item => item.Id == flowId) ?? throw new PluginRepositoryException("Ce flow n'existe pas dans le dépôt.");
+        var wanted = flow.Versions.SingleOrDefault(item => item.Version == (version ?? flow.LatestVersion)) ?? throw new PluginRepositoryException("Cette version n'existe pas dans le dépôt.");
+        var bytes = await DownloadAsync(wanted.DownloadUrl, 1024 * 1024, "La définition de flow dépasse 1 Mio.", ct);
+        if (!string.Equals(Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(), wanted.Sha256, StringComparison.Ordinal))
+            throw new PluginRepositoryException("L'empreinte SHA-256 du flow ne correspond pas à celle annoncée par le dépôt.");
+        return (flow, wanted, bytes);
+    }
+
+    private async Task<byte[]> DownloadAsync(string url, long limit, string tooLarge, CancellationToken ct)
+    {
+        try
+        {
+            using var response = await clients.CreateClient(HttpClientName).GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+            if (!response.IsSuccessStatusCode) throw new PluginRepositoryException($"Le téléchargement a échoué (HTTP {(int)response.StatusCode}).");
+            return await ReadLimitedAsync(response, limit, tooLarge, ct);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            throw new PluginRepositoryException("Le fichier est injoignable ou ne se télécharge pas dans le délai imparti.");
+        }
     }
 }

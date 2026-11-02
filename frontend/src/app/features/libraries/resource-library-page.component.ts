@@ -10,7 +10,7 @@ import {
   untracked,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -30,6 +30,8 @@ import {
   ResourceSheetComponent,
   ResourceSheetSection,
 } from '../../shared/ui/resource-sheet.component';
+import { SubnavComponent, SubnavOption } from '../../shared/ui/subnav.component';
+import { SubtitleProfileEditorComponent } from './subtitle-profile-editor.component';
 
 /** Taille lisible d'un fichier ou d'une ressource. */
 export function formatResourceSize(bytes: number): string {
@@ -39,6 +41,7 @@ export function formatResourceSize(bytes: number): string {
 }
 
 type EditorMode = 'create' | 'version';
+type ResourceSection = 'font' | 'subtitle-profile' | 'subtitle';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -48,6 +51,8 @@ type EditorMode = 'create' | 'version';
     LibrarySectionTabsComponent,
     DrawerActionButtonComponent,
     ResourceSheetComponent,
+    SubnavComponent,
+    SubtitleProfileEditorComponent,
     ReactiveFormsModule,
     MatButtonModule,
     MatFormFieldModule,
@@ -59,13 +64,13 @@ type EditorMode = 'create' | 'version';
       [items]="items()"
       [showToolbar]="false"
       resourceIcon="copy"
-      listEmptyMessage="Aucune ressource. Ajoutez des polices pour les partager avec tous les nœuds."
+      [listEmptyMessage]="emptyMessage()"
       openLabel="Ouvrir"
       (open)="openResource($event)"
       [catalogState]="catalogState()"
       [catalogMessage]="catalogMessage()"
       [actionOpen]="editorMode() !== null"
-      [actionTitle]="editorMode() === 'version' ? 'Nouvelle version' : 'Nouvelle ressource'"
+      [actionTitle]="actionTitle()"
       [actionDescription]="editorDescription()"
       [detailOpen]="selected() !== null"
       [detailTitle]="selected()?.summary?.name ?? 'Ressource'"
@@ -76,6 +81,13 @@ type EditorMode = 'create' | 'version';
     >
       <ng-template #catalogueNavigation>
         <app-library-section-tabs catalogue-navigation selected="resources" />
+        <app-subnav
+          label="Type de ressource"
+          presentation="capsule"
+          [options]="kindOptions"
+          [selected]="section()"
+          (selectedChange)="selectSection($event)"
+        />
       </ng-template>
 
       <ng-template #detailContent catalogue-detail>
@@ -83,7 +95,7 @@ type EditorMode = 'create' | 'version';
           <app-resource-sheet
             ariaLabel="Versions et fichiers de la ressource"
             [title]="details.summary.name"
-            [subtitle]="'Polices · version ' + details.summary.latestVersion"
+            [subtitle]="kindLabel(details.summary.kind) + ' · version ' + details.summary.latestVersion"
             [sections]="sections()"
           />
         }
@@ -102,12 +114,20 @@ type EditorMode = 'create' | 'version';
       </ng-template>
 
       <ng-template #actionContent>
+        @if (section() === 'subtitle-profile') {
+          <app-subtitle-profile-editor
+            [busy]="busy()"
+            [mode]="editorMode() === 'version' ? 'version' : 'create'"
+            [documentText]="profileDocument()"
+            (submitted)="saveProfile($event)"
+            (cancelled)="closeEditor()"
+          />
+          @if (error()) {
+            <p class="error" role="alert">{{ error() }}</p>
+          }
+        } @else {
         <form class="resource-form" [formGroup]="form" (ngSubmit)="save()">
           @if (editorMode() === 'create') {
-            <mat-form-field appearance="outline" subscriptSizing="dynamic">
-              <mat-label>Nom de la ressource</mat-label>
-              <input matInput formControlName="name" maxlength="128" [readonly]="busy()" />
-            </mat-form-field>
             <mat-form-field appearance="outline" subscriptSizing="dynamic">
               <mat-label>Description</mat-label>
               <textarea
@@ -123,12 +143,12 @@ type EditorMode = 'create' | 'version';
             #picker
             hidden
             type="file"
-            multiple
-            accept=".ttf,.otf,.ttc"
+            [multiple]="editorMode() === 'create'"
+            [accept]="section() === 'subtitle' ? '.srt,.ass,.ssa,.vtt' : '.ttf,.otf,.ttc'"
             (change)="pick(picker)"
           />
           <button matButton="outlined" type="button" [disabled]="busy()" (click)="picker.click()">
-            Choisir des polices (.ttf, .otf, .ttc)
+            {{ fileButton() }}
           </button>
           <ul class="chosen" aria-label="Fichiers choisis">
             @for (file of files(); track file.name) {
@@ -147,10 +167,7 @@ type EditorMode = 'create' | 'version';
               </li>
             }
           </ul>
-          <p class="hint">
-            20 Mo au plus par fichier, 100 Mo par version. Chaque version est conservée : un flow
-            garde la version qu’il utilise.
-          </p>
+          <p class="hint">{{ fileHint() }}</p>
           @if (error()) {
             <p class="error" role="alert">{{ error() }}</p>
           }
@@ -164,11 +181,12 @@ type EditorMode = 'create' | 'version';
                   ? 'Envoi en cours…'
                   : editorMode() === 'version'
                     ? 'Publier la version'
-                    : 'Créer'
+                    : 'Ajouter'
               }}
             </button>
           </div>
         </form>
+        }
       </ng-template>
     </app-resource-catalog-template>
   `,
@@ -217,6 +235,55 @@ export class ResourceLibraryPageComponent {
     initialValue: this.route.snapshot.data,
   });
   protected readonly title = computed(() => (this.routeData()['title'] as string) ?? 'Ressources');
+  protected readonly kindOptions: readonly SubnavOption[] = [
+    { value: 'font', label: 'Polices' },
+    { value: 'subtitle-profile', label: 'Profils de sous-titres' },
+    { value: 'subtitle', label: 'Sous-titres' },
+  ];
+  private readonly sectionParam = toSignal(
+    this.route.queryParamMap.pipe(map((params) => params.get('section'))),
+    { initialValue: this.route.snapshot.queryParamMap.get('section') },
+  );
+  protected readonly section = computed<ResourceSection>(() => {
+    const value = this.sectionParam();
+    return value === 'subtitle-profile' || value === 'subtitle' ? value : 'font';
+  });
+  protected readonly profileDocument = signal<string | null>(null);
+  protected readonly emptyMessage = computed(() => {
+    switch (this.section()) {
+      case 'subtitle-profile':
+        return 'Aucun profil. Créez-en un : le moteur mettra ses mesures à l’échelle de chaque vidéo.';
+      case 'subtitle':
+        return 'Aucun fichier de sous-titres. Chaque fichier ajouté devient une ressource réutilisable.';
+      default:
+        return 'Aucune police. Chaque fichier ajouté devient une ressource réutilisable.';
+    }
+  });
+  protected readonly actionTitle = computed(() => {
+    if (this.editorMode() === 'version') return 'Nouvelle version';
+    switch (this.section()) {
+      case 'subtitle-profile':
+        return 'Nouveau profil';
+      case 'subtitle':
+        return 'Nouveaux sous-titres';
+      default:
+        return 'Nouvelles polices';
+    }
+  });
+  protected readonly fileButton = computed(() =>
+    this.section() === 'subtitle'
+      ? this.editorMode() === 'version'
+        ? 'Choisir le nouveau fichier (.srt, .ass, .ssa, .vtt)'
+        : 'Choisir des sous-titres (.srt, .ass, .ssa, .vtt)'
+      : this.editorMode() === 'version'
+        ? 'Choisir la nouvelle police (.ttf, .otf, .ttc)'
+        : 'Choisir des polices (.ttf, .otf, .ttc)',
+  );
+  protected readonly fileHint = computed(() =>
+    this.section() === 'subtitle'
+      ? '20 Mo au plus par fichier. Chaque fichier est une ressource. Une nouvelle version concerne ce fichier seul ; un flow garde la version qu’il cite.'
+      : '20 Mo au plus par fichier. Chaque fichier est une ressource, nommée comme le fichier. Une nouvelle version concerne ce fichier seul ; un flow garde la version qu’il cite.',
+  );
   protected readonly catalogState = signal<'ready' | 'loading' | 'error'>('loading');
   protected readonly catalogMessage = signal('Chargement des ressources…');
   protected readonly resources = signal<readonly FlowResourceSummary[]>([]);
@@ -227,23 +294,30 @@ export class ResourceLibraryPageComponent {
   protected readonly busy = signal(false);
   protected readonly error = signal('');
   protected readonly form = new FormGroup({
-    name: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
     description: new FormControl('', { nonNullable: true }),
   });
-  protected readonly editorDescription = computed(() =>
-    this.editorMode() === 'version'
-      ? 'La nouvelle version remplace la précédente pour les prochains flows ; les flows existants gardent la leur.'
-      : 'Les polices sont envoyées au serveur puis copiées automatiquement sur les nœuds.',
-  );
+  protected readonly editorDescription = computed(() => {
+    if (this.editorMode() === 'version')
+      return 'La nouvelle version de ce fichier sert aux prochains flows. Les flows déjà publiés gardent la leur.';
+    switch (this.section()) {
+      case 'subtitle-profile':
+        return 'Les mesures sont celles du canevas de référence. Les nœuds appliquent le profil cité par le flow.';
+      case 'subtitle':
+        return 'Chaque fichier de sous-titres est une ressource, puis copié sur les nœuds.';
+      default:
+        return 'Chaque police est envoyée comme une ressource séparée, puis copiée sur les nœuds.';
+    }
+  });
   protected readonly canSave = computed(
     () =>
       !this.busy() &&
       this.files().length > 0 &&
-      (this.editorMode() === 'version' || this.form.controls.name.value.trim().length > 0),
+      (this.editorMode() === 'create' || this.files().length === 1),
   );
   protected readonly items = computed<readonly ResourceListItem[]>(() => {
     const query = this.query().trim().toLocaleLowerCase();
     return this.resources()
+      .filter((item) => item.kind === this.section())
       .filter(
         (item) =>
           !query ||
@@ -255,7 +329,7 @@ export class ResourceLibraryPageComponent {
         name: item.name,
         subtitle: item.description || undefined,
         tags: [
-          { label: 'Polices' },
+          { label: this.kindLabel(item.kind) },
           { label: `v${item.latestVersion}`, tone: 'ok' as const },
           { label: formatResourceSize(item.totalBytes) },
         ],
@@ -309,7 +383,7 @@ export class ResourceLibraryPageComponent {
         actions: [
           {
             id: 'add-fonts-resource',
-            label: 'Ajouter des polices',
+            label: 'Ajouter',
             icon: 'add',
             run: () => this.openCreate(),
           },
@@ -347,9 +421,30 @@ export class ResourceLibraryPageComponent {
     });
   }
 
+  protected kindLabel(kind: string): string {
+    switch (kind) {
+      case 'subtitle-profile':
+        return 'Profil de sous-titres';
+      case 'subtitle':
+        return 'Sous-titre';
+      default:
+        return 'Police';
+    }
+  }
+
+  protected selectSection(value: string): void {
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { section: value === 'font' ? null : value, resource: null },
+      queryParamsHandling: 'merge',
+    });
+    this.closeEditor();
+  }
+
   protected openCreate(): void {
-    this.form.reset({ name: '', description: '' });
+    this.form.reset({ description: '' });
     this.files.set([]);
+    this.profileDocument.set(null);
     this.error.set('');
     this.editorMode.set('create');
   }
@@ -357,7 +452,11 @@ export class ResourceLibraryPageComponent {
   protected openVersion(): void {
     this.files.set([]);
     this.error.set('');
+    this.profileDocument.set(null);
     this.editorMode.set('version');
+    const details = this.selected();
+    if (this.section() === 'subtitle-profile' && details)
+      void this.loadProfile(details.summary.id, details.summary.latestVersion);
   }
 
   protected closeEditor(): void {
@@ -367,10 +466,14 @@ export class ResourceLibraryPageComponent {
 
   protected pick(input: HTMLInputElement): void {
     const picked = Array.from(input.files ?? []);
-    this.files.update((current) => [
-      ...current,
-      ...picked.filter((file) => !current.some((item) => item.name === file.name)),
-    ]);
+    this.files.set(
+      this.editorMode() === 'version'
+        ? picked.slice(0, 1)
+        : [
+            ...this.files(),
+            ...picked.filter((file) => !this.files().some((item) => item.name === file.name)),
+          ],
+    );
     input.value = '';
   }
 
@@ -383,31 +486,77 @@ export class ResourceLibraryPageComponent {
     this.busy.set(true);
     this.error.set('');
     try {
-      const uploaded = [];
-      for (const file of this.files()) uploaded.push(await this.api.uploadFile(file));
-      const references = uploaded.map(({ name, sha256 }) => ({ name, sha256 }));
+      const chosen = this.files();
       if (this.editorMode() === 'version' && this.selected()) {
         const id = this.selected()!.summary.id;
-        await this.api.addVersion(id, references);
+        const uploaded = await this.api.uploadFile(chosen[0], this.section());
+        await this.api.addVersion(id, { name: uploaded.name, sha256: uploaded.sha256 });
         this.editorMode.set(null);
         await this.load();
         await this.loadDetails(id);
         this.notifications.show('Nouvelle version publiée.');
       } else {
-        const created = await this.api.create(
-          this.form.controls.name.value.trim(),
-          this.form.controls.description.value.trim(),
-          references,
-        );
+        const description = this.form.controls.description.value.trim();
+        let lastId = '';
+        for (const file of chosen) {
+          const uploaded = await this.api.uploadFile(file, this.section());
+          const created = await this.api.create(uploaded.name, description, {
+            name: uploaded.name,
+            sha256: uploaded.sha256,
+          }, this.section());
+          lastId = created.summary.id;
+        }
         this.editorMode.set(null);
         await this.load();
-        this.openResource(created.summary.id);
-        this.notifications.show('Ressource créée. Les nœuds la récupèrent automatiquement.');
+        if (lastId) this.openResource(lastId);
+        this.notifications.show(
+          chosen.length > 1
+            ? `${chosen.length} fichiers ajoutés. Les nœuds les récupèrent automatiquement.`
+            : 'Ressource ajoutée. Les nœuds la récupèrent automatiquement.',
+        );
       }
     } catch (error) {
       this.error.set(this.message(error, 'L’envoi a échoué.'));
     } finally {
       this.busy.set(false);
+    }
+  }
+
+  protected async saveProfile(event: { name: string; description: string; file: File }): Promise<void> {
+    this.busy.set(true);
+    this.error.set('');
+    try {
+      const uploaded = await this.api.uploadFile(event.file, 'subtitle-profile');
+      if (this.editorMode() === 'version' && this.selected()) {
+        const id = this.selected()!.summary.id;
+        await this.api.addVersion(id, { name: uploaded.name, sha256: uploaded.sha256 });
+        this.editorMode.set(null);
+        await this.load();
+        await this.loadDetails(id);
+        this.notifications.show('Nouvelle version publiée.');
+      } else {
+        const created = await this.api.create(event.name, event.description, {
+          name: uploaded.name,
+          sha256: uploaded.sha256,
+        }, 'subtitle-profile');
+        this.editorMode.set(null);
+        await this.load();
+        this.openResource(created.summary.id);
+        this.notifications.show('Profil ajouté. Les nœuds le récupèrent automatiquement.');
+      }
+    } catch (error) {
+      this.error.set(this.message(error, 'L’envoi a échoué.'));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  private async loadProfile(id: string, version: number): Promise<void> {
+    try {
+      const content = await this.api.content(id, version);
+      this.profileDocument.set(await content.text());
+    } catch {
+      this.profileDocument.set(null);
     }
   }
 

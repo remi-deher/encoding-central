@@ -9,7 +9,7 @@ import {
   FlowResourceVersion,
 } from '../models/flow-resources';
 
-/** Catalogue des ressources du cluster (polices, ADR 0006) : un fichier est d'abord envoyé, puis référencé par son empreinte. */
+/** Catalogue des ressources du cluster : un fichier, une ressource, une version par contenu (ADR 0032). */
 @Injectable({ providedIn: 'root' })
 export class FlowResources {
   private readonly http = inject(HttpClient);
@@ -34,15 +34,26 @@ export class FlowResources {
     );
   }
 
-  create(name: string, description: string, files: readonly FlowResourceFileReference[]) {
+  create(name: string, description: string, file: FlowResourceFileReference, kind = 'font') {
     return firstValueFrom(
-      this.http.post<FlowResourceDetails>(this.base, { kind: 'font', name, description, files }),
+      this.http.post<FlowResourceDetails>(this.base, {
+        kind,
+        name,
+        description,
+        files: [file],
+      }),
     );
   }
 
-  addVersion(id: string, files: readonly FlowResourceFileReference[]) {
+  content(id: string, version: number) {
     return firstValueFrom(
-      this.http.post<FlowResourceVersion>(`${this.base}/${id}/versions`, { files }),
+      this.http.get(`${this.base}/${id}/versions/${version}/content`, { responseType: 'blob' }),
+    );
+  }
+
+  addVersion(id: string, file: FlowResourceFileReference) {
+    return firstValueFrom(
+      this.http.post<FlowResourceVersion>(`${this.base}/${id}/versions`, { files: [file] }),
     );
   }
 

@@ -128,6 +128,8 @@ Chaque archive outil contient `tool.json` à sa racine. Exemple de manifeste :
 
 Dans `repository.json`, chaque paquet `tools[]` donne `id`, `name`, `summary`, `latestVersion` et `versions[]`; chaque version donne la plateforme, l'URL d'archive et son SHA-256. Le serveur vérifie le hash de l'archive puis ceux des exécutables dans `tool.json`. Le worker répète ces contrôles avant extraction. Les hashes garantissent que l'archive et ses binaires n'ont pas changé depuis publication du manifeste ; ils ne remplacent pas une signature du dépôt.
 
+Le même index peut ajouter `resources[]` et `flows[]`. Une ressource donne `id` (UUID), `name`, `kind` (`font`, `subtitle-profile` ou `subtitle`), `summary`, `latestVersion` et `versions[]` (`version` entier, `fileName`, `downloadUrl`, `sha256`). Un flow donne `id` (le même UUID que la définition), `name`, `summary`, `latestVersion` et `versions[]` (`version`, `downloadUrl`, `sha256`). Le fichier de flow est une définition ou `{ "definition", "publish" }`. L'installation vérifie l'empreinte, le type du fichier, puis crée la ressource ou publie le flow. Une version déjà présente avec la même empreinte est un succès.
+
 **À la main** (plugin fourni avec l'image, ou besoin d'un lancement particulier) :
 
 - **Serveur** : copier le manifeste dans le dossier `FlowPlugins:ManifestDirectory` (variable `FlowPlugins__ManifestDirectory`) et redémarrer. Le catalogue valide le manifeste ; les composants apparaissent dans l’éditeur.

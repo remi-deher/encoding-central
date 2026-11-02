@@ -1,6 +1,6 @@
 ---
 domain: replication-storage
-updated: 2026-10-27
+updated: 2026-11-02
 legacy_adr: [0001, 0004, 0014, 0029, 0043, 0049, 0060-peer, 0061-peer]
 code:
   - backend/src/Encoding.Api/Infrastructure/Data/
@@ -60,10 +60,10 @@ Le maillage LWW est l'unique modèle de réplication (ADR [0013](../adr/0013-ret
 
 ## Ressources de flow (ADR 0006, PR 1)
 - Métadonnées (ressource, versions immuables, noms de fichiers, tailles, SHA-256) réconciliées comme les scripts ; **octets** dans `Resources:Directory` (défaut `<Node:DataDirectory>/resources/ab/<sha256>`), jamais dans le journal : c'est l'exception assumée à l'invariant « binaires jamais réconciliés ».
-- Envoi : `POST /api/v1/resources/blobs?kind=font&name=…` (corps brut, un fichier, 20 Mio au plus, extension et signature contrôlées), puis `POST /api/v1/resources` ou `…/{id}/versions` qui référencent les empreintes ; 100 Mio par version. Écriture réservée à `admin`, lecture à tout rôle.
+- Envoi : `POST /api/v1/resources/blobs?kind=font|subtitle-profile|subtitle&name=…` (corps brut, un fichier, 20 Mio au plus, extension et signature contrôlées), puis `POST /api/v1/resources` ou `…/{id}/versions` avec une seule empreinte. Lecture du fichier : `GET /api/v1/resources/{id}/versions/{version}/content` (session). Écriture réservée à `admin`, lecture à tout rôle. Une ressource est un fichier ([ADR 0032](../adr/0032-ressources-a-plat.md), types ouverts par [ADR 0033](../adr/0033-profils-et-depot-complet.md)).
 - Suppression : refusée (409) tant qu'un flow, toute version confondue, référence l'identifiant ; le message nomme le flow et le bloc. Un fichier n'est effacé du magasin que si aucune version ne l'utilise encore.
 - Récupération par un pair (PR 2) : `GET /api/v1/cluster/resources/blobs/{sha256}`, hors session, authentifié par les identités de pairs admis (mêmes en-têtes et fenêtre d'horloge de 2 min que la réconciliation, limiteur `cluster-mesh`). La signature couvre `GET <chemin>` + pair + horodatage, pas de corps ; la requête rejouée dans la fenêtre ne donne que le même fichier. Réponse en flux avec `Range`. `ResourceBlobFetcher` interroge les pairs connus dans l'ordre, reprend un `.part` à l'octet atteint, vérifie taille puis SHA-256 avant de publier ; un fichier faux est supprimé, un fichier incomplet conservé. Deux demandes de la même empreinte partagent un transfert (délai de 2 min). `ResourcePrefetchService` précharge toutes les 30 s toutes les versions absentes du magasin. Côté worker, un cache local par empreinte (`resources-cache`) est rempli toutes les 30 s avec la dernière version de chaque ressource ; une ancienne version est téléchargée à la demande. La publication d’un flow (PUT) est refusée si une ressource référencée ou sa version n’existe pas.
-- Worker (PR 3) : `GET /api/v1/runtime/nodes/{nodeId}/resources/{id}/versions/{n}` (liste des fichiers) et `…/resources/blobs/{sha256}` (octets, récupérés d'un pair d'abord si le serveur ne les a pas), authentifiés par le jeton de nœud. Bloc `subtitles-add-fonts`, champ `resource`.
+- Worker (PR 3) : `GET /api/v1/runtime/nodes/{nodeId}/resources/{id}/versions/{n}` (liste des fichiers) et `…/resources/blobs/{sha256}` (octets, récupérés d'un pair d'abord si le serveur ne les a pas), authentifiés par le jeton de nœud. Les polices, le profil de sous-titres et le fichier de sous-titres cités par un bloc passent par ce chemin.
 - Non livré : interface (PR 4).  Un fichier envoyé sans être référencé reste dans le magasin (nettoyage à prévoir).
 
 ## Non livré / limites

@@ -194,6 +194,22 @@ internal static partial class Harness
         Check(eligibility.CanRun(flow, gpu, worker), "A node with the profile encoder takes the flow.");
         Check(eligibility.CanRun(flow, cpuOnly, worker), "A node without the profile encoder still takes the flow: its « Oui » branch is not asked of it.");
         Check(!eligibility.CanRun(plain, cpuOnly, worker), "Without the option, every branch is still checked.");
+        var profile = new EncodingProfileSnapshot(Guid.NewGuid(), 1, "Matériel", "", [new("hevc_qsv", 25, "medium", 0)]);
+        var retryVideo = Node(registry, "encode", "video-transcode", new()
+        {
+            ["encoderMode"] = J("automatic"), ["videoCodec"] = J("hevc"), ["retryWithCpu"] = J(true),
+            ["encodingProfile"] = JsonSerializer.SerializeToElement(profile, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+        });
+        var hardwareGate = Node(registry, "gate", "nodes-require-capability", new() { ["toolId"] = J("ffmpeg"), ["encoderKind"] = J("hardware"), ["requiredEncoder"] = J("hevc") });
+        var retryFlow = new FlowDefinition(1, Guid.NewGuid(), 1, "Library access ignores CPU fallback", "video",
+            [Node(registry, "entry", "base-input-file"), Node(registry, "access", "nodes-library-access", new() { ["requireProfileEncoder"] = J(true) }), hardwareGate, retryVideo, Node(registry, "end", "base-complete-flow")],
+            [new("a", "entry", "success", "access"), new("b", "access", "yes", "gate"), new("c", "gate", "success", "encode"), new("d", "encode", "success", "end"), new("e", "access", "no", "end")]);
+        Check(eligibility.CanRun(retryFlow, cpuOnly, worker), "CPU fallback does not answer yes: the node follows the no branch.");
+        Check(eligibility.CanRun(retryFlow, gpu, worker), "The node that has the profile target still follows the yes branch.");
+        var accepted = MediaCodecPolicy.AcceptedEncodingTarget(profile, "hevc", "libx265", true);
+        Check(accepted is { EncoderId: "libx265", Quality: 23, Preset: "medium", Priority: 0 }, "A CPU retry is accepted only when it matches the catalog fallback.");
+        Check(MediaCodecPolicy.AcceptedEncodingTarget(profile, "hevc", "libx265", false) is null, "Without retry, an encoder outside the profile is refused.");
+        Check(MediaCodecPolicy.AcceptedEncodingTarget(profile, "hevc", "hevc_qsv", false) is { Quality: 25 }, "A declared target stays the reference.");
         Check(!eligibility.CanRun(flow, gpu.Select(cap => cap.ToolId == "plugin/nodes" ? cap with { Version = "1.6.0" } : cap).ToArray(), worker), "An agent announcing nodes 1.6.0 does not receive a flow that uses the option.");
     }
 

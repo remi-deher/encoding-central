@@ -19,9 +19,15 @@ public sealed class FlowConfigurationCompatibilityTests
         var resize = registry.FindReference("video-resize")!;
         Assert.Null(registry.MinimumRuntime(resize, Config(new { resolution = "custom", onlyIfLarger = false })));
         Assert.Equal("1.2.0", registry.MinimumRuntime(resize, Config(new { onlyIfLarger = true }))!.Value.Version);
-        var subtitles = registry.FindReference("subtitles-manage")!;
-        Assert.Null(registry.MinimumRuntime(subtitles, Config(new { styleProfile = "none" })));
+        Assert.Null(registry.FindReference("subtitles-manage"));
+        Assert.Null(registry.FindReference("base-subtitle-manage"));
+        var subtitles = registry.FindReference("subtitles-style-ass")!;
+        Assert.Equal("1.1.0", registry.MinimumRuntime(subtitles, Config(new { styleProfile = "none" }))!.Value.Version);
         Assert.Equal("1.2.0", registry.MinimumRuntime(subtitles, Config(new { styleProfile = "custom" }))!.Value.Version);
+        Assert.Equal("1.1.0", registry.MinimumRuntime(subtitles, Config(new { profile = "" }))!.Value.Version);
+        Assert.Equal("1.5.0", registry.MinimumRuntime(subtitles, Config(new { profile = "11111111-1111-1111-1111-111111111111:1" }))!.Value.Version);
+        var defaultSubtitle = registry.FindReference("subtitles-default-subtitle")!;
+        Assert.Equal("1.4.0", registry.MinimumRuntime(defaultSubtitle, new Dictionary<string, JsonElement>())!.Value.Version);
     }
 
     [Fact]

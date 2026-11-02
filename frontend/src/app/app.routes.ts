@@ -142,9 +142,9 @@ const applicationRoutes: Routes = [
         glyph: '◫',
         order: 5,
         visible: false,
-        keywords: ['polices', 'fonts', 'fichiers'],
+        keywords: ['polices', 'fonts', 'fichiers', 'profils', 'sous-titres'],
       },
-      description: 'Partagez des polices avec tous les nœuds du cluster.',
+      description: 'Partagez des polices, des profils et des fichiers de sous-titres avec tous les nœuds du cluster.',
     },
   },
   {

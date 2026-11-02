@@ -16,6 +16,23 @@ public readonly record struct ResourceReference(Guid Id, int Version)
         reference = new(id, version);
         return true;
     }
+
+    /// <summary>Plusieurs références séparées par des virgules. Une chaîne vide n'en contient aucune.</summary>
+    public static bool TryParseList(string? text, out IReadOnlyList<ResourceReference> references)
+    {
+        var items = new List<ResourceReference>();
+        foreach (var part in (text ?? "").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!TryParse(part, out var reference))
+            {
+                references = [];
+                return false;
+            }
+            items.Add(reference);
+        }
+        references = items;
+        return true;
+    }
 }
 
 /// <summary>Fichier d'une version de ressource tel que le serveur l'annonce à un worker.</summary>

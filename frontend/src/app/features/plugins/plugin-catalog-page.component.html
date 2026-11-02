@@ -321,6 +321,7 @@
                     tone="success"
                   />
                 }
+                @if (pkg.kind === 'plugin' || pkg.kind === 'tool') {
                 <button
                   matButton="outlined"
                   type="button"
@@ -329,6 +330,7 @@
                 >
                   Retirer
                 </button>
+                }
               } @else {
                 <button
                   matButton="filled"

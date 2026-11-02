@@ -4,7 +4,8 @@ using System.Text.RegularExpressions;
 namespace Encoding.Contracts.Flows;
 
 /// <summary>Options du bloc <c>base-track-names</c> (architecture 0056).</summary>
-public sealed record TrackNameOptions(string AudioTemplate, string SubtitleTemplate, bool SingleDefaultAudio, string DefaultAudioLanguage, bool RenameTracks = true)
+public sealed record TrackNameOptions(string AudioTemplate, string SubtitleTemplate, bool SingleDefaultAudio, string DefaultAudioLanguage, bool RenameTracks = true,
+    bool SingleDefaultSubtitle = false, string DefaultSubtitleLanguage = "")
 {
     public const string DefaultAudioTemplate = "{language} {variant} / {codec} / {layout} / {flags}";
     public const string DefaultSubtitleTemplate = "{language} {variant} / {codec} / {flags}";
@@ -14,8 +15,10 @@ public sealed record TrackNameOptions(string AudioTemplate, string SubtitleTempl
         string Text(string key, string fallback) => configuration.TryGetValue(key, out var value) && value.ValueKind == JsonValueKind.String
             && !string.IsNullOrWhiteSpace(value.GetString()) ? value.GetString()!.Trim() : fallback;
         var single = !configuration.TryGetValue("singleDefaultAudio", out var flag) || flag.ValueKind != JsonValueKind.False;
+        var subtitle = configuration.TryGetValue("singleDefaultSubtitle", out var subtitleFlag) && subtitleFlag.ValueKind == JsonValueKind.True;
         return new(Text("audioTemplate", DefaultAudioTemplate), Text("subtitleTemplate", DefaultSubtitleTemplate), single, Text("defaultAudioLanguage", ""),
-            !configuration.TryGetValue("renameTracks", out var rename) || rename.ValueKind != JsonValueKind.False);
+            !configuration.TryGetValue("renameTracks", out var rename) || rename.ValueKind != JsonValueKind.False,
+            subtitle, Text("defaultSubtitleLanguage", ""));
     }
 }
 
@@ -79,6 +82,30 @@ public static class TrackNaming
             }
         }
 
+        // Sous-titre par défaut : une langue, jamais une piste forcée. Plusieurs candidats : celui déjà par défaut, sinon le premier.
+        var subtitles = tracks.Where(item => item.Type == "subtitles").ToArray();
+        bool?[] subtitleDefaults = new bool?[subtitles.Length];
+        if (options.SingleDefaultSubtitle && options.DefaultSubtitleLanguage.Length > 0 && subtitles.Length > 0
+            && LanguageCode(options.DefaultSubtitleLanguage) is { } subtitleLanguage)
+        {
+            var open = new List<int>();
+            for (var i = 0; i < subtitles.Length; i++)
+            {
+                if (LanguageCode(subtitles[i].Language) != subtitleLanguage || Effective(subtitles[i], originals).Forced) continue;
+                open.Add(i);
+            }
+            if (open.Count > 0)
+            {
+                var chosen = open.FindIndex(i => subtitles[i].Default);
+                var chosenIndex = open[chosen < 0 ? 0 : chosen];
+                for (var i = 0; i < subtitles.Length; i++)
+                {
+                    var wanted = i == chosenIndex;
+                    if (subtitles[i].Default != wanted) subtitleDefaults[i] = wanted;
+                }
+            }
+        }
+
         foreach (var track in tracks.Where(item => item.Type is "audio" or "subtitles"))
         {
             var source = Effective(track, originals);
@@ -96,7 +123,8 @@ public static class TrackNaming
                 ["layout"] = track.Type == "audio" && stream is { } a ? LayoutLabel(a, track.AudioChannels) : "", ["flags"] = string.Join(" / ", flags)
             };
             var name = options.RenameTracks ? Render(track.Type == "audio" ? options.AudioTemplate : options.SubtitleTemplate, tokens) : track.Name;
-            var defaultChange = track.Type == "audio" ? defaults[Array.IndexOf(audio, track)] : null;
+            var defaultChange = track.Type == "audio" ? defaults[Array.IndexOf(audio, track)]
+                : track.Type == "subtitles" ? subtitleDefaults[Array.IndexOf(subtitles, track)] : null;
             if (name != track.Name || defaultChange is not null)
                 edits.Add(new(track.Uid, track.Type, track.Ordinal, name, defaultChange,
                     $"{track.Type} {track.Ordinal} : « {track.Name} » vers « {name} »" + (defaultChange is { } d ? (d ? ", piste par défaut" : ", plus par défaut") : "")));

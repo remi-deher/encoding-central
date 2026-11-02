@@ -764,8 +764,14 @@ export class PluginCatalogPageComponent {
     void this.runStoreAction(
       () => pkg.kind === 'tool'
         ? this.extensionsService.installToolPackage(pkg.repositoryId, pkg.id, pkg.version)
-        : this.extensionsService.installPackage(pkg.repositoryId, pkg.id, pkg.version),
-      `« ${pkg.name} » ${pkg.version} est installé ; les workers le téléchargent dans la minute.`,
+        : pkg.kind === 'resource'
+          ? this.extensionsService.installCatalogResource(pkg.repositoryId, pkg.id, pkg.version)
+          : pkg.kind === 'flow'
+            ? this.extensionsService.installCatalogFlow(pkg.repositoryId, pkg.id, pkg.version)
+            : this.extensionsService.installPackage(pkg.repositoryId, pkg.id, pkg.version),
+      pkg.kind === 'resource' || pkg.kind === 'flow'
+        ? `« ${pkg.name} » version ${pkg.version} est dans le catalogue.`
+        : `« ${pkg.name} » ${pkg.version} est installé ; les workers le téléchargent dans la minute.`,
     );
   }
 

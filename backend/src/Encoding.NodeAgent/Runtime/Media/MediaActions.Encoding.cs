@@ -17,7 +17,7 @@ public sealed partial class MediaActions
         plan = preparedPlan;
         if (plan.Count == 0) return new(null, []);
 
-        var output = Output(directory, node, Path.GetExtension(current) is ".mp4" or ".mkv" or ".mka" or ".flac" ? Path.GetExtension(current) : ".mkv");
+        var output = Output(directory, node, PlannedContainerExtension(current, plan));
         var input = new List<string> { "-nostdin", "-y", "-v", "error" };
         var args = new List<string> { "-c", "copy" };
         var videoFilters = new List<string>();
@@ -40,17 +40,14 @@ public sealed partial class MediaActions
                     break;
                 case "base-resize-video" or "video-resize":
                     videoFilters.Add(VideoResizePolicy.Filter(c));
-                    if (!plan.Any(p => p.ComponentId is "base-transcode-video" or "video-transcode")) args.AddRange(["-c:v", "libx264"]);
                     break;
                 case "base-auto-crop" or "video-auto-crop":
                     var cropF = Text(c, "cropFilter");
                     if (!string.IsNullOrEmpty(cropF)) videoFilters.Add(cropF);
-                    if (!plan.Any(p => p.ComponentId is "base-transcode-video" or "video-transcode")) args.AddRange(["-c:v", "libx264"]);
                     break;
                 case "base-deinterlace-video" or "video-deinterlace":
                     var deintAlgo = Text(c, "algorithm", "bwdif");
                     if (!string.IsNullOrEmpty(deintAlgo)) videoFilters.Add(deintAlgo);
-                    if (!plan.Any(p => p.ComponentId is "base-transcode-video" or "video-transcode")) args.AddRange(["-c:v", "libx264"]);
                     break;
                 case "base-remux-media" or "video-remux-media":
                     output = Output(directory, node, "." + Text(c, "container", "mkv"));
@@ -61,8 +58,13 @@ public sealed partial class MediaActions
         }
 
         if (await AppendAudioPlanAsync(plan, current, directory, input, args, preserve, ct) is { } audioExtension
-            && Path.GetExtension(output) == Path.GetExtension(current))
+            && Path.GetExtension(output).Equals(Path.GetExtension(current), StringComparison.OrdinalIgnoreCase))
             output = Output(directory, node, audioExtension);
+        if (videoFilters.Count > 0 && !plan.Any(p => p.ComponentId is "base-transcode-video" or "video-transcode"))
+        {
+            var observed = inputMetadata ?? await scanner.ScanAsync(current, ct);
+            args.AddRange(["-c:v", SameCodecVideoEncoder(FirstVideoCodec(observed))]);
+        }
         if (hardwareMode == "vaapi") videoFilters.AddRange(["format=nv12", "hwupload"]);
         if (videoFilters.Count > 0) args.AddRange(["-vf", string.Join(',', videoFilters)]);
         input.AddRange(["-i", current]);

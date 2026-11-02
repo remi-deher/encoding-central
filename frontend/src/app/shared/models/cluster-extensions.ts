@@ -38,7 +38,7 @@ export interface StoreRepository {
 export interface StorePackage {
   readonly id: string;
   readonly name: string;
-  readonly kind: 'plugin' | 'tool';
+  readonly kind: 'plugin' | 'tool' | 'resource' | 'flow';
   readonly platform?: string | null;
   readonly sha256?: string | null;
   readonly installedSha256?: string | null;

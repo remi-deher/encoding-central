@@ -95,8 +95,8 @@ import { NodeGroupResponse } from '../../models/cluster';
     }
     @if (field().editor === 'resource') {
       <p>
-        Ressource du catalogue (Bibliothèques, Ressources). Le flow garde la version choisie ; les
-        nœuds récupèrent les fichiers automatiquement.
+        Chaque puce est un fichier du catalogue, épinglé sur une version. Les nœuds le récupèrent
+        automatiquement.
       </p>
     }
     @if (field().editor === 'node') {
@@ -136,9 +136,11 @@ export class ConfigurationReferenceFieldComponent implements OnInit {
   protected readonly query = signal('');
   protected readonly loadMessage = signal('');
   private readonly observed = signal<readonly ConfigurationChoice[]>([]);
-  protected readonly multiple = computed(() =>
-    ['languages', 'indices', 'labels'].includes(this.field().editor ?? ''),
-  );
+  protected readonly multiple = computed(() => {
+    const editor = this.field().editor ?? '';
+    if (editor === 'resource') return !this.field().resourceKind;
+    return ['languages', 'indices', 'labels'].includes(editor);
+  });
   protected readonly tokens = computed(() => configurationTokens(this.value()));
   private readonly options = computed(() => [
     ...this.contextOptions(),
@@ -168,7 +170,10 @@ export class ConfigurationReferenceFieldComponent implements OnInit {
         const details = await Promise.all(
           summaries.map((summary) => this.resourcesApi.get(summary.id)),
         );
-        const options = details.flatMap((resource) =>
+        const kind = this.field().resourceKind;
+        const options = details
+          .filter((resource) => !kind || resource.summary.kind === kind)
+          .flatMap((resource) =>
           resource.versions.map((version) => ({
             value: `${resource.summary.id}:${version.version}`,
             label:
@@ -179,7 +184,11 @@ export class ConfigurationReferenceFieldComponent implements OnInit {
         this.observed.set(options);
         if (!options.length)
           this.loadMessage.set(
-            'Aucune ressource dans le catalogue. Ajoutez des polices dans Bibliothèques, Ressources.',
+            kind === 'subtitle-profile'
+              ? 'Aucun profil dans le catalogue. Ajoutez-en un dans Ressources, Profils de sous-titres.'
+              : kind === 'subtitle'
+                ? 'Aucun sous-titre dans le catalogue. Ajoutez-en un dans Ressources, Sous-titres.'
+                : 'Aucune ressource dans le catalogue. Ajoutez des polices dans Bibliothèques, Ressources.',
           );
         return;
       }

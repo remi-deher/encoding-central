@@ -39,27 +39,28 @@ internal static class SubtitleScenarios
         Check(AssProfile.Canvas(J(new { width = 1920, height = 1080, display_aspect_ratio = "16:9", side_data_list = new[] { new { rotation = -90 } } })) == (1080, 1920), "A rotated video swaps the canvas.");
         try { AssProfile.Canvas(J(new { width = 0, height = 0 })); Check(false, "Invalid dimensions must be refused."); } catch (SubtitleException) { }
 
-        var styles = AssProfile.Styles(1920, 1080);
+        var profile = ProportionalSubtitleProfile.Document;
+        var styles = AssProfile.Styles(1920, 1080, profile);
         Check(styles[0] == "Style: Default,Trebuchet MS,69,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,7.5,0,2,60,60,60,1", "The default style is scaled by height / 360.");
-        var header = AssProfile.Header(1920, 1080);
-        Check(AssProfile.HasCurrent(header + "[Events]\n", 1920, 1080) && !AssProfile.HasCurrent(header + "[Events]\n", 1280, 720), "The profile check depends on the canvas.");
-        var upgrade = AssProfile.Upgrade(Foreign + "[Events]\nFormat: x\nDialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Texte\n", 1920, 1080);
-        Check(upgrade.Changed && !upgrade.Complex && AssProfile.HasCurrent(upgrade.Text, 1920, 1080) && upgrade.Text.Contains("Dialogue: 0,0:00:01.00", StringComparison.Ordinal), "A simple ASS is upgraded and keeps its events.");
-        Check(!AssProfile.Upgrade(upgrade.Text, 1920, 1080).Changed, "Upgrading twice changes nothing.");
-        Check(AssProfile.IsCustom(Foreign.Replace("Style: Default", "Style: Karaoke")) && AssProfile.IsCustom("[Events]\nDialogue: 0,0,0,Default,,0,0,0,,{\\pos(10,10)}x") && !AssProfile.IsCustom(Foreign), "Extra styles and placement tags mark a custom ASS.");
-        Check(AssProfile.Upgrade("[Script Info]\nPlayResX: 1\n[Events]\n", 1920, 1080).Complex, "An ASS without styles section is left intact.");
+        var header = AssProfile.Header(1920, 1080, profile);
+        Check(AssProfile.HasCurrent(header + "[Events]\n", 1920, 1080, profile) && !AssProfile.HasCurrent(header + "[Events]\n", 1280, 720, profile), "The profile check depends on the canvas.");
+        var upgrade = AssProfile.Upgrade(Foreign + "[Events]\nFormat: x\nDialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Texte\n", 1920, 1080, profile);
+        Check(upgrade.Changed && !upgrade.Complex && AssProfile.HasCurrent(upgrade.Text, 1920, 1080, profile) && upgrade.Text.Contains("Dialogue: 0,0:00:01.00", StringComparison.Ordinal), "A simple ASS is upgraded and keeps its events.");
+        Check(!AssProfile.Upgrade(upgrade.Text, 1920, 1080, profile).Changed, "Upgrading twice changes nothing.");
+        Check(AssProfile.IsCustom(Foreign.Replace("Style: Default", "Style: Karaoke"), profile) && AssProfile.IsCustom("[Events]\nDialogue: 0,0,0,Default,,0,0,0,,{\\pos(10,10)}x", profile) && !AssProfile.IsCustom(Foreign, profile), "Extra styles and placement tags mark a custom ASS.");
+        Check(AssProfile.Upgrade("[Script Info]\nPlayResX: 1\n[Events]\n", 1920, 1080, profile).Complex, "An ASS without styles section is left intact.");
 
-        var options = new SubtitleOptions();
+        var options = new SubtitleOptions(ApplyProfile: true, Profile: profile);
         SubtitleTrack Text(int ordinal, string codec, string language, string title, string ass, bool forced = false, bool def = false) =>
             new(ordinal, codec, language, title, def, forced, false, ass);
 
         // SRT converti, ASS déjà au profil, ASS personnalisé et piste bitmap.
-        var current = AssProfile.Header(1920, 1080) + "[Events]\nFormat: x\nDialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Bonjour\n";
+        var current = AssProfile.Header(1920, 1080, profile) + "[Events]\nFormat: x\nDialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Bonjour\n";
         var custom = Ass(["{\\pos(100,100)}Panneau"], Foreign.Replace("Style: Default", "Style: Karaoke"));
         var plan = SubtitlePlanner.Plan([
             Text(0, "subrip", "eng", "", Ass(Lines("Hello", 5))), Text(1, "ass", "fre", "", current), Text(2, "ass", "jpn", "", custom),
             new(3, "hdmv_pgs_subtitle", "ger", "", false, false, false, null)], null, canvas, options);
-        Check(plan.Changed && plan.Decisions[0].ReplacementAss is { } converted && AssProfile.HasCurrent(converted, 1920, 1080) && converted.Contains("Hello réplique numéro 4", StringComparison.Ordinal), "An SRT is converted to the profile with its events.");
+        Check(plan.Changed && plan.Decisions[0].ReplacementAss is { } converted && AssProfile.HasCurrent(converted, 1920, 1080, profile) && converted.Contains("Hello réplique numéro 4", StringComparison.Ordinal), "An SRT is converted to the profile with its events.");
         Check(plan.Decisions[1].ReplacementAss is null && plan.Decisions[2].ReplacementAss is null && plan.Decisions[3].ReplacementAss is null, "A conform ASS, a custom ASS and a bitmap track are copied from the source.");
         Check(plan.Decisions[0].Title == "Anglais / ASS / Piste 1" && plan.Decisions[1].Title == "Français / ASS / Piste 2" && plan.Decisions[3].Title == "Allemand / PGS / Piste 4", "Titles follow « Langue / Format / Piste N ».");
         var untouched = SubtitlePlanner.Plan([Text(0, "ass", "fre", "Français / ASS / Piste 1", current)], null, canvas, options);
@@ -114,26 +115,33 @@ internal static class SubtitleScenarios
 
         // Catalogue et éligibilité.
         var subsManifest = registry.Plugins.Single(item => item.Id == "subtitles");
-        var manage = subsManifest.Components.Single(item => item.Id == "subtitles-manage");
+        var chosen = subsManifest.Components.Single(item => item.Id == "subtitles-default-subtitle");
         var fonts = subsManifest.Components.Single(item => item.Id == "subtitles-add-fonts");
         var baseManifest = registry.Plugins.Single(item => item.Id == "base");
         var input = baseManifest.Components.Single(item => item.Id == "base-input-file");
-        Check(subsManifest.Version == "1.3.0" && manage.Version == "1.0.0" && fonts.Version == "1.0.0"
-            && manage.Outputs.Select(item => item.Id).SequenceEqual(["success", "unchanged", "error"]) && fonts.Outputs.Select(item => item.Id).SequenceEqual(["success", "unchanged", "error"]), "Both blocks are declared in Subtitles 1.3.0 with three outputs.");
+        Check(subsManifest.Version == "1.3.0" && chosen.Version == "1.0.0" && fonts.Version == "1.0.0"
+            && subsManifest.Components.All(item => item.Id != "subtitles-manage")
+            && chosen.Outputs.Select(item => item.Id).SequenceEqual(["success", "unchanged", "error"]) && fonts.Outputs.Select(item => item.Id).SequenceEqual(["success", "unchanged", "error"]), "Subtitles 1.3.0 keeps the precise blocks and drops the combined one.");
         FlowDefinition Flow(params object[] _) => new(1, Guid.NewGuid(), 1, "Subtitles", "video", [
             new("input", null, new("base", "1.4.0", input.Id, input.Version, 1), new Dictionary<string, JsonElement>()),
-            new("subs", null, new("base", "1.4.0", "base-subtitle-manage", "1.4.0", 1), new Dictionary<string, JsonElement>()),
+            new("subs", null, new("subtitles", "1.3.0", "subtitles-default-subtitle", "1.0.0", 1), new Dictionary<string, JsonElement>()),
             new("fonts", null, new("base", "1.4.0", "base-add-fonts", "1.4.0", 1), new Dictionary<string, JsonElement>())],
             [new("a", "input", "success", "subs"), new("b", "subs", "success", "fonts")]);
         var worker = Guid.NewGuid();
-        NodeToolCapability[] Caps(string baseVersion, params NodeToolCapability[] more) => [new("plugin/base", baseVersion, ["general"], []), new("ffprobe", "7.0", ["video"], []), .. more];
+        NodeToolCapability[] Caps(string subtitleVersion, params NodeToolCapability[] more) => [new("plugin/base", "1.4.0", ["general"], []), new("plugin/subtitles", subtitleVersion, ["general"], []), new("ffprobe", "7.0", ["video"], []), .. more];
         var ffmpeg = new NodeToolCapability("ffmpeg", "7.0", ["video"], []); var mkv = new NodeToolCapability("mkvtoolnix", "81.0", ["video"], []);
-        Check(validator.Validate(Flow()).IsValid, "A flow with both blocks is valid.");
-        Check(eligibility.CanRun(Flow(), Caps("1.4.0", ffmpeg, mkv), worker, inventory: new Encoding.Contracts.Nodes.NodeInventory("test", "x64", 1, 1, FontSets: ["Crunchyroll"])), "A worker with FFmpeg, MKVToolNix and Base 1.4.0 can run it.");
-        Check(!eligibility.CanRun(Flow(), Caps("1.4.0", mkv), worker, inventory: new Encoding.Contracts.Nodes.NodeInventory("test", "x64", 1, 1, FontSets: ["Crunchyroll"])) && !eligibility.CanRun(Flow(), Caps("1.4.0", ffmpeg), worker, inventory: new Encoding.Contracts.Nodes.NodeInventory("test", "x64", 1, 1, FontSets: ["Crunchyroll"])), "Both FFmpeg and MKVToolNix are required.");
-        Check(!eligibility.CanRun(Flow(), Caps("1.3.0", ffmpeg, mkv), worker, inventory: new Encoding.Contracts.Nodes.NodeInventory("test", "x64", 1, 1, FontSets: ["Crunchyroll"])), "A worker that does not announce Base 1.4.0 never receives it.");
+        Check(validator.Validate(Flow()).IsValid, "A flow with the default-subtitle block and fonts is valid.");
+        Check(!validator.Validate(new FlowDefinition(1, Guid.NewGuid(), 1, "Ancien", "video", [
+            new("input", null, new("base", "1.4.0", input.Id, input.Version, 1), new Dictionary<string, JsonElement>()),
+            new("subs", null, new("subtitles", "1.3.0", "subtitles-manage", "1.0.0", 1), new Dictionary<string, JsonElement>())],
+            [new("a", "input", "success", "subs")])).IsValid, "The combined subtitle block is no longer publishable.");
+        Check(eligibility.CanRun(Flow(), Caps("1.4.0", mkv), worker, inventory: new Encoding.Contracts.Nodes.NodeInventory("test", "x64", 1, 1, FontSets: ["Crunchyroll"])), "A worker with MKVToolNix and Subtitles 1.4.0 can run the default-subtitle block and the font block.");
+        Check(!eligibility.CanRun(Flow(), Caps("1.4.0", ffmpeg), worker, inventory: new Encoding.Contracts.Nodes.NodeInventory("test", "x64", 1, 1, FontSets: ["Crunchyroll"])), "MKVToolNix is required.");
+        Check(!eligibility.CanRun(Flow(), Caps("1.3.0", ffmpeg, mkv), worker, inventory: new Encoding.Contracts.Nodes.NodeInventory("test", "x64", 1, 1, FontSets: ["Crunchyroll"])), "A worker that does not announce Subtitles 1.4.0 never receives the default-subtitle block.");
         var lockBlock = baseManifest.Components.Single(item => item.Id == "base-disk-lock"); var unlockBlock = baseManifest.Components.Single(item => item.Id == "base-disk-unlock");
         Check(lockBlock.Outputs.Select(item => item.Id).SequenceEqual(["acquired", "busy", "error"]) && unlockBlock.Outputs.Select(item => item.Id).SequenceEqual(["success", "error"]) && lockBlock.RequiredTools.Count == 0, "The disk blocks are declared in Base 1.5.0 and need no tool, so any worker can run them.");
         Check(SubtitleOptions.From(new Dictionary<string, JsonElement> { ["styleProfile"] = J("none"), ["setTitles"] = J(false) }) is { ApplyProfile: false, SetTitles: false, ConvertSrt: true }, "Options are read from the block configuration.");
+        try { SubtitleOptions.From(new Dictionary<string, JsonElement> { ["styleProfile"] = J("crunchyroll") }); Check(false, "The built-in profile must be refused."); }
+        catch (SubtitleException) { }
     }
 }

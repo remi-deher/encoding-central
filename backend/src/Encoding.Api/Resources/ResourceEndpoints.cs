@@ -16,6 +16,12 @@ public static class ResourceEndpoints
             await repository.GetAsync(id, ct) is { } details ? Results.Ok(details) : Results.NotFound()).WithName("GetResource");
         resources.MapGet("/{id:guid}/versions/{version:int}", async (Guid id, int version, ResourceRepository repository, CancellationToken ct) =>
             await repository.GetVersionAsync(id, version, ct) is { } item ? Results.Ok(item) : Results.NotFound()).WithName("GetResourceVersion");
+        resources.MapGet("/{id:guid}/versions/{version:int}/content", async (Guid id, int version, ResourceRepository repository, ResourceBlobStore blobs, CancellationToken ct) =>
+        {
+            if (await repository.GetVersionAsync(id, version, ct) is not { Files.Count: 1 } item || !blobs.Exists(item.Files[0].Sha256))
+                return Results.NotFound();
+            return Results.File(blobs.OpenRead(item.Files[0].Sha256), "application/octet-stream", item.Files[0].Name);
+        }).WithName("GetResourceVersionContent");
 
         // Envoi d'un fichier (corps brut, un fichier par requête) : il rejoint le magasin, puis une ressource ou une
         // nouvelle version le référence par son empreinte. Réservé au rôle admin (toute écriture l'est par défaut).
@@ -31,7 +37,7 @@ public static class ResourceEndpoints
         resources.MapPost("", async (CreateResourceRequest request, ResourceRepository repository, CancellationToken ct) =>
         {
             var errors = new Dictionary<string, string[]>();
-            if (request.Kind != "font") errors["kind"] = ["Type de ressource non pris en charge (« font » uniquement)."];
+            if (!ResourceBlobStore.Kinds.Contains(request.Kind)) errors["kind"] = ["Type de ressource non pris en charge (font, subtitle-profile ou subtitle)."];
             if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Trim().Length > 128) errors["name"] = ["Le nom contient entre 1 et 128 caractères."];
             if ((request.Description ?? "").Trim().Length > 1000) errors["description"] = ["La description contient 1000 caractères au plus."];
             if (errors.Count > 0) return Results.ValidationProblem(errors);

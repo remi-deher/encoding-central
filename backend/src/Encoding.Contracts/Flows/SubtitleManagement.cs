@@ -8,17 +8,22 @@ namespace Encoding.Contracts.Flows;
 /// <summary>Sous-titres ou polices impossibles à traiter sans risque (piste vide non confirmée, police absente, dimensions invalides). Le bloc suit sa sortie « Erreur ».</summary>
 public sealed class SubtitleException(string message) : Exception(message);
 
-/// <summary>Options du bloc <c>base-subtitle-manage</c> (architecture 0057).</summary>
-public sealed record SubtitleOptions(bool ApplyProfile = true, bool ConvertSrt = true, bool UpgradeAss = true, bool RemoveDuplicates = true,
-    bool InferForced = true, bool SetTitles = true, bool FrenchDefault = true, string? Operation = null, AssStyleSettings? Style = null)
+/// <summary>Options du bloc de sous-titres. Le style vient d'une ressource de profil, jamais d'un jeu écrit dans le moteur.</summary>
+public sealed record SubtitleOptions(bool ApplyProfile = false, bool ConvertSrt = true, bool UpgradeAss = true, bool RemoveDuplicates = true,
+    bool InferForced = true, bool SetTitles = true, bool FrenchDefault = true, string? Operation = null, SubtitleStyleProfile? Profile = null)
 {
     public static SubtitleOptions From(IReadOnlyDictionary<string, JsonElement> configuration)
     {
         bool Flag(string key) => !configuration.TryGetValue(key, out var value) || value.ValueKind != JsonValueKind.False;
-        var profile = configuration.TryGetValue("styleProfile", out var mode) && mode.ValueKind == JsonValueKind.String ? mode.GetString() : "crunchyroll";
-        return new(profile != "none", Flag("convertSrt"), Flag("upgradeAss"), Flag("removeDuplicates"), Flag("inferForced"), Flag("setTitles"),
-            Flag("frenchDefault"), configuration.TryGetValue("operation", out var operation) ? operation.GetString() : null,
-            profile == "custom" ? AssStyleSettings.From(configuration) : null);
+        var mode = configuration.TryGetValue("styleProfile", out var modeValue) && modeValue.ValueKind == JsonValueKind.String ? modeValue.GetString() : null;
+        SubtitleStyleProfile? profile = null;
+        if (configuration.TryGetValue("profileDocument", out var document) && document.ValueKind == JsonValueKind.String
+            && !string.IsNullOrWhiteSpace(document.GetString()))
+            profile = SubtitleStyleProfile.Parse(document.GetString()!);
+        if (profile is null && mode is "crunchyroll" or "custom")
+            throw new SubtitleException("Le profil de style intégré a été retiré. Citez une ressource de profil de sous-titres (identifiant:version).");
+        return new(profile is not null, Flag("convertSrt"), Flag("upgradeAss"), Flag("removeDuplicates"), Flag("inferForced"), Flag("setTitles"),
+            Flag("frenchDefault"), configuration.TryGetValue("operation", out var operation) ? operation.GetString() : null, profile);
     }
 }
 
@@ -31,12 +36,10 @@ public sealed record SubtitleDecision(int Ordinal, bool Drop, string? Replacemen
 
 public sealed record SubtitlePlan(IReadOnlyList<SubtitleDecision> Decisions, IReadOnlyList<string> Notes, bool Changed);
 
-/// <summary>Profil de style ASS proportionnel (référence 16:9 sur 360 lignes), intégré et en lecture seule.</summary>
+/// <summary>Met un profil de sous-titres à l'échelle du cadre affiché et reconnaît un ASS déjà conforme à ce profil.</summary>
 public static class AssProfile
 {
-    public const string Version = "2";
     private const string StyleFormat = "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding";
-    public static readonly string[] StyleNames = ["Default", "Italique", "TiretsDefault", "Sign"];
     private static readonly Regex Positioned = new(@"\{[^}]*\\(?:pos|move|org|clip|iclip|p[1-9]|fs|fscx|fscy|bord|shad|fn)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     /// <summary>Dimensions affichées de la vidéo (rapport d'affichage, anamorphose et rotation pris en compte).</summary>
@@ -70,49 +73,45 @@ public static class AssProfile
 
     private static string Num(double value) => Math.Round(value, 3, MidpointRounding.AwayFromZero).ToString("0.###", CultureInfo.InvariantCulture);
 
-    private static string Scaled(string line, int width, int height, AssStyleSettings? settings = null)
+    private static string Scaled(SubtitleStyle style, int width, int height, SubtitleStyleProfile profile)
     {
-        var factor = height / 360.0;
-        var fields = line.Split(',');
-        if (settings is not null) {
-            fields[1] = settings.FontFamily;
-            fields[2] = Num(settings.FontSize);
-            fields[16] = Num(settings.Outline);
-            fields[21] = Num(settings.Margin);
-        }
-        foreach (var index in new[] { 2, 16, 17 }) fields[index] = Num(double.Parse(fields[index], CultureInfo.InvariantCulture) * factor);
-        fields[19] = fields[20] = Num(Math.Round(width * 20 / 640.0, MidpointRounding.AwayFromZero));
-        fields[21] = Num(Math.Round(height * (settings?.Margin ?? 20) / 360.0, MidpointRounding.AwayFromZero));
-        return string.Join(',', fields);
+        var factorH = height / (double)profile.ReferenceHeight;
+        var marginL = Num(Math.Round(width * style.MarginL / profile.ReferenceWidth, MidpointRounding.AwayFromZero));
+        var marginR = Num(Math.Round(width * style.MarginR / profile.ReferenceWidth, MidpointRounding.AwayFromZero));
+        var marginV = Num(Math.Round(height * style.MarginV / profile.ReferenceHeight, MidpointRounding.AwayFromZero));
+        return string.Join(',', [
+            "Style: " + style.Name, style.FontName, Num(style.FontSize * factorH), style.PrimaryColour, style.SecondaryColour, style.OutlineColour, style.BackColour,
+            style.Bold.ToString(CultureInfo.InvariantCulture), style.Italic.ToString(CultureInfo.InvariantCulture), style.Underline.ToString(CultureInfo.InvariantCulture),
+            style.StrikeOut.ToString(CultureInfo.InvariantCulture), Num(style.ScaleX), Num(style.ScaleY), Num(style.Spacing), Num(style.Angle),
+            style.BorderStyle.ToString(CultureInfo.InvariantCulture), Num(style.Outline * factorH), Num(style.Shadow * factorH),
+            style.Alignment.ToString(CultureInfo.InvariantCulture), marginL, marginR, marginV, style.Encoding.ToString(CultureInfo.InvariantCulture)
+        ]);
     }
 
-    public static string[] Styles(int width, int height, AssStyleSettings? settings = null) =>
-    [
-        Scaled("Style: Default,Trebuchet MS,23,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,2.5,0,2,20,20,20,1", width, height, settings),
-        Scaled("Style: Italique,Trebuchet MS,23,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,-1,0,0,100,100,0,0,1,2.5,0,2,20,20,20,1", width, height, settings),
-        Scaled("Style: TiretsDefault,Trebuchet MS,23,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,2.5,0,1,20,20,20,1", width, height, settings),
-        Scaled("Style: Sign,Arial,21,&H00FFFFFF,&H000000FF,&H00292929,&H00000000,-1,0,0,0,100,100,0,0,1,1,0,8,20,20,20,1", width, height, settings)
-    ];
+    public static string[] Styles(int width, int height, SubtitleStyleProfile profile) =>
+        profile.Styles.Select(style => Scaled(style, width, height, profile)).ToArray();
 
-    public static string Header(int width, int height, AssStyleSettings? settings = null) =>
-        "[Script Info]\nTitle: New subtitles\nSubtitleProfileVersion: " + Version + "\nScriptType: v4.00+\nWrapStyle: 0\nPlayResX: " + width + "\nPlayResY: " + height
-        + "\nScaledBorderAndShadow: yes\nYCbCr Matrix: TV.601\nLayoutResX: " + width + "\nLayoutResY: " + height + "\n\n[V4+ Styles]\n" + StyleFormat + "\n"
-        + string.Join('\n', Styles(width, height, settings)) + "\n\n";
+    public static string Header(int width, int height, SubtitleStyleProfile profile) =>
+        "[Script Info]\nTitle: " + profile.Title + "\nSubtitleProfileVersion: " + profile.ProfileVersion + "\nScriptType: v4.00+\nWrapStyle: " + profile.WrapStyle
+        + "\nPlayResX: " + width + "\nPlayResY: " + height + "\nScaledBorderAndShadow: " + (profile.ScaledBorderAndShadow ? "yes" : "no")
+        + "\nYCbCr Matrix: " + profile.Matrix + "\nLayoutResX: " + width + "\nLayoutResY: " + height + "\n\n[V4+ Styles]\n" + StyleFormat + "\n"
+        + string.Join('\n', Styles(width, height, profile)) + "\n\n";
 
-    public static bool HasCurrent(string text, int width, int height, AssStyleSettings? settings = null)
+    public static bool HasCurrent(string text, int width, int height, SubtitleStyleProfile profile)
     {
         var lines = text.Replace("\r", "").Split('\n').Select(line => line.Trim()).ToHashSet(StringComparer.Ordinal);
-        var styles = Styles(width, height, settings);
-        string[] required = ["SubtitleProfileVersion: " + Version, "PlayResX: " + width, "PlayResY: " + height, "LayoutResX: " + width, "LayoutResY: " + height,
-            "ScaledBorderAndShadow: yes", "YCbCr Matrix: TV.601", styles[0], styles[1], styles[2], styles[3]];
-        return required.All(lines.Contains) && text.Contains(StyleFormat, StringComparison.Ordinal) && text.IndexOf(StyleFormat,
+        var styles = Styles(width, height, profile);
+        var required = new List<string> { "SubtitleProfileVersion: " + profile.ProfileVersion, "PlayResX: " + width, "PlayResY: " + height, "LayoutResX: " + width, "LayoutResY: " + height,
+            "ScaledBorderAndShadow: " + (profile.ScaledBorderAndShadow ? "yes" : "no"), "YCbCr Matrix: " + profile.Matrix, "WrapStyle: " + profile.WrapStyle };
+        required.AddRange(styles);
+        return required.All(lines.Contains) && styles.Length > 0 && text.Contains(StyleFormat, StringComparison.Ordinal) && text.IndexOf(StyleFormat,
             StringComparison.Ordinal) < text.IndexOf(styles[0], StringComparison.Ordinal);
     }
 
-    /// <summary>Styles propres au typesetting ou balises de placement : un tel ASS n'est jamais recalibré.</summary>
-    public static bool IsCustom(string text) =>
-        Positioned.IsMatch(text) || text.Replace("\r", "").Split('\n').Any(line => Regex.Match(line, @"^Style:\s*([^,]+),",
-            RegexOptions.IgnoreCase) is { Success: true } match && !StyleNames.Contains(match.Groups[1].Value.Trim()));
+    /// <summary>Balises de placement, ou un nom de style absent du profil : un tel ASS n'est jamais recalibré.</summary>
+    public static bool IsCustom(string text, SubtitleStyleProfile? profile) =>
+        Positioned.IsMatch(text) || profile is not null && text.Replace("\r", "").Split('\n').Any(line => Regex.Match(line, @"^Style:\s*([^,]+),",
+            RegexOptions.IgnoreCase) is { Success: true } match && !profile.Styles.Any(style => style.Name == match.Groups[1].Value.Trim()));
 
     private static string SetScriptInfo(string text, string key, string value)
     {
@@ -122,20 +121,21 @@ public static class AssProfile
         return styles.Success ? text[..styles.Index] + key + ": " + value + "\n" + text[styles.Index..] : text;
     }
 
-    /// <summary>Normalise l'en-tête et les quatre styles communs d'un ASS simple ; les événements sont conservés. <c>Complex</c> : pas de section de styles exploitable, le fichier reste intact.</summary>
-    public static (string Text, bool Changed, bool Complex) Upgrade(string text, int width, int height, AssStyleSettings? settings = null)
+    /// <summary>Normalise l'en-tête et les styles du profil sur un ASS simple ; les événements sont conservés. <c>Complex</c> : pas de section de styles exploitable, le fichier reste intact.</summary>
+    public static (string Text, bool Changed, bool Complex) Upgrade(string text, int width, int height, SubtitleStyleProfile profile)
     {
         text = text.TrimStart('\uFEFF');
         var original = text;
-        foreach (var (key, value) in new[] { ("SubtitleProfileVersion", Version), ("PlayResX", width.ToString(CultureInfo.InvariantCulture)), ("PlayResY",
-            height.ToString(CultureInfo.InvariantCulture)),
-            ("ScaledBorderAndShadow", "yes"), ("YCbCr Matrix", "TV.601"), ("LayoutResX", width.ToString(CultureInfo.InvariantCulture)), ("LayoutResY", height.ToString(CultureInfo.InvariantCulture)) })
+        foreach (var (key, value) in new[] { ("SubtitleProfileVersion", profile.ProfileVersion), ("WrapStyle", profile.WrapStyle.ToString(CultureInfo.InvariantCulture)),
+            ("PlayResX", width.ToString(CultureInfo.InvariantCulture)), ("PlayResY", height.ToString(CultureInfo.InvariantCulture)),
+            ("ScaledBorderAndShadow", profile.ScaledBorderAndShadow ? "yes" : "no"), ("YCbCr Matrix", profile.Matrix),
+            ("LayoutResX", width.ToString(CultureInfo.InvariantCulture)), ("LayoutResY", height.ToString(CultureInfo.InvariantCulture)) })
             text = SetScriptInfo(text, key, value);
         var start = Regex.Match(text, @"^\[V4\+ Styles\]\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase);
         if (!start.Success) return (text, false, true);
         var next = Regex.Match(text[(start.Index + 1)..], @"^\[[^\]]+\]\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase);
         var end = next.Success ? start.Index + 1 + next.Index : text.Length;
-        var result = text[..start.Index] + "[V4+ Styles]\n" + StyleFormat + "\n" + string.Join('\n', Styles(width, height)) + "\n\n" + text[end..];
+        var result = text[..start.Index] + "[V4+ Styles]\n" + StyleFormat + "\n" + string.Join('\n', Styles(width, height, profile)) + "\n\n" + text[end..];
         return (result, result != original, false);
     }
 }
@@ -263,7 +263,7 @@ public static class SubtitlePlanner
         {
             state.Rows = Dialogues(state.Track.AssText!);
             state.Events = state.Rows.Select(row => row.Text).ToList();
-            state.Custom = AssProfile.IsCustom(state.Track.AssText!);
+            state.Custom = AssProfile.IsCustom(state.Track.AssText!, options.Profile);
             if (state.Events.Count > 0) { notes.Add($"Sous-titres piste {state.Track.Ordinal} ({state.Track.Language}) : {state.Events.Count} répliques."); continue; }
             if (AssIsEmpty(state.Track)) { state.Dropped = options.Operation is null or "subtitles-remove-duplicates";
                 notes.Add($"Piste {state.Track.Ordinal} vide confirmée : {(state.Dropped ? "retirée" : "conservée") }."); }
@@ -344,20 +344,20 @@ public static class SubtitlePlanner
                     if (!options.ConvertSrt) continue;
                     var events = text.IndexOf("[Events]", StringComparison.Ordinal);
                     if (events < 0) throw new SubtitleException($"Section [Events] absente après conversion de la piste {state.Track.Ordinal}.");
-                    state.Replacement = options.ApplyProfile ? AssProfile.Header(canvas.Width, canvas.Height, options.Style) + text[events..] : text;
+                    state.Replacement = options.ApplyProfile ? AssProfile.Header(canvas.Width, canvas.Height, options.Profile!) + text[events..] : text;
                     if (options.ApplyProfile && !AssProfile.HasCurrent(state.Replacement, canvas.Width, canvas.Height,
-                        options.Style)) throw new SubtitleException($"Validation du profil de style échouée, piste {state.Track.Ordinal}.");
+                        options.Profile!)) throw new SubtitleException($"Validation du profil de style échouée, piste {state.Track.Ordinal}.");
                     state.Kind = "converti";
                 }
-                else if (AssProfile.HasCurrent(text, canvas.Width, canvas.Height, options.Style)) state.Kind = "à jour";
+                else if (options.Profile is { } current && AssProfile.HasCurrent(text, canvas.Width, canvas.Height, current)) state.Kind = "à jour";
                 else if (state.Custom) { state.Kind = "personnalisé"; notes.Add($"ASS avec styles ou placements personnalisés conservé sans recalibrage : piste {state.Track.Ordinal}."); }
-                else if (options.UpgradeAss)
+                else if (options.UpgradeAss && options.Profile is { } upgrading)
                 {
-                    var upgrade = AssProfile.Upgrade(text, canvas.Width, canvas.Height, options.Style);
+                    var upgrade = AssProfile.Upgrade(text, canvas.Width, canvas.Height, upgrading);
                     if (upgrade.Complex) { state.Kind = "personnalisé"; notes.Add($"ASS sans section de styles standard laissé intact : piste {state.Track.Ordinal}."); }
                     else if (upgrade.Changed)
                     {
-                        if (!AssProfile.HasCurrent(upgrade.Text, canvas.Width, canvas.Height, options.Style)) throw new SubtitleException($"Mise à niveau ASS invalide, piste {state.Track.Ordinal}.");
+                        if (!AssProfile.HasCurrent(upgrade.Text, canvas.Width, canvas.Height, upgrading)) throw new SubtitleException($"Mise à niveau ASS invalide, piste {state.Track.Ordinal}.");
                         state.Replacement = upgrade.Text; state.Kind = "mis à niveau";
                     }
                 }

@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
+using Encoding.Contracts.Flows;
 
 namespace Encoding.Api.Resources;
 
@@ -14,7 +16,10 @@ public sealed class ResourceBlobStore(IConfiguration configuration)
     public const long MaxResourceBytes = 100L * 1024 * 1024;
     public const int MaxFilesPerVersion = 64;
 
+    public static readonly string[] Kinds = ["font", "subtitle-profile", "subtitle"];
     private static readonly string[] FontExtensions = [".ttf", ".otf", ".ttc"];
+    private static readonly string[] ProfileExtensions = [".json"];
+    private static readonly string[] SubtitleExtensions = [".srt", ".ass", ".ssa", ".vtt"];
 
     private readonly string root = Path.GetFullPath(configuration["Resources:Directory"]
         ?? (configuration["Node:DataDirectory"] is { Length: > 0 } dataDir ? Path.Combine(dataDir, "resources") : Path.Combine(AppContext.BaseDirectory, "resources")));
@@ -55,7 +60,13 @@ public sealed class ResourceBlobStore(IConfiguration configuration)
         var trimmed = (name ?? "").Trim();
         if (trimmed.Length is 0 or > 128 || trimmed.Any(char.IsControl) || trimmed.IndexOfAny(['/', '\\', ':']) >= 0 || trimmed is "." or "..")
             throw new ResourceException("Nom de fichier invalide (128 caractères au plus, sans chemin).");
-        var allowed = kind == "font" ? FontExtensions : [];
+        var allowed = kind switch
+        {
+            "font" => FontExtensions,
+            "subtitle-profile" => ProfileExtensions,
+            "subtitle" => SubtitleExtensions,
+            _ => []
+        };
         if (!allowed.Contains(Path.GetExtension(trimmed), StringComparer.OrdinalIgnoreCase))
             throw new ResourceException($"Extension non autorisée : seuls {string.Join(", ", allowed)} sont acceptés pour ce type.");
         return trimmed;
@@ -113,7 +124,33 @@ public sealed class ResourceBlobStore(IConfiguration configuration)
         await using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 16, FileOptions.Asynchronous);
         var read = await file.ReadAsync(header, ct);
         if (kind == "font" && read == 4 && IsFontSignature(header)) return;
-        throw new ResourceException("Le contenu n'est pas une police TrueType ou OpenType valide.");
+        if (kind == "subtitle-profile" && await IsSubtitleProfileAsync(file, ct)) return;
+        if (kind == "subtitle" && await IsTextSubtitleAsync(file, ct)) return;
+        throw new ResourceException(kind switch
+        {
+            "subtitle-profile" => "Le contenu n'est pas un profil de sous-titres valide.",
+            "subtitle" => "Le contenu n'est pas un fichier de sous-titres texte valide.",
+            _ => "Le contenu n'est pas une police TrueType ou OpenType valide."
+        });
+    }
+
+    private static async Task<bool> IsSubtitleProfileAsync(FileStream file, CancellationToken ct)
+    {
+        file.Position = 0;
+        using var reader = new StreamReader(file, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        var text = await reader.ReadToEndAsync(ct);
+        try { SubtitleStyleProfile.Parse(text); return true; }
+        catch (SubtitleException) { return false; }
+    }
+
+    private static async Task<bool> IsTextSubtitleAsync(FileStream file, CancellationToken ct)
+    {
+        file.Position = 0;
+        var buffer = new byte[4096];
+        var read = await file.ReadAsync(buffer, ct);
+        if (read == 0 || buffer.AsSpan(0, read).Contains((byte)0)) return false;
+        try { new UTF8Encoding(false, true).GetString(buffer.AsSpan(0, read)); return true; }
+        catch (DecoderFallbackException) { return false; }
     }
 
     private static bool IsFontSignature(byte[] h) =>

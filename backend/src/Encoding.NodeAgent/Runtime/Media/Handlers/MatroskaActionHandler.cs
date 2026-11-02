@@ -22,6 +22,12 @@ public sealed class MatroskaActionHandler(IProcessToolRunner tools) : IMediaActi
         var current = context.Current;
         var directory = context.Directory;
         var node = context.Node;
+        if (!IsMatroska(current))
+        {
+            if (id is "base-add-audio-track" or "audio-add-track" or "base-add-subtitle-track" or "subtitles-add-track")
+                return await AddTrackPreservingContainerAsync(id, c, current, directory, node, context.Extra, ct);
+            throw new IOException("Ce bloc Matroska conserve le conteneur : le fichier doit déjà être un MKV.");
+        }
         var file = MediaActions.Output(directory, node, ".mkv");
 
         if (id is "base-extract-track" or "base-extract-attachments" or "base-extract-chapters" or "mkv-extract-track" or "mkv-extract-attachments" or "mkv-extract-chapters")
@@ -142,5 +148,52 @@ public sealed class MatroskaActionHandler(IProcessToolRunner tools) : IMediaActi
         }
         await tools.CheckedAsync("mkvmerge", merge, directory, ct);
         return new(file, []);
+    }
+
+    private async Task<MediaActionOutcome> AddTrackPreservingContainerAsync(
+        string id, IReadOnlyDictionary<string, JsonElement> c, string current,
+        string directory, string node, Func<string, Task<string>> extra, CancellationToken ct)
+    {
+        if (!IsMp4Family(current))
+            throw new IOException("L'ajout de piste conserve le conteneur d'origine. Il s'applique à un Matroska ou à un MP4.");
+        var extraPath = await extra(MediaActions.Text(c, "sourceFile"));
+        var currentProbe = await ProbeAsync(current, directory, ct);
+        var extraProbe = await ProbeAsync(extraPath, directory, ct);
+        var subtitle = id is "base-add-subtitle-track" or "subtitles-add-track";
+        var kind = subtitle ? "subtitle" : "audio";
+        var ordinal = CountStreams(currentProbe, kind);
+        var extraCodec = extraProbe.GetProperty("streams").EnumerateArray().First().GetProperty("codec_name").GetString() ?? "";
+        var file = MediaActions.Output(directory, node, Path.GetExtension(current));
+        var args = new List<string> { "-nostdin", "-y", "-v", "error", "-i", current, "-i", extraPath, "-map", "0", "-map", "1:0", "-map_metadata", "0", "-c", "copy" };
+        if (subtitle && extraCodec is not ("mov_text" or "tx3g")) args.AddRange(["-c:s:" + ordinal, "mov_text"]);
+        var specifier = (subtitle ? "s:s:" : "s:a:") + ordinal;
+        var language = MediaActions.Text(c, "language");
+        var title = MediaActions.Text(c, "trackName");
+        if (language != "") args.AddRange(["-metadata:" + specifier, "language=" + language]);
+        if (title != "") args.AddRange(["-metadata:" + specifier, "title=" + title]);
+        var mark = MediaActions.Flag(c, subtitle ? "forcedTrack" : "defaultTrack") ? (subtitle ? "forced" : "default") : "0";
+        args.AddRange(["-disposition:" + (subtitle ? "s:" : "a:") + ordinal, mark]);
+        args.Add(file);
+        await tools.CheckedAsync("ffmpeg", args, directory, ct);
+        return new(file, []);
+    }
+
+    private async Task<JsonElement> ProbeAsync(string path, string directory, CancellationToken ct)
+    {
+        using var json = JsonDocument.Parse(await tools.CheckedAsync("ffprobe", ["-v", "error", "-show_streams", "-of", "json", path], directory, ct));
+        return json.RootElement.Clone();
+    }
+
+    private static int CountStreams(JsonElement probe, string type) =>
+        probe.GetProperty("streams").EnumerateArray().Count(stream => stream.GetProperty("codec_type").GetString() == type);
+
+    private static bool IsMatroska(string path) => Path.GetExtension(path).Equals(".mkv", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsMp4Family(string path)
+    {
+        var extension = Path.GetExtension(path);
+        return extension.Equals(".mp4", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".m4v", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".mov", StringComparison.OrdinalIgnoreCase);
     }
 }

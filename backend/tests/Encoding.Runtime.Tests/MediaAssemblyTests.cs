@@ -34,7 +34,7 @@ public sealed class MediaAssemblyTests
             using var capture=RuntimeCommandCapture.Begin();var invocation=Guid.NewGuid();
             MediaActionOutcome result;
             using(capture.BeginStep("assembly",invocation))
-                result=await actions.AssembleAsync(Config(new { manageSubtitles=true, addFonts=true }),metadata,null,source,directory,"assembly",default,resource);
+                result=await actions.AssembleAsync(Config(new { manageSubtitles=true, addFonts=true, profileDocument=ProportionalSubtitleProfile.Json }),metadata,null,source,directory,"assembly",default,resource);
             Assert.NotNull(result.Primary);
             var commands=capture.ForStep("assembly",invocation);
             Assert.Single(commands,command=>command.Command.Contains("mkvmerge") && command.Command.Contains(" -o "));
@@ -48,6 +48,30 @@ public sealed class MediaAssemblyTests
             var empty=Path.Combine(directory,"empty-fonts");Directory.CreateDirectory(empty);
             await Assert.ThrowsAsync<SubtitleException>(()=>actions.AssembleAsync(Config(new { manageSubtitles=true, addFonts=true }),metadata,null,source,directory,"failure",default,empty));
             Assert.Equal(sha,await SafeMediaPaths.DigestAsync(source,default));
+        }
+        finally { Directory.Delete(directory,true); }
+    }
+
+    [MediaToolsFact]
+    public async Task AssemblyKeepsAnMp4WhenSubtitlesAreEdited()
+    {
+        var directory=Path.Combine(Path.GetTempPath(),"builder-assembly-mp4-"+Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory);
+        try
+        {
+            var tools=new ProcessToolRunner();var scanner=new MediaScanner(tools);var actions=new MediaActions(tools,scanner,new Capabilities());
+            var source=Path.Combine(directory,"source.mp4");var subtitle=Path.Combine(directory,"source.srt");
+            await File.WriteAllTextAsync(subtitle,"1\n00:00:00,000 --> 00:00:00,500\nBonjour\n");
+            await tools.CheckedAsync("ffmpeg",["-v","error","-y","-f","lavfi","-i","color=size=128x72:duration=1:rate=5","-f","lavfi","-i","anullsrc=r=48000:cl=stereo","-i",subtitle,"-t","1","-map","0:v","-map","1:a","-map","2:s","-c:v","mpeg4","-c:a","aac","-c:s","mov_text","-metadata:s:s:0","language=fre",source],directory,default);
+            var sha=await SafeMediaPaths.DigestAsync(source,default);var metadata=await scanner.ScanAsync(source,default);
+            var result=await actions.AssembleAsync(Config(new { manageSubtitles=true, addFonts=true, nameTracks=true }),metadata,null,source,directory,"assembly",default);
+            Assert.NotNull(result.Primary);
+            Assert.EndsWith(".mp4",result.Primary,StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(Directory.GetFiles(directory,"*.mkv"),_=>true);
+            Assert.Equal(sha,await SafeMediaPaths.DigestAsync(source,default));
+            var probe=await scanner.ScanAsync(result.Primary!,default);
+            Assert.Contains(probe.GetProperty("streams").EnumerateArray(),stream=>stream.GetProperty("codec_name").GetString()=="mpeg4");
+            Assert.Contains(probe.GetProperty("streams").EnumerateArray(),stream=>stream.GetProperty("codec_type").GetString()=="subtitle");
+            Assert.Contains("Matroska",result.Value!.ToString());
         }
         finally { Directory.Delete(directory,true); }
     }

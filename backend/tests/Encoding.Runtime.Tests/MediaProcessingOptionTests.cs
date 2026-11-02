@@ -93,11 +93,15 @@ public sealed class MediaProcessingOptionTests
     [Fact]
     public void CustomAssStyleIsScaledAndRecognizedWithoutChangingEvents()
     {
-        var settings = new AssStyleSettings("Arial", 24, 2, 18);
-        var header = AssProfile.Header(1920, 1080, settings);
+        var profile = SubtitleStyleProfile.Parse("""
+            {"formatVersion":1,"profileVersion":"1","reference":{"width":640,"height":360},"styles":[
+              {"name":"Default","fontName":"Arial","fontSize":24,"primaryColour":"&H00FFFFFF","secondaryColour":"&H000000FF","outlineColour":"&H00000000","backColour":"&H00000000","outline":2,"marginL":20,"marginR":20,"marginV":18}
+            ]}
+            """);
+        var header = AssProfile.Header(1920, 1080, profile);
         Assert.Contains("Style: Default,Arial,72,", header);
-        Assert.True(AssProfile.HasCurrent(header, 1920, 1080, settings));
-        Assert.False(AssProfile.HasCurrent(header, 1920, 1080));
+        Assert.True(AssProfile.HasCurrent(header, 1920, 1080, profile));
+        Assert.False(AssProfile.HasCurrent(header, 1920, 1080, ProportionalSubtitleProfile.Document));
         Assert.Throws<SubtitleException>(() => AssStyleSettings.From(Config(new { fontFamily = "Arial,invalid" })));
     }
 }

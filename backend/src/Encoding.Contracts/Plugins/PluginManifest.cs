@@ -106,7 +106,8 @@ public sealed record FlowConfigurationField(
     string? RequiresPluginVersion = null,
     string? RequiresPluginVersionValue = null,
     bool LegacyOnly = false,
-    string? Scope = null);
+    string? Scope = null,
+    string? ResourceKind = null);
 
 public sealed record FlowSelectOption(
     string Value,

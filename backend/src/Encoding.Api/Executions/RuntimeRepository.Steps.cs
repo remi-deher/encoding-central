@@ -400,8 +400,9 @@ public sealed partial class RuntimeRepository
                 || profileValue.ValueKind!=JsonValueKind.Object) return false;
             var profile=profileValue.Deserialize<EncodingProfileSnapshot>(Json);
             var codec=node.Configuration.TryGetValue("videoCodec",out var codecValue)?codecValue.GetString():"hevc";
+            var retryWithCpu=node.Configuration.TryGetValue("retryWithCpu",out var retryFlag)&&retryFlag.ValueKind==JsonValueKind.True;
             var encoder=VideoEncoderCatalog.Find(resolution.EncoderId);
-            var target=profile?.Targets.SingleOrDefault(item=>item.EncoderId==resolution.EncoderId);
+            var target=profile is null||string.IsNullOrEmpty(codec)?null:MediaCodecPolicy.AcceptedEncodingTarget(profile,codec,resolution.EncoderId,retryWithCpu);
             var preset=encoder?.Presets.FirstOrDefault(item=>item.Id==target?.Preset)?.Value;
             if(profile is null || encoder is null || target is null || resolution.Codec!=codec || encoder.Codec!=codec
                 || resolution.ProfileId!=profile.Id || resolution.ProfileVersion!=profile.Version || resolution.ProfileName!=profile.Name
