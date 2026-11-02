@@ -1,15 +1,17 @@
-# Le rôle est dans l'image. Ce fichier ne publie que les ports et un volume de données
-# par conteneur. Les ports sont sur toutes les interfaces pour qu'un worker joigne
-# le central par l'adresse IP de la machine.
+# Deux nœuds utilisent l'image unique : l'API sur le serveur et l'interface worker
+# sur le worker. Les volumes existants restent attachés à leur nœud respectif.
 name: encoding-central
 
 services:
   server:
+    image: backend-encoding
     build:
       context: ..
       dockerfile: backend/Dockerfile
-      target: central
     hostname: encoding-central
+    environment:
+      Node__Name: encoding-central
+      Node__Roles: server
     ports:
       - "5080:8080"
     volumes:
@@ -20,13 +22,18 @@ services:
     restart: unless-stopped
 
   worker:
+    image: backend-encoding
     build:
       context: ..
       dockerfile: backend/Dockerfile
-      target: worker
     hostname: encoding-worker
+    environment:
+      Node__Name: encoding-worker
+      Node__Roles: worker
+      Cluster__ApiBaseUrl: http://server:8080/
+      WorkerUi__Port: 8081
     ports:
-      - "5081:8080"
+      - "5081:8081"
     volumes:
       - worker-node-data:/var/lib/encoding-node
       - /home/remi/encoding-tests/worker-media:/libraries/worker
