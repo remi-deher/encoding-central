@@ -119,12 +119,12 @@ internal static class SubtitleScenarios
         var fonts = subsManifest.Components.Single(item => item.Id == "subtitles-add-fonts");
         var baseManifest = registry.Plugins.Single(item => item.Id == "base");
         var input = baseManifest.Components.Single(item => item.Id == "base-input-file");
-        Check(subsManifest.Version == "1.3.0" && chosen.Version == "1.0.0" && fonts.Version == "1.0.0"
+        Check(subsManifest.Version == "1.5.0" && chosen.Version == "1.0.0" && fonts.Version == "1.0.0"
             && subsManifest.Components.All(item => item.Id != "subtitles-manage")
-            && chosen.Outputs.Select(item => item.Id).SequenceEqual(["success", "unchanged", "error"]) && fonts.Outputs.Select(item => item.Id).SequenceEqual(["success", "unchanged", "error"]), "Subtitles 1.3.0 keeps the precise blocks and drops the combined one.");
+            && chosen.Outputs.Select(item => item.Id).SequenceEqual(["success", "unchanged", "error"]) && fonts.Outputs.Select(item => item.Id).SequenceEqual(["success", "unchanged", "error"]), "Subtitles 1.5.0 keeps the precise blocks and drops the combined one.");
         FlowDefinition Flow(params object[] _) => new(1, Guid.NewGuid(), 1, "Subtitles", "video", [
             new("input", null, new("base", "1.4.0", input.Id, input.Version, 1), new Dictionary<string, JsonElement>()),
-            new("subs", null, new("subtitles", "1.3.0", "subtitles-default-subtitle", "1.0.0", 1), new Dictionary<string, JsonElement>()),
+            new("subs", null, new("subtitles", "1.5.0", "subtitles-default-subtitle", "1.0.0", 1), new Dictionary<string, JsonElement>()),
             new("fonts", null, new("base", "1.4.0", "base-add-fonts", "1.4.0", 1), new Dictionary<string, JsonElement>())],
             [new("a", "input", "success", "subs"), new("b", "subs", "success", "fonts")]);
         var worker = Guid.NewGuid();
@@ -133,11 +133,11 @@ internal static class SubtitleScenarios
         Check(validator.Validate(Flow()).IsValid, "A flow with the default-subtitle block and fonts is valid.");
         Check(!validator.Validate(new FlowDefinition(1, Guid.NewGuid(), 1, "Ancien", "video", [
             new("input", null, new("base", "1.4.0", input.Id, input.Version, 1), new Dictionary<string, JsonElement>()),
-            new("subs", null, new("subtitles", "1.3.0", "subtitles-manage", "1.0.0", 1), new Dictionary<string, JsonElement>())],
+            new("subs", null, new("subtitles", "1.5.0", "subtitles-manage", "1.0.0", 1), new Dictionary<string, JsonElement>())],
             [new("a", "input", "success", "subs")])).IsValid, "The combined subtitle block is no longer publishable.");
-        Check(eligibility.CanRun(Flow(), Caps("1.3.0", mkv), worker, inventory: new Encoding.Contracts.Nodes.NodeInventory("test", "x64", 1, 1, FontSets: ["Crunchyroll"])), "A worker with MKVToolNix and Subtitles 1.3.0 can run the default-subtitle block and the font block.");
-        Check(!eligibility.CanRun(Flow(), Caps("1.3.0", ffmpeg), worker, inventory: new Encoding.Contracts.Nodes.NodeInventory("test", "x64", 1, 1, FontSets: ["Crunchyroll"])), "MKVToolNix is required.");
-        Check(!eligibility.CanRun(Flow(), Caps("1.2.0", ffmpeg, mkv), worker, inventory: new Encoding.Contracts.Nodes.NodeInventory("test", "x64", 1, 1, FontSets: ["Crunchyroll"])), "A worker that does not announce Subtitles 1.3.0 never receives the default-subtitle block.");
+        Check(eligibility.CanRun(Flow(), Caps("1.5.0", mkv), worker, inventory: new Encoding.Contracts.Nodes.NodeInventory("test", "x64", 1, 1, FontSets: ["Crunchyroll"])), "A worker with MKVToolNix and Subtitles 1.5.0 can run the default-subtitle block and the font block.");
+        Check(!eligibility.CanRun(Flow(), Caps("1.5.0", ffmpeg), worker, inventory: new Encoding.Contracts.Nodes.NodeInventory("test", "x64", 1, 1, FontSets: ["Crunchyroll"])), "MKVToolNix is required.");
+        Check(!eligibility.CanRun(Flow(), Caps("1.4.0", ffmpeg, mkv), worker, inventory: new Encoding.Contracts.Nodes.NodeInventory("test", "x64", 1, 1, FontSets: ["Crunchyroll"])), "A worker that does not announce Subtitles 1.5.0 never receives the default-subtitle block.");
         var lockBlock = baseManifest.Components.Single(item => item.Id == "base-disk-lock"); var unlockBlock = baseManifest.Components.Single(item => item.Id == "base-disk-unlock");
         Check(lockBlock.Outputs.Select(item => item.Id).SequenceEqual(["acquired", "busy", "error"]) && unlockBlock.Outputs.Select(item => item.Id).SequenceEqual(["success", "error"]) && lockBlock.RequiredTools.Count == 0, "The disk blocks are declared in Base 1.5.0 and need no tool, so any worker can run them.");
         Check(SubtitleOptions.From(new Dictionary<string, JsonElement> { ["styleProfile"] = J("none"), ["setTitles"] = J(false) }) is { ApplyProfile: false, SetTitles: false, ConvertSrt: true }, "Options are read from the block configuration.");

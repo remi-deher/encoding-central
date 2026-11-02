@@ -89,7 +89,7 @@ internal static class TrackNameScenarios
         var names = subsManifest.Components.Single(item => item.Id == "subtitles-track-names");
         var baseManifest = registry.Plugins.Single(item => item.Id == "base");
         var input = baseManifest.Components.Single(item => item.Id == "base-input-file");
-        Check(subsManifest.Version == "1.3.0" && names.Version == "1.0.0" && names.Outputs.Select(item => item.Id).SequenceEqual(["success", "unchanged", "error"]), "The block is declared in Subtitles 1.3.0 with its three outputs.");
+        Check(subsManifest.Version == "1.5.0" && names.Version == "1.0.0" && names.Outputs.Select(item => item.Id).SequenceEqual(["success", "unchanged", "error"]), "The block is declared in Subtitles 1.3.0 with its three outputs.");
         FlowDefinition Flow() => new(1, Guid.NewGuid(), 1, "Track names", "video", [
             new("input", null, new("base", "1.3.0", input.Id, input.Version, 1), new Dictionary<string, JsonElement>()),
             new("names", null, new("base", "1.3.0", "base-track-names", "1.3.0", 1), new Dictionary<string, JsonElement>())], [new("edge", "input", "success", "names")]);
