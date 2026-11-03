@@ -240,6 +240,8 @@ public sealed class FlowComponentRegistry
             if (pluginSchema.Fields.FirstOrDefault(field => field.Type is not ("text" or "secret" or "number" or "boolean" or "select")) is { } badField)
                 throw new InvalidOperationException($"Schéma de configuration invalide : {installed.Id} (champ « {badField.Id} » de type « {badField.Type} » non pris en charge).");
         }
+        if (installed.Capabilities?.FirstOrDefault(capability => !PluginCapabilities.Ids.Contains(capability)) is { } unknownCapability)
+            throw new InvalidOperationException($"Capacité de plugin inconnue : {installed.Id} (« {unknownCapability} » ; « {PluginCapabilities.Network} » attendu).");
         if (installed.PublicationGuard is { } guard)
         {
             var guardComponent = installed.Components.SingleOrDefault(item => item.Id == guard.ComponentId);
