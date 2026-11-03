@@ -188,7 +188,7 @@ public sealed class AiAssistantSupportService(
                 var worker = await workers.GetAsync(id, workerPresence.OfflineAfter, ct);
                 if (worker is null) return null;
                 var label = string.IsNullOrWhiteSpace(worker.DisplayName) ? worker.Name : worker.DisplayName;
-                var source = new AiAssistantSource("node", id, $"Worker {label}", "/nodes");
+                var source = new AiAssistantSource("node", id, $"Worker {label}", "/workers");
                 return new(source, JsonSerializer.Serialize(worker, ContextJsonOptions));
             }
             case "library":

@@ -177,9 +177,9 @@ internal static class OperationsScenarios
 
             using var details = JsonDocument.Parse(await client.GetStringAsync("/health/details"));
             var checks = details.RootElement.GetProperty("checks").EnumerateArray().ToDictionary(item => item.GetProperty("name").GetString()!, item => item.GetProperty("status").GetString());
-            Check(new[] { "database", "migrations", "cluster", "flow-backups", "artifact-storage", "backup-storage" }.All(checks.ContainsKey), "/health/details liste chaque contrôle.");
+            Check(new[] { "database", "migrations", "central", "flow-backups", "artifact-storage", "backup-storage" }.All(checks.ContainsKey), "/health/details liste chaque contrôle.");
             Check(checks["database"] == "healthy" && checks["migrations"] == "healthy" && checks["artifact-storage"] == "healthy", "Base, schéma et volumes sont sains.");
-            Check(checks["cluster"] == "degraded", "Un central sans worker en ligne est dégradé, pas en panne.");
+            Check(checks["central"] == "degraded", "Un central sans worker en ligne est dégradé, pas en panne.");
             Check(!(await client.GetStringAsync("/health/details")).Contains(directory, StringComparison.Ordinal), "Les chemins du serveur ne sont pas exposés.");
 
             Check((await client.GetAsync("/metrics")).StatusCode == HttpStatusCode.Unauthorized, "/metrics exige le jeton configuré.");

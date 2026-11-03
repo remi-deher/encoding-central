@@ -64,7 +64,7 @@ public sealed class McpService(McpToolRegistry registry, ILogger<McpService> log
         var href = operation.Domain switch
         {
             "libraries" => "/libraries",
-            "nodes-and-groups" => "/nodes",
+            "workers-and-groups" => "/workers",
             "executions-and-logs" => "/tasks",
             "scripts" => "/scripts",
             "encoding-profiles" => "/settings/encoding-profiles",

@@ -267,7 +267,7 @@ public static partial class BusinessOperationCatalog
     {
         "get_version" or "get_updates" => "updates",
         "get_libraries_overview" or "list_libraries" or "create_library" or "update_library" or "delete_library" or "get_library_worker_access" or "get_library_workflow" or "get_library_processing" or "configure_library_worker_access" or "save_library_processing" or "set_library_activation" or "assign_library_flow" or "request_library_discovery" => "libraries",
-        "list_workers" or "list_worker_groups" or "get_worker_group" or "save_worker_group" or "delete_worker_group" or "get_worker_activity" or "get_worker_identity" or "save_worker_identity" or "set_worker_draining" or "get_worker_processing" or "save_worker_processing" => "nodes-and-groups",
+        "list_workers" or "list_worker_groups" or "get_worker_group" or "save_worker_group" or "delete_worker_group" or "get_worker_activity" or "get_worker_identity" or "save_worker_identity" or "set_worker_draining" or "get_worker_processing" or "save_worker_processing" => "workers-and-groups",
         "list_executions" or "get_execution" or "get_execution_events" or "get_execution_pipeline" or "cancel_execution" or "retry_execution" or "resume_execution" or "get_system_logs" => "executions-and-logs",
         "get_flow_schema" or "list_flows" or "get_flow" or "create_flow" or "clone_flow" or "delete_flow" => "flows-and-components",
         "list_scripts" or "get_script" or "save_script" or "publish_script" or "delete_script" or "validate_script_draft" => "scripts",
