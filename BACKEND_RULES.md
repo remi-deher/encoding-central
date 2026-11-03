@@ -72,3 +72,11 @@ Ces règles sont obligatoires pour toute conception ou modification du backend. 
 - Supprimer le code devenu inutile après avoir vérifié qu’il n’est plus utilisé.
 - Signaler les changements de comportement, les migrations nécessaires et les limites de validation.
 - Documenter toute nouvelle décision structurante et mettre à jour ces règles si un principe évolue.
+
+## 9. SQL natif SQLite uniquement
+
+- Tout SQL du backend (dépôts, `Sql.Command`, migrations) est du **SQLite natif**, exécuté tel quel. **Aucune couche de traduction** de dialecte (regex ou autre) : pas de `clock_timestamp()`, `now()`, `interval`, `::type`, `ANY(…)`, `jsonb_*`, `ILIKE`, `LATERAL`, `unnest`, `ARRAY[…]`, `LEAST`/`GREATEST`, `gen_random_uuid()`, ni de `RETURNING` ou de type qui n'existent pas dans SQLite. Voir [ADR 0042](docs/architecture/adr/0042-sql-sqlite-natif.md).
+- Instants : `Sql.UtcNow` (texte UTC de largeur fixe) ; tableaux : paramètre JSON lu par `json_each(@p)` ; durée : modificateur `strftime` (`'+30 seconds'`).
+- Pas de `FOR UPDATE` ni de `SKIP LOCKED` : la sérialisation repose sur l'écrivain unique (`SqliteWriter`). Une séquence lecture puis écriture s'exécute dans **une seule transaction d'écriture** ; ne jamais lire hors transaction pour décider d'une écriture.
+- `SqlStatementsPrepareTests` compile chaque requête de `backend/src` sur une base migrée : une requête invalide échoue à la CI. Un fragment SQL construit à l'exécution se déclare dans `DynamicFragments` de ce test.
+- Une migration appliquée n'est **jamais** modifiée (numéro unique, additive) : un correctif de schéma est une nouvelle migration.
