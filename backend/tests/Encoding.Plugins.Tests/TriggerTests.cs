@@ -8,7 +8,7 @@ using Encoding.Api.Infrastructure;
 using Encoding.Api.Infrastructure.Data;
 using Encoding.Api.Infrastructure.Data.Sqlite;
 using Encoding.Api.Libraries;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Encoding.Api.Plugins;
 using Encoding.Contracts.Flows;
 using Encoding.Contracts.Libraries;

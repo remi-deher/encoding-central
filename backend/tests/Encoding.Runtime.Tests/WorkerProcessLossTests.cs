@@ -8,7 +8,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.IO.Compression;
 using Encoding.Api.Infrastructure;
-using Encoding.NodeAgent;
+using Encoding.WorkerAgent;
 using Xunit;
 
 namespace Encoding.Runtime.Tests;
@@ -20,7 +20,7 @@ public sealed class MultiProcessFactAttribute : FactAttribute
     {
         if (Environment.GetEnvironmentVariable("ENCODING_TEST_MULTIPROCESS") != "1")
             Skip = "Définir ENCODING_TEST_MULTIPROCESS=1 (processus réels, ffmpeg requis, plusieurs minutes).";
-        else if (!OperatingSystem.IsLinux() || Encoding.NodeAgent.Runtime.ProcessToolRunner.Find("ffmpeg") is null)
+        else if (!OperatingSystem.IsLinux() || Encoding.WorkerAgent.Runtime.ProcessToolRunner.Find("ffmpeg") is null)
             Skip = "Linux et ffmpeg sont requis.";
     }
 }

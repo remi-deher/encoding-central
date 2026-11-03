@@ -61,7 +61,7 @@ public static class FlowEndpoints
     private static void MapFlowPreflightAndValidationEndpoints(this RouteGroupBuilder flows)
     {
         flows.MapGet("/{id:guid}/preflight", async (Guid id, FlowCoordinatorService coordinator,
-            Encoding.Api.Nodes.WorkerPresenceOptions presence, CancellationToken ct) =>
+            Encoding.Api.Workers.WorkerPresenceOptions presence, CancellationToken ct) =>
             await coordinator.PreflightAsync(id, presence.OfflineAfter, ct) is { } result
                 ? Results.Ok(result)
                 : ApiProblem.NotFound("Flow introuvable."))

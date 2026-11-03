@@ -1,7 +1,7 @@
 using System.Net;
-using Encoding.Contracts.Nodes;
-using Encoding.NodeAgent;
-using Encoding.NodeAgent.Services;
+using Encoding.Contracts.Workers;
+using Encoding.WorkerAgent;
+using Encoding.WorkerAgent.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;

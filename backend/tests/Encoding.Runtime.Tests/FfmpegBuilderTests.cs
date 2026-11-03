@@ -2,8 +2,8 @@ using System.Text.Json;
 using Encoding.Api.Flows;
 using Encoding.Contracts.Flows;
 using Encoding.Contracts.Executions;
-using Encoding.Contracts.Nodes;
-using Encoding.NodeAgent.Runtime;
+using Encoding.Contracts.Workers;
+using Encoding.WorkerAgent.Runtime;
 using Xunit;
 
 namespace Encoding.Runtime.Tests;

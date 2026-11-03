@@ -5,7 +5,7 @@ Bilan de l'audit de séparation des responsabilités et des corrections appliqu�
 ## 1. État actuel
 
 ### Structure
-- Cinq projets : `Contracts` → `Core` → `Api` et `NodeAgent` (+ `Launcher`). Les références sont correctement en couches et sont vérifiées par `ArchitectureTests`.
+- Cinq projets : `Contracts` → `Core` → `Api` et `WorkerAgent` (+ `Launcher`). Les références sont correctement en couches et sont vérifiées par `ArchitectureTests`.
 - Interfaces aux frontières utiles : `IProcessToolRunner`, `ILocalPublicationArtifactStore` (+ `TimeProvider` sur le store). Les services MCP/IA ne sont plus un seul monolithe partiel.
 - Aucun fichier source de plus de 600 lignes.
 - Lignes de code de plus de 200 caractères et méthodes de plus de 120 lignes plafonnées par des cliquets (Roslyn pour les méthodes).

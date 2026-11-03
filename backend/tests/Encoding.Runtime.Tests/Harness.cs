@@ -6,17 +6,17 @@ using Encoding.Api.Executions;
 using Encoding.Api.Flows;
 using Encoding.Api.Infrastructure;
 using Encoding.Api.Libraries;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Encoding.Api.Plugins;
 using Encoding.Contracts.Executions;
 using Encoding.Contracts.Flows;
 using Encoding.Contracts.Flows.Conditions;
-using Encoding.Contracts.Nodes;
+using Encoding.Contracts.Workers;
 using Encoding.Contracts.Plugins;
-using Encoding.NodeAgent;
-using Encoding.NodeAgent.Runtime;
-using Encoding.NodeAgent.Runtime.Media;
-using Encoding.NodeAgent.Services;
+using Encoding.WorkerAgent;
+using Encoding.WorkerAgent.Runtime;
+using Encoding.WorkerAgent.Runtime.Media;
+using Encoding.WorkerAgent.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
@@ -293,7 +293,7 @@ internal static partial class Harness
             builder.Services.AddSingleton(_ => new Encoding.Api.Resources.ResourceBlobStore(config));
             builder.Services.AddSingleton(provider => new Encoding.Api.Resources.ResourceRepository(db, provider.GetRequiredService<Encoding.Api.Resources.ResourceBlobStore>()));
             builder.Services.AddSingleton<Encoding.Api.Executions.RuntimeExecutionCoordinator>();
-            builder.Services.AddSingleton<Encoding.Api.Nodes.WorkerManagementService>();
+            builder.Services.AddSingleton<Encoding.Api.Workers.WorkerManagementService>();
             builder.Services.AddSingleton<Encoding.Api.Flows.FlowCoordinatorService>();
             app=builder.Build();
             app.Use(async (context,next) =>
@@ -369,7 +369,7 @@ internal static partial class Harness
             var identity = await identityRepository.GetNodeIdentityAsync(a, CancellationToken.None);
             Check(identity is not null && identity.GroupIds.Count == 2, "Manual and automatic membership are both resolved.");
             Check(identity!.EffectiveLabels["zone"] == "local" && identity.EffectiveLabels["gpu"] == "nvidia" && identity.EffectiveLabels["memory"] == "large", "Node labels override group labels and inherit the remaining group labels.");
-            Check(Encoding.Contracts.Nodes.WorkerLabelSelector.Matches("gpu=nvidia,memory=large", identity.EffectiveLabels), "Combined group and label selectors match effective labels.");
+            Check(Encoding.Contracts.Workers.WorkerLabelSelector.Matches("gpu=nvidia,memory=large", identity.EffectiveLabels), "Combined group and label selectors match effective labels.");
             var node = await new WorkerRepository(db).GetAsync(a, TimeSpan.FromHours(1), CancellationToken.None);
             Check(node?.DisplayName == "Transcode A", "The friendly name stays separate from the heartbeat name.");
 

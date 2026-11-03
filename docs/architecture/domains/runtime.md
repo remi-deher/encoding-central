@@ -5,7 +5,7 @@ legacy_adr: [0005, 0009, 0015, 0016, 0018, 0020, 0021, 0028, 0030, 0033, 0054, 0
 code:
   - backend/src/Encoding.Api/Executions/
   - backend/src/Encoding.Api/Libraries/
-  - backend/src/Encoding.NodeAgent/Runtime/
+  - backend/src/Encoding.WorkerAgent/Runtime/
   - backend/src/Encoding.Contracts/Executions/
   - backend/src/Encoding.Core/Runtime/
 tags: [exécution, bail, époque, checkpoint, relais, attente, verrou, découverte, surveillance, publication, remplacement, landlock, intégrité]

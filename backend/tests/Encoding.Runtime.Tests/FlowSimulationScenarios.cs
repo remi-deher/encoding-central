@@ -131,7 +131,7 @@ internal static class FlowSimulationScenarios
     }
     private static async Task ImportAsync()
     {
-        if (Environment.GetEnvironmentVariable("ENCODING_TEST_REQUIRE_MEDIA_TOOLS") != "1" && Encoding.NodeAgent.Runtime.ProcessToolRunner.Find("mediainfo") is null) return;
+        if (Environment.GetEnvironmentVariable("ENCODING_TEST_REQUIRE_MEDIA_TOOLS") != "1" && Encoding.WorkerAgent.Runtime.ProcessToolRunner.Find("mediainfo") is null) return;
         var directory = Path.Combine(Path.GetTempPath(), "encoding-simulator-test-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try

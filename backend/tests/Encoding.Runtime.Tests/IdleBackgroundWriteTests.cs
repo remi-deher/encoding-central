@@ -1,7 +1,7 @@
 using Encoding.Api.Executions;
 using Encoding.Api.Flows;
 using Encoding.Api.Infrastructure;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;

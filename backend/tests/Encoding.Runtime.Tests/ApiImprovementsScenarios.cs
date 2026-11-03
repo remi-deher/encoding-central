@@ -43,15 +43,15 @@ internal static class ApiImprovementsScenarios
         Directory.CreateDirectory(directory);
         try
         {
-            var secretFile = Path.Combine(directory, Encoding.Core.Nodes.LocalEnrollment.FileName);
-            Encoding.Core.Nodes.LocalEnrollment.Create(secretFile);
+            var secretFile = Path.Combine(directory, Encoding.Core.Workers.LocalEnrollment.FileName);
+            Encoding.Core.Workers.LocalEnrollment.Create(secretFile);
 
             await using var factory = CreateFactory(database, directory, new()
             {
                 ["Auth:AnonymousRequestsPerMinute"] = "1000",
                 ["Auth:HeavyOperationsPerMinute"] = "3",
-                [Encoding.Core.Nodes.LocalEnrollment.SecretFileSetting] = secretFile,
-                [Encoding.Api.Nodes.LocalWorkerEndpoints.BaseUrlSetting] = "http://example.invalid/",
+                [Encoding.Core.Workers.LocalEnrollment.SecretFileSetting] = secretFile,
+                [Encoding.Api.Workers.LocalWorkerEndpoints.BaseUrlSetting] = "http://example.invalid/",
             });
 
             var anonymous = new TestClient(factory.CreateClient(new() { HandleCookies = false, AllowAutoRedirect = false }));

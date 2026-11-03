@@ -32,7 +32,7 @@ ARG APP_VERSION=0.0.0-dev
 WORKDIR /source/backend
 
 COPY backend/src/Encoding.Api/Encoding.Api.csproj ./src/Encoding.Api/
-COPY backend/src/Encoding.NodeAgent/Encoding.NodeAgent.csproj ./src/Encoding.NodeAgent/
+COPY backend/src/Encoding.WorkerAgent/Encoding.WorkerAgent.csproj ./src/Encoding.WorkerAgent/
 COPY backend/src/Encoding.Launcher/Encoding.Launcher.csproj ./src/Encoding.Launcher/
 COPY backend/src/Encoding.Contracts/Encoding.Contracts.csproj ./src/Encoding.Contracts/
 COPY backend/src/Encoding.Core/Encoding.Core.csproj ./src/Encoding.Core/
@@ -44,13 +44,13 @@ RUN --mount=type=cache,target=/root/.local/share/NuGet/http-cache \
       export SSL_CERT_FILE=/tmp/ca-bundle.pem; \
     fi; \
     dotnet restore ./src/Encoding.Api/Encoding.Api.csproj; \
-    dotnet restore ./src/Encoding.NodeAgent/Encoding.NodeAgent.csproj; \
+    dotnet restore ./src/Encoding.WorkerAgent/Encoding.WorkerAgent.csproj; \
     dotnet restore ./src/Encoding.Launcher/Encoding.Launcher.csproj; \
     rm -f /tmp/ca-bundle.pem
 COPY backend/migrations/ ./migrations/
 COPY backend/src ./src
 RUN dotnet publish ./src/Encoding.Api/Encoding.Api.csproj --configuration Release --output /app/api --no-restore -p:InformationalVersion=${APP_VERSION} \
- && dotnet publish ./src/Encoding.NodeAgent/Encoding.NodeAgent.csproj --configuration Release --output /app/agent --no-restore -p:InformationalVersion=${APP_VERSION} \
+ && dotnet publish ./src/Encoding.WorkerAgent/Encoding.WorkerAgent.csproj --configuration Release --output /app/agent --no-restore -p:InformationalVersion=${APP_VERSION} \
  && dotnet publish ./src/Encoding.Launcher/Encoding.Launcher.csproj --configuration Release --output /app/launcher --no-restore -p:InformationalVersion=${APP_VERSION}
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime-common
@@ -130,4 +130,4 @@ ENV Worker__Roles=worker \
     PluginStore__Directory=/var/lib/encoding-node/plugin-store
 EXPOSE 8081
 USER $APP_UID
-ENTRYPOINT ["dotnet", "/app/agent/Encoding.NodeAgent.dll"]
+ENTRYPOINT ["dotnet", "/app/agent/Encoding.WorkerAgent.dll"]

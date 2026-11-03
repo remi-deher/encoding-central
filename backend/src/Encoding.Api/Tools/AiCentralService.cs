@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text;
 using Encoding.Contracts.Tools;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Encoding.Contracts.Auth;
 
 namespace Encoding.Api.Tools;

@@ -2,7 +2,7 @@ using System.Text.Json;
 using Encoding.Api.Executions;
 using Encoding.Api.Flows;
 using Encoding.Contracts.Flows;
-using Encoding.Contracts.Nodes;
+using Encoding.Contracts.Workers;
 
 namespace Encoding.Runtime.Tests;
 

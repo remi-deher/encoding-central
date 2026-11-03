@@ -1,5 +1,5 @@
 using System.Threading.RateLimiting;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 

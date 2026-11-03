@@ -6,7 +6,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Encoding.NodeAgent.Runtime;
+using Encoding.WorkerAgent.Runtime;
 using Xunit;
 
 namespace Encoding.Runtime.Tests;
@@ -18,7 +18,7 @@ public sealed class DockerFactAttribute : FactAttribute
     {
         if (Environment.GetEnvironmentVariable("ENCODING_TEST_DOCKER") != "1")
             Skip = "Définir ENCODING_TEST_DOCKER=1, ENCODING_TEST_CENTRAL_IMAGE et ENCODING_TEST_WORKER_IMAGE (images construites) ; Docker, Linux et ffmpeg requis.";
-        else if (!OperatingSystem.IsLinux() || Encoding.NodeAgent.Runtime.ProcessToolRunner.Find("ffmpeg") is null || Encoding.NodeAgent.Runtime.ProcessToolRunner.Find("docker") is null)
+        else if (!OperatingSystem.IsLinux() || Encoding.WorkerAgent.Runtime.ProcessToolRunner.Find("ffmpeg") is null || Encoding.WorkerAgent.Runtime.ProcessToolRunner.Find("docker") is null)
             Skip = "Linux, docker et ffmpeg sont requis.";
         else if (needsPreviousImage && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ENCODING_TEST_PREVIOUS_WORKER_IMAGE")))
             Skip = "Définir ENCODING_TEST_PREVIOUS_WORKER_IMAGE (image worker de la dernière version publiée).";

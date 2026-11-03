@@ -21,7 +21,7 @@ public static class AuthEndpoints
             return Results.Ok(new AuthStatusResponse(setupRequired, setupRequired ? null : Current(http.User)));
         }).AllowAnonymous().WithName("GetAuthStatus");
 
-        auth.MapPost("/setup", async (SetupRequest request, HttpContext http, AuthService service, AuthOptions options, Encoding.Api.Nodes.LocalWorkerRegistry localNode, CancellationToken ct) =>
+        auth.MapPost("/setup", async (SetupRequest request, HttpContext http, AuthService service, AuthOptions options, Encoding.Api.Workers.LocalWorkerRegistry localNode, CancellationToken ct) =>
         {
             var errors = new Dictionary<string, string[]>();
             if (!string.IsNullOrWhiteSpace(request.Username) || !string.IsNullOrWhiteSpace(request.Password))
@@ -29,8 +29,8 @@ public static class AuthEndpoints
                 foreach (var (k, v) in AuthService.ValidateNewUser(request.Username, request.Password))
                     errors[k] = v;
             }
-            if (!Encoding.Api.Nodes.LocalWorkerRegistry.IsValidName(request.NodeDisplayName))
-                errors["nodeDisplayName"] = [$"Le nom du worker ne peut pas dépasser {Encoding.Api.Nodes.LocalWorkerRegistry.MaximumNameLength} caractères."];
+            if (!Encoding.Api.Workers.LocalWorkerRegistry.IsValidName(request.NodeDisplayName))
+                errors["nodeDisplayName"] = [$"Le nom du worker ne peut pas dépasser {Encoding.Api.Workers.LocalWorkerRegistry.MaximumNameLength} caractères."];
             if (!string.IsNullOrWhiteSpace(request.ClusterName) && !Encoding.Api.Infrastructure.CentralIdentityRepository.IsValidName(request.ClusterName))
                 errors["clusterName"] = [$"Le nom du central ne peut pas dépasser {Encoding.Api.Infrastructure.CentralIdentityRepository.MaximumNameLength} caractères."];
             if (errors.Count > 0) return (IResult)Results.ValidationProblem(errors);
@@ -58,7 +58,7 @@ public static class AuthEndpoints
             Encoding.Api.Infrastructure.NetworkSettingsService network, CancellationToken ct) =>
         {
             if (!await service.SetupRequiredAsync(ct)) return Results.NotFound();
-            return Results.Ok(await Encoding.Api.Nodes.SetupWorkerProbe.ReadAsync(clients, configuration, network, ct));
+            return Results.Ok(await Encoding.Api.Workers.SetupWorkerProbe.ReadAsync(clients, configuration, network, ct));
         }).AllowAnonymous().RequireRateLimiting(AuthExtensions.SetupProbePolicy).WithName("GetSetupNode");
 
         auth.MapPost("/login", async (LoginRequest request, HttpContext http, AuthService service, AuthOptions options, CancellationToken ct) =>

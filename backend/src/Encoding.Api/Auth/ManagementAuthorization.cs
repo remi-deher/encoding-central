@@ -1,4 +1,4 @@
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Microsoft.AspNetCore.Authorization;
 
 namespace Encoding.Api.Auth;

@@ -1,7 +1,7 @@
 using System.Net;
-using Encoding.Core.Nodes;
-using Encoding.NodeAgent;
-using Encoding.NodeAgent.Services;
+using Encoding.Core.Workers;
+using Encoding.WorkerAgent;
+using Encoding.WorkerAgent.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;

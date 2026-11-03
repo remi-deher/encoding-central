@@ -2,7 +2,7 @@ using System.Text.Json;
 using Encoding.Api.Flows;
 using Encoding.Contracts.Executions;
 using Encoding.Contracts.Flows;
-using Encoding.NodeAgent.Runtime;
+using Encoding.WorkerAgent.Runtime;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Encoding.Runtime.Tests;

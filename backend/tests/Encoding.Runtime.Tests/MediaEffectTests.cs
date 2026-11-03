@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Encoding.Contracts.Plugins;
 using Encoding.Contracts.Executions;
-using Encoding.NodeAgent.Runtime;
+using Encoding.WorkerAgent.Runtime;
 using Xunit;
 
 namespace Encoding.Runtime.Tests;

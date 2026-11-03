@@ -1,5 +1,5 @@
 using Encoding.Core.Runtime;
-using Encoding.NodeAgent.Runtime;
+using Encoding.WorkerAgent.Runtime;
 using Encoding.Plugins.Tests;
 
 // Le worker relance son propre exécutable avec --isolated-process pour appliquer Landlock avant de lancer le plugin :

@@ -95,21 +95,21 @@ public sealed class ContractTests
     public void NodeLabelSelectorsRequireEveryKeyAndValue()
     {
         IReadOnlyDictionary<string, string?> labels = new Dictionary<string, string?> { ["gpu"] = "nvidia", ["region"] = "eu" };
-        Assert.True(Encoding.Contracts.Nodes.WorkerLabelSelector.Matches("gpu,region=eu", labels));
-        Assert.False(Encoding.Contracts.Nodes.WorkerLabelSelector.Matches("gpu,region=us", labels));
-        Assert.False(Encoding.Contracts.Nodes.WorkerLabelSelector.Matches("missing", labels));
+        Assert.True(Encoding.Contracts.Workers.WorkerLabelSelector.Matches("gpu,region=eu", labels));
+        Assert.False(Encoding.Contracts.Workers.WorkerLabelSelector.Matches("gpu,region=us", labels));
+        Assert.False(Encoding.Contracts.Workers.WorkerLabelSelector.Matches("missing", labels));
     }
 
     [Fact]
     public void AutomaticNodeGroupsMatchAllDeclaredCharacteristics()
     {
-        var node = new Encoding.Contracts.Nodes.WorkerResponse(Guid.NewGuid(), "worker", [Encoding.Contracts.Nodes.NodeRole.Worker], 4, [],
-            Encoding.Contracts.Nodes.WorkerPresenceStatus.Online, DateTimeOffset.UtcNow,
-            new Encoding.Contracts.Nodes.WorkerInventory("Linux", "X64", 8, 32768));
-        var criteria = new Encoding.Contracts.Nodes.WorkerGroupCriteria([Encoding.Contracts.Nodes.NodeRole.Worker], "Linux", "X64", 16384, ["ffmpeg"], 2);
-        Assert.False(Encoding.Api.Nodes.WorkerGroupRepository.Matches(criteria, node));
-        var equipped = node with { Capabilities = [new Encoding.Contracts.Nodes.WorkerToolCapability("ffmpeg", "7.0", ["video"], [])] };
-        Assert.True(Encoding.Api.Nodes.WorkerGroupRepository.Matches(criteria, equipped));
+        var node = new Encoding.Contracts.Workers.WorkerResponse(Guid.NewGuid(), "worker", [Encoding.Contracts.Workers.NodeRole.Worker], 4, [],
+            Encoding.Contracts.Workers.WorkerPresenceStatus.Online, DateTimeOffset.UtcNow,
+            new Encoding.Contracts.Workers.WorkerInventory("Linux", "X64", 8, 32768));
+        var criteria = new Encoding.Contracts.Workers.WorkerGroupCriteria([Encoding.Contracts.Workers.NodeRole.Worker], "Linux", "X64", 16384, ["ffmpeg"], 2);
+        Assert.False(Encoding.Api.Workers.WorkerGroupRepository.Matches(criteria, node));
+        var equipped = node with { Capabilities = [new Encoding.Contracts.Workers.WorkerToolCapability("ffmpeg", "7.0", ["video"], [])] };
+        Assert.True(Encoding.Api.Workers.WorkerGroupRepository.Matches(criteria, equipped));
     }
 
     [Fact]
@@ -117,7 +117,7 @@ public sealed class ContractTests
     {
         var group = Guid.NewGuid(); var previous = Guid.NewGuid(); var candidate = Guid.NewGuid();
         var selector = new Encoding.Contracts.Executions.RuntimeHandoffSelector("selector", TargetGroupId: group, RequiredLabels: "gpu=nvidia,region");
-        var identity = new Encoding.Contracts.Nodes.WorkerIdentityResponse(candidate, null, new Dictionary<string,string?>(),
+        var identity = new Encoding.Contracts.Workers.WorkerIdentityResponse(candidate, null, new Dictionary<string,string?>(),
             new Dictionary<string,string?> { ["gpu"] = "nvidia", ["region"] = null }, [group]);
         Assert.True(selector.Accepts(candidate, previous, identity));
         Assert.False(selector.Accepts(candidate, previous, identity with { GroupIds = [] }));

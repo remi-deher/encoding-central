@@ -1,7 +1,7 @@
 using Encoding.Api.Infrastructure;
 using Encoding.Api.Infrastructure.Data;
-using Encoding.Api.Nodes;
-using Encoding.Contracts.Nodes;
+using Encoding.Api.Workers;
+using Encoding.Contracts.Workers;
 using Xunit;
 
 namespace Encoding.Runtime.Tests;

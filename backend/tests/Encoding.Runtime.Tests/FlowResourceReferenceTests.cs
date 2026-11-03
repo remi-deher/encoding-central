@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Encoding.Contracts.Flows;
-using Encoding.NodeAgent.Services;
+using Encoding.WorkerAgent.Services;
 using Xunit;
 
 namespace Encoding.Runtime.Tests;
@@ -56,7 +56,7 @@ public sealed class FlowResourceReferenceTests
             new("input", null, registry.FindReference("base-input-file")!, new Dictionary<string, JsonElement>()),
             new("fonts", null, registry.FindReference("subtitles-add-fonts")!, new Dictionary<string, JsonElement> { ["fontSet"] = JsonSerializer.SerializeToElement("Anime") })
         ], [new("next", "input", "success", "fonts")]);
-        Encoding.Contracts.Nodes.WorkerToolCapability[] caps = [
+        Encoding.Contracts.Workers.WorkerToolCapability[] caps = [
             new("plugin/base", "1.7.0", ["general"], []), new("plugin/subtitles", "1.1.0", ["video"], []),
             new("mkvtoolnix", "90.0", ["video"], []), new("ffprobe", "7.0", ["video"], [])];
         var worker = Guid.NewGuid();
@@ -82,7 +82,7 @@ public sealed class FlowResourceReferenceTests
             new("input", null, registry.FindReference("base-input-file")!, new Dictionary<string, JsonElement>()),
             new("fonts", null, fonts, values)
         ], [new("next", "input", "success", "fonts")]);
-        Encoding.Contracts.Nodes.WorkerToolCapability[] Caps(string subtitlesVersion) => [
+        Encoding.Contracts.Workers.WorkerToolCapability[] Caps(string subtitlesVersion) => [
             new("plugin/base", "1.7.0", ["general"], []), new("plugin/subtitles", subtitlesVersion, ["video"], []),
             new("mkvtoolnix", "90.0", ["video"], []), new("ffprobe", "7.0", ["video"], [])];
         var worker = Guid.NewGuid();

@@ -7,7 +7,7 @@ using Encoding.Api.Auth;
 using Encoding.Api.Infrastructure;
 using Encoding.Api.Infrastructure.Data;
 using Encoding.Contracts.Auth;
-using Encoding.Contracts.Nodes;
+using Encoding.Contracts.Workers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
@@ -15,7 +15,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.DataProtection;
-// Encoding.Api et Encoding.NodeAgent exposent chacun un Program : un type de l’assemblage API désigne le point d’entrée à héberger.
+// Encoding.Api et Encoding.WorkerAgent exposent chacun un Program : un type de l’assemblage API désigne le point d’entrée à héberger.
 using ApiAssembly = Encoding.Api.Auth.AuthOptions;
 
 namespace Encoding.Runtime.Tests;
@@ -93,7 +93,7 @@ internal static class AuthScenarios
             "All assigned IPv4/IPv6 addresses retain their interface, including loopback, virtual and scoped addresses; only identical pairs are deduplicated.");
         var manyAddresses = Enumerable.Range(1, 40).Select(index => ("eth0", System.Net.IPAddress.Parse("10.1.0." + index)));
         Check(LocalNetworkAddresses.Select(manyAddresses).Count == 40, "A host with many assigned addresses is not truncated to sixteen entries.");
-        var urls = Encoding.Api.Nodes.SetupWorkerProbe.Urls("https://encoding.example.com/", "http://encoding:8080/", "http://127.0.0.1:5080/", "https://ENCODING.example.com", "http://192.168.1.20:8080/", null, "pas une url");
+        var urls = Encoding.Api.Workers.SetupWorkerProbe.Urls("https://encoding.example.com/", "http://encoding:8080/", "http://127.0.0.1:5080/", "https://ENCODING.example.com", "http://192.168.1.20:8080/", null, "pas une url");
         Check(urls.SequenceEqual(["https://encoding.example.com", "http://192.168.1.20:8080"]),
             "Only network-reachable configured URLs are shown, without Docker service names nor loopback: " + string.Join(",", urls));
         const string agent = """
@@ -102,7 +102,7 @@ internal static class AuthScenarios
              "inventory":{"operatingSystem":"Ubuntu 24.04","architecture":"X64","processorCount":8,"memoryMb":16384,"processorModel":"Intel Core i5","gpus":[{"name":"Intel UHD Graphics 630","vendor":"Intel","driver":"i915","device":"card0"}],"fontSets":["noto"]},
              "capabilities":[{"toolId":"ffmpeg","version":"7.1","mediaTypes":["video"],"accelerationTypes":["cpu","qsv"],"encoders":["hevc_qsv"],"encoderChecks":[{"encoderId":"hevc_qsv","status":"usable"}],"manifestFingerprint":"abc"}]}
             """;
-        var sheet = Encoding.Api.Nodes.SetupWorkerProbe.ProjectAgentStatus(agent, addresses, urls);
+        var sheet = Encoding.Api.Workers.SetupWorkerProbe.ProjectAgentStatus(agent, addresses, urls);
         var serialized = JsonSerializer.Serialize(sheet, Json);
         Check(sheet.AgentAvailable && sheet.DisplayName == "Salon" && sheet.Inventory?.ProcessorModel == "Intel Core i5" && sheet.Inventory.Gpus?.Single().Name == "Intel UHD Graphics 630",
             "The setup sheet keeps the hardware read by the local agent.");
@@ -111,7 +111,7 @@ internal static class AuthScenarios
         Check(!serialized.Contains("SECRET-KEY") && !serialized.Contains("123456") && !serialized.Contains("7d0f") && !serialized.Contains("Maison")
             && !serialized.Contains("noto") && !serialized.Contains("abc") && !serialized.Contains("7.1"),
             "The setup sheet is an allow-list: no pairing secret, cluster identity, fonts, tool versions nor fingerprints.");
-        Check(!Encoding.Api.Nodes.SetupWorkerProbe.ProjectAgentStatus("not json", [], []).AgentAvailable, "An unreadable agent answer means unknown hardware.");
+        Check(!Encoding.Api.Workers.SetupWorkerProbe.ProjectAgentStatus("not json", [], []).AgentAvailable, "An unreadable agent answer means unknown hardware.");
         Console.WriteLine("PASS: setup node sheet allow-list, network addresses and configured URLs.");
     }
 
@@ -134,10 +134,10 @@ internal static class AuthScenarios
         try
         {
             var cluster = database;
-            var secretFile = Path.Combine(directory, Encoding.Core.Nodes.LocalEnrollment.FileName);
-            Encoding.Core.Nodes.LocalEnrollment.Create(secretFile);
+            var secretFile = Path.Combine(directory, Encoding.Core.Workers.LocalEnrollment.FileName);
+            Encoding.Core.Workers.LocalEnrollment.Create(secretFile);
             LocalSecret = File.ReadAllText(secretFile).Trim();
-            await using (var factory = CreateFactory(cluster, directory, new() { ["Auth:AnonymousRequestsPerMinute"] = "1000", ["Auth:MaxPendingPairingRequests"] = "2", [Encoding.Core.Nodes.LocalEnrollment.SecretFileSetting] = secretFile, [Encoding.Api.Nodes.LocalWorkerEndpoints.BaseUrlSetting] = "http://example.invalid/" }))
+            await using (var factory = CreateFactory(cluster, directory, new() { ["Auth:AnonymousRequestsPerMinute"] = "1000", ["Auth:MaxPendingPairingRequests"] = "2", [Encoding.Core.Workers.LocalEnrollment.SecretFileSetting] = secretFile, [Encoding.Api.Workers.LocalWorkerEndpoints.BaseUrlSetting] = "http://example.invalid/" }))
             {
                 await ScenarioAsync(factory);
                 await EndpointCatalogueAsync(factory);
@@ -192,7 +192,7 @@ internal static class AuthScenarios
             if (Cookie is not null) request.Headers.Add("Cookie", $"{SessionAuthentication.CookieName}={Cookie}");
             if (csrf && method != HttpMethod.Get) request.Headers.Add(ManagementAccessHandler.CsrfHeader, "1");
             if (nodeToken is not null) request.Headers.Add("X-Node-Token", nodeToken);
-            if (localSecret is not null) request.Headers.Add(Encoding.Core.Nodes.LocalEnrollment.HeaderName, localSecret);
+            if (localSecret is not null) request.Headers.Add(Encoding.Core.Workers.LocalEnrollment.HeaderName, localSecret);
             return await http.SendAsync(request);
         }
         public async Task<HttpStatusCode> StatusAsync(HttpMethod method, string url, object? body = null, bool csrf = true, string? nodeToken = null, string? localSecret = null)
@@ -315,7 +315,7 @@ internal static class AuthScenarios
         Check(await viewer.StatusAsync(post, "/api/v1/local-worker/leave") == HttpStatusCode.Forbidden, "A viewer cannot make this node leave its cluster.");
         Check(await viewer.StatusAsync(post, "/api/v1/local-worker/enroll", new { clusterId = Guid.NewGuid() }) == HttpStatusCode.Forbidden, "A viewer cannot enroll this node elsewhere.");
         Check(await admin.StatusAsync(post, "/api/v1/local-worker/leave") == HttpStatusCode.ServiceUnavailable, "Without a local worker function, the relay answers with a clear refusal.");
-        var masked = JsonDocument.Parse(Encoding.Api.Nodes.LocalWorkerEndpoints.HideSecrets("{\"name\":\"n\",\"pairingKey\":\"K\",\"verificationCode\":\"C\"}")).RootElement;
+        var masked = JsonDocument.Parse(Encoding.Api.Workers.LocalWorkerEndpoints.HideSecrets("{\"name\":\"n\",\"pairingKey\":\"K\",\"verificationCode\":\"C\"}")).RootElement;
         Check(masked.GetProperty("name").GetString() == "n" && masked.GetProperty("pairingKey").ValueKind == JsonValueKind.Null && masked.GetProperty("verificationCode").ValueKind == JsonValueKind.Null,
             "A viewer never sees the pairing key or the verification code.");
         Check(await viewer.StatusAsync(post, "/api/v1/workers/enrollment-requests/approve", new ApproveWorkerEnrollmentRequest("0123456789ABCDEF")) == HttpStatusCode.Forbidden, "A viewer cannot approve a node.");
@@ -495,7 +495,7 @@ internal static class AuthScenarios
         Check(await anonymous.StatusAsync(post, "/api/v1/workers/enrollment-requests", pendingBefore, csrf: false) == HttpStatusCode.Accepted, "A request made while the mode is off stays pending.");
         Check(await anonymous.StatusAsync(put, $"/api/v1/workers/{pendingBefore.Node.Id}/heartbeat", new WorkerHeartbeatRequest(pendingBefore.Node.Name, pendingBefore.Node.Roles, 1, pendingBefore.Node.Capabilities), csrf: false, nodeToken: pendingBefore.Node.NodeToken) == HttpStatusCode.Unauthorized, "A pending node is not accepted without approval.");
         var pendingList = (await (await admin.SendAsync(get, "/api/v1/workers/enrollment-requests")).Content.ReadFromJsonAsync<List<PendingWorkerEnrollmentResponse>>(Json))!;
-        Check(pendingList.Single(item => item.Id == pendingBefore.Node.Id).VerificationCode == Encoding.Core.Nodes.WorkerVerificationCode.FromToken(pendingBefore.Node.Id, pendingBefore.Node.NodeToken),
+        Check(pendingList.Single(item => item.Id == pendingBefore.Node.Id).VerificationCode == Encoding.Core.Workers.WorkerVerificationCode.FromToken(pendingBefore.Node.Id, pendingBefore.Node.NodeToken),
             "The pending list shows the verification code the node computes on its side.");
         Check(await admin.StatusAsync(put, "/api/v1/workers/first-link", new OpenEnrollmentWindowRequest(5)) == HttpStatusCode.OK, "An administrator enables first-link acceptance.");
         var firstLink = new CreateWorkerEnrollmentRequest(NewNode(Guid.NewGuid(), NodeToken()), "CCCCCCCCCCCCCCCC");

@@ -1,4 +1,4 @@
-using Encoding.Core.Nodes;
+using Encoding.Core.Workers;
 using Encoding.Launcher;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -45,7 +45,7 @@ IReadOnlyDictionary<string, string> AgentEnvironment()
 
 builder.Services.AddSingleton(new ProcessSupervisor(
     new SystemProcess("serveur", Path.Combine(home, "api"), "Encoding.Api.dll"),
-    new SystemProcess("agent", Path.Combine(home, "agent"), "Encoding.NodeAgent.dll"),
+    new SystemProcess("agent", Path.Combine(home, "agent"), "Encoding.WorkerAgent.dll"),
     ServerEnvironment, AgentEnvironment, TimeSpan.FromSeconds(45), () => DateTimeOffset.UtcNow));
 builder.Services.AddHostedService<LauncherService>();
 

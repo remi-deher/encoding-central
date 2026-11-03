@@ -7,7 +7,7 @@ using Encoding.Api.Flows;
 using Encoding.Api.Infrastructure.Data;
 using Encoding.Api.Libraries;
 using Encoding.Api.Logging;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Encoding.Api.Plugins;
 using Encoding.Api.Resources;
 using Encoding.Contracts.Executions;
@@ -244,12 +244,12 @@ public sealed class McpLibrariesHandler(
     public async Task<McpCallToolResult> ToolSaveNodeGroupAsync(JsonElement args, bool isAdmin, CancellationToken ct)
     {
         if (!isAdmin) return Denied("La modification des groupes exige le rôle administrateur.");
-        if (!TryDeserialize<Encoding.Contracts.Nodes.SaveWorkerGroupRequest>(args, out var request)) return Invalid("Définition de groupe invalide.");
+        if (!TryDeserialize<Encoding.Contracts.Workers.SaveWorkerGroupRequest>(args, out var request)) return Invalid("Définition de groupe invalide.");
         if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Trim().Length > 128
             || request.Description is null || request.Description.Length > 2000
             || request.Criteria is null || request.Labels is null || request.NodeIds is null || request.NodeIds.Count > 2048
             || request.Labels.Count > 128 || !Enum.IsDefined(request.Mode)
-            || request.Mode == Encoding.Contracts.Nodes.WorkerGroupMode.Automatic && request.NodeIds.Count > 0)
+            || request.Mode == Encoding.Contracts.Workers.WorkerGroupMode.Automatic && request.NodeIds.Count > 0)
             return Invalid("Les champs du groupe ou ses limites sont invalides.");
         Guid? id = null;
         if (args.TryGetProperty("id", out var idValue))
@@ -302,7 +302,7 @@ public sealed class McpLibrariesHandler(
     public async Task<McpCallToolResult> ToolSaveNodeIdentityAsync(JsonElement args, bool isAdmin, CancellationToken ct)
     {
         if (!isAdmin) return Denied("La modification de l’identité d’un worker exige le rôle administrateur.");
-        if (!TryGuid(args, "nodeId", out var id) || !TryDeserialize<Encoding.Contracts.Nodes.SaveWorkerIdentityRequest>(args, out var request))
+        if (!TryGuid(args, "nodeId", out var id) || !TryDeserialize<Encoding.Contracts.Workers.SaveWorkerIdentityRequest>(args, out var request))
             return Invalid("Paramètres d’identité de worker invalides.");
         if (request.Labels is null || request.Labels.Count > 128 || request.DisplayName?.Length > 128
             || request.Labels.Any(pair => !System.Text.RegularExpressions.Regex.IsMatch(pair.Key, "^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$") || pair.Value?.Length > 256))
@@ -329,7 +329,7 @@ public sealed class McpLibrariesHandler(
     public async Task<McpCallToolResult> ToolSaveNodeProcessingAsync(JsonElement args, bool isAdmin, CancellationToken ct)
     {
         if (!isAdmin) return Denied("La configuration de capacité d’un worker exige le rôle administrateur.");
-        if (!TryGuid(args, "nodeId", out var id) || !TryDeserialize<Encoding.Contracts.Nodes.SaveWorkerProcessingSettings>(args, out var request))
+        if (!TryGuid(args, "nodeId", out var id) || !TryDeserialize<Encoding.Contracts.Workers.SaveWorkerProcessingSettings>(args, out var request))
             return Invalid("Paramètres de capacité du worker invalides.");
         try
         {

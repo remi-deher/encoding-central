@@ -19,7 +19,7 @@ Répartition observée sur une exécution de référence :
 ### A. validate-copy (359 à 522 s) — `verifyDecoding`
 
 - **Emplacement d'activation** :
-  `RuntimeFlowRunner.EnsureDecodedAsync` (`backend/src/Encoding.NodeAgent/Runtime/RuntimeFlowRunner.cs:154-162`), imposé systématiquement lors de l'exécution de `base-publish-result` ou en fin de flow lorsque le fichier résultant diffère de la source (selon l'ADR 0007).
+  `RuntimeFlowRunner.EnsureDecodedAsync` (`backend/src/Encoding.WorkerAgent/Runtime/RuntimeFlowRunner.cs:154-162`), imposé systématiquement lors de l'exécution de `base-publish-result` ou en fin de flow lorsque le fichier résultant diffère de la source (selon l'ADR 0007).
 - **Cause racine** :
   Le décodage de contrôle décodait systématiquement **la totalité** des 35 000 images de la vidéo (`-map 0:v? -map 0:a?`) sur CPU (`libdav1d` / `hevc`), même lorsque la vidéo n'avait subi qu'un remux / copie bit-à-bit (`-c:v copy`). Le CPU décodait du HEVC 10b à ~75-80 fps, soit ~5 minutes de calcul pur inutile.
 - **Règle implémentée** (préservant les garanties de l'ADR 0007) :
@@ -36,7 +36,7 @@ Répartition observée sur une exécution de référence :
 ### B. Étape audio (57 à 80 s sans commande) — Transfert WebDAV local & Hashs
 
 - **Cause racine** :
-  Dans `RuntimeFlowRunner.EnsureFilesAsync` (`backend/src/Encoding.NodeAgent/Runtime/RuntimeFlowRunner.cs:122-145`) :
+  Dans `RuntimeFlowRunner.EnsureFilesAsync` (`backend/src/Encoding.WorkerAgent/Runtime/RuntimeFlowRunner.cs:122-145`) :
   Pour un nœud ayant accès direct à la bibliothèque (`directRead == true`), si l'étape nécessitait de matérialiser le fichier d'origine dans le dossier de travail (`current.mkv`), le runner passait par `transferService.DownloadAsync(...)` via l'API WebDAV loopback (`localhost`).
   Ce flux WebDAV :
   1. Copiait le fichier source vers un temporaire d'upload (`RuntimeTransferService.UploadAsync`) ;
@@ -60,7 +60,7 @@ Répartition observée sur une exécution de référence :
   3. `out-*.mkv` : fichiers de sortie générés par chaque bloc (`ffmpeg`, `mkvmerge`).
   4. `track-names` : effectuait un `File.Copy(current, file, true)` de 467 Mo uniquement pour lancer `mkvpropedit` sur les en-têtes MKV.
 - **Correctif implémenté** :
-  Dans `MediaActions.TrackNamesAsync` (`backend/src/Encoding.NodeAgent/Runtime/Media/MediaActions.cs`) :
+  Dans `MediaActions.TrackNamesAsync` (`backend/src/Encoding.WorkerAgent/Runtime/Media/MediaActions.cs`) :
   Si le fichier `current` est déjà un fichier de travail temporaire privé `out-*.mkv` produit par une étape précédente dans le répertoire d'exécution (`Path.GetDirectoryName(current) == directory`), `mkvpropedit` modifie directement le fichier sur place sans duplication intégrale de 467 Mo.
 - **Gains mesurés** :
   Étape `track-names` ramenée de 20 s à **< 1 s** (gain de ~19 s).

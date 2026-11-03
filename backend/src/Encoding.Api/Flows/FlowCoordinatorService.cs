@@ -1,11 +1,11 @@
 using System.Text.Json;
 using Encoding.Api.Executions;
 using Encoding.Api.Infrastructure;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Encoding.Api.Plugins;
 using Encoding.Api.Resources;
 using Encoding.Contracts.Flows;
-using Encoding.Contracts.Nodes;
+using Encoding.Contracts.Workers;
 
 namespace Encoding.Api.Flows;
 

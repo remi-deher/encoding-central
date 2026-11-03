@@ -3,11 +3,11 @@ domain: cluster
 updated: 2026-11-02
 legacy_adr: [0001, 0002, 0017, 0034, 0036, 0037, 0038, 0039, 0040, 0041, 0044, 0045, 0046, 0047, 0048, 0050, 0051, 0052, 0053, 0066]
 code:
-  - backend/src/Encoding.Api/Nodes/
-  - backend/src/Encoding.Core/Nodes/
-  - backend/src/Encoding.NodeAgent/Services/
+  - backend/src/Encoding.Api/Workers/
+  - backend/src/Encoding.Core/Workers/
+  - backend/src/Encoding.WorkerAgent/Services/
   - backend/src/Encoding.Launcher/
-  - backend/src/Encoding.Contracts/Nodes/
+  - backend/src/Encoding.Contracts/Workers/
   - frontend/src/app/features/nodes/
 tags: [nœud, cluster, rattachement, jumelage, central, worker, deux-images, groupes, matériel, gpu]
 ---
@@ -25,7 +25,7 @@ Il n'y a qu'un **central**, unique autorité, et des **workers** (le central emb
 ## État courant
 
 ### Deux images, un central
-- Le Dockerfile publie `central` et `worker` ([ADR 0036](../adr/0036-separation-stricte-central-worker.md)). `central` embarque `Encoding.Api` (8080), l'interface, la base SQLite, `Encoding.NodeAgent` (worker intégré, 8081, boucle locale) et `Encoding.Launcher`, qui démarre et surveille les deux processus sans jamais changer de mode. Il est autonome et reste l'unique autorité du cluster : il pilote les workers.
+- Le Dockerfile publie `central` et `worker` ([ADR 0036](../adr/0036-separation-stricte-central-worker.md)). `central` embarque `Encoding.Api` (8080), l'interface, la base SQLite, `Encoding.WorkerAgent` (worker intégré, 8081, boucle locale) et `Encoding.Launcher`, qui démarre et surveille les deux processus sans jamais changer de mode. Il est autonome et reste l'unique autorité du cluster : il pilote les workers.
 - `worker` n'embarque que l'agent et son interface Angular (8081) : ni API, ni lanceur, ni base de données. Il n'est jamais autonome : tant qu'il n'a pas de central, son interface ne propose que le choix du central. Son interface est alimentée par l'API du central (relayée par `CentralUiProxy`) et son flux SSE.
 - Le worker est enrôlé à son setup : l'assistant demande l'adresse du central et un compte administrateur de ce central ([ADR 0034](../adr/0034-rattachement-par-compte-administrateur.md)). `POST /api/v1/worker/centrals` (choix du central) n'est ouvert sans secret local que tant que le worker n'a pas de central ; `GET /api/v1/worker/hardware` (matériel détecté, lecture seule, sans secret) l'est tant que le worker n'est pas rattaché, pour l'écran d'accueil. Le dernier écran du setup du worker appelle `/api/v1/local-worker/enroll` : la session administrateur du central est relayée à l'agent, qui la présente au central ; aucune approbation n'est ensuite nécessaire.
 - Le worker intégré du central est enrôlé d'office par un secret de conteneur (`local-enrollment.secret`, présenté seulement à un serveur en boucle locale). Le nom convivial est choisi dans l'assistant `/setup`.

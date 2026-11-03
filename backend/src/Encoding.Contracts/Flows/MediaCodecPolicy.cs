@@ -5,11 +5,11 @@ namespace Encoding.Contracts.Flows;
 public static class MediaCodecPolicy
 {
     /// <summary>Le worker a-t-il un encodeur utilisable du profil, repli CPU compris si le bloc l'autorise ? Faux sans bloc vidéo à profil.</summary>
-    public static bool ProfileEncoderUsable(FlowDefinition flow, Encoding.Contracts.Nodes.WorkerToolCapability? ffmpeg) =>
+    public static bool ProfileEncoderUsable(FlowDefinition flow, Encoding.Contracts.Workers.WorkerToolCapability? ffmpeg) =>
         ProfileEncodersMatch(flow, ffmpeg, allowCpuFallback: true);
 
     /// <summary>Le worker a-t-il une cible déclarée du profil ? Le repli CPU ne compte pas : il ne fait pas répondre « oui » à un worker qui n'a que le logiciel.</summary>
-    public static bool ProfileTargetAvailable(FlowDefinition flow, Encoding.Contracts.Nodes.WorkerToolCapability? ffmpeg) =>
+    public static bool ProfileTargetAvailable(FlowDefinition flow, Encoding.Contracts.Workers.WorkerToolCapability? ffmpeg) =>
         ProfileEncodersMatch(flow, ffmpeg, allowCpuFallback: false);
 
     /// <summary>Cible à laquelle une résolution doit correspondre. Hors profil, le repli CPU n'est accepté que s'il reproduit la cible catalogue synthétique.</summary>
@@ -20,11 +20,11 @@ public static class MediaCodecPolicy
         var descriptor = VideoEncoderCatalog.Find(encoderId);
         if (descriptor is null || descriptor.Codec != codec || descriptor.Acceleration != "cpu") return null;
         var fallback = ResolveCpuFallbackVideoEncoder(codec, profile, [encoderId], [descriptor.Acceleration],
-            [new Encoding.Contracts.Nodes.WorkerEncoderCapability(encoderId, "usable")]);
+            [new Encoding.Contracts.Workers.WorkerEncoderCapability(encoderId, "usable")]);
         return fallback?.Encoder.Id == encoderId ? fallback.Value.Target : null;
     }
 
-    private static bool ProfileEncodersMatch(FlowDefinition flow, Encoding.Contracts.Nodes.WorkerToolCapability? ffmpeg, bool allowCpuFallback)
+    private static bool ProfileEncodersMatch(FlowDefinition flow, Encoding.Contracts.Workers.WorkerToolCapability? ffmpeg, bool allowCpuFallback)
     {
         var videoNodes = flow.Nodes.Where(node => node.Component.ComponentId is "base-transcode-video" or "video-transcode"
             && node.Configuration.TryGetValue("encodingProfile", out var profile) && profile.ValueKind == JsonValueKind.Object).ToList();
@@ -57,7 +57,7 @@ public static class MediaCodecPolicy
         EncodingProfileSnapshot profile,
         IReadOnlyList<string> availableEncoders,
         IReadOnlyList<string> availableAccelerations,
-        IReadOnlyList<Encoding.Contracts.Nodes.WorkerEncoderCapability>? encoderChecks = null)
+        IReadOnlyList<Encoding.Contracts.Workers.WorkerEncoderCapability>? encoderChecks = null)
     {
         var targets = profile.Targets
             .Where(target => VideoEncoderCatalog.Find(target.EncoderId)?.Codec == codec)
@@ -81,7 +81,7 @@ public static class MediaCodecPolicy
         EncodingProfileSnapshot profile,
         IReadOnlyList<string> availableEncoders,
         IReadOnlyList<string> availableAccelerations,
-        IReadOnlyList<Encoding.Contracts.Nodes.WorkerEncoderCapability>? encoderChecks = null)
+        IReadOnlyList<Encoding.Contracts.Workers.WorkerEncoderCapability>? encoderChecks = null)
     {
         var cpuTargets=profile.Targets
             .Where(target=>VideoEncoderCatalog.Find(target.EncoderId) is { } descriptor&&descriptor.Codec==codec&&descriptor.Acceleration=="cpu")

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Encoding.Api.Flows;
 using Encoding.Contracts.Flows;
-using Encoding.Contracts.Nodes;
+using Encoding.Contracts.Workers;
 using Encoding.Contracts.Executions;
 using Encoding.Api.Plugins;
 
@@ -121,7 +121,7 @@ public sealed class RuntimeEligibility(
                 if(node.Configuration.TryGetValue("targetGroupId",out var group) && group.ValueKind==System.Text.Json.JsonValueKind.String
                     && (!Guid.TryParse(group.GetString(),out var groupId) || identity is null || !identity.GroupIds.Contains(groupId))) return false;
                 if(node.Configuration.TryGetValue("requiredLabels",out var labels) && labels.ValueKind==System.Text.Json.JsonValueKind.String
-                    && !Encoding.Contracts.Nodes.WorkerLabelSelector.Matches(labels.GetString(),identity?.EffectiveLabels)) return false;
+                    && !Encoding.Contracts.Workers.WorkerLabelSelector.Matches(labels.GetString(),identity?.EffectiveLabels)) return false;
             }
             if(node.Component.PluginId=="nodes" && node.Component.ComponentId=="nodes-require-capability")
             {

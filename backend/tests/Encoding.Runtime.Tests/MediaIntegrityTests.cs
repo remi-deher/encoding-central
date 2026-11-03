@@ -1,6 +1,6 @@
 using Encoding.Contracts.Flows;
-using Encoding.NodeAgent.Runtime;
-using Encoding.NodeAgent.Runtime.Media;
+using Encoding.WorkerAgent.Runtime;
+using Encoding.WorkerAgent.Runtime.Media;
 using Xunit;
 
 namespace Encoding.Runtime.Tests;

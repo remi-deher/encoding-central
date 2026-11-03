@@ -159,7 +159,7 @@ public sealed class FlowDefinitionValidator(
                     Issue("field.invalid", path + "/configuration/targetGroupId", "L’identifiant du groupe doit être un UUID valide.");
                 if (node.Configuration.TryGetValue("requiredLabels", out labelSelector)
                     && (labelSelector.ValueKind != JsonValueKind.String
-                        || !string.IsNullOrWhiteSpace(labelSelector.GetString()) && !Encoding.Contracts.Nodes.WorkerLabelSelector.IsValid(labelSelector.GetString())))
+                        || !string.IsNullOrWhiteSpace(labelSelector.GetString()) && !Encoding.Contracts.Workers.WorkerLabelSelector.IsValid(labelSelector.GetString())))
                     Issue("field.invalid", path + "/configuration/requiredLabels", "Utilisez au plus 64 étiquettes sous la forme clé ou clé=valeur.");
             }
             if (node.Component.PluginId == "nodes" && node.Component.ComponentId == "nodes-require-capability"

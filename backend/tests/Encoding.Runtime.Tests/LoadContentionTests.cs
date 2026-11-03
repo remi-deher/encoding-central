@@ -4,8 +4,8 @@ using System.Diagnostics;
 using Encoding.Api.Executions;
 using Encoding.Api.Infrastructure;
 using Encoding.Api.Infrastructure.Data;
-using Encoding.Api.Nodes;
-using Encoding.Contracts.Nodes;
+using Encoding.Api.Workers;
+using Encoding.Contracts.Workers;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 

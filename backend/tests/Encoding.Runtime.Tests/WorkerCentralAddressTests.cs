@@ -1,6 +1,6 @@
 using System.Net;
-using Encoding.NodeAgent;
-using Encoding.NodeAgent.Services;
+using Encoding.WorkerAgent;
+using Encoding.WorkerAgent.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -103,7 +103,7 @@ public sealed class WorkerCentralAddressTests
             }).Build());
 
         Assert.True(options.WorkerImage);
-        Assert.Equal([Encoding.Contracts.Nodes.NodeRole.Worker], options.Roles);
+        Assert.Equal([Encoding.Contracts.Workers.NodeRole.Worker], options.Roles);
     }
 
     [Fact]

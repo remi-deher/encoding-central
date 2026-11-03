@@ -2,9 +2,9 @@ using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
-using Encoding.Core.Nodes;
-using Encoding.NodeAgent;
-using Encoding.NodeAgent.Services;
+using Encoding.Core.Workers;
+using Encoding.WorkerAgent;
+using Encoding.WorkerAgent.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using static Encoding.Plugins.Tests.Support;
 
@@ -36,7 +36,7 @@ internal static class MembershipTests
             var secretFile = Path.Combine(data, "secret");
             File.WriteAllText(secretFile, "secret");
             var localUrl = "http://127.0.0.1:18080/";
-            var options = new WorkerAgentOptions("membership", [Encoding.Contracts.Nodes.NodeRole.Server, Encoding.Contracts.Nodes.NodeRole.Worker], 1, data,
+            var options = new WorkerAgentOptions("membership", [Encoding.Contracts.Workers.NodeRole.Server, Encoding.Contracts.Workers.NodeRole.Worker], 1, data,
                 localUrl, false, TimeSpan.FromSeconds(10), 8081, secretFile);
             var store = new WorkerIdentityStore(options);
             var enrollment = new WorkerEnrollmentService(options, store, new WorkerCentralDiscovery(options, NullLogger<WorkerCentralDiscovery>.Instance),

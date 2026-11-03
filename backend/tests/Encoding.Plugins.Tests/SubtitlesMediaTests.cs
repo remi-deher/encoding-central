@@ -1,9 +1,9 @@
 using System.Text;
 using System.Text.Json;
 using Encoding.Contracts.Flows;
-using Encoding.NodeAgent.Runtime;
-using Encoding.NodeAgent.Runtime.Media;
-using Encoding.NodeAgent.Services;
+using Encoding.WorkerAgent.Runtime;
+using Encoding.WorkerAgent.Runtime.Media;
+using Encoding.WorkerAgent.Services;
 using static Encoding.Plugins.Tests.Support;
 
 namespace Encoding.Plugins.Tests;
@@ -13,7 +13,7 @@ internal static class SubtitlesMediaTests
 {
     private sealed class NoProbe : IToolCapabilityProbe
     {
-        public Task<IReadOnlyList<Encoding.Contracts.Nodes.WorkerToolCapability>> DiscoverAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<Encoding.Contracts.Nodes.WorkerToolCapability>>([]);
+        public Task<IReadOnlyList<Encoding.Contracts.Workers.WorkerToolCapability>> DiscoverAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<Encoding.Contracts.Workers.WorkerToolCapability>>([]);
     }
 
     private static string Srt(IEnumerable<string> lines)

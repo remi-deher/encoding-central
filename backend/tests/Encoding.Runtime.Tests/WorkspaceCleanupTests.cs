@@ -1,5 +1,5 @@
 using Encoding.Api.Infrastructure.Operations;
-using Encoding.NodeAgent.Runtime;
+using Encoding.WorkerAgent.Runtime;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 

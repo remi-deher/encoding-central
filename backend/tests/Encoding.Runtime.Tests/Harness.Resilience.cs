@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using Encoding.Api.Executions;
 using Encoding.Api.Infrastructure;
 using Encoding.Api.Infrastructure.Data;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Encoding.Api.Plugins;
 using Encoding.Contracts.Executions;
 using Microsoft.AspNetCore.DataProtection;

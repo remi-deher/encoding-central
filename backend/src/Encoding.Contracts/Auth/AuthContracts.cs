@@ -24,7 +24,7 @@ public sealed record SetupWorkerResponse(
     string? Name,
     string? DisplayName,
     bool AgentAvailable,
-    Encoding.Contracts.Nodes.WorkerInventory? Inventory,
+    Encoding.Contracts.Workers.WorkerInventory? Inventory,
     IReadOnlyList<SetupWorkerTool>? Tools,
     IReadOnlyList<SetupWorkerAddress> Addresses,
     IReadOnlyList<string> Urls);
@@ -33,7 +33,7 @@ public sealed record SetupWorkerResponse(
 public sealed record SetupWorkerTool(
     string ToolId,
     IReadOnlyList<string> AccelerationTypes,
-    IReadOnlyList<Encoding.Contracts.Nodes.WorkerEncoderCapability> EncoderChecks);
+    IReadOnlyList<Encoding.Contracts.Workers.WorkerEncoderCapability> EncoderChecks);
 
 /// <summary>Adresse IPv4/IPv6 assignée à une interface vue par le processus du worker (dans un conteneur : son réseau à lui).</summary>
 public sealed record SetupWorkerAddress(string Interface, string Address);

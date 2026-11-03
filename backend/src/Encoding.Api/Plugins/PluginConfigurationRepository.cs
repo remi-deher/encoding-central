@@ -276,7 +276,7 @@ public sealed class PluginConfigurationRepository(DbDataSource dataSource, IData
             && !(values.TryGetValue("requiredLabels",out var labels) && labels.ValueKind==JsonValueKind.String && !string.IsNullOrWhiteSpace(labels.GetString())))
             throw new PluginConfigurationValidationException("Choisissez un groupe ou des étiquettes pour cette destination.");
         if(values.TryGetValue("requiredLabels",out var labelSelector) && labelSelector.ValueKind==JsonValueKind.String
-            && !string.IsNullOrWhiteSpace(labelSelector.GetString()) && !Encoding.Contracts.Nodes.WorkerLabelSelector.IsValid(labelSelector.GetString()))
+            && !string.IsNullOrWhiteSpace(labelSelector.GetString()) && !Encoding.Contracts.Workers.WorkerLabelSelector.IsValid(labelSelector.GetString()))
             throw new PluginConfigurationValidationException("Le filtre d’étiquettes doit utiliser clé ou clé=valeur, séparés par des virgules.");
     }
 

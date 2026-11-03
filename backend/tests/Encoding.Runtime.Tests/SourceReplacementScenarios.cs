@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using Encoding.Contracts.Executions;
-using Encoding.NodeAgent.Runtime;
+using Encoding.WorkerAgent.Runtime;
 
 namespace Encoding.Runtime.Tests;
 

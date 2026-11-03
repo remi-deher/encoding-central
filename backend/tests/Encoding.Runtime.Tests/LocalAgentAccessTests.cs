@@ -1,9 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
-using Encoding.Api.Nodes;
-using Encoding.Contracts.Nodes;
-using Encoding.Core.Nodes;
-using Encoding.NodeAgent;
+using Encoding.Api.Workers;
+using Encoding.Contracts.Workers;
+using Encoding.Core.Workers;
+using Encoding.WorkerAgent;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -193,14 +193,14 @@ public sealed class LocalAgentAccessTests
                 using var firstClient = firstBoot.CreateClient();
                 using var enrollMessage = new HttpRequestMessage(HttpMethod.Post, "/api/v1/workers/enroll")
                 {
-                    Content = JsonContent.Create(new Encoding.Contracts.Nodes.WorkerEnrollmentRequest(
+                    Content = JsonContent.Create(new Encoding.Contracts.Workers.WorkerEnrollmentRequest(
                         localNodeId,
                         "encoding-host",
                         [NodeRole.Server, NodeRole.Worker],
                         1,
                         [],
                         localNodeToken,
-                        Version: Encoding.Contracts.Nodes.AppVersion.Current))
+                        Version: Encoding.Contracts.Workers.AppVersion.Current))
                 };
                 enrollMessage.Headers.Add(LocalEnrollment.HeaderName, LocalEnrollment.Read(fixture.Path)!);
                 using var enrollResponse = await firstClient.SendAsync(enrollMessage);

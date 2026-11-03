@@ -1,7 +1,7 @@
 using Encoding.Api.Infrastructure.Data;
 using System.Data.Common;
 using Encoding.Api.Executions;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Encoding.Api.Infrastructure.Operations;

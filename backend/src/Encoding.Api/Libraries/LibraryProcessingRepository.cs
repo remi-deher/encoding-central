@@ -2,7 +2,7 @@ using Encoding.Api.Infrastructure.Data;
 using System.Data.Common;
 
 using Encoding.Contracts.Libraries;
-using Encoding.Contracts.Nodes;
+using Encoding.Contracts.Workers;
 namespace Encoding.Api.Libraries;
 
 public sealed class LibraryProcessingRepository(DbDataSource dataSource)

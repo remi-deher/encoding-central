@@ -7,11 +7,11 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Encoding.Api.Infrastructure;
 using Encoding.Api.Infrastructure.Operations;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Encoding.Api.Libraries;
 using Encoding.Api.Plugins;
-using Encoding.Contracts.Nodes;
-using Encoding.Core.Nodes;
+using Encoding.Contracts.Workers;
+using Encoding.Core.Workers;
 using Encoding.Contracts.Libraries;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http.Features;
@@ -136,9 +136,9 @@ builder.Services.AddSingleton<AiSettingsService>();
 builder.Services.AddSingleton<AiClientFactory>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<IntegrationTriggerService>());
 builder.Services.AddTransient<LocalAgentAuthenticationHandler>();
-builder.Services.AddHttpClient(Encoding.Api.Nodes.LocalWorkerEndpoints.HttpClientName, (services, client) =>
+builder.Services.AddHttpClient(Encoding.Api.Workers.LocalWorkerEndpoints.HttpClientName, (services, client) =>
 {
-    client.BaseAddress = new Uri(Encoding.Api.Nodes.LocalWorkerEndpoints.AgentBaseUrl(services.GetRequiredService<IConfiguration>()));
+    client.BaseAddress = new Uri(Encoding.Api.Workers.LocalWorkerEndpoints.AgentBaseUrl(services.GetRequiredService<IConfiguration>()));
     client.Timeout = TimeSpan.FromSeconds(30);
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false })
     .AddHttpMessageHandler<LocalAgentAuthenticationHandler>();

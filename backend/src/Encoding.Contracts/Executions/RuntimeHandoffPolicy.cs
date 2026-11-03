@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Encoding.Contracts.Flows;
 
-using Encoding.Contracts.Nodes;
+using Encoding.Contracts.Workers;
 
 namespace Encoding.Contracts.Executions;
 

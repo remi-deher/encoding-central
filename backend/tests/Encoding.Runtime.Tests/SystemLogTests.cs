@@ -7,7 +7,7 @@ using Encoding.Api.Infrastructure.Data;
 using Encoding.Api.Libraries;
 using Encoding.Api.Logging;
 using Encoding.Api.Mcp;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Encoding.Api.Plugins;
 using Encoding.Api.Resources;
 using Encoding.Contracts.Logging;
@@ -263,14 +263,14 @@ public sealed class SystemLogProviderTests
         var nodeContext = new DefaultSystemLogWorkerContext(nodeId, "Worker-01");
 
         using var provider = new SystemLogProvider(ringBuffer, broadcaster, nodeContext);
-        var logger = provider.CreateLogger("Encoding.NodeAgent.Services.ToolCapabilityProbe");
+        var logger = provider.CreateLogger("Encoding.WorkerAgent.Services.ToolCapabilityProbe");
 
         logger.LogInformation("Sonde GPU terminée avec token enc_pat_1122334455667788");
 
         var entries = ringBuffer.Query(new SystemLogFilterQuery { Limit = 10 });
         Assert.Single(entries);
         var entry = entries[0];
-        Assert.Equal("Encoding.NodeAgent.Services.ToolCapabilityProbe", entry.Category);
+        Assert.Equal("Encoding.WorkerAgent.Services.ToolCapabilityProbe", entry.Category);
         Assert.Equal(SystemLogLevel.Information, entry.Level);
         Assert.Contains("***REDACTED***", entry.Message);
         Assert.DoesNotContain("enc_pat_1122334455667788", entry.Message);

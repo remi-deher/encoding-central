@@ -3,7 +3,7 @@ using Encoding.Api.Executions;
 using Encoding.Api.Flows;
 using Encoding.Contracts.Executions;
 using Encoding.Contracts.Flows;
-using Encoding.Contracts.Nodes;
+using Encoding.Contracts.Workers;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 

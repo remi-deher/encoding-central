@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Encoding.Contracts.Flows;
-using Encoding.Contracts.Nodes;
+using Encoding.Contracts.Workers;
 using Xunit;
 
 namespace Encoding.Runtime.Tests;

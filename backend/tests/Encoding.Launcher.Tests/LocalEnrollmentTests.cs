@@ -1,4 +1,4 @@
-using Encoding.Core.Nodes;
+using Encoding.Core.Workers;
 
 namespace Encoding.Launcher.Tests;
 
