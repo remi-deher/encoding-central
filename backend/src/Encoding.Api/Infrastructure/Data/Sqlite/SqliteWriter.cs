@@ -30,7 +30,7 @@ public sealed class SqliteWriteUnavailableException(string reason)
 /// or <c>SKIP LOCKED</c>. A read-then-write sequence is made atomic by running it in one write transaction (admitted here,
 /// opened with BEGIN IMMEDIATE): no other writer of the central can interleave, so a "claim" cannot be taken twice.
 /// A read that must stay consistent without writing uses <see cref="System.Data.IsolationLevel.Snapshot"/> (deferred, query-only).
-/// Any new code that relies on reading and then writing outside such a transaction is a bug. See ADR 0042.
+/// Any new code that relies on reading and then writing outside such a transaction is a bug. See ADR 0043.
 /// </summary>
 public sealed class SqliteWriter
 {

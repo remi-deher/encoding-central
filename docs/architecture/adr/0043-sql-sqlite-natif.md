@@ -1,5 +1,5 @@
 ---
-id: 0042
+id: 0043
 title: SQL SQLite natif, sans couche de traduction
 status: implemented
 domain: storage
@@ -10,7 +10,7 @@ superseded_by: []
 tags: [sqlite, sql, migrations, ecrivain-unique]
 ---
 
-# 0042 — SQL SQLite natif, sans couche de traduction
+# 0043 — SQL SQLite natif, sans couche de traduction
 
 ## Contexte
 SQLite est le seul moteur ([storage](../domains/storage.md)), mais les dépôts écrivaient encore du SQL au dialecte PostgreSQL (`FOR UPDATE SKIP LOCKED`, `clock_timestamp()`, `interval`, `ANY(@p)`, `::text`, `jsonb_*`, `LATERAL`…) que `SqliteTranslator` réécrivait par expressions régulières à chaque exécution. Une construction non prévue échouait à l'exécution, le SQL lu n'était pas le SQL exécuté, et chaque nouvelle requête demandait d'étendre le traducteur.

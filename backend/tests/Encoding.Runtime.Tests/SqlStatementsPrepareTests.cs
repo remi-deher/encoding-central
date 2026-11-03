@@ -11,7 +11,7 @@ using Xunit;
 namespace Encoding.Runtime.Tests;
 
 /// <summary>
-/// ADR 0042 : le SQL du dépôt est du SQLite natif, exécuté tel quel. Ce test extrait chaque requête écrite dans <c>backend/src</c>
+/// ADR 0043 : le SQL du dépôt est du SQLite natif, exécuté tel quel. Ce test extrait chaque requête écrite dans <c>backend/src</c>
 /// (littéraux, chaînes interpolées et concaténations), la fait compiler par SQLite (<c>EXPLAIN</c> = <c>sqlite3_prepare</c>, sans exécution)
 /// sur une base migrée, puis échoue sur toute erreur de syntaxe, table, colonne ou fonction inconnue : l'erreur apparaît en CI,
 /// pas à l'exécution. Les restes de dialecte PostgreSQL (casts, <c>FOR UPDATE</c>, <c>jsonb_*</c>…) sont aussi refusés explicitement.
