@@ -80,7 +80,7 @@ public sealed class WorkerProcessLossTests
             JsonElement nodes = default;
             await WaitAsync(async () =>
             {
-                nodes = await client.GetFromJsonAsync<JsonElement>("nodes");
+                nodes = await client.GetFromJsonAsync<JsonElement>("workers");
                 return nodes.GetArrayLength() == 2 && nodes.EnumerateArray().All(node => node.GetProperty("status").GetString() == "online");
             }, 90, "two online workers", processes);
 
@@ -119,9 +119,9 @@ public sealed class WorkerProcessLossTests
             {
                 var current = (await client.GetFromJsonAsync<JsonElement>("executions")).GetProperty("executions")[0];
                 executionId = current.GetProperty("id").GetGuid();
-                if (current.GetProperty("state").GetString() != "running" || current.GetProperty("node").ValueKind != JsonValueKind.String) return false;
+                if (current.GetProperty("state").GetString() != "running" || current.GetProperty("worker").ValueKind != JsonValueKind.String) return false;
                 if (!FfmpegRunningFor(executionId)) return false;
-                victim = current.GetProperty("node").GetString();
+                victim = current.GetProperty("worker").GetString();
                 return true;
             }, 180, "ffmpeg encoding", processes);
             var killed = processes.Single(proc => proc.Name == victim);
@@ -142,11 +142,11 @@ public sealed class WorkerProcessLossTests
             if (final.GetProperty("state").GetString() != "succeeded")
             {
                 var history = (await client.GetFromJsonAsync<JsonElement>($"executions/{executionId}/events")).ToString();
-                var state = (await client.GetFromJsonAsync<JsonElement>("nodes")).EnumerateArray().Select(node => $"{node.GetProperty("name")}={node.GetProperty("status")}");
+                var state = (await client.GetFromJsonAsync<JsonElement>("workers")).EnumerateArray().Select(node => $"{node.GetProperty("name")}={node.GetProperty("status")}");
                 Assert.Fail($"Exécution : {final.GetProperty("detail")}\nNœuds : {string.Join(", ", state)}\nHistorique : {history}");
             }
             Assert.Equal(executionId, final.GetProperty("id").GetGuid());
-            Assert.NotEqual(victim, final.GetProperty("node").GetString());
+            Assert.NotEqual(victim, final.GetProperty("worker").GetString());
             var events = (await client.GetFromJsonAsync<JsonElement>($"executions/{executionId}/events")).ToString();
             Assert.Contains("reprise", events, StringComparison.OrdinalIgnoreCase);
             Assert.Equal(sourceSha, Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(source))));
