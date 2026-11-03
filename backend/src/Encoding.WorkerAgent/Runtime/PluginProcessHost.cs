@@ -124,7 +124,8 @@ public sealed class PluginProcessHost(IProcessToolRunner processes,IConfiguratio
         var timeout=invocation.Deadline-DateTimeOffset.UtcNow;
         if(component.TimeoutSeconds is { } declared && TimeSpan.FromSeconds(declared)<timeout) timeout=TimeSpan.FromSeconds(declared);
         ToolResult result;
-        try { result=await processes.RunAsync(plugin.Executable,plugin.Arguments,workspace,timeout,ct,input,1048576,true,plugin.ReadOnlyPaths); }
+        try { result=await processes.RunAsync(plugin.Executable,plugin.Arguments,workspace,timeout,ct,input,1048576,true,plugin.ReadOnlyPaths,
+            allowNetwork:PluginCapabilities.AllowsNetwork(manifest)); }
         catch(OperationCanceledException) when(!ct.IsCancellationRequested)
         {
             throw new IOException($"Le plugin {plugin.Id} a dépassé son délai ({(int)timeout.TotalSeconds} s) ; son effet doit être considéré comme incertain.");

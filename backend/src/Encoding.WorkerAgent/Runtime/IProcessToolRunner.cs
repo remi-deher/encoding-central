@@ -16,7 +16,8 @@ public interface IProcessToolRunner
         bool sandbox = false,
         IReadOnlyList<string>? readOnlyPaths = null,
         bool trackProgress = false,
-        double? progressDurationSeconds = null);
+        double? progressDurationSeconds = null,
+        bool allowNetwork = false);
 
     Task<string> CheckedAsync(string executable, IEnumerable<string> args, string directory, CancellationToken ct);
 

@@ -1,10 +1,13 @@
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
 namespace Encoding.Core.Runtime;
 
-/// <summary>Linux filesystem boundary for untrusted child processes. No insecure fallback.</summary>
+/// <summary>
+/// Linux boundary for untrusted child processes: Landlock (filesystem, TCP from ABI 4) plus a minimal seccomp filter. No insecure
+/// fallback: any rule that cannot be applied ends with exit code 79 before the tool starts. The relay replaces itself with the tool
+/// (execve), so <c>/proc/self</c> opened here is the tool's own process directory.
+/// </summary>
 public static class ProcessSandbox
 {
     [DllImport("libc", EntryPoint = "syscall", SetLastError = true)]
@@ -12,7 +15,9 @@ public static class ProcessSandbox
     [DllImport("libc", SetLastError = true)] private static extern int open(string path, int flags);
     [DllImport("libc")] private static extern int close(int fd);
     [DllImport("libc")] private static extern int prctl(int option, ulong arg2, ulong arg3, ulong arg4, ulong arg5);
-    [StructLayout(LayoutKind.Sequential)] private struct Ruleset { public ulong Access; }
+    [DllImport("libc", SetLastError = true)] private static extern int execvpe(string file, string?[] argv, string?[] envp);
+    [DllImport("libc")] private static extern nint signal(int number, nint handler);
+    [StructLayout(LayoutKind.Sequential)] private struct Ruleset { public ulong Access; public ulong Network; }
     [StructLayout(LayoutKind.Sequential, Pack = 1)] private struct PathRule { public ulong Access; public int Parent; }
     /// <summary>
     /// Variable posée par l'hôte sur le processus relais pour demander un environnement minimal à l'enfant isolé
@@ -39,56 +44,64 @@ public static class ProcessSandbox
         return result;
     }
 
-    public static bool IsAvailable => OperatingSystem.IsLinux() && Syscall(444, 0, 0, 1, 0) >= 1;
+    public static bool IsAvailable => OperatingSystem.IsLinux() && SeccompFilter.IsSupported(RuntimeInformation.ProcessArchitecture)
+        && prctl(21, 0, 0, 0, 0) >= 0 && Syscall(444, 0, 0, 1, 0) >= 1;
 
     public static int Run(string[] args)
     {
         if (args.Length < 4 || !IsAvailable) return 79;
         var descriptors = new List<int>();
-        nint buffer = 0;
+        nint buffer = 0, program = 0;
         var rulesFd = -1;
         try
         {
-            var abi = Syscall(444, 0, 0, 1, 0);
-            ulong all = (1UL << 13) - 1;
-            if (abi >= 2) all |= 1UL << 13;
-            if (abi >= 3) all |= 1UL << 14;
+            var policy = SandboxPolicy.Parse(Environment.GetEnvironmentVariable(SandboxPolicy.EnvironmentVariable));
+            var abi = (int)Syscall(444, 0, 0, 1, 0);
+            var all = SandboxRules.FilesystemAccess(abi);
             buffer = Marshal.AllocHGlobal(16);
-            Marshal.StructureToPtr(new Ruleset { Access = all }, buffer, false);
-            rulesFd = (int)Syscall(444, buffer, 8, 0, 0);
+            Marshal.StructureToPtr(new Ruleset { Access = all, Network = SandboxRules.NetworkAccess(abi, policy) }, buffer, false);
+            rulesFd = (int)Syscall(444, buffer, SandboxRules.RulesetSize(abi), 0, 0);
             if (rulesFd < 0) return 79;
-            const ulong read = 1UL | (1UL << 2) | (1UL << 3);
             void Allow(string path, ulong access)
             {
                 if (!File.Exists(path) && !Directory.Exists(path)) return;
                 var fd = open(path, 0x200000 | 0x80000); // O_PATH | O_CLOEXEC
                 if (fd < 0) throw new IOException("Sandbox path unavailable.");
                 descriptors.Add(fd);
-                if (!Directory.Exists(path)) access &= 1UL | (1UL << 1) | (1UL << 2) | (1UL << 14);
+                if (!Directory.Exists(path)) access &= SandboxRules.Execute | SandboxRules.WriteFile | SandboxRules.ReadFile | SandboxRules.Truncate;
                 Marshal.StructureToPtr(new PathRule { Access = access, Parent = fd }, buffer, false);
                 if (Syscall(445, rulesFd, 1, buffer, 0) != 0) throw new IOException("Sandbox rule rejected.");
             }
             Allow(Path.GetFullPath(args[1]), all);
-            foreach (var path in new[] { "/usr", "/bin", "/lib", "/lib64", "/proc", "/sys", "/etc/passwd", "/etc/ssl/certs", "/etc/ssl/openssl.cnf",
-                "/usr/lib/ssl/openssl.cnf", "/etc/resolv.conf", "/etc/hosts", "/etc/nsswitch.conf", "/etc/ld.so.cache", "/dev/urandom",
-                "/dev/random" }) Allow(path, read);
-            Allow("/dev/null", (1UL << 1) | (1UL << 2));
-            foreach (var path in Directory.EnumerateFiles(AppContext.BaseDirectory).Where(path => path.EndsWith(".dll") || path.EndsWith(".deps.json")
-                || path.EndsWith(".runtimeconfig.json"))) Allow(path, read);
-            Allow(args[2], read);
-            foreach (var path in JsonSerializer.Deserialize<string[]>(args[3]) ?? []) Allow(Path.GetFullPath(path), read);
-            if (prctl(38, 1, 0, 0, 0) != 0 || Syscall(446, rulesFd, 0, 0, 0) != 0) return 79;
-            var info = new ProcessStartInfo(args[2]) { WorkingDirectory = args[1], UseShellExecute = false };
-            foreach (var arg in args.Skip(4)) info.ArgumentList.Add(arg);
-            if (Environment.GetEnvironmentVariable(MinimalEnvironmentVariable) == "minimal")
-            {
-                var current = info.Environment.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
-                info.Environment.Clear();
-                foreach (var (name, value) in MinimalEnvironment(current, Path.GetFullPath(args[1]))) info.Environment[name] = value;
-            }
-            using var child = Process.Start(info) ?? throw new IOException("Child unavailable.");
-            child.WaitForExit();
-            return child.ExitCode;
+            foreach (var path in SandboxRules.ReadOnlyPaths(policy)) Allow(path, SandboxRules.Read);
+            Allow("/dev/null", SandboxRules.WriteFile | SandboxRules.ReadFile);
+            Allow(args[2], SandboxRules.Read);
+            foreach (var path in JsonSerializer.Deserialize<string[]>(args[3]) ?? []) Allow(Path.GetFullPath(path), SandboxRules.Read);
+
+            // Prepared before the restriction (managed code may still load assemblies): afterwards only execve remains.
+            var current = Environment.GetEnvironmentVariables().Cast<System.Collections.DictionaryEntry>()
+                .ToDictionary(entry => (string)entry.Key, entry => (string?)entry.Value, StringComparer.Ordinal);
+            var minimal = current.GetValueOrDefault(MinimalEnvironmentVariable) == "minimal";
+            current.Remove(SandboxPolicy.EnvironmentVariable);
+            var environment = minimal ? MinimalEnvironment(current, Path.GetFullPath(args[1])) : current.Where(pair => pair.Value is not null)
+                .ToDictionary(pair => pair.Key, pair => pair.Value!, StringComparer.Ordinal);
+            string?[] argv = [args[2], .. args.Skip(4), null];
+            string?[] envp = [.. environment.Select(pair => pair.Key + "=" + pair.Value), null];
+            Directory.SetCurrentDirectory(args[1]);
+            signal(13, 0); // SIGPIPE: the runtime ignores it, the tool must get the default disposition back through execve
+            execvpe("", argv, envp); // always fails (ENOENT): binds the native entry point now, before the restriction
+
+            var filter = SeccompFilter.Encode(SeccompFilter.Build(RuntimeInformation.ProcessArchitecture, policy.AllowNetwork));
+            program = Marshal.AllocHGlobal(16 + filter.Length);
+            Marshal.Copy(filter, 0, program + 16, filter.Length);
+            Marshal.WriteInt64(program, 0);
+            Marshal.WriteInt16(program, (short)(filter.Length / 8)); // struct sock_fprog { u16 len; sock_filter* filter; }
+            Marshal.WriteIntPtr(program, 8, program + 16);
+            if (prctl(38, 1, 0, 0, 0) != 0 || Syscall(446, rulesFd, 0, 0, 0) != 0 || prctl(22, 2, (ulong)program, 0, 0) != 0) return 79;
+
+            // Replaces this process: same PID, so the /proc/self rule above stays the tool's own directory. Returns only on failure.
+            execvpe(args[2], argv, envp);
+            return 79;
         }
         catch { return 79; }
         finally
@@ -96,6 +109,7 @@ public static class ProcessSandbox
             foreach (var fd in descriptors) close(fd);
             if (rulesFd >= 0) close(rulesFd);
             if (buffer != 0) Marshal.FreeHGlobal(buffer);
+            if (program != 0) Marshal.FreeHGlobal(program);
         }
     }
 }
