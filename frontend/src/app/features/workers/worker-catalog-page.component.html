@@ -6,12 +6,14 @@
   (navigationSelectedChange)="onManagementTabChange($event)"
   [actionStep]="actionStep()"
   [detailOpen]="
-    pageTab() === 'groups' ? selectedGroupForDetail() !== null : selectedNode() !== null
+    pageTab() === 'groups' ? groups.selectedGroupForDetail() !== null : data.selectedNode() !== null
   "
-  [actionOpen]="pageTab() === 'groups' ? groupFormOpen() : local.flow() !== null || actionOpen()"
+  [actionOpen]="
+    pageTab() === 'groups' ? groups.groupFormOpen() : local.flow() !== null || data.actionOpen()
+  "
   [actionTitle]="
     pageTab() === 'groups'
-      ? groupEditing()
+      ? groups.groupEditing()
         ? 'Modifier le groupe'
         : 'Nouveau groupe de workers'
       : local.flow() === 'join'
@@ -26,38 +28,40 @@
         : actionDescription()
   "
   [detailTitle]="
-    pageTab() === 'groups' ? (selectedGroupForDetail()?.name ?? 'Détails du groupe') : detailTitle()
+    pageTab() === 'groups' ? (groups.selectedGroupForDetail()?.name ?? 'Détails du groupe') : detailTitle()
   "
   [detailDescription]="
     pageTab() === 'groups' ? 'Membres et critères résolus du groupe' : detailDescription()
   "
   [catalogState]="pageState()"
   [catalogMessage]="catalogMessage()"
-  [drawerSize]="pageTab() === 'groups' && groupFormOpen() ? 'wide' : 'standard'"
+  [drawerSize]="pageTab() === 'groups' && groups.groupFormOpen() ? 'wide' : 'standard'"
   [drawerHeaderDensity]="
-    selectedNode() && !actionOpen() && local.flow() === null ? 'compact' : 'standard'
+    data.selectedNode() && !data.actionOpen() && local.flow() === null ? 'compact' : 'standard'
   "
   [drawerModal]="true"
-  (detailClosed)="pageTab() === 'groups' ? closeGroupDetail() : onDetailClosed()"
-  (actionClosed)="pageTab() === 'groups' ? closeGroupForm() : closeCreateNode()"
-  [showToolbar]="
-    pageTab() === 'cluster' && clusterIdentity() !== null && filtersOpen()
-  "
+  (detailClosed)="pageTab() === 'groups' ? groups.closeGroupDetail() : onDetailClosed()"
+  (actionClosed)="pageTab() === 'groups' ? groups.closeGroupForm() : enrollment.closeCreateNode()"
+  [showToolbar]="pageTab() === 'cluster' && clusterIdentity() !== null && filtersOpen()"
   filterLabel="Membres du central actuel"
   searchLayout="end"
   searchLabel=""
-  [searchQuery]="nodeSearchQuery()"
-  (searchQueryChange)="nodeSearchQuery.set($event)"
-  [filterCount]="activeFilters().length"
+  [searchQuery]="members.nodeSearchQuery()"
+  (searchQueryChange)="members.nodeSearchQuery.set($event)"
+  [filterCount]="members.activeFilters().length"
 >
   <ng-template #pageActions>
     @if (pageTab() === 'groups') {
       @if (isAdmin()) {
-        <button matButton="filled" type="button" (click)="createGroup()">Créer un groupe</button>
+        <button matButton="filled" type="button" (click)="groups.createGroup()">
+          Créer un groupe
+        </button>
       }
     } @else if (pageTab() === 'cluster' && clusterIdentity()) {
       @if (isAdmin()) {
-        <button matButton="filled" type="button" (click)="addNode()">Ajouter un worker</button>
+        <button matButton="filled" type="button" (click)="enrollment.addNode()">
+          Ajouter un worker
+        </button>
       }
     }
   </ng-template>
@@ -68,7 +72,7 @@
         <strong>{{ clusterName() }}</strong>
       } @else {
         <span>Organisation</span>
-        <strong>{{ filteredGroups().length }} groupe(s)</strong>
+        <strong>{{ groups.filteredGroups().length }} groupe(s)</strong>
       }
     </div>
   }
@@ -80,9 +84,9 @@
         </button>
       }
       @if (clusterIdentity()) {
-        @if (enrollmentRows().length > 0) {
+        @if (enrollment.enrollmentRows().length > 0) {
           <button matButton="outlined" type="button" (click)="focusEnrollmentRequests()">
-            Demandes <span class="node-action-count">{{ enrollmentRows().length }}</span>
+            Demandes <span class="node-action-count">{{ enrollment.enrollmentRows().length }}</span>
           </button>
         }
         <button matButton="outlined" type="button" [matMenuTriggerFor]="clusterActions">
@@ -100,88 +104,31 @@
       }
     </div>
   }
-  <ng-container catalogue-summary>
-    @if (pageTab() === 'cluster' && local.pending()) {
-      <div class="node-alert-banner node-alert-banner_warning" role="status">
-        <span class="node-alert-icon" aria-hidden="true">!</span>
-        <p>
-          <strong>Rattachement en attente</strong> vers {{ local.targetName() }}.
-        </p>
-      </div>
-    }
-    @if (pageTab() === 'cluster' && local.agentUnavailable() && !local.loading()) {
-      <div class="node-alert-banner node-alert-banner_warning" role="status">
-        <span class="node-alert-icon" aria-hidden="true">!</span>
-        <p>
-          <strong>L’agent de ce worker ne répond pas.</strong>
-          Le suivi du rattachement est indisponible tant que l’agent ne répond pas.
-        </p>
-      </div>
-    }
-    @if (local.identityUnavailable() && !local.loading()) {
-      <div class="node-alert-banner node-alert-banner_warning" role="alert">
-        <span class="node-alert-icon" aria-hidden="true">⚠️</span>
-        <p>
-          L’identité du central n’a pas pu être actualisée. Réessayez avant de modifier son
-          appartenance.
-        </p>
-      </div>
-    }
-    @if (pageTab() === 'cluster' && local.status()?.enrollmentFailure; as failure) {
-      <div class="node-alert-banner node-alert-banner_danger" role="alert">
-        <span class="node-alert-icon" aria-hidden="true">✕</span>
-        <p>Rattachement annulé : {{ failure }}</p>
-      </div>
-    }
-    @if (pageTab() === 'cluster' && clusterIdentity()) {
-      <section class="node-cluster-summary" aria-label="Synthèse du central">
-        <div class="node-cluster-identity">
-          <span class="node-cluster-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <rect x="3" y="4" width="18" height="6" rx="2" />
-              <rect x="3" y="14" width="18" height="6" rx="2" />
-              <path d="M7 7h.01M7 17h.01M11 7h7M11 17h7" />
-            </svg>
-          </span>
-          <span class="node-cluster-name">
-            <strong>{{ clusterName() }}</strong>
-            <small>{{ nodes().length }} workers membres</small>
-          </span>
-        </div>
-        @for (tile of summaryTiles(); track tile.label) {
-          <div
-            class="node-cluster-metric"
-            [class.node-cluster-metric_attention]="tile.tone === 'attention'"
-            [title]="tile.detail ?? tile.label"
-          >
-            <span>{{ tile.label }}</span>
-            <strong>{{ tile.value }}</strong>
-          </div>
-        }
-      </section>
-    }
-  </ng-container>
+  <app-worker-cluster-summary catalogue-summary [active]="pageTab() === 'cluster'" />
   <div catalogue-filters class="catalogue-filters-container">
     <mat-form-field appearance="outline" subscriptSizing="dynamic">
       <mat-label>Fonctions</mat-label
-      ><mat-select [value]="selectedRole()" (selectionChange)="onRoleChange($event.value)">
-        @for (option of roleOptions(); track option.value) {
+      ><mat-select [value]="members.selectedRole()" (selectionChange)="members.onRoleChange($event.value)">
+        @for (option of members.roleOptions(); track option.value) {
           <mat-option [value]="option.value">{{ option.label }} · {{ option.count }}</mat-option>
         }
       </mat-select>
     </mat-form-field>
     <mat-form-field appearance="outline" subscriptSizing="dynamic">
       <mat-label>État</mat-label
-      ><mat-select [value]="selectedState()" (selectionChange)="selectedState.set($event.value)">
-        @for (option of stateOptions(); track option.value) {
+      ><mat-select
+        [value]="members.selectedState()"
+        (selectionChange)="members.selectedState.set($event.value)"
+      >
+        @for (option of members.stateOptions(); track option.value) {
           <mat-option [value]="option.value">{{ option.label }} · {{ option.count }}</mat-option>
         }
       </mat-select>
     </mat-form-field>
   </div>
-  @if (activeFilters().length > 0) {
+  @if (members.activeFilters().length > 0) {
     <div catalogue-active-filters class="active-filters" role="group" aria-label="Filtres actifs">
-      @for (filter of activeFilters(); track filter.id) {
+      @for (filter of members.activeFilters(); track filter.id) {
         <button
           type="button"
           class="filter-chip"
@@ -191,173 +138,33 @@
           {{ filter.label }} <span aria-hidden="true">✕</span>
         </button>
       }
-      <button type="button" class="filter-chip is-plain" (click)="clearNodeFilters()">
+      <button type="button" class="filter-chip is-plain" (click)="members.clearNodeFilters()">
         Tout effacer
       </button>
     </div>
   }
   <div catalogue-table>
     @if (pageTab() === 'groups') {
-      <div class="groups-grid">
-        @if (filteredGroups().length === 0) {
-          <div class="groups-empty">
-            <span class="empty-icon"><app-icon name="sell" /></span>
-            @if (groupSearchQuery().trim()) {
-              <h3 class="empty-title">Aucun résultat</h3>
-              <p class="empty-desc">Aucun groupe ne correspond à « {{ groupSearchQuery() }} ».</p>
-            } @else {
-              <h3 class="empty-title">Aucun groupe de workers</h3>
-              <p class="empty-desc">
-                Les groupes permettent d’organiser vos serveurs et workers, d’attribuer des
-                étiquettes partagées et de contraindre l’exécution des flows.
-              </p>
-              @if (isAdmin()) {
-                <button matButton="filled" type="button" (click)="createGroup()">
-                  Créer un groupe
-                </button>
-              }
-            }
-          </div>
-        } @else {
-          @for (group of filteredGroups(); track group.id) {
-            <app-worker-group-card
-              [group]="group"
-              [nodes]="nodes()"
-              [isAdmin]="isAdmin()"
-              (open)="openGroupDetail(group)"
-              (edit)="editGroup(group)"
-              (delete)="confirmRemoveGroup(group)"
-            />
-          }
-        }
-      </div>
+      <app-worker-groups-tab />
     } @else if (pageTab() === 'node') {
-      <app-worker-overview-card
-        ariaLabel="Fiche du worker local"
-        layout="local"
-        [isMaster]="(localNode()?.roles ?? []).includes('server')"
-        [title]="localSheet().title"
-        [subtitle]="
-          (localNode()?.roles ?? []).includes('server')
-            ? 'Central de ' + clusterName()
-            : localSheet().subtitle
-        "
-        [hardware]="localOverviewHardware()"
-        [statusLabel]="localOverviewStatus().label"
-        [statusTone]="localOverviewStatus().tone"
-        [nodeId]="localNode()?.id ?? 'local-node'"
-        [roles]="localOverviewRoles()"
-        [admissionEnabled]="localAdmissionEnabled()"
-        [admissionDisabled]="localAdmissionDisabled()"
-        [taskCapacity]="localTaskCapacity()"
-        [meta]="localOverviewMeta()"
-        [notices]="localSheet().notices"
-        [sections]="localOverviewSections()"
-        [libraries]="localOverviewLibraries()"
-        [libraryAccessState]="libraryAccessState()"
-        (actionSelected)="onLocalSheetAction($event)"
-        (admissionChange)="setLocalAdmission($event)"
-      />
+      <app-worker-local-tab />
     } @else {
-      @if (isAdmin() && enrollmentRows().length) {
-        <section id="node-enrollment-requests" class="node-enrollment-requests">
-          <header class="node-enrollment-heading">
-            <h2>Demandes de rattachement</h2>
-            <p>Comparez le code affiché sur le worker demandeur avant de l’approuver.</p>
-          </header>
-          <app-data-table
-            [columns]="enrollmentColumns"
-            [rows]="enrollmentRows()"
-            layout="resources"
-            [layoutOptions]="enrollmentLayoutOptions"
-            [rowOpenable]="true"
-            rowOpenLabel="Examiner la demande"
-            (rowOpen)="onEnrollmentOpen($event)"
-          />
-        </section>
-      }
-      @if (selectedMemberIds().size && isAdmin()) {
-        <div class="member-selection" role="group" aria-label="Actions sur la sélection">
-          <span>{{ selectedMemberIds().size }} worker(s) sélectionné(s)</span>
-          <button
-            matButton="outlined"
-            type="button"
-            [disabled]="bulkBusy()"
-            (click)="runMemberBulk('drain')"
-          >
-            Vidanger
-          </button>
-          <button
-            matButton="outlined"
-            type="button"
-            [disabled]="bulkBusy()"
-            (click)="runMemberBulk('resume')"
-          >
-            Reprendre le travail
-          </button>
-          <button
-            matButton="outlined"
-            type="button"
-            [disabled]="bulkBusy()"
-            (click)="runMemberBulk('delete')"
-          >
-            Supprimer
-          </button>
-          <button matButton="text" type="button" (click)="selectedMemberIds.set(emptySelection)">
-            Tout désélectionner
-          </button>
-        </div>
-      }
-      @if (memberCards().length) {
-        <div class="member-cards">
-          @for (card of memberCards(); track card.id) {
-            <app-worker-overview-card
-              [ariaLabel]="'Carte du worker ' + card.title"
-              [isMaster]="card.isMaster"
-              [title]="card.title"
-              [subtitle]="card.subtitle"
-              [hardware]="card.hardware"
-              [statusLabel]="card.statusLabel"
-              [statusTone]="card.statusTone"
-              [nodeId]="card.id"
-              [roles]="card.roles"
-              [admissionEnabled]="card.admissionEnabled"
-              [admissionDisabled]="card.admissionDisabled"
-              [taskCapacity]="card.taskCapacity"
-              [meta]="card.meta"
-              [sections]="card.sections"
-              [libraries]="card.libraries"
-              [libraryAccessState]="libraryAccessState()"
-              [actions]="memberActions()"
-              [selectable]="isAdmin() && !bulkBusy()"
-              [selected]="selectedMemberIds().has(card.id)"
-              [active]="selectedNode()?.id === card.id"
-              [openable]="true"
-              (selectedChange)="toggleMember(card.id, $event)"
-              (actionSelected)="onMemberCardAction(card.id, $event)"
-              (admissionChange)="setMemberAdmission(card.id, $event)"
-              (open)="openNodeCard(card.id)"
-            />
-          }
-        </div>
-      } @else {
-        <p class="member-empty">Aucun worker ne correspond à ces filtres.</p>
-      }
+      <app-worker-cluster-tab />
     }
   </div>
   <ng-template #detailHeaderActions>
     @if (isAdmin()) {
-      @if (rawNode(); as node) {
-        @if (admissionEnabledFor(node) !== null) {
+      @if (members.rawSelectedNode(); as node) {
+        @if (members.admissionEnabledFor(node) !== null) {
           <mat-slide-toggle
-            [checked]="admissionEnabledFor(node) ?? false"
-            [disabled]="admissionDisabledFor(node)"
+            [checked]="members.admissionEnabledFor(node) ?? false"
+            [disabled]="members.admissionDisabledFor(node)"
             [aria-label]="
-              (admissionEnabledFor(node) ? 'Suspendre' : 'Réactiver') +
+              (members.admissionEnabledFor(node) ? 'Suspendre' : 'Réactiver') +
               ' les nouvelles tâches sur ' +
               node.name
             "
-            (change)="setSelectedNodeAdmission($event.checked)"
+            (change)="members.setSelectedNodeAdmission($event.checked)"
           >
             Nouvelles tâches
           </mat-slide-toggle>
@@ -365,7 +172,7 @@
         <app-drawer-action-button
           label="Nom et étiquettes"
           variant="outlined"
-          (activated)="editSelectedNodeIdentity()"
+          (activated)="detail.editSelectedNodeIdentity()"
         />
       }
     }
@@ -373,182 +180,13 @@
   <ng-template #detailContent catalogue-detail>
     @if (pageTab() === 'groups') {
       <app-worker-group-detail
-        [group]="selectedGroupForDetail()"
-        [nodes]="nodes()"
+        [group]="groups.selectedGroupForDetail()"
+        [nodes]="data.nodes()"
         [isAdmin]="isAdmin()"
-        (edit)="editGroup(selectedGroupForDetail()!)"
+        (edit)="groups.editGroup(groups.selectedGroupForDetail()!)"
       />
     } @else {
-      <mat-tab-group
-        class="node-detail-tabs"
-        aria-label="Sections du worker"
-        [selectedIndex]="selectedNodeTabIndex()"
-        (selectedIndexChange)="selectedNodeTabIndex.set($event)"
-      >
-        <mat-tab label="Général">
-          @if (generalSheet(); as sheet) {
-            <app-resource-sheet
-              ariaLabel="Informations générales du worker"
-              [title]="sheet.title"
-              [subtitle]="sheet.subtitle"
-              [sections]="sheet.sections"
-            />
-          }
-        </mat-tab>
-        @if (rawNode()?.roles?.includes('worker')) {
-          <mat-tab label="Traitement">
-            <div class="node-processing-tab">
-              <app-detail-card-grid
-                [cards]="processingCards()"
-                [initiallyExpanded]="true"
-                [collapsible]="false"
-                [cardContentTemplates]="{
-                  'node-processing-limit': processingLimitContent,
-                  'node-processing-calendar': processingCalendarContent,
-                }"
-                ariaLabel="Réglages de traitement du worker"
-              />
-              <p class="node-tab-note">
-                Les plafonds de bibliothèque et de couple worker et bibliothèque s’appliquent aussi.
-                Hors des plages du calendrier, aucun nouveau traitement ne démarre ; ceux en cours
-                ne sont pas interrompus.
-              </p>
-            </div>
-            <ng-template #processingLimitContent>
-              @if (processingForm(); as form) {
-                <app-record-form
-                  [data]="form"
-                  [busy]="processingBusy()"
-                  (submitted)="saveNodeProcessing($event)"
-                />
-              } @else {
-                <p role="status">Chargement de la limite du worker…</p>
-              }
-            </ng-template>
-            <ng-template #processingCalendarContent>
-              @if (nodeProcessingState(); as settings) {
-                <app-weekly-schedule-form
-                  [schedule]="settings.schedule"
-                  [busy]="scheduleBusy()"
-                  (saved)="saveNodeSchedule($event)"
-                />
-              } @else {
-                <p role="status">Chargement du calendrier…</p>
-              }
-            </ng-template>
-          </mat-tab>
-        }
-        <mat-tab label="Capacités">
-          <app-detail-field-list [fields]="capabilityFields()" layout="cards" />
-          <app-detail-card-grid
-            [cards]="capabilityCards()"
-            [initiallyExpanded]="false"
-            ariaLabel="Outils et capacités de traitement"
-            emptyMessage="Aucune capacité déclarée par ce worker."
-          />
-          <p class="node-tab-note capability-note">
-            Les encodeurs « utilisables » ont réussi un test synthétique ; les bibliothèques,
-            limites et règles d’attribution déterminent aussi l’éligibilité à une tâche.
-          </p>
-        </mat-tab>
-        <mat-tab label="Bibliothèques">
-          @if (selectedNode(); as node) {
-            <section class="node-libraries" aria-label="Bibliothèques autorisées sur ce worker">
-              <header class="node-libraries-heading">
-                <div>
-                  <h3>Accès autorisés par le serveur</h3>
-                  <p>
-                    Le serveur déclare les bibliothèques et autorise les workers. Configurez ici le
-                    chemin visible depuis {{ node.name }}.
-                  </p>
-                </div>
-                <button matButton="filled" type="button" (click)="openAddLibrary()">
-                  Déclarer une bibliothèque
-                </button>
-              </header>
-              @if (availableLibraries().length) {
-                <div class="add-library-row">
-                  <mat-form-field appearance="outline">
-                    <mat-label>Bibliothèque déjà déclarée</mat-label>
-                    <mat-select
-                      [value]="selectedAvailableLibraryId()"
-                      (selectionChange)="selectedAvailableLibraryId.set($event.value)"
-                    >
-                      @for (library of availableLibraries(); track library.id) {
-                        <mat-option [value]="library.id">{{ library.name }}</mat-option>
-                      }
-                    </mat-select>
-                  </mat-form-field>
-                  <button
-                    matButton="outlined"
-                    type="button"
-                    [disabled]="!selectedAvailableLibraryId()"
-                    (click)="addExistingLibrary()"
-                  >
-                    Ajouter au worker
-                  </button>
-                </div>
-              }
-              @if (nodeLibraryLoading()) {
-                <p role="status">Chargement des bibliothèques autorisées…</p>
-              } @else if (nodeLibraryRows().length) {
-                <app-data-table
-                  [columns]="nodeLibraryColumns"
-                  [rows]="nodeLibraryRows()"
-                  [rowActions]="nodeLibraryActions"
-                  [separateRowActionColumns]="true"
-                  (rowAction)="onNodeLibraryAction($event)"
-                  (toggleChange)="onNodeLibraryToggle($event)"
-                  emptyMessage="Aucune bibliothèque autorisée sur ce worker."
-                />
-              } @else {
-                <div class="node-libraries-empty">
-                  <strong>Aucune bibliothèque autorisée</strong>
-                  <p>
-                    Choisissez une bibliothèque déjà déclarée par le serveur ou créez-en une
-                    nouvelle.
-                  </p>
-                </div>
-              }
-            </section>
-          }
-        </mat-tab>
-        <mat-tab label="Avancé">
-          <div class="node-processing-tab">
-            @if (lifecycleText(); as text) {
-              <p class="node-tab-note" role="status">{{ text }}</p>
-            }
-            @if (rawNode()?.lifecycle === 'quarantined') {
-              <div class="node-tab-actions">
-                <app-drawer-action-button
-                  label="Lever la quarantaine"
-                  [disabled]="lifecycleBusy()"
-                  (activated)="clearQuarantine()"
-                />
-              </div>
-            }
-            <p class="node-tab-note">
-              Retirer le worker révoque son identité et refuse ses baux actifs, sans supprimer
-              l’historique. Il ne peut pas être réactivé par un simple signal de présence.
-            </p>
-            <div class="node-tab-actions">
-              <app-drawer-action-button
-                label="Supprimer le worker"
-                tone="danger"
-                [disabled]="removalBusy()"
-                (activated)="confirmNodeRemoval()"
-              />
-            </div>
-          </div>
-        </mat-tab>
-        <mat-tab label="Journaux">
-          @if (selectedNode(); as node) {
-            <div class="node-logs-tab">
-              <app-system-log-viewer [nodeId]="node.id" [title]="'Journaux de ' + node.name" />
-            </div>
-          }
-        </mat-tab>
-      </mat-tab-group>
+      <app-worker-detail-drawer />
     }
   </ng-template>
   <ng-template #actionFooterActions>
@@ -556,157 +194,10 @@
       <app-record-form-actions [form]="form" />
     }
   </ng-template>
-
   <ng-template #actionContent>
-    @if (pageTab() === 'groups') {
-      <app-worker-group-editor
-        [group]="groupEditing()"
-        [nodes]="nodes()"
-        [busy]="groupBusy()"
-        (saved)="saveNodeGroup($event)"
-        (cancelled)="closeGroupForm()"
-      />
-    } @else if (local.flow() === 'join') {
-      <app-guided-setup
-        [steps]="joinSteps()"
-        [index]="local.joinIndex()"
-        [busy]="local.busy()"
-        [error]="local.error()"
-        [disabled]="local.agentUnavailable()"
-        (submitted)="local.verifyAddress($event.values)"
-        (acted)="onSetupAction($event)"
-        (chosen)="local.chooseCluster($event['id'].toString())"
-        (choiceAction)="local.forgetCluster($event.row['id'].toString())"
-        (cancelled)="local.closeFlow()"
-      />
-    } @else if (actionType() === 'identity') {
-      @if (identityForm(); as form) {
-        <app-record-form
-          [embedded]="true"
-          [data]="form"
-          (submitted)="saveNodeIdentity($event)"
-          (cancelled)="closeCreateNode()"
-        />
-      }
-    } @else if (actionType() === 'library-access' && selectedNode(); as node) {
-      @if (nodeLibraryLoading()) {
-        <p role="status">Chargement de la configuration…</p>
-      } @else {
-        <app-library-node-access-form
-          [libraryName]="selectedNodeLibrary()?.name ?? ''"
-          [nodes]="[nodeAccessOption(node)]"
-          [initialAccesses]="selectedNodeLibraryAccess() ? [selectedNodeLibraryAccess()!] : []"
-          [busy]="accessFormBusy()"
-          (saved)="saveNodeLibraryAccess($event)"
-          (cancelled)="closeCreateNode()"
-        />
-      }
-    } @else if (actionType() === 'create-library') {
-      <app-record-form
-        [embedded]="true"
-        [data]="createLibraryFormData"
-        (submitted)="createLibraryFromNode($event)"
-        (cancelled)="closeCreateNode()"
-      />
-    } @else if (enrollmentView() === 'requests') {
-      <section class="enrollment-guide" aria-label="Demandes de jumelage">
-        <div class="enrollment-step">
-          <span>Étape 1 sur 2</span>
-          <h3>Repérer le worker</h3>
-          <p>
-            Sur le worker à ajouter, ouvrez la page Workers puis « Cluster
-            <app-icon name="forward" /> Rejoindre un central » : ajoutez l’adresse de ce central
-            puis choisissez « Demander à rejoindre ». La demande apparaîtra ici pour vérification.
-          </p>
-        </div>
-        @if (enrollmentRows().length) {
-          <app-data-table
-            [columns]="enrollmentColumns"
-            [rows]="enrollmentRows()"
-            layout="resources"
-            [layoutOptions]="enrollmentLayoutOptions"
-            [rowOpenable]="true"
-            rowOpenLabel="Examiner"
-            (rowOpen)="onEnrollmentOpen($event)"
-            emptyMessage="Aucune demande de jumelage en attente."
-          />
-        } @else {
-          <p class="enrollment-empty" role="status">
-            Aucune demande en attente. Depuis le worker à ajouter, ouvrez Workers
-            <app-icon name="forward" /> Cluster <app-icon name="forward" /> Rejoindre un central.
-            Les demandes et leurs clés expirent après 10 minutes.
-          </p>
-        }
-        <button matButton="text" type="button" (click)="showPairingKey()">
-          J’ai déjà une clé de jumelage
-        </button>
-        @if (isAdmin()) {
-          <div class="enrollment-step enrollment-window">
-            <h3>Enrôlement direct</h3>
-            @if (enrollmentWindow().isOpen) {
-              <p role="status">
-                Un worker peut rejoindre ce central sans validation jusqu’à
-                {{ enrollmentWindow().openUntil | date: 'HH:mm' }}. Fermez la fenêtre dès que le
-                worker est rattaché.
-              </p>
-              <button matButton="outlined" type="button" (click)="closeEnrollmentWindow()">
-                Fermer l’enrôlement direct
-              </button>
-            } @else {
-              <p>
-                Fermé : la confirmation locale d’un worker est refusée par défaut. Ouvrez-la 10
-                minutes pour rattacher un worker sans clé.
-              </p>
-              <button matButton="outlined" type="button" (click)="openEnrollmentWindow()">
-                Ouvrir l’enrôlement direct (10 min)
-              </button>
-            }
-          </div>
-          <div class="enrollment-step enrollment-window">
-            <h3>Première liaison</h3>
-            @if (firstLink().isActive) {
-              <p role="status">
-                La prochaine demande de rattachement sera acceptée
-                <strong>sans vérification</strong> jusqu’à
-                {{ firstLink().expiresAt | date: 'HH:mm' }}, puis ce mode s’éteindra seul.
-              </p>
-              <button matButton="outlined" type="button" (click)="disableFirstLink()">
-                Désactiver maintenant
-              </button>
-            } @else {
-              <p>
-                Désactivé : chaque demande est comparée puis approuvée à la main. Activez-le 10
-                minutes pour accepter sans vérification la toute première demande qui arrive.
-              </p>
-              <button matButton="outlined" type="button" (click)="enableFirstLink()">
-                Accepter la prochaine demande (10 min)
-              </button>
-            }
-          </div>
-        }
-      </section>
-    } @else if (enrollmentView() === 'review' && selectedEnrollment()) {
-      <app-guided-setup
-        [steps]="enrollmentSteps()"
-        [index]="enrollmentStep()"
-        [orientation]="'horizontal'"
-        [busy]="enrollmentApprovalBusy()"
-        [acknowledged]="enrollmentCodeConfirmed()"
-        (acknowledgementChange)="enrollmentCodeConfirmed.set($event)"
-        (acted)="onEnrollmentSetupAction($event)"
-      />
-    } @else if (enrollmentView() === 'key') {
-      <div class="pairing-key-header">
-        <button matButton="text" type="button" (click)="showPendingRequests()">
-          <app-icon name="back" /> Retour aux demandes
-        </button>
-      </div>
-      <app-record-form
-        [embedded]="true"
-        [data]="createFormData"
-        (submitted)="acceptNode($event)"
-        (cancelled)="closeCreateNode()"
-      />
-    }
+    <app-worker-action-drawer
+      [groupsMode]="pageTab() === 'groups'"
+      (setupFinished)="onSetupFinished()"
+    />
   </ng-template>
 </app-central-maintenance-template>

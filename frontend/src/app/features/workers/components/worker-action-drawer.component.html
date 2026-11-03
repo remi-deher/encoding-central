@@ -1,0 +1,150 @@
+@if (groupsMode()) {
+  <app-worker-group-editor
+    [group]="groups.groupEditing()"
+    [nodes]="data.nodes()"
+    [busy]="groups.groupBusy()"
+    (saved)="groups.saveNodeGroup($event)"
+    (cancelled)="groups.closeGroupForm()"
+  />
+} @else if (local.flow() === 'join') {
+  <app-guided-setup
+    [steps]="joinSteps()"
+    [index]="local.joinIndex()"
+    [busy]="local.busy()"
+    [error]="local.error()"
+    [disabled]="local.agentUnavailable()"
+    (submitted)="local.verifyAddress($event.values)"
+    (acted)="onSetupAction($event)"
+    (chosen)="local.chooseCluster($event['id'].toString())"
+    (choiceAction)="local.forgetCluster($event.row['id'].toString())"
+    (cancelled)="local.closeFlow()"
+  />
+} @else if (data.actionType() === 'identity') {
+  @if (detail.identityForm(); as form) {
+    <app-record-form
+      [embedded]="true"
+      [data]="form"
+      (submitted)="detail.saveNodeIdentity($event)"
+      (cancelled)="enrollment.closeCreateNode()"
+    />
+  }
+} @else if (data.actionType() === 'library-access' && data.selectedNode(); as node) {
+  @if (data.nodeLibraryLoading()) {
+    <p role="status">Chargement de la configuration…</p>
+  } @else {
+    <app-library-node-access-form
+      [libraryName]="detail.selectedNodeLibrary()?.name ?? ''"
+      [nodes]="[detail.nodeAccessOption(node)]"
+      [initialAccesses]="detail.selectedNodeLibraryAccess() ? [detail.selectedNodeLibraryAccess()!] : []"
+      [busy]="detail.accessFormBusy()"
+      (saved)="detail.saveNodeLibraryAccess($event)"
+      (cancelled)="enrollment.closeCreateNode()"
+    />
+  }
+} @else if (data.actionType() === 'create-library') {
+  <app-record-form
+    [embedded]="true"
+    [data]="createLibraryFormData"
+    (submitted)="detail.createLibraryFromNode($event)"
+    (cancelled)="enrollment.closeCreateNode()"
+  />
+} @else if (enrollment.enrollmentView() === 'requests') {
+  <section class="enrollment-guide" aria-label="Demandes de jumelage">
+    <div class="enrollment-step">
+      <span>Étape 1 sur 2</span>
+      <h3>Repérer le worker</h3>
+      <p>
+        Sur le worker à ajouter, ouvrez la page Workers puis « Cluster
+        <app-icon name="forward" /> Rejoindre un central » : ajoutez l’adresse de ce central
+        puis choisissez « Demander à rejoindre ». La demande apparaîtra ici pour vérification.
+      </p>
+    </div>
+    @if (enrollment.enrollmentRows().length) {
+      <app-data-table
+        [columns]="enrollment.enrollmentColumns"
+        [rows]="enrollment.enrollmentRows()"
+        layout="resources"
+        [layoutOptions]="enrollment.enrollmentLayoutOptions"
+        [rowOpenable]="true"
+        rowOpenLabel="Examiner"
+        (rowOpen)="enrollment.onEnrollmentOpen($event)"
+        emptyMessage="Aucune demande de jumelage en attente."
+      />
+    } @else {
+      <p class="enrollment-empty" role="status">
+        Aucune demande en attente. Depuis le worker à ajouter, ouvrez Workers
+        <app-icon name="forward" /> Cluster <app-icon name="forward" /> Rejoindre un central.
+        Les demandes et leurs clés expirent après 10 minutes.
+      </p>
+    }
+    <button matButton="text" type="button" (click)="enrollment.showPairingKey()">
+      J’ai déjà une clé de jumelage
+    </button>
+    @if (isAdmin()) {
+      <div class="enrollment-step enrollment-window">
+        <h3>Enrôlement direct</h3>
+        @if (enrollment.enrollmentWindow().isOpen) {
+          <p role="status">
+            Un worker peut rejoindre ce central sans validation jusqu’à
+            {{ enrollment.enrollmentWindow().openUntil | date: 'HH:mm' }}. Fermez la fenêtre dès
+            que le worker est rattaché.
+          </p>
+          <button matButton="outlined" type="button" (click)="enrollment.closeEnrollmentWindow()">
+            Fermer l’enrôlement direct
+          </button>
+        } @else {
+          <p>
+            Fermé : la confirmation locale d’un worker est refusée par défaut. Ouvrez-la 10
+            minutes pour rattacher un worker sans clé.
+          </p>
+          <button matButton="outlined" type="button" (click)="enrollment.openEnrollmentWindow()">
+            Ouvrir l’enrôlement direct (10 min)
+          </button>
+        }
+      </div>
+      <div class="enrollment-step enrollment-window">
+        <h3>Première liaison</h3>
+        @if (enrollment.firstLink().isActive) {
+          <p role="status">
+            La prochaine demande de rattachement sera acceptée
+            <strong>sans vérification</strong> jusqu’à
+            {{ enrollment.firstLink().expiresAt | date: 'HH:mm' }}, puis ce mode s’éteindra seul.
+          </p>
+          <button matButton="outlined" type="button" (click)="enrollment.disableFirstLink()">
+            Désactiver maintenant
+          </button>
+        } @else {
+          <p>
+            Désactivé : chaque demande est comparée puis approuvée à la main. Activez-le 10
+            minutes pour accepter sans vérification la toute première demande qui arrive.
+          </p>
+          <button matButton="outlined" type="button" (click)="enrollment.enableFirstLink()">
+            Accepter la prochaine demande (10 min)
+          </button>
+        }
+      </div>
+    }
+  </section>
+} @else if (enrollment.enrollmentView() === 'review' && enrollment.selectedEnrollment()) {
+  <app-guided-setup
+    [steps]="enrollment.enrollmentSteps()"
+    [index]="enrollment.enrollmentStep()"
+    [orientation]="'horizontal'"
+    [busy]="enrollment.enrollmentApprovalBusy()"
+    [acknowledged]="enrollment.enrollmentCodeConfirmed()"
+    (acknowledgementChange)="enrollment.enrollmentCodeConfirmed.set($event)"
+    (acted)="enrollment.onEnrollmentSetupAction($event)"
+  />
+} @else if (enrollment.enrollmentView() === 'key') {
+  <div class="pairing-key-header">
+    <button matButton="text" type="button" (click)="enrollment.showPendingRequests()">
+      <app-icon name="back" /> Retour aux demandes
+    </button>
+  </div>
+  <app-record-form
+    [embedded]="true"
+    [data]="enrollment.createFormData"
+    (submitted)="enrollment.acceptNode($event)"
+    (cancelled)="enrollment.closeCreateNode()"
+  />
+}
