@@ -75,7 +75,7 @@ Ces règles sont obligatoires pour toute conception ou modification du backend. 
 
 ## 9. SQL natif SQLite uniquement
 
-- Tout SQL du backend (dépôts, `Sql.Command`, migrations) est du **SQLite natif**, exécuté tel quel. **Aucune couche de traduction** de dialecte (regex ou autre) : pas de `clock_timestamp()`, `now()`, `interval`, `::type`, `ANY(…)`, `jsonb_*`, `ILIKE`, `LATERAL`, `unnest`, `ARRAY[…]`, `LEAST`/`GREATEST`, `gen_random_uuid()`, ni de `RETURNING` ou de type qui n'existent pas dans SQLite. Voir [ADR 0043](docs/architecture/adr/0043-sql-sqlite-natif.md).
+- Tout SQL du backend (dépôts, `Sql.Command`, migrations) est du **SQLite natif**, exécuté tel quel. **Aucune couche de traduction** de dialecte (regex ou autre) : pas de `clock_timestamp()`, `now()`, `interval`, `::type`, `ANY(…)`, `jsonb_*`, `ILIKE`, `LATERAL`, `unnest`, `ARRAY[…]`, `LEAST`/`GREATEST`, `gen_random_uuid()`, ni de type ou de syntaxe absents de SQLite (`RETURNING` est pris en charge et autorisé). Voir [ADR 0043](docs/architecture/adr/0043-sql-sqlite-natif.md).
 - Instants : `Sql.UtcNow` (texte UTC de largeur fixe) ; tableaux : paramètre JSON lu par `json_each(@p)` ; durée : modificateur `strftime` (`'+30 seconds'`).
 - Pas de `FOR UPDATE` ni de `SKIP LOCKED` : la sérialisation repose sur l'écrivain unique (`SqliteWriter`). Une séquence lecture puis écriture s'exécute dans **une seule transaction d'écriture** ; ne jamais lire hors transaction pour décider d'une écriture.
 - `SqlStatementsPrepareTests` compile chaque requête de `backend/src` sur une base migrée : une requête invalide échoue à la CI. Un fragment SQL construit à l'exécution se déclare dans `DynamicFragments` de ce test.

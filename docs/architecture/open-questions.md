@@ -48,6 +48,7 @@ Décidés par l'[ADR 0036](adr/0036-separation-stricte-central-worker.md) : cent
 - Les instructions du projet (mission) et la mémoire d'équipe citent encore PostgreSQL ; le code, `AGENTS.md` et la production (vérifiée le 2026-10-21) sont en SQLite seul. À aligner côté instructions du projet, hors dépôt.
 - Documents d'exploitation : ré-audités le 2026-10-21 (index dans `docs/operations/README.md`). Restent à ré-auditer : `docs/design/*`.
 - `backend/README.md` : sections datées par numéros de migration (« la migration 0008 ajoute… ») à réécrire en renvoyant vers les fiches.
+- Dette SQL (ADR 0043) : l'instant courant est écrit en littéral `(strftime('%Y-%m-%d %H:%M:%f', 'now'…) || '000Z')` à ~100 endroits, contre quelques usages de `Sql.UtcNow` ; à factoriser (constante interpolée ou vue) dans une PR dédiée.
 
 ## Non vérifié en conditions réelles (à ne pas présenter comme garanti)
 Landlock en conteneur de production ; GPU réel (QSV, VAAPI, NVENC) ; Plex/Jellyfin/Sonarr/Radarr réels ; NAS/NFS (atomicité du renommage et des verrous) ; cluster multi-hôtes sous charge (changement de mode, reprise après perte de worker) ; thème sombre et mobile de la page Nœuds et de l'éditeur de flow.

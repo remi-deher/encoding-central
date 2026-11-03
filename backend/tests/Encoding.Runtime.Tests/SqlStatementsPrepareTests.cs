@@ -109,6 +109,22 @@ public sealed class SqlStatementsPrepareTests
         Assert.NotNull(Prepare(connection, "SELECT id::text FROM workers"));
     }
 
+    [DatabaseFact]
+    public async Task MigrationNativeScheduleSlotsDefaultOpensEverySlot()
+    {
+        await using var database = await TestDatabase.CreateSqliteAsync("sql-schedule-default");
+        await DatabaseMigrator.ApplyAsync(database.Db, Harness.RepositoryRoot(), CancellationToken.None);
+        await using var connection = new SqliteConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using var insert = connection.CreateCommand();
+        insert.CommandText = "INSERT INTO workers(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at) VALUES('w1','w','[\"worker\"]',1,'[]','2026-01-01 00:00:00.000000Z');"
+            + "INSERT INTO worker_processing_settings(worker_id) VALUES('w1')";
+        await insert.ExecuteNonQueryAsync();
+        await using var read = connection.CreateCommand();
+        read.CommandText = "SELECT schedule_slots FROM worker_processing_settings WHERE worker_id='w1'";
+        Assert.Equal(new string('1', 672), (string?)await read.ExecuteScalarAsync());
+    }
+
     /// <summary>Compile chaque instruction sans l'exécuter (<c>EXPLAIN</c>) ; retourne le message d'erreur SQLite, ou null.</summary>
     private static string? Prepare(SqliteConnection connection, string sql)
     {

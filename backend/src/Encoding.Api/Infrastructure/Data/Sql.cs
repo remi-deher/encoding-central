@@ -9,7 +9,7 @@ public enum SqlKind { Text, Json, Bytes, Integer, Decimal, Uuid }
 
 /// <summary>
 /// Seul point du backend qui connaît le fournisseur de base de données.
-/// Le SQL des dépôts est du SQLite natif, exécuté tel quel (aucune traduction) ; voir l'ADR 0043 et l'ADR 0043.
+/// Le SQL des dépôts est du SQLite natif, exécuté tel quel (aucune traduction) ; voir l'ADR 0043.
 /// </summary>
 public static class Sql
 {
