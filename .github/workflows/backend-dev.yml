@@ -1,0 +1,46 @@
+name: Backend dev
+# Garde-fou léger de la branche dev : compilation stricte + tests d'architecture seulement.
+# Les jobs lourds (runtime complet, multi-processus, Docker, stress, mesures) restent dans backend.yml,
+# déclenchés par la PR de promotion vers main (TEST_RULES.md §8). Ce workflow est volontairement séparé :
+# backend.yml ne doit pas s'exécuter sur dev, sinon ses jobs ignorés produiraient des contrôles « skipped »
+# que .github/scripts/wait-ci.mjs lirait comme des échecs lors de la promotion.
+on:
+  push:
+    branches: [dev]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-dev.yml"
+  pull_request:
+    branches: [dev]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-dev.yml"
+permissions:
+  contents: read
+concurrency:
+  group: backend-dev-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend-dev-fast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet restore backend/Encoding.sln
+      - run: dotnet build backend/Encoding.sln --configuration Release --no-restore -warnaserror
+      - name: Architecture tests only
+        run: >-
+          dotnet test backend/tests/Encoding.Runtime.Tests --configuration Release --no-build
+          --filter "FullyQualifiedName~ArchitectureTests"
+          --logger "trx;LogFileName=architecture.trx" --results-directory test-results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-dev-architecture-results
+          path: test-results
+          retention-days: 7
