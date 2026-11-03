@@ -29,6 +29,6 @@ export interface LibraryProcessingSettings {
   readonly watchEnabled: boolean;
   readonly scanIntervalSeconds: number;
   readonly maxConcurrentTasks: number | null;
-  readonly nodeLimits: readonly { nodeId: string; maxConcurrentTasks: number }[];
+  readonly workerLimits: readonly { workerId: string; maxConcurrentTasks: number }[];
   readonly revision: number;
 }

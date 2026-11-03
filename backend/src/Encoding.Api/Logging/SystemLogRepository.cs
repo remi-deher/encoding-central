@@ -48,8 +48,8 @@ public sealed class SystemLogRepository
             pCategory.Value = entry.Category;
             pMessage.Value = entry.Message;
             pException.Value = (object?)entry.Exception ?? DBNull.Value;
-            pNodeId.Value = (object?)entry.NodeId?.ToString() ?? DBNull.Value;
-            pNodeName.Value = (object?)entry.NodeName ?? DBNull.Value;
+            pNodeId.Value = (object?)entry.WorkerId?.ToString() ?? DBNull.Value;
+            pNodeName.Value = (object?)entry.WorkerName ?? DBNull.Value;
             pEventId.Value = (object?)entry.EventId ?? DBNull.Value;
 
             await cmd.ExecuteNonQueryAsync(ct);
@@ -83,7 +83,7 @@ public sealed class SystemLogRepository
             sql += " AND category LIKE @category";
         }
 
-        if (query.NodeId.HasValue)
+        if (query.WorkerId.HasValue)
         {
             sql += " AND worker_id = @worker_id";
         }
@@ -108,9 +108,9 @@ public sealed class SystemLogRepository
             cmd.Parameters.AddWithValue("category", query.Category.Trim() + "%");
         }
 
-        if (query.NodeId.HasValue)
+        if (query.WorkerId.HasValue)
         {
-            cmd.Parameters.AddWithValue("worker_id", query.NodeId.Value.ToString());
+            cmd.Parameters.AddWithValue("worker_id", query.WorkerId.Value.ToString());
         }
 
         if (query.Since.HasValue)
@@ -147,8 +147,8 @@ public sealed class SystemLogRepository
                 Category: category,
                 Message: message,
                 Exception: exception,
-                NodeId: nodeId,
-                NodeName: nodeName,
+                WorkerId: nodeId,
+                WorkerName: nodeName,
                 EventId: eventId));
         }
 

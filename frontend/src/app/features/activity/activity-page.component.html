@@ -161,8 +161,8 @@
                 <span class="item-subtitle">
                   {{ file.library }} ·
                   {{ file.flow ? file.flow + ' · v' + file.flowVersion : 'Aucun flow attribué' }}
-                  @if (file.node) {
-                    · {{ file.node }}
+                  @if (file.worker) {
+                    · {{ file.worker }}
                   }
                 </span>
                 @if (activityExecutionLabel(file); as exactState) {

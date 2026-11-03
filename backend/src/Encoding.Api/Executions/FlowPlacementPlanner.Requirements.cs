@@ -309,8 +309,8 @@ public sealed partial class FlowPlacementPlanner
 
         foreach (var constraint in path.RunConstraints)
         {
-            if (constraint.TargetNodeId.HasValue && constraint.TargetNodeId.Value != node.NodeId)
-                missing.Add($"worker cible imposé {constraint.TargetNodeId.Value:D}");
+            if (constraint.TargetWorkerId.HasValue && constraint.TargetWorkerId.Value != node.WorkerId)
+                missing.Add($"worker cible imposé {constraint.TargetWorkerId.Value:D}");
             if (constraint.TargetGroupId.HasValue && (node.Identity is null || !node.Identity.GroupIds.Contains(constraint.TargetGroupId.Value)))
                 missing.Add($"groupe imposé {constraint.TargetGroupId.Value:D}");
             if (!string.IsNullOrWhiteSpace(constraint.RequiredLabels) && !WorkerLabelSelector.Matches(constraint.RequiredLabels, node.Identity?.EffectiveLabels))

@@ -216,9 +216,9 @@ public sealed class LocalAgentAccessTests
                 using var setupResponse = await secondClient.PostAsJsonAsync(
                     "/api/v1/auth/setup",
                     new Encoding.Contracts.Auth.SetupRequest(
-                        NodeDisplayName: "Serveur Principal",
+                        WorkerDisplayName: "Serveur Principal",
                         
-                        ClusterName: "Cluster Salon"));
+                        CentralName: "Cluster Salon"));
                 Assert.Equal(HttpStatusCode.Created, setupResponse.StatusCode);
 
                 // Display name is saved on the already-enrolled local node in workers:

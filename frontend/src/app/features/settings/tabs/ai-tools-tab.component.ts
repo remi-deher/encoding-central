@@ -411,7 +411,7 @@ export class AiToolsTabComponent implements OnInit, OnDestroy {
     this.aiService.getSettingsModelCatalog().subscribe({
       next: (catalog) => {
         this.modelCatalog.set(catalog);
-        const catalogLoading = catalog.nodes.some((node) =>
+        const catalogLoading = catalog.workers.some((node) =>
           node.providers.some((provider) => provider.state === 'loading'),
         );
         this.loadingModelCatalog.set(catalogLoading);
@@ -448,7 +448,7 @@ export class AiToolsTabComponent implements OnInit, OnDestroy {
         : usage === 'flow'
           ? this.flowLocalOnly()
           : false;
-    const nodes = localOnly ? catalog.nodes.slice(0, 1) : catalog.nodes;
+    const nodes = localOnly ? catalog.workers.slice(0, 1) : catalog.workers;
     return nodes.flatMap((node) =>
       node.providers
         .filter((provider) => provider.provider === providerId && provider.state === 'available')
@@ -673,7 +673,7 @@ export class AiToolsTabComponent implements OnInit, OnDestroy {
   clusterLabel(id: string): string {
     const view = this.cluster();
     if (!view) return 'Disponibilité à vérifier';
-    const count = view.nodes.filter((n) => n.providers.includes(id)).length;
+    const count = view.workers.filter((n) => n.providers.includes(id)).length;
     return count
       ? `${count} worker${count > 1 ? 's' : ''} configuré${count > 1 ? 's' : ''}`
       : 'Aucune connexion déclarée';

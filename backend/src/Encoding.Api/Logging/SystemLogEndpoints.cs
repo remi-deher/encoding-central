@@ -36,7 +36,7 @@ public static class SystemLogEndpoints
                 MinLevel: minLevel ?? SystemLogLevel.Information,
                 Category: category,
                 Search: search,
-                NodeId: nodeId,
+                WorkerId: nodeId,
                 Limit: limit.GetValueOrDefault(100),
                 Since: since);
 
@@ -103,7 +103,7 @@ public static class SystemLogEndpoints
                 MinLevel: minLevel ?? SystemLogLevel.Information,
                 Category: category,
                 Search: search,
-                NodeId: nodeId,
+                WorkerId: nodeId,
                 Limit: 50);
 
             context.Response.Headers.ContentType = "text/event-stream; charset=utf-8";

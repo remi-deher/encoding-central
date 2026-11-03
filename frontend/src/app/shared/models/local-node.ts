@@ -42,7 +42,7 @@ export interface DiscoveredCluster {
 }
 
 export interface LocalNodeStatus {
-  readonly nodeId: string;
+  readonly workerId: string;
   readonly name: string;
   readonly displayName?: string | null;
   readonly roles: readonly NodeRole[];
@@ -54,8 +54,8 @@ export interface LocalNodeStatus {
   readonly isEnrolled: boolean;
   readonly pairingKey: string | null;
   readonly pairingExpiresAt: string | null;
-  readonly clusterId: string | null;
-  readonly clusterName: string | null;
+  readonly centralId: string | null;
+  readonly centralName: string | null;
   readonly verificationCode: string | null;
   readonly enrollmentFailure: string | null;
 }

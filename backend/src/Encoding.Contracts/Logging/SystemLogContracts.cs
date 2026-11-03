@@ -20,8 +20,8 @@ public sealed record SystemLogEntry(
     string Category,
     string Message,
     string? Exception = null,
-    Guid? NodeId = null,
-    string? NodeName = null,
+    Guid? WorkerId = null,
+    string? WorkerName = null,
     int? EventId = null
 );
 
@@ -29,7 +29,7 @@ public sealed record SystemLogFilterQuery(
     SystemLogLevel? MinLevel = null,
     string? Category = null,
     string? Search = null,
-    Guid? NodeId = null,
+    Guid? WorkerId = null,
     int Limit = 100,
     DateTimeOffset? Since = null
 );

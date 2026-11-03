@@ -37,14 +37,14 @@ public sealed class WorkerAutoEnrollmentService(
                 var clusters = discovery.List();
                 var local = clusters.FirstOrDefault(enrollment.IsLocalCluster);
                 // Un worker qui a déjà choisi un autre central (jumelage en cours ou enrôlé) n'est pas ramené au serveur local.
-                var choseElsewhere = identity.HasCredentials && local is not null && identity.ClusterId != local.Id.ToString("D");
+                var choseElsewhere = identity.HasCredentials && local is not null && identity.CentralId != local.Id.ToString("D");
                 if (!identity.IsEnrolled && local is not null && !choseElsewhere)
                 {
                     await enrollment.EnrollAsync(local.Id, stoppingToken);
                     logger.LogInformation("Le worker local a rejoint le central {ClusterId}.", local.Id);
                 }
                 else if (options.AutomaticEnrollmentEnabled && !identity.IsEnrolled
-                    && GetAutomaticEnrollmentTarget(clusters, options.ClusterApiBaseUrl is not null) is { } automaticTarget)
+                    && GetAutomaticEnrollmentTarget(clusters, options.CentralApiBaseUrl is not null) is { } automaticTarget)
                 {
                     await enrollment.EnrollAsync(automaticTarget.Id, stoppingToken);
                     logger.LogInformation("L’enrôlement automatique auprès du central {ClusterId} est terminé.", automaticTarget.Id);

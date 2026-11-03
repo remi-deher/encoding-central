@@ -37,14 +37,14 @@ public sealed class AiAssistantSupportService(
     FlowTemplateRepository? flowTemplates = null)
 {
     public AiCentralStore Store => store;
-    public AiCentralService Cluster => cluster;
+    public AiCentralService Central => cluster;
     public ValueTask<Guid> LocalIdAsync(CancellationToken ct) => centralId.GetAsync(ct);
     public FlowRepository Flows => flows;
     public ExecutionRepository Executions => executions;
     public LibraryWorkflowRepository LibraryWorkflows => libraryWorkflows;
     public LibraryRepository Libraries => libraries;
-    public WorkerRepository Nodes => nodes;
-    public WorkerPresenceOptions NodePresence => nodePresence;
+    public WorkerRepository Workers => nodes;
+    public WorkerPresenceOptions WorkerPresence => nodePresence;
     public McpService Mcp => mcp;
 
     public FlowTemplateRepository FlowTemplates => flowTemplates
@@ -55,8 +55,8 @@ public sealed class AiAssistantSupportService(
         if (refresh) await cluster.ModelsAsync(true, ct);
         var view = await cluster.CachedViewAsync(ct);
         var policy = await cluster.ModelPolicyAsync(ct);
-        var nodes = settings.AssistantLocalOnly ? view.Nodes.Take(1) : view.Nodes;
-        var catalogs = nodes.Where(n => n.Reachable).Select(n => new AiWorkerModelCatalog(n.NodeId, n.Name, n.Catalogs ?? [])).ToArray();
+        var nodes = settings.AssistantLocalOnly ? view.Workers.Take(1) : view.Workers;
+        var catalogs = nodes.Where(n => n.Reachable).Select(n => new AiWorkerModelCatalog(n.WorkerId, n.Name, n.Catalogs ?? [])).ToArray();
         var options = catalogs.SelectMany(node => node.Providers
             .Where(c => c.State == "available"
                 && (!settings.AssistantLocalOnly || c.Provider == "ollama")
@@ -67,7 +67,7 @@ public sealed class AiAssistantSupportService(
                 && (c.Provider != "anthropic" || settings.AnthropicEnabled))
             .SelectMany(c => c.Models.Where(m => !policy.DisabledModels.Any(d => d.Provider == c.Provider && d.Model == m.Id))
                 .Select(m => new AiAssistantModelOption(c.Provider, m.Id, m.Label, m.ReasoningEfforts,
-                    node.NodeId, node.Name, m.DefaultReasoningEffort, m.ReasoningKnown, m.IsDefault)))).ToArray();
+                    node.WorkerId, node.Name, m.DefaultReasoningEffort, m.ReasoningKnown, m.IsDefault)))).ToArray();
         var defaultProvider = settings.AssistantProvider ?? settings.DefaultProvider;
         var inheritedProvider = settings.AssistantProvider is null;
         var configuredModel = inheritedProvider ? settings.AssistantModel ?? settings.DefaultModel : settings.AssistantModel;
@@ -380,7 +380,7 @@ public sealed class AiAssistantSupportService(
             var generated = await cluster.GenerateAsync(
                 conversation.Provider,
                 new AiPrompt(TitleSystemPrompt, exchange, Model: conversation.Model, SessionId: sessionId, RequestId: requestId,
-                    ReasoningEffort: conversation.ReasoningEffort, NodeId: conversation.NodeId),
+                    ReasoningEffort: conversation.ReasoningEffort, WorkerId: conversation.WorkerId),
                 timeout.Token, localOnly: localOnly);
             return generated.Success ? CleanTitle(generated.Content, 60) : null;
         }

@@ -29,13 +29,13 @@ export interface LibraryNodeAccessOption {
 }
 
 export interface LibraryNodeAccessValue {
-  readonly nodeId: string;
+  readonly workerId: string;
   readonly mode: LibraryNodeAccessMode;
   readonly isEnabled: boolean;
   readonly localPath: string | null;
   readonly canRead: boolean;
   readonly canWrite: boolean;
-  readonly transferSourceNodeId: string | null;
+  readonly transferSourceWorkerId: string | null;
 }
 
 interface NodeDirectoryBrowserEntry {
@@ -143,7 +143,7 @@ interface NodeAccessControls {
                     >
                       @for (group of groups(); track group.id) {
                         <mat-option [value]="group.id"
-                          >{{ group.name }} ({{ group.nodeIds.length }} worker(s))</mat-option
+                          >{{ group.name }} ({{ group.workerIds.length }} worker(s))</mat-option
                         >
                       }
                     </mat-select>
@@ -827,14 +827,14 @@ export class LibraryNodeAccessFormComponent implements OnInit {
           : new Set(
               this.groups()
                 .filter((group) => this.selectedGroupIds().includes(group.id))
-                .flatMap((group) => group.nodeIds),
+                .flatMap((group) => group.workerIds),
             )
       : new Set(this.nodes().map((node) => node.id));
     return this.nodes().filter((node) => nodeIds.has(node.id));
   }
 
   ngOnInit(): void {
-    for (const access of this.initialAccesses()) this.currentAccesses.set(access.nodeId, access);
+    for (const access of this.initialAccesses()) this.currentAccesses.set(access.workerId, access);
     for (const node of this.nodes()) {
       const access = this.currentAccesses.get(node.id);
       this.form.addControl(
@@ -853,7 +853,7 @@ export class LibraryNodeAccessFormComponent implements OnInit {
           canWrite: new FormControl(access?.mode === 'direct' ? access.canWrite : false, {
             nonNullable: true,
           }),
-          transferSourceNodeId: new FormControl(access?.transferSourceNodeId ?? '', {
+          transferSourceNodeId: new FormControl(access?.transferSourceWorkerId ?? '', {
             nonNullable: true,
           }),
         }),
@@ -896,7 +896,7 @@ export class LibraryNodeAccessFormComponent implements OnInit {
     const summary = this.describe(
       access.mode,
       access.localPath,
-      access.transferSourceNodeName,
+      access.transferSourceWorkerName,
       access.canRead,
       access.canWrite,
     );
@@ -941,13 +941,13 @@ export class LibraryNodeAccessFormComponent implements OnInit {
       const controls = this.form.controls[node.id].controls;
       const mode = controls.mode.value;
       return {
-        nodeId: node.id,
+        workerId: node.id,
         mode,
         isEnabled: mode !== 'unsupported' && controls.isEnabled.value,
         localPath: mode === 'direct' ? controls.localPath.value.trim() : null,
         canRead: mode === 'direct' ? controls.canRead.value : mode === 'transfer',
         canWrite: mode === 'direct' ? controls.canWrite.value : mode === 'transfer',
-        transferSourceNodeId: mode === 'transfer' ? controls.transferSourceNodeId.value : null,
+        transferSourceWorkerId: mode === 'transfer' ? controls.transferSourceNodeId.value : null,
       };
     });
     this.saved.emit(values);

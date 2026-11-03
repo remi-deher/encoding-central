@@ -25,7 +25,7 @@ describe('SetupWizardPageComponent', () => {
     navigateFn = vi.fn().mockResolvedValue(true);
     pendingSignal = signal(false);
     statusSignal = signal<LocalNodeStatus | null>({
-      nodeId: 'node-1',
+      workerId: 'node-1',
       name: 'srv-transcode',
       displayName: 'Serveur Salon',
       roles: ['server', 'worker'],
@@ -50,8 +50,8 @@ describe('SetupWizardPageComponent', () => {
       isEnrolled: true,
       pairingKey: null,
       pairingExpiresAt: null,
-      clusterId: null,
-      clusterName: null,
+      centralId: null,
+      centralName: null,
       verificationCode: null,
       enrollmentFailure: null,
     });

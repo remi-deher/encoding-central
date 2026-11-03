@@ -91,7 +91,7 @@ public sealed class SystemLogStreamBroadcaster
             !entry.Category.StartsWith(query.Category.Trim(), StringComparison.OrdinalIgnoreCase))
             return false;
 
-        if (query.NodeId.HasValue && entry.NodeId != query.NodeId.Value)
+        if (query.WorkerId.HasValue && entry.WorkerId != query.WorkerId.Value)
             return false;
 
         if (!string.IsNullOrWhiteSpace(query.Search))

@@ -6,7 +6,7 @@ const { formatNodeLabel } = await loadModel('cluster');
 
 const NOW = Date.parse('2026-10-15T12:00:00Z');
 const status = {
-  nodeId: 'n1',
+  workerId: 'n1',
   name: 'nas',
   roles: ['server', 'worker'],
   maxConcurrentTasks: 2,
@@ -22,7 +22,7 @@ const status = {
       ],
     },
   ],
-  clusterName: 'Maison',
+  centralName: 'Maison',
   enrollmentFailure: null,
 };
 const node = {
@@ -41,7 +41,7 @@ const node = {
 const base = {
   status,
   node,
-  clusterName: 'Maison',
+  centralName: 'Maison',
   agentUnavailable: false,
   activeTasks: 1,
   now: NOW,
@@ -101,7 +101,7 @@ test('an old agent without GPU data says so instead of claiming none', () => {
 });
 
 test('an invalid date stays unknown and a missing central name falls back to the agent', () => {
-  const sheet = localNodeSheet({ ...base, clusterName: null, status: { ...status, clusterName: null } });
+  const sheet = localNodeSheet({ ...base, centralName: null, status: { ...status, centralName: null } });
   assert.equal(sheet.subtitle, 'Membre de son central');
   assert.equal(formatLastSignal('n’importe quoi'), null);
 });

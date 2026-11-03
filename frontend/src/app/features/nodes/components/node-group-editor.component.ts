@@ -36,7 +36,7 @@ export interface SaveNodeGroupPayload {
   readonly mode: NodeGroupMode;
   readonly criteria: NodeGroupCriteria;
   readonly labels: Record<string, string | null>;
-  readonly nodeIds: readonly string[];
+  readonly workerIds: readonly string[];
 }
 
 @Component({
@@ -178,7 +178,7 @@ export class NodeGroupEditorComponent {
         this.name.set(g.name);
         this.description.set(g.description ?? '');
         this.mode.set(g.mode);
-        this.selectedNodeIds.set(new Set(g.nodeIds));
+        this.selectedNodeIds.set(new Set(g.workerIds));
         this.labels.set({ ...g.labels });
 
         const c = g.criteria;
@@ -292,7 +292,7 @@ export class NodeGroupEditorComponent {
       mode,
       criteria: mode === 'automatic' ? this.automaticCriteria() : {},
       labels: this.labels(),
-      nodeIds: mode === 'manual' ? Array.from(this.selectedNodeIds()) : [],
+      workerIds: mode === 'manual' ? Array.from(this.selectedNodeIds()) : [],
     };
 
     this.saved.emit(payload);

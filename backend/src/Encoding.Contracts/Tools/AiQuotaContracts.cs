@@ -8,5 +8,5 @@ public sealed record AiQuotaWindow(string Id, string Name, double? UsedPercent, 
 /// <summary>Account-wide provider observation, never an application token budget.</summary>
 public sealed record AiQuotaSnapshot(string Provider, string State, IReadOnlyList<AiQuotaWindow> Windows,
     DateTimeOffset? ObservedAt, DateTimeOffset CheckedAt, bool Experimental, string? Message = null);
-public sealed record AiWorkerQuotas(Guid NodeId, string Name, IReadOnlyList<AiQuotaSnapshot> Providers);
-public sealed record AiCentralQuotas(IReadOnlyList<AiWorkerQuotas> Nodes);
+public sealed record AiWorkerQuotas(Guid WorkerId, string Name, IReadOnlyList<AiQuotaSnapshot> Providers);
+public sealed record AiCentralQuotas(IReadOnlyList<AiWorkerQuotas> Workers);

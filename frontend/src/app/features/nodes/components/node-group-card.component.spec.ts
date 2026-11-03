@@ -13,7 +13,7 @@ describe('NodeGroupCardComponent', () => {
       minimumMemoryMb: 16384,
     },
     labels: { gpu: 'nvidia' },
-    nodeIds: [],
+    workerIds: [],
     createdAt: '2026-10-17T00:00:00Z',
     updatedAt: '2026-10-17T00:00:00Z',
   };

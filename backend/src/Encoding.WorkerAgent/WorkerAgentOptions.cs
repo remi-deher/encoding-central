@@ -5,7 +5,7 @@ public sealed record WorkerAgentOptions(
     IReadOnlyList<Encoding.Contracts.Workers.NodeRole> Roles,
     int MaxConcurrentTasks,
     string DataDirectory,
-    string? ClusterApiBaseUrl,
+    string? CentralApiBaseUrl,
     bool AutomaticEnrollmentEnabled,
     TimeSpan HeartbeatInterval,
     int LocalApiPort,

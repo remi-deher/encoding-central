@@ -104,12 +104,12 @@ public sealed record WorkerEnrollmentRequest(
     IReadOnlyList<NodeRole> Roles,
     int MaxConcurrentTasks,
     IReadOnlyList<WorkerToolCapability> Capabilities,
-    string NodeToken,
+    string WorkerToken,
     WorkerInventory? Inventory = null,
     string? DisplayName = null,
     string? Version = null);
 
-public sealed record CreateWorkerEnrollmentRequest(WorkerEnrollmentRequest Node, string PairingKey);
+public sealed record CreateWorkerEnrollmentRequest(WorkerEnrollmentRequest Worker, string PairingKey);
 
 public sealed record ApproveWorkerEnrollmentRequest(string PairingKey);
 

@@ -19,9 +19,9 @@ describe('AiUsagePanelComponent', () => {
     since: '2026-09-21T00:00:00Z',
     truncated: false,
     total: totals(150, 25, 4, 1),
-    nodes: [
+    workers: [
       {
-        nodeId: 'a',
+        workerId: 'a',
         name: 'nas-51',
         total: totals(150, 25, 3),
         providers: [{ provider: 'openai', totals: totals(150, 25, 3) }],

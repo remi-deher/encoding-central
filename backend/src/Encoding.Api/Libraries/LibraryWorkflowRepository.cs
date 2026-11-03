@@ -272,9 +272,9 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
     /// </summary>
     private async Task<bool> ServesLibraryAutomaticallyAsync(Guid library,DbConnection c,DbTransaction tx,CancellationToken ct)
     {
-        var node=localNode?.NodeId;
+        var node=localNode?.WorkerId;
         if(node is not {} resolvedNode) return true;
-        if(localNode?.NodeId is null) await localNode!.RegisterAsync(resolvedNode,ct);
+        if(localNode?.WorkerId is null) await localNode!.RegisterAsync(resolvedNode,ct);
         await using var access=Sql.Command("""
           SELECT EXISTS(SELECT 1 FROM library_worker_accesses a JOIN workers n ON n.id=a.worker_id AND n.deleted_at IS NULL AND 'server'=ANY(n.roles)
                         WHERE a.library_id=@library AND a.mode='direct' AND a.is_enabled AND a.can_read),

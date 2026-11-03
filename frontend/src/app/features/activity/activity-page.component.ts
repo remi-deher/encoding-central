@@ -797,7 +797,7 @@ export class ActivityPageComponent {
       .filter(
         (file) =>
           !normalized ||
-          [file.relativePath, file.library, file.flow, file.node, this.statusLabel(file.status)]
+          [file.relativePath, file.library, file.flow, file.worker, this.statusLabel(file.status)]
             .filter(Boolean)
             .join(' ')
             .toLocaleLowerCase('fr-FR')
@@ -925,7 +925,7 @@ export class ActivityPageComponent {
       'Fichier     : ' + execution.media,
       'Bibliothèque: ' + execution.library,
       'Flow        : ' + execution.flow + ' (v' + execution.flowVersion + ')',
-      'Worker      : ' + (execution.node ?? '—'),
+      'Worker      : ' + (execution.worker ?? '—'),
       'État        : ' + executionStateLabel(execution),
       'Progression : ' + (execution.progress != null ? execution.progress + '%' : '—'),
       'Démarré     : ' + (execution.startedAt ? formatFullDateTime(execution.startedAt) : '—'),

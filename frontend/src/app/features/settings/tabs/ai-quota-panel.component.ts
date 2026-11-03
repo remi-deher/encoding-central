@@ -33,7 +33,7 @@ import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-
       @if (error()) {
         <p role="status">{{ error() }}</p>
       }
-      @for (node of nodes(); track node.nodeId) {
+      @for (node of nodes(); track node.workerId) {
         <h4>{{ node.name }}</h4>
         <div class="quota-grid">
           @for (quota of node.providers; track quota.provider) {
@@ -197,10 +197,10 @@ export class AiQuotaPanelComponent {
           }
           this.now.set(Date.now());
           const missing = this.nodes().filter(
-            (old) => !view.nodes.some((node) => node.nodeId === old.nodeId),
+            (old) => !view.workers.some((node) => node.workerId === old.workerId),
           );
           this.nodes.set([
-            ...view.nodes,
+            ...view.workers,
             ...missing.map((node) => ({
               ...node,
               providers: node.providers.map((quota) => ({

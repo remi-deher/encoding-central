@@ -431,7 +431,7 @@
           Modèle indisponible ou désactivé. Choisissez un modèle disponible.
         </p>
       }
-      @for (node of assistantOptions()?.catalogs ?? []; track node.nodeId) {
+      @for (node of assistantOptions()?.catalogs ?? []; track node.workerId) {
         @for (catalog of node.providers; track catalog.provider) {
           @if (catalog.state !== 'available') {
             <p class="muted" role="status">

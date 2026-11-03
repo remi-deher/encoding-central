@@ -29,20 +29,20 @@ public static class AuthEndpoints
                 foreach (var (k, v) in AuthService.ValidateNewUser(request.Username, request.Password))
                     errors[k] = v;
             }
-            if (!Encoding.Api.Workers.LocalWorkerRegistry.IsValidName(request.NodeDisplayName))
-                errors["nodeDisplayName"] = [$"Le nom du worker ne peut pas dépasser {Encoding.Api.Workers.LocalWorkerRegistry.MaximumNameLength} caractères."];
-            if (!string.IsNullOrWhiteSpace(request.ClusterName) && !Encoding.Api.Infrastructure.CentralIdentityRepository.IsValidName(request.ClusterName))
-                errors["clusterName"] = [$"Le nom du central ne peut pas dépasser {Encoding.Api.Infrastructure.CentralIdentityRepository.MaximumNameLength} caractères."];
+            if (!Encoding.Api.Workers.LocalWorkerRegistry.IsValidName(request.WorkerDisplayName))
+                errors["workerDisplayName"] = [$"Le nom du worker ne peut pas dépasser {Encoding.Api.Workers.LocalWorkerRegistry.MaximumNameLength} caractères."];
+            if (!string.IsNullOrWhiteSpace(request.CentralName) && !Encoding.Api.Infrastructure.CentralIdentityRepository.IsValidName(request.CentralName))
+                errors["centralName"] = [$"Le nom du central ne peut pas dépasser {Encoding.Api.Infrastructure.CentralIdentityRepository.MaximumNameLength} caractères."];
             if (errors.Count > 0) return (IResult)Results.ValidationProblem(errors);
 
             var (outcome, _) = await service.SetupAsync(request, ct);
             if (outcome == SetupOutcome.AlreadyConfigured)
                 return Results.Conflict(new { title = "Le central possède déjà un administrateur." });
-            await localNode.RequestNameAsync(request.NodeDisplayName, ct);
-            if (!string.IsNullOrWhiteSpace(request.ClusterName))
+            await localNode.RequestNameAsync(request.WorkerDisplayName, ct);
+            if (!string.IsNullOrWhiteSpace(request.CentralName))
             {
                 var clusterRepo = http.RequestServices.GetRequiredService<Encoding.Api.Infrastructure.CentralIdentityRepository>();
-                if (Encoding.Api.Infrastructure.CentralIdentityRepository.IsValidName(request.ClusterName)) await clusterRepo.RenameAsync(request.ClusterName, ct);
+                if (Encoding.Api.Infrastructure.CentralIdentityRepository.IsValidName(request.CentralName)) await clusterRepo.RenameAsync(request.CentralName, ct);
             }
             var effectiveUsername = string.IsNullOrWhiteSpace(request.Username) ? "admin" : request.Username.Trim();
             var effectivePassword = service.LastCreatedPassword ?? request.Password ?? "admin";

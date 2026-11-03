@@ -79,7 +79,7 @@ internal static class FlowSimulationScenarios
         var waiting = Run(flow);
         Check(waiting.Status == "waiting" && waiting.WaitingNodeId == "transform" && waiting.Steps.Count == 3, "Real transformations require an explicit result.");
         Check(waiting.Steps[2].Context.Variables.ContainsKey("mediaDetails"), "Probe uses the profile and produces the same variable shape as a worker.");
-        var assumptions = new Dictionary<string, FlowSimulationAssumption> { ["transform"] = new("success", after, Modified: true), ["handoff"] = new("success", WorkerNodeId: target) };
+        var assumptions = new Dictionary<string, FlowSimulationAssumption> { ["transform"] = new("success", after, Modified: true), ["handoff"] = new("success", WorkerId: target) };
         var completed = simulator.Simulate(new(J(flow), file, assumptions), new Dictionary<string, JsonElement> { ["mode"] = J("node"), ["targetNodeId"] = J(target.ToString()) });
         Check(completed.Status == "completed" && completed.Steps[^2].OutputId == "yes", "Assumed conversion and relay retain source metadata, update worker and evaluate typed variables.");
         Check(completed.Steps[3].Assumed && completed.Steps[4].Assumed && !completed.Steps[5].Assumed, "The trace distinguishes assumptions from real decisions.");
@@ -93,10 +93,10 @@ internal static class FlowSimulationScenarios
             Connections = [new("a", "entry", "success", "constraint"), new("b", "constraint", "success", "finish")] };
         var constraintResult = new Dictionary<string, FlowSimulationAssumption> { ["constraint"] = new("success") };
         ExpectArgument(() => Run(constrained, assumptions: constraintResult));
-        Check(Run(constrained, file with { WorkerNodeId = target }, constraintResult).Status == "completed", "A node constraint cannot contradict the simulated worker.");
+        Check(Run(constrained, file with { WorkerId = target }, constraintResult).Status == "completed", "A node constraint cannot contradict the simulated worker.");
         var selectedConstraint = basic with { Nodes = [input, Node("selector", "nodes-run-on-node", new Dictionary<string, JsonElement> { ["targetGroupId"] = J(Guid.NewGuid().ToString()), ["requiredLabels"] = J("gpu=nvidia") }), finish],
             Connections = [new("a", "entry", "success", "selector"), new("b", "selector", "success", "finish")] };
-        var selectorResult = Run(selectedConstraint, file with { WorkerNodeId = target }, new Dictionary<string, FlowSimulationAssumption> { ["selector"] = new("success") });
+        var selectorResult = Run(selectedConstraint, file with { WorkerId = target }, new Dictionary<string, FlowSimulationAssumption> { ["selector"] = new("success") });
         Check(selectorResult.Status == "completed" && selectorResult.Steps[1].Detail.Contains("ne sont pas vérifiées"), "Group and label eligibility remains an explicit assumption in simulation.");
         var directAccessFlow = basic with { Nodes = [input, Node("directAccess", "nodes-require-direct-access"), finish],
             Connections = [new("a", "entry", "success", "directAccess"), new("b", "directAccess", "success", "finish")] };
@@ -182,7 +182,7 @@ internal static class FlowSimulationScenarios
         Check(success.StatusCode == HttpStatusCode.OK && (await success.Content.ReadFromJsonAsync<FlowSimulationResult>())?.Steps[1].OutputId == "yes", "The HTTP simulation contract returns typed trace decisions.");
         using var invalid = await client.PostAsJsonAsync("/api/v1/flows/simulate", request with { Definition = J(new { invalid = true }) });
         Check(invalid.StatusCode == HttpStatusCode.UnprocessableEntity, "Invalid flow definitions return 422.");
-        using var invalidProfile = await client.PostAsJsonAsync("/api/v1/flows/simulate", request with { File = request.File with { SourceNodeId = Guid.Empty } });
+        using var invalidProfile = await client.PostAsJsonAsync("/api/v1/flows/simulate", request with { File = request.File with { SourceWorkerId = Guid.Empty } });
         Check(invalidProfile.StatusCode == HttpStatusCode.BadRequest, "Invalid profiles return 400.");
         using var empty = await client.PostAsync("/api/v1/flows/inspect-metadata", new ByteArrayContent([]));
         Check(empty.StatusCode == HttpStatusCode.BadRequest, "Empty metadata imports return 400.");

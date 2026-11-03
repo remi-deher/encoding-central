@@ -109,7 +109,7 @@ import { StatusBadgeComponent } from '../status-badge.component';
       @for (job of jobs(); track job.id) {
         <li>
           <div class="job-heading">
-            <span>{{ job.node ?? 'Worker non renseigné' }}</span
+            <span>{{ job.worker ?? 'Worker non renseigné' }}</span
             ><app-status-badge [label]="labels[job.state]" tone="accent" />
           </div>
           <strong>{{ fileName(job.media) }}</strong>

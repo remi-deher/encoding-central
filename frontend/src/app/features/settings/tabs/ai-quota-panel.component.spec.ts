@@ -7,9 +7,9 @@ import { AiClusterQuotas } from '../../../shared/models/ai-tools';
 describe('AiQuotaPanelComponent', () => {
   const api = { getQuotas: vi.fn() };
   const view = (): AiClusterQuotas => ({
-    nodes: [
+    workers: [
       {
-        nodeId: 'node',
+        workerId: 'node',
         name: 'Salon',
         providers: [
           {
@@ -70,14 +70,14 @@ describe('AiQuotaPanelComponent', () => {
     const data = view();
     api.getQuotas.mockReturnValue(
       of({
-        nodes: [
+        workers: [
           {
-            ...data.nodes[0],
+            ...data.workers[0],
             providers: [
               {
-                ...data.nodes[0].providers[0],
+                ...data.workers[0].providers[0],
                 windows: [
-                  { ...data.nodes[0].providers[0].windows[0], resetsAt: '2020-01-01T00:00:00Z' },
+                  { ...data.workers[0].providers[0].windows[0], resetsAt: '2020-01-01T00:00:00Z' },
                 ],
               },
             ],
@@ -93,7 +93,7 @@ describe('AiQuotaPanelComponent', () => {
 
   it('ignore une réponse en vol après un changement de connexion', () => {
     const pending = new Subject<AiClusterQuotas>();
-    api.getQuotas.mockReturnValueOnce(pending).mockReturnValue(of({ nodes: [] }));
+    api.getQuotas.mockReturnValueOnce(pending).mockReturnValue(of({ workers: [] }));
     const fixture = TestBed.createComponent(AiQuotaPanelComponent);
     fixture.detectChanges();
     fixture.componentRef.setInput('refreshKey', 1);

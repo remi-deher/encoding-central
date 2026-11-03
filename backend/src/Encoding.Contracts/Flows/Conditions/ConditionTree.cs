@@ -17,7 +17,7 @@ public sealed record ConditionFieldDefinition(string Id, string Label, string Ty
     IReadOnlyList<string> SupportedFlowMediaTypes, bool RequiresMetadata = false, bool SupportsScope = false,
     bool RequiresVariableName = false, IReadOnlyList<FlowSelectOption>? Options = null, string? Unit = null);
 public sealed record ConditionPreset(string Id, string Label, ConditionExpression Expression, IReadOnlyList<string> SupportedFlowMediaTypes);
-public sealed record ConditionEvaluationContext(RuntimeContext Runtime, Guid SourceNodeId, Guid WorkerNodeId,
+public sealed record ConditionEvaluationContext(RuntimeContext Runtime, Guid SourceWorkerId, Guid WorkerId,
     Guid? LibraryId, string MediaPath, string SourceSha256, IReadOnlyList<string>? WorkerCodecs = null);
 public sealed class ConditionEvaluationException(string message) : Exception(message);
 public sealed record ConditionObservation(ConditionRule Rule, JsonElement? Actual, bool? Result, string? Error = null);
@@ -205,8 +205,8 @@ public static class ConditionTree
         {
             case "file.extension": return Element(data.Runtime.Extension.TrimStart('.'));
             case "file.path": return Element(data.MediaPath);
-            case "source.nodeId": return Element(data.SourceNodeId.ToString("D"));
-            case "worker.nodeId": return Element(data.WorkerNodeId.ToString("D"));
+            case "source.nodeId": return Element(data.SourceWorkerId.ToString("D"));
+            case "worker.nodeId": return Element(data.WorkerId.ToString("D"));
             case "worker.codecs": return Element(data.WorkerCodecs ?? []);
             case "library.id": return data.LibraryId is { } library ? Element(library.ToString("D")) : null;
             case "processing.modified": return Element(data.Runtime.CurrentSha256 != data.SourceSha256);

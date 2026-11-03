@@ -21,7 +21,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
     /// </summary>
     public async Task<WorkerResponse?> EnrollAsync(WorkerEnrollmentRequest request, bool allowNewNode, CancellationToken cancellationToken)
     {
-        var tokenHash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(request.NodeToken));
+        var tokenHash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(request.WorkerToken));
         const string sql = """
             INSERT INTO workers (id, name, roles, max_concurrent_tasks, capabilities, inventory, last_seen_at, worker_token_hash, display_name)
             SELECT @id, @name, @roles, @max_concurrent_tasks, @capabilities, @inventory, clock_timestamp(), @worker_token_hash, @display_name
@@ -81,15 +81,15 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
     public async Task<PairingRequestResult> CreatePairingRequestAsync(CreateWorkerEnrollmentRequest request, int maxPending, CancellationToken cancellationToken)
     {
         await using var deleted=dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM workers WHERE id=@id AND deleted_at IS NOT NULL)");
-        deleted.Parameters.AddWithValue("id",request.Node.Id); if((await deleted.ScalarBoolAsync(cancellationToken))) return PairingRequestResult.Conflict;
+        deleted.Parameters.AddWithValue("id",request.Worker.Id); if((await deleted.ScalarBoolAsync(cancellationToken))) return PairingRequestResult.Conflict;
         // Borne les demandes en attente pour qu’un appelant anonyme ne puisse pas saturer la liste d’approbation.
         await using var pending=dataSource.CreateCommand("SELECT count(*) FROM worker_enrollment_requests WHERE expires_at > clock_timestamp() AND worker_id <> @id");
-        pending.Parameters.AddWithValue("id",request.Node.Id); if((long)(await pending.ExecuteScalarAsync(cancellationToken))! >= maxPending) return PairingRequestResult.TooMany;
+        pending.Parameters.AddWithValue("id",request.Worker.Id); if((long)(await pending.ExecuteScalarAsync(cancellationToken))! >= maxPending) return PairingRequestResult.TooMany;
         var pairingKeyHash = HashSecret(request.PairingKey);
-        var nodeTokenHash = HashSecret(request.Node.NodeToken);
+        var nodeTokenHash = HashSecret(request.Worker.WorkerToken);
         await using (var existingNode = dataSource.CreateCommand("SELECT worker_token_hash FROM workers WHERE id=@id AND deleted_at IS NULL"))
         {
-            existingNode.Parameters.AddWithValue("id",request.Node.Id);
+            existingNode.Parameters.AddWithValue("id",request.Worker.Id);
             var existing = await existingNode.ExecuteScalarAsync(cancellationToken);
             if (existing is DBNull || existing is byte[] known && !CryptographicOperations.FixedTimeEquals(known,nodeTokenHash))
                 return PairingRequestResult.Conflict;
@@ -118,13 +118,13 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         await using var command = Sql.Command(sql, connection, transaction);
-        AddNodeParameters(command, request.Node.Id, new WorkerHeartbeatRequest(
-            request.Node.Name,
-            request.Node.Roles,
-            request.Node.MaxConcurrentTasks,
-            request.Node.Capabilities,
-            request.Node.Inventory));
-        command.Parameters.AddWithValue("display_name", (object?)request.Node.DisplayName ?? DBNull.Value);
+        AddNodeParameters(command, request.Worker.Id, new WorkerHeartbeatRequest(
+            request.Worker.Name,
+            request.Worker.Roles,
+            request.Worker.MaxConcurrentTasks,
+            request.Worker.Capabilities,
+            request.Worker.Inventory));
+        command.Parameters.AddWithValue("display_name", (object?)request.Worker.DisplayName ?? DBNull.Value);
         command.Parameters.AddWithValue("pairing_key_hash", SqlKind.Bytes, pairingKeyHash);
         command.Parameters.AddWithValue("worker_token_hash", SqlKind.Bytes, nodeTokenHash);
         if (await command.ExecuteScalarAsync(cancellationToken) is null) return PairingRequestResult.Conflict;

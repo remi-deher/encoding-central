@@ -222,11 +222,11 @@ export class AiAssistantPageComponent implements OnDestroy {
   protected readonly readTools = [
     { name: 'list_flows', label: 'Lister les flows' },
     { name: 'get_flow', label: 'Relire le flow sélectionné' },
-    { name: 'list_nodes', label: 'Lister les workers' },
+    { name: 'list_workers', label: 'Lister les workers' },
     { name: 'list_executions', label: 'Consulter les exécutions récentes' },
     { name: 'get_libraries_overview', label: 'Consulter les bibliothèques' },
     { name: 'list_libraries', label: 'Lister les bibliothèques' },
-    { name: 'list_node_groups', label: 'Lister les groupes de workers' },
+    { name: 'list_worker_groups', label: 'Lister les groupes de workers' },
     { name: 'list_scripts', label: 'Lister les scripts' },
     { name: 'list_encoding_profiles', label: 'Lister les profils d’encodage' },
     { name: 'list_templates', label: 'Lister les modèles de flow' },
@@ -976,7 +976,7 @@ export class AiAssistantPageComponent implements OnDestroy {
           provider: selectedModel.provider,
           model: selectedModel.model,
           reasoningEffort: this.selectedReasoningEffort(),
-          nodeId: selectedModel.nodeId,
+          workerId: selectedModel.workerId,
         }
       : activeConversation;
     this.followTail.set(true);
@@ -1006,7 +1006,7 @@ export class AiAssistantPageComponent implements OnDestroy {
         provider: this.requestSelection?.provider,
         model: this.requestSelection?.model,
         reasoningEffort: this.requestSelection?.reasoningEffort,
-        nodeId: this.requestSelection?.nodeId,
+        workerId: this.requestSelection?.workerId,
         attachments: this.attachments(),
       })
       .subscribe({
@@ -1025,7 +1025,7 @@ export class AiAssistantPageComponent implements OnDestroy {
                       sources: response.sources,
                       selection: response.selection,
                       actualModel: response.actualModel,
-                      executorNodeId: response.executorNodeId,
+                      executorNodeId: response.executorWorkerId,
                     },
                   ]
               : oldTurns;

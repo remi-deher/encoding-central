@@ -302,7 +302,7 @@ export class NodeGroupDetailComponent {
     if (!g) return [];
     const all = this.nodes();
     if (g.mode === 'manual') {
-      const set = new Set(g.nodeIds);
+      const set = new Set(g.workerIds);
       return all.filter((n) => set.has(n.id));
     }
     return all.filter((n) => matchesGroupCriteria(g.criteria, n));

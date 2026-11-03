@@ -4,7 +4,7 @@ using Encoding.Contracts.Plugins;
 
 namespace Encoding.Api.Plugins;
 
-public sealed record MissingPluginPrerequisite(string Code, string NodeId, string PluginId, string FieldId);
+public sealed record MissingPluginPrerequisite(string Code, string WorkerId, string PluginId, string FieldId);
 
 public static class PluginConfigurationPrerequisites
 {

@@ -4,7 +4,7 @@ using Encoding.Contracts.Flows;
 namespace Encoding.Contracts.Executions;
 
 /// <summary>Condition de réveil résolue d'un bloc Attendre (architecture 0033). Valeurs simples pour une égalité exacte entre worker et serveur.</summary>
-public sealed record RuntimeWait(string Mode, int? DelayMinutes = null, Guid? NodeId = null, string? NodeStatus = null,
+public sealed record RuntimeWait(string Mode, int? DelayMinutes = null, Guid? WorkerId = null, string? WorkerStatus = null,
     string? Metric = null, string? Scope = null, string? Operator = null, int? Threshold = null,
     string? BlockNodeId = null, string? MetOutputs = null, int PollSeconds = 60, int? MaxWaitMinutes = null, string MediaPolicy = "keep")
 {
@@ -62,7 +62,7 @@ public static class RuntimeWaitPolicy
                     target = id;
                 }
                 if (status == "offline" && target is null) throw new ArgumentException("Attendre qu'un worker soit hors ligne nécessite de le désigner.");
-                return new(mode, NodeId: target, NodeStatus: status, PollSeconds: poll, MaxWaitMinutes: max, MediaPolicy: media);
+                return new(mode, WorkerId: target, WorkerStatus: status, PollSeconds: poll, MaxWaitMinutes: max, MediaPolicy: media);
             }
             case "workload":
             {

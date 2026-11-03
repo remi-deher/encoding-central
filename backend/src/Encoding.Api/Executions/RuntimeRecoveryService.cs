@@ -232,14 +232,14 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
         var needsWrite=eligibility!.RequiresWriteAccess(flow,entry,checkpoint is not null);
         foreach(var candidate in candidates)
         {
-            var plannedTarget=item.Plan?.NodeAssignments?.TryGetValue(entry,out var nodeTarget)==true?nodeTarget:item.Plan?.AssignedNodeId;
+            var plannedTarget=item.Plan?.WorkerAssignments?.TryGetValue(entry,out var nodeTarget)==true?nodeTarget:item.Plan?.AssignedWorkerId;
             if(plannedTarget is not null && candidate.Id!=plannedTarget.Value) continue;
             if(candidate.Id==item.Previous && !selector.IsResume || candidate.Capacity<=0) continue;
             var identity=await nodeGroups!.GetNodeIdentityAsync(candidate.Id,ct);
             if(!selector.Accepts(candidate.Id,item.Previous??Guid.Empty,identity)) continue;
             if(!fresh && candidate.ScheduleEnabled && candidate.Timezone is not null && candidate.Slots is not null
                 && !new WorkerSchedule(true,candidate.Timezone,candidate.Slots).IsOpen(DateTimeOffset.UtcNow)) continue;
-            if(!eligibility.CanRun(flow,candidate.Capabilities,candidate.Id,entry,checkpoint is not null,checkpoint?.Context,identity,candidate.Inventory,item.Plan?.NodeAssignments)) continue;
+            if(!eligibility.CanRun(flow,candidate.Capabilities,candidate.Id,entry,checkpoint is not null,checkpoint?.Context,identity,candidate.Inventory,item.Plan?.WorkerAssignments)) continue;
             // Un worker occupé (baux actifs au maximum de sa capacité) reste un destinataire valide : il prend la tâche en file dès qu'il se libère.
             await using var c=await dataSource.OpenConnectionAsync(ct);
             await using(var access=Sql.Command("""

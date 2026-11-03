@@ -197,10 +197,10 @@ public sealed class SystemLogRingBufferTests
         var node2 = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
 
-        buffer.Add(new SystemLogEntry("1", now.AddMinutes(1), SystemLogLevel.Information, "Encoding.Probe", "Probe GPU started", NodeId: node1));
-        buffer.Add(new SystemLogEntry("2", now.AddMinutes(2), SystemLogLevel.Warning, "Encoding.Probe", "GPU NVENC throttled", NodeId: node1));
-        buffer.Add(new SystemLogEntry("3", now.AddMinutes(3), SystemLogLevel.Error, "Encoding.Plugins", "Plugin Python crashed", NodeId: node2));
-        buffer.Add(new SystemLogEntry("4", now.AddMinutes(4), SystemLogLevel.Information, "Encoding.Plugins", "Plugin loaded successfully", NodeId: node2));
+        buffer.Add(new SystemLogEntry("1", now.AddMinutes(1), SystemLogLevel.Information, "Encoding.Probe", "Probe GPU started", WorkerId: node1));
+        buffer.Add(new SystemLogEntry("2", now.AddMinutes(2), SystemLogLevel.Warning, "Encoding.Probe", "GPU NVENC throttled", WorkerId: node1));
+        buffer.Add(new SystemLogEntry("3", now.AddMinutes(3), SystemLogLevel.Error, "Encoding.Plugins", "Plugin Python crashed", WorkerId: node2));
+        buffer.Add(new SystemLogEntry("4", now.AddMinutes(4), SystemLogLevel.Information, "Encoding.Plugins", "Plugin loaded successfully", WorkerId: node2));
 
         // Filter by MinLevel Warning
         var warnEntries = buffer.Query(new SystemLogFilterQuery { MinLevel = SystemLogLevel.Warning });
@@ -219,9 +219,9 @@ public sealed class SystemLogRingBufferTests
         Assert.Equal("3", searchEntries[0].Id);
 
         // Filter by Node
-        var node1Entries = buffer.Query(new SystemLogFilterQuery { NodeId = node1 });
+        var node1Entries = buffer.Query(new SystemLogFilterQuery { WorkerId = node1 });
         Assert.Equal(2, node1Entries.Count);
-        Assert.All(node1Entries, e => Assert.Equal(node1, e.NodeId));
+        Assert.All(node1Entries, e => Assert.Equal(node1, e.WorkerId));
 
         // Categories
         var categories = buffer.GetCategories();
@@ -274,8 +274,8 @@ public sealed class SystemLogProviderTests
         Assert.Equal(SystemLogLevel.Information, entry.Level);
         Assert.Contains("***REDACTED***", entry.Message);
         Assert.DoesNotContain("enc_pat_1122334455667788", entry.Message);
-        Assert.Equal(nodeId, entry.NodeId);
-        Assert.Equal("Worker-01", entry.NodeName);
+        Assert.Equal(nodeId, entry.WorkerId);
+        Assert.Equal("Worker-01", entry.WorkerName);
     }
 }
 

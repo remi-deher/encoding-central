@@ -241,8 +241,8 @@ internal sealed partial class RuntimeFlowExecution
         var nextNodeId = FlowPath.NextNodeId(lease.Flow, node.Id, ctx.Output);
         if (nextNodeId is null) ctx.Wait = null;
         var placementHandoff = false;
-        if (ctx.Handoff is null && nextNodeId is not null && state.PlacementPlan?.NodeAssignments?.TryGetValue(nextNodeId, out var plannedWorker) == true
-            && plannedWorker != client.NodeId)
+        if (ctx.Handoff is null && nextNodeId is not null && state.PlacementPlan?.WorkerAssignments?.TryGetValue(nextNodeId, out var plannedWorker) == true
+            && plannedWorker != client.WorkerId)
         {
             if (state.DirectRead) await EnsureFilesAsync();
             ctx.Handoff = new RuntimeHandoffSelector("node", plannedWorker);
@@ -315,7 +315,7 @@ internal sealed partial class RuntimeFlowExecution
             {
                 if (state.Context.Plan.Any(step => !IsFfmpegPlan(step.ComponentId)))
                     throw new IOException("Le builder contient une opération incompatible avec FFmpeg.");
-                var outcome = await actions.FfmpegPlanAsync(state.Context.Plan, state.Current, directory, node.Id, client.NodeId, job.Token,
+                var outcome = await actions.FfmpegPlanAsync(state.Context.Plan, state.Current, directory, node.Id, client.WorkerId, job.Token,
                     !state.Variables.TryGetValue("plan.preserveUnchangedTracks", out var preserve) || preserve.GetBoolean(), knownMetadata: state.Context.CurrentMetadata);
                 if (outcome.Primary is null) ctx.Output = "skipped";
                 await ApplyOutcomeAsync(outcome, node.Id);
@@ -379,7 +379,7 @@ internal sealed partial class RuntimeFlowExecution
         var c = ctx.Config;
         var tree = ConditionTree.Parse(c["rules"], lease.Flow.MediaType);
         if (ConditionTree.RequiresMetadata(tree) && (state.Context.CurrentMetadata is null || state.Context.BeforeMetadata is null)) await EnsureScanAsync();
-        ctx.Output = ConditionTree.Evaluate(tree, new(state.Context with { Variables = state.Variables }, lease.SourceNodeId, client.NodeId,
+        ctx.Output = ConditionTree.Evaluate(tree, new(state.Context with { Variables = state.Variables }, lease.SourceWorkerId, client.WorkerId,
             lease.LibraryId, lease.MediaPath, state.SourceSha ?? "")) ? "yes" : "no";
 
         return StepOutcome.Continue();
@@ -427,7 +427,7 @@ internal sealed partial class RuntimeFlowExecution
     {
         var node = ctx.Node;
         ctx.Handoff = RuntimeHandoffPolicy.Resolve(node, lease.PluginConfigurations?.GetValueOrDefault("nodes"));
-        if (ctx.Handoff.Mode == "node" && ctx.Handoff.TargetNodeId == client.NodeId)
+        if (ctx.Handoff.Mode == "node" && ctx.Handoff.TargetWorkerId == client.WorkerId)
             throw new IOException("Le relais doit sélectionner un autre worker.");
 
         return StepOutcome.Continue();
@@ -437,7 +437,7 @@ internal sealed partial class RuntimeFlowExecution
     {
         var node = ctx.Node; var c = ctx.Config;
         // Ce worker est le worker d'accès du fichier et le monte directement (accès par transfert : « non »).
-        var direct = lease.SourceNodeId == client.NodeId && lease.SourceRoot is not null;
+        var direct = lease.SourceWorkerId == client.WorkerId && lease.SourceRoot is not null;
         if (direct && RuntimeHandoffPolicy.LibraryAccessNeedsEncoder(node))
             direct = Encoding.Contracts.Flows.MediaCodecPolicy.ProfileTargetAvailable(lease.Flow, (await capabilities.DiscoverAsync(job.Token)).FirstOrDefault(c => c.ToolId == "ffmpeg"));
         ctx.Output = direct ? "yes" : "no";
@@ -496,7 +496,7 @@ internal sealed partial class RuntimeFlowExecution
     {
         var node = ctx.Node; var c = ctx.Config; var started = ctx.Started;
         await EnsureScanAsync();
-        var invocation = new FlowStepInvocation(1, started.InvocationId, lease.ExecutionId, lease.Attempt, client.NodeId, lease.Epoch, node.Id, node.Component, c,
+        var invocation = new FlowStepInvocation(1, started.InvocationId, lease.ExecutionId, lease.Attempt, client.WorkerId, lease.Epoch, node.Id, node.Component, c,
             new(state.SourceSha, state.DirectRead ? null : Path.GetFileName(state.Current), state.Context.BeforeMetadata, state.Context.CurrentMetadata, state.Variables, lease.MediaPath,
                 lease.LibraryId), DateTimeOffset.UtcNow.AddHours(6),
             lease.PluginConfigurations?.GetValueOrDefault(node.Component.PluginId));

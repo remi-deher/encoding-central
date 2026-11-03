@@ -58,7 +58,7 @@ public static class WorkerEndpoints
             var byAdministrator = IsAdministratorSession(httpContext);
             var outcome = await service.EnrollAsync(request, isLocal, cancellationToken, byAdministrator);
             if (outcome.HasValidationErrors) return (IResult)Results.ValidationProblem(outcome.ValidationErrors!);
-            if (outcome.Node is not null) return Results.Ok(outcome.Node);
+            if (outcome.Worker is not null) return Results.Ok(outcome.Worker);
 
             return outcome.WindowOpen
                 ? Results.Conflict(new { title = "Cet identifiant appartient déjà à un autre worker." })
@@ -138,7 +138,7 @@ public static class WorkerEndpoints
             {
                 HeartbeatOutcomeKind.Unauthorized => Results.Unauthorized(),
                 HeartbeatOutcomeKind.ValidationProblem => Results.ValidationProblem(outcome.ValidationErrors!),
-                HeartbeatOutcomeKind.Ok => Results.Ok(outcome.Node),
+                HeartbeatOutcomeKind.Ok => Results.Ok(outcome.Worker),
                 HeartbeatOutcomeKind.Gone => Results.Json(new { title = "Ce worker a été retiré du central." },
                     statusCode: StatusCodes.Status410Gone),
                 _ => Results.Unauthorized()

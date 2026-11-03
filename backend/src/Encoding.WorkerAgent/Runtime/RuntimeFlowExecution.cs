@@ -148,7 +148,7 @@ internal sealed partial class RuntimeFlowExecution(WorkerAgentOptions options, M
     private async Task InitializeAsync()
     {
         state.SourceSha = lease.SourceSha256;
-        state.DirectRead = lease.DirectRead && lease.SourceNodeId == client.NodeId && lease.SourceRoot is not null;
+        state.DirectRead = lease.DirectRead && lease.SourceWorkerId == client.WorkerId && lease.SourceRoot is not null;
         while (state.SourceSha is null && !state.DirectRead)
         {
             var source = await client.GetAsync<RuntimeSourceState>($"executions/{lease.ExecutionId:D}/source?epoch={lease.Epoch}", job.Token);
@@ -156,7 +156,7 @@ internal sealed partial class RuntimeFlowExecution(WorkerAgentOptions options, M
         }
         state.Extension = Path.GetExtension(lease.MediaPath); if (string.IsNullOrWhiteSpace(state.Extension)) state.Extension = ".mkv";
         state.Original = state.DirectRead ? SafeMediaPaths.Resolve(lease.SourceRoot!, lease.MediaPath) : Path.Combine(directory, "source" + state.Extension);
-        if (lease.VerifyPublicationAccess && lease.SourceNodeId == client.NodeId && lease.SourceRoot is not null)
+        if (lease.VerifyPublicationAccess && lease.SourceWorkerId == client.WorkerId && lease.SourceRoot is not null)
             await LibraryAccessVerifier.VerifyPublicationAsync(lease.SourceRoot, job.Token, lease.VerifyReplacementAccess ? lease.MediaPath : null);
         state.Observed = state.DirectRead ? MediaFileStamp.Read(state.Original) : null;
         state.Context = lease.Checkpoint?.Context ?? new(state.SourceSha ?? "", state.Extension, new Dictionary<string, JsonElement>(), null, null, [],
@@ -396,7 +396,7 @@ internal sealed partial class RuntimeFlowExecution(WorkerAgentOptions options, M
         if (changed && state.Variables.ContainsKey("runtime.inPlaceEdited"))
             throw new IOException("La source a été modifiée sur place ; un résultat publié ensuite ne correspondrait plus à sa version d’origine.");
         if (changed) await EnsurePublicationIntegrityAsync();
-        if (changed && lease.SourceNodeId == client.NodeId && lease.SourceRoot is not null)
+        if (changed && lease.SourceWorkerId == client.WorkerId && lease.SourceRoot is not null)
             localPublicationArtifacts.Register(lease.ExecutionId, lease.Epoch, state.Context.CurrentSha256, state.Current);
         await client.PostAsync<object>($"executions/{lease.ExecutionId:D}/finish", new FinishRuntimeExecution(lease.Epoch, Guid.NewGuid(),
             state.Revision, failed ? ExecutionStates.Failed : state.Terminal == ExecutionOutcomes.Deferred ? ExecutionStates.Deferred : ExecutionStates.Succeeded,
@@ -423,7 +423,7 @@ internal sealed partial class RuntimeFlowExecution(WorkerAgentOptions options, M
         {
             var node = lease.Flow.Nodes.Single(item => item.Id == probe.BlockNodeId);
             var context = lease.Checkpoint?.Context ?? throw new InvalidOperationException("Sonde sans checkpoint.");
-            var invocation = new FlowStepInvocation(1, Guid.NewGuid(), lease.ExecutionId, lease.Attempt, client.NodeId, lease.Epoch, node.Id, node.Component, node.Configuration,
+            var invocation = new FlowStepInvocation(1, Guid.NewGuid(), lease.ExecutionId, lease.Attempt, client.WorkerId, lease.Epoch, node.Id, node.Component, node.Configuration,
                 new(lease.SourceSha256, "current" + context.Extension, context.BeforeMetadata, context.CurrentMetadata, new Dictionary<string,
                     JsonElement>(context.Variables), lease.MediaPath, lease.LibraryId),
                 DateTimeOffset.UtcNow.AddSeconds(45), lease.PluginConfigurations?.GetValueOrDefault(node.Component.PluginId));

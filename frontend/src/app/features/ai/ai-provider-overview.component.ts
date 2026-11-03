@@ -105,14 +105,14 @@ const PROVIDERS = [
               </div>
             </div>
             @if (cluster(); as view) {
-              @if (view.nodes.length === 0) {
+              @if (view.workers.length === 0) {
                 <div class="empty-state compact">
                   <h3>Aucun fournisseur signalé</h3>
                   <p>La source n’a retourné aucun worker déclarant un fournisseur IA.</p>
                 </div>
               } @else {
                 <ul class="node-list">
-                  @for (node of view.nodes; track node.nodeId) {
+                  @for (node of view.workers; track node.workerId) {
                     <li class="node-row">
                       <strong>{{ node.name }}</strong>
                       <span>{{ providerNames(node.providers) }}</span>

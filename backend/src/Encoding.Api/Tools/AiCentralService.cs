@@ -76,7 +76,7 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralId centr
         if (refresh && modelCatalog is not null)
             foreach (var provider in new[] { "codex-cli", "claude-cli", "openai", "anthropic", "ollama" }) modelCatalog.Invalidate(provider);
         var local = await LocalAsync(ct);
-        return new(local.NodeId, local.Name, local.Catalogs ?? []);
+        return new(local.WorkerId, local.Name, local.Catalogs ?? []);
     }
     public async Task<AiCentralModelCatalog> ModelsAsync(bool refresh, CancellationToken ct) =>
         new([await LocalModelsAsync(refresh, ct)], await ModelPolicyAsync(ct));
@@ -95,7 +95,7 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralId centr
     }
     public static bool Supports(AiWorkerAvailability node, string provider, AiPrompt prompt)
     {
-        if (!node.Reachable || !node.Providers.Contains(provider) || prompt.NodeId is { } id && node.NodeId != id) return false;
+        if (!node.Reachable || !node.Providers.Contains(provider) || prompt.WorkerId is { } id && node.WorkerId != id) return false;
         if (prompt.Model is null) return true;
         if (node.Catalogs is null) return node.Models?.GetValueOrDefault(provider) == prompt.Model && prompt.ReasoningEffort is null;
         return node.Catalogs.Any(c => c.Provider == provider && c.State == "available"
@@ -148,7 +148,7 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralId centr
         if (days is < 1 or > 365) throw new ArgumentException("Période invalide.");
         const int pageSize = 200, maxSessions = 5000;
         var since = DateTimeOffset.UtcNow.AddDays(-days);
-        var names = (await CachedViewAsync(ct)).Nodes.ToDictionary(node => node.NodeId, node => node.Name);
+        var names = (await CachedViewAsync(ct)).Workers.ToDictionary(node => node.WorkerId, node => node.Name);
         var cells = new Dictionary<(Guid, string), long[]>();
         var costs = new Dictionary<(Guid, string), decimal?>();
         var scanned = 0;
@@ -159,7 +159,7 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralId centr
             foreach (var session in page)
                 foreach (var turn in session.Turns.Where(t => (t.CompletedAt ?? session.UpdatedAt ?? DateTimeOffset.MinValue) >= since))
                 {
-                    var key = (turn.ExecutorNodeId ?? Guid.Empty, turn.Selection?.Provider ?? session.Provider);
+                    var key = (turn.ExecutorWorkerId ?? Guid.Empty, turn.Selection?.Provider ?? session.Provider);
                     var cell = cells.TryGetValue(key, out var existing) ? existing : cells[key] = new long[5];
                     cell[0]++;
                     if (turn.Usage is not { } usage || usage.InputTokens is null && usage.OutputTokens is null) { cell[4]++; continue; }
@@ -224,15 +224,15 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralId centr
             if (session.SystemPrompt != prompt.SystemPrompt || session.Scope != prompt.Scope
                 || !allowModelChanges && (session.Provider != provider || session.Model != prompt.Model || session.ReasoningEffort != prompt.ReasoningEffort))
                 throw new ArgumentException("La configuration de cette session ne peut pas être modifiée.");
-            var selection = new AiTurnModelSelection(provider, prompt.Model, prompt.ReasoningEffort, prompt.NodeId);
+            var selection = new AiTurnModelSelection(provider, prompt.Model, prompt.ReasoningEffort, prompt.WorkerId);
             var completed = session.Turns.FirstOrDefault(t => t.RequestId == requestId);
             if (completed is not null && (completed.UserPrompt != prompt.UserPrompt || completed.Selection is { } oldSelection && oldSelection != selection))
                 throw new ArgumentException("Identifiant de requête déjà utilisé pour une autre demande ou configuration.");
-            if (completed is not null) return new(true, completed.Content, SessionId: id, RequestId: requestId, Usage: completed.Usage, ExecutorNodeId: completed.ExecutorNodeId);
+            if (completed is not null) return new(true, completed.Content, SessionId: id, RequestId: requestId, Usage: completed.Usage, ExecutorWorkerId: completed.ExecutorWorkerId);
             if (session.PendingRequest is { } pending && pending != requestId)
                 return new(false, "", "Reprenez d’abord la demande interrompue avec son identifiant.", SessionId: id, RequestId: pending);
             if (session.PendingPrompt is { } saved && (saved.UserPrompt != prompt.UserPrompt || saved.Model != prompt.Model
-                || saved.ReasoningEffort != prompt.ReasoningEffort || saved.NodeId != prompt.NodeId || session.Provider != provider))
+                || saved.ReasoningEffort != prompt.ReasoningEffort || saved.WorkerId != prompt.WorkerId || session.Provider != provider))
                 throw new ArgumentException("La demande en attente conserve son message, son modèle et son raisonnement.");
             if ((await ModelPolicyAsync(ct)).DisabledModels.Any(m => m.Provider == provider && m.Model == prompt.Model))
                 throw new ArgumentException("Ce modèle est désactivé dans le central.");
@@ -264,7 +264,7 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralId centr
                 if (result.Success)
                 {
                     session = session with { Turns = [.. session.Turns, new(requestId, prompt.UserPrompt, result.Content, result.Usage, DateTimeOffset.UtcNow,
-                        selection, result.ExecutorNodeId)], PendingRequest = null, PendingPrompt = null, AttemptDeadline = null,
+                        selection, result.ExecutorWorkerId)], PendingRequest = null, PendingPrompt = null, AttemptDeadline = null,
                         UpdatedAt = DateTimeOffset.UtcNow, LastError = null };
                     await store.SaveAsync("session/" + id, session, ct);
                     return result with { SessionId = id, RequestId = requestId };
@@ -311,7 +311,7 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralId centr
                 return new(false, "", "Ce fournisseur est désactivé dans le central.");
             settings.UpdateSettings(new(DefaultProvider: shared.DefaultProvider, TimeoutSeconds: shared.TimeoutSeconds,
                 SubtitleBatchSize: shared.SubtitleBatchSize, CodexEnabled: shared.CodexEnabled, ClaudeEnabled: shared.ClaudeEnabled));
-            return (await factory.CreateLocalClient(request.Provider).GenerateTextAsync(request.Prompt, deadline.Token)) with { ExecutorNodeId = await centralId.GetAsync(ct) };
+            return (await factory.CreateLocalClient(request.Provider).GenerateTextAsync(request.Prompt, deadline.Token)) with { ExecutorWorkerId = await centralId.GetAsync(ct) };
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return new(false, "", "Bail d’exécution IA expiré."); }
     }

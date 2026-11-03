@@ -68,7 +68,7 @@ internal static partial class Harness
         Check(registry.Resolve(legacy.Component with { PluginVersion = "1.0.0" }) is not null, "Legacy node constraints remain resolvable.");
         Check(!new RuntimeHandoffSelector("eligible").Accepts(destination, destination), "A relay excludes the previous worker.");
         var inherited = relay with { Configuration = new Dictionary<string, JsonElement> { ["mode"] = J("inherit") } };
-        Check(RuntimeHandoffPolicy.Resolve(inherited, new Dictionary<string, JsonElement> { ["mode"] = J("node"), ["targetNodeId"] = J(destination) }).TargetNodeId == destination, "Plugin defaults are inherited.");
+        Check(RuntimeHandoffPolicy.Resolve(inherited, new Dictionary<string, JsonElement> { ["mode"] = J("node"), ["targetNodeId"] = J(destination) }).TargetWorkerId == destination, "Plugin defaults are inherited.");
         Check(RuntimeHandoffPolicy.Resolve(relay with { Configuration = new Dictionary<string, JsonElement> { ["mode"] = J("eligible") } }, new Dictionary<string, JsonElement> { ["mode"] = J("node"), ["targetNodeId"] = J(destination) }).Mode == "eligible", "The block overrides defaults.");
         Check(!validator.Validate(Chain(Node(registry, "entry", "base-input-file"), relay)).IsValid, "A relay requires a connected continuation.");
         var branch = flow with { Nodes = [.. flow.Nodes, Node(registry, "other", "base-variable", new() { ["name"] = J("x"), ["value"] = J("1") })], Connections = [.. flow.Connections, new("branch", "entry", "error", "other")] };
@@ -374,13 +374,13 @@ internal static partial class Harness
             Check(node?.DisplayName == "Transcode A", "The friendly name stays separate from the heartbeat name.");
 
             var production = (await groups.ListAsync(CancellationToken.None)).Single(g => g.Name == "Production");
-            Check(production.NodeIds.Contains(b), "A manual group lists its active members.");
+            Check(production.WorkerIds.Contains(b), "A manual group lists its active members.");
             await using (var retire = db.CreateCommand("UPDATE workers SET deleted_at=clock_timestamp() WHERE id=@id"))
             { retire.Parameters.AddWithValue("id", b); await retire.ExecuteNonQueryAsync(); }
             try
             {
                 production = (await groups.ListAsync(CancellationToken.None)).Single(g => g.Name == "Production");
-                Check(!production.NodeIds.Contains(b) && production.NodeIds.Contains(a), "A removed node no longer appears as a group member.");
+                Check(!production.WorkerIds.Contains(b) && production.WorkerIds.Contains(a), "A removed node no longer appears as a group member.");
             }
             finally
             {
@@ -522,7 +522,7 @@ internal static partial class Harness
             { pending.Parameters.AddWithValue("id",id);Check((await pending.ScalarBoolAsync()),"The media reservation survives waiting."); }
             var received=await runtime.ClaimAsync(b,CancellationToken.None)??throw new InvalidOperationException("The receiver must claim.");
             Check(received.ExecutionId==id && received.Attempt==lease.Attempt && received.Epoch>lease.Epoch,"The same execution resumes with a new epoch.");
-            Check(received.SourceNodeId==a,"The source node is preserved.");
+            Check(received.SourceWorkerId==a,"The source node is preserved.");
             Check(received.Checkpoint?.NextNodeId=="end" && received.Checkpoint.Context.Variables["selected"].GetInt32()==42,"The context and resume point survive.");
             Check(received.Checkpoint!.Context.CurrentSha256==context.CurrentSha256,"The correct source or transformed file is referenced.");
             if(converted) Check(received.Checkpoint.Context.Variables.ContainsKey("artifact.export.report"),"Additional artifact references survive changing workers.");

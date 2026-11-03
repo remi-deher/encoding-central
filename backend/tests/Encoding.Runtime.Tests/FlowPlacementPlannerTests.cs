@@ -90,9 +90,9 @@ public sealed class FlowPlacementPlannerTests
         var plan = planner.Plan(flow, metadata, [nodeA], DateTimeOffset.UtcNow);
 
         Assert.Equal(FlowPlacementPlan.StrategyDirectUnified, plan.Strategy);
-        Assert.Equal(nodeAId, plan.AssignedNodeId);
-        Assert.Equal(nodeAId, plan.AccessNodeId);
-        Assert.Null(plan.TranscodeNodeId);
+        Assert.Equal(nodeAId, plan.AssignedWorkerId);
+        Assert.Equal(nodeAId, plan.AccessWorkerId);
+        Assert.Null(plan.TranscodeWorkerId);
         Assert.Empty(plan.MissingCapabilities);
         Assert.Contains("0 transfert réseau", plan.Reason);
     }
@@ -167,9 +167,9 @@ public sealed class FlowPlacementPlannerTests
         var plan = planner.Plan(flow, metadata, [nodeA, nodeB], DateTimeOffset.UtcNow);
 
         Assert.Equal(FlowPlacementPlan.StrategyTransferWorker, plan.Strategy);
-        Assert.Equal(nodeBId, plan.AssignedNodeId);
-        Assert.Equal(nodeAId, plan.AccessNodeId);
-        Assert.Null(plan.TranscodeNodeId);
+        Assert.Equal(nodeBId, plan.AssignedWorkerId);
+        Assert.Equal(nodeAId, plan.AccessWorkerId);
+        Assert.Null(plan.TranscodeWorkerId);
         Assert.Empty(plan.MissingCapabilities);
         Assert.Contains("transfert WebDAV", plan.Reason);
     }
@@ -199,10 +199,10 @@ public sealed class FlowPlacementPlannerTests
         var plan = planner.Plan(flow, null, candidates, DateTimeOffset.UtcNow);
 
         Assert.True(plan.Strategy==FlowPlacementPlan.StrategySegmented,$"{plan.Strategy}: {plan.Reason}; missing={string.Join(',',plan.MissingCapabilities)}");
-        Assert.Equal(direct, plan.NodeAssignments!["input"]);
-        Assert.Equal(gpu, plan.NodeAssignments["encode"]);
-        Assert.Equal(direct, plan.NodeAssignments["remux"]);
-        Assert.Equal(direct, plan.NodeAssignments["complete"]);
+        Assert.Equal(direct, plan.WorkerAssignments!["input"]);
+        Assert.Equal(gpu, plan.WorkerAssignments["encode"]);
+        Assert.Equal(direct, plan.WorkerAssignments["remux"]);
+        Assert.Equal(direct, plan.WorkerAssignments["complete"]);
     }
 
     [Fact]
@@ -228,8 +228,8 @@ public sealed class FlowPlacementPlannerTests
         var plan=planner.Plan(flow,null,candidates,DateTimeOffset.UtcNow);
 
         Assert.Equal(FlowPlacementPlan.StrategySegmented,plan.Strategy);
-        Assert.Equal(source,plan.NodeAssignments!["handoff"]);
-        Assert.Equal(target,plan.NodeAssignments["script"]);
+        Assert.Equal(source,plan.WorkerAssignments!["handoff"]);
+        Assert.Equal(target,plan.WorkerAssignments["script"]);
     }
 
     [Fact]
@@ -259,7 +259,7 @@ public sealed class FlowPlacementPlannerTests
         var plan = planner.Plan(flow, null, [nodeA], DateTimeOffset.UtcNow);
 
         Assert.Equal(FlowPlacementPlan.StrategyImpossible, plan.Strategy);
-        Assert.Null(plan.AssignedNodeId);
+        Assert.Null(plan.AssignedWorkerId);
         Assert.Contains("python", string.Join(" ", plan.MissingCapabilities));
         Assert.Contains("Placement impossible", plan.Reason);
     }
@@ -313,7 +313,7 @@ public sealed class FlowPlacementPlannerTests
         var plan = planner.Plan(flow, metadataHevc, [nodeACpuOnly], DateTimeOffset.UtcNow);
 
         Assert.Equal(FlowPlacementPlan.StrategyDirectUnified, plan.Strategy);
-        Assert.Equal(nodeAId, plan.AssignedNodeId);
+        Assert.Equal(nodeAId, plan.AssignedWorkerId);
         Assert.Empty(plan.MissingCapabilities);
     }
 
@@ -339,7 +339,7 @@ public sealed class FlowPlacementPlannerTests
 
         var plan = planner.Plan(flow, null, [nodeA, nodeB], DateTimeOffset.UtcNow);
 
-        Assert.Equal(nodeBId, plan.AssignedNodeId);
+        Assert.Equal(nodeBId, plan.AssignedWorkerId);
     }
 
     [Fact]
@@ -368,7 +368,7 @@ public sealed class FlowPlacementPlannerTests
 
         var plan = planner.Plan(flow, null, [nodeA, nodeB], DateTimeOffset.UtcNow);
 
-        Assert.Equal(nodeBId, plan.AssignedNodeId);
+        Assert.Equal(nodeBId, plan.AssignedWorkerId);
     }
 
     [Fact]
@@ -474,22 +474,22 @@ public sealed class FlowPlacementPlannerTests
         // 1. Avant scan (sourceMetadata = null) : plan segmenté commençant sur encoding-50 et déléguant le H.265 à encoding-51
         var initialPlan = planner.Plan(flow, null, candidates, DateTimeOffset.UtcNow);
         Assert.Equal(FlowPlacementPlan.StrategySegmented, initialPlan.Strategy);
-        Assert.Equal(node50, initialPlan.AssignedNodeId);
-        Assert.Equal(node50, initialPlan.NodeAssignments!["input"]);
-        Assert.Equal(node50, initialPlan.NodeAssignments["handoff"]);
-        Assert.Equal(node51, initialPlan.NodeAssignments["video-worker"]);
+        Assert.Equal(node50, initialPlan.AssignedWorkerId);
+        Assert.Equal(node50, initialPlan.WorkerAssignments!["input"]);
+        Assert.Equal(node50, initialPlan.WorkerAssignments["handoff"]);
+        Assert.Equal(node51, initialPlan.WorkerAssignments["video-worker"]);
 
         // 2. Après scan d'un fichier H.264 : plan segmenté, encoding-50 prépare puis délègue à encoding-51
         var h264Meta = J(new { streams = new[] { new { codec_type = "video", codec_name = "h264", width = 1920, height = 1080 } } });
         var h264Plan = planner.Plan(flow, h264Meta, candidates, DateTimeOffset.UtcNow);
         Assert.Equal(FlowPlacementPlan.StrategySegmented, h264Plan.Strategy);
-        Assert.Equal(node50, h264Plan.AssignedNodeId);
-        Assert.Equal(node51, h264Plan.NodeAssignments!["video-worker"]);
+        Assert.Equal(node50, h264Plan.AssignedWorkerId);
+        Assert.Equal(node51, h264Plan.WorkerAssignments!["video-worker"]);
 
         // 3. Après scan d'un fichier déjà HEVC : reste à 100 % sur encoding-50 (0 transfert réseau)
         var hevcMeta = J(new { streams = new[] { new { codec_type = "video", codec_name = "hevc", width = 1920, height = 1080 } } });
         var hevcPlan = planner.Plan(flow, hevcMeta, candidates, DateTimeOffset.UtcNow);
         Assert.Equal(FlowPlacementPlan.StrategyDirectUnified, hevcPlan.Strategy);
-        Assert.Equal(node50, hevcPlan.AssignedNodeId);
+        Assert.Equal(node50, hevcPlan.AssignedWorkerId);
     }
 }

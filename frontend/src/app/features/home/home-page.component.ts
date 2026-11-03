@@ -254,7 +254,7 @@ export class HomePageComponent {
     const query = this.searchQuery().trim().toLocaleLowerCase('fr-FR');
     return this.homeExecutionState().active.filter((item) =>
       !query ||
-      [item.media, item.library, item.flow, item.node ?? '', item.detail].some((value) =>
+      [item.media, item.library, item.flow, item.worker ?? '', item.detail].some((value) =>
         value.toLocaleLowerCase('fr-FR').includes(query),
       ),
     );
@@ -263,7 +263,7 @@ export class HomePageComponent {
     const query = this.searchQuery().trim().toLocaleLowerCase('fr-FR');
     return this.homeExecutionState().publications.filter((item) =>
       !query ||
-      [item.media, item.library, item.flow, item.node ?? '', item.detail].some((value) =>
+      [item.media, item.library, item.flow, item.worker ?? '', item.detail].some((value) =>
         value.toLocaleLowerCase('fr-FR').includes(query),
       ),
     );
@@ -332,7 +332,7 @@ export class HomePageComponent {
         path: '/workers?tab=cluster',
       }));
     const executions = [...this.homeExecutionState().active, ...this.homeExecutionState().publications]
-      .filter((item) => matches(item.media, item.library, item.flow, item.node ?? '', item.detail))
+      .filter((item) => matches(item.media, item.library, item.flow, item.worker ?? '', item.detail))
       .slice(0, 4)
       .map((item) => ({
         id: `overview-execution:${item.id}`,
@@ -475,7 +475,7 @@ export class HomePageComponent {
   protected readonly matrixCells = computed(() => {
     const cells: Record<string, MatrixCell> = {};
     for (const access of this.state().snapshot?.accesses ?? []) {
-      cells[access.nodeId + '|' + access.libraryId] = !access.isEnabled
+      cells[access.workerId + '|' + access.libraryId] = !access.isEnabled
         ? { label: 'Désactivé', tone: 'neutral' }
         : access.mode === 'direct'
           ? { label: 'Accès direct', tone: 'success' }

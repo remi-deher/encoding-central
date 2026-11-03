@@ -66,7 +66,7 @@ public sealed class AiAssistantConversationsService(AiAssistantSupportService su
                     sourceLabel, $"Conversation · {sourceLabel} · {conversation.Provider}",
                     null, null, conversation.UpdatedAt));
             }
-            else if (await support.Cluster.GetSessionAsync(conversation.Id, ct) is { } session)
+            else if (await support.Central.GetSessionAsync(conversation.Id, ct) is { } session)
             {
                 for (var turnIndex = 0; turnIndex < session.Turns.Count; turnIndex++)
                 {
@@ -121,7 +121,7 @@ public sealed class AiAssistantConversationsService(AiAssistantSupportService su
         var ownerId = AiAssistantSupportService.OwnerId(user);
         var stored = await support.ReadConversationAsync(ownerId, id, ct);
         if (stored is null) return false;
-        var session = await support.Cluster.GetSessionAsync(id, ct);
+        var session = await support.Central.GetSessionAsync(id, ct);
         if (session?.PendingRequest is not null)
             throw new InvalidOperationException("Terminez ou reprenez la demande en cours avant de supprimer cette conversation.");
 
@@ -235,13 +235,13 @@ public sealed class AiAssistantConversationsService(AiAssistantSupportService su
         if (stored is null) return null;
         var conversation = stored.Conversation;
 
-        var session = await support.Cluster.GetSessionAsync(id, ct);
+        var session = await support.Central.GetSessionAsync(id, ct);
         var turns = session?.Turns.Select(turn => new AiAssistantTurn(
             turn.RequestId, stored.UserPrompts?.GetValueOrDefault(turn.RequestId) ?? turn.UserPrompt, turn.Content,
             stored.TurnSources?.GetValueOrDefault(turn.RequestId) ?? [conversation.Source],
             stored.TurnSelections?.GetValueOrDefault(turn.RequestId) ?? turn.Selection,
             stored.TurnActualModels?.GetValueOrDefault(turn.RequestId) ?? turn.Usage?.Model,
-            turn.ExecutorNodeId)).ToArray()
+            turn.ExecutorWorkerId)).ToArray()
             ?? Array.Empty<AiAssistantTurn>();
         var pending = session?.PendingRequest is { } requestId && session.PendingPrompt is { } prompt
             ? new AiAssistantPendingTurn(requestId, stored.UserPrompts?.GetValueOrDefault(requestId) ?? prompt.UserPrompt,
@@ -260,7 +260,7 @@ public sealed class AiAssistantConversationsService(AiAssistantSupportService su
         var ownerId = AiAssistantSupportService.OwnerId(user);
         var stored = await support.ReadConversationAsync(ownerId, id, ct);
         if (stored is null) return null;
-        var session = await support.Cluster.GetSessionAsync(id, ct);
+        var session = await support.Central.GetSessionAsync(id, ct);
         if (session?.PendingRequest is not null)
             throw new InvalidOperationException("Reprenez ou terminez la demande en cours avant de modifier ses ressources.");
         if (session is not null && session.SystemPrompt != AiAssistantSupportService.BuildSystemPrompt())

@@ -12,8 +12,8 @@ export interface ExecutionResponse {
   readonly flow: string;
   readonly flowVersion: number;
   readonly state: ExecutionState;
-  readonly nodeId: string | null;
-  readonly node: string | null;
+  readonly workerId: string | null;
+  readonly worker: string | null;
   readonly progress: number | null;
   readonly detail: string;
   readonly attempt: number;
@@ -110,7 +110,7 @@ export interface ExecutionOverviewResponse {
 export interface ExecutionFilterQuery {
   readonly state?: ExecutionState;
   readonly libraryId?: string;
-  readonly nodeId?: string;
+  readonly workerId?: string;
   readonly since?: string;
   readonly limit?: number;
   readonly offset?: number;

@@ -17,7 +17,7 @@ public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresen
     internal static string Describe(RuntimeWait wait)=>wait.Mode switch
     {
         "timer"=>$"En attente : {wait.DelayMinutes} min.",
-        "nodeState"=>$"En attente : worker {(wait.NodeId is null?"quelconque":wait.NodeId.Value.ToString("D"))} {wait.NodeStatus switch{"online"=>"en ligne","offline"=>"hors ligne",_=>"libre"}}.",
+        "nodeState"=>$"En attente : worker {(wait.WorkerId is null?"quelconque":wait.WorkerId.Value.ToString("D"))} {wait.WorkerStatus switch{"online"=>"en ligne","offline"=>"hors ligne",_=>"libre"}}.",
         "workload"=>$"En attente : {(wait.Metric=="running"?"tâches en cours":"tâches en file")} ({(wait.Scope=="library"?"bibliothèque":"cluster")}) {(wait.Operator=="lte"?"≤":"≥")} {wait.Threshold}.",
         _=>$"En attente : condition du bloc {wait.BlockNodeId} ({wait.MetOutputs})."
     };
@@ -181,7 +181,7 @@ public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresen
           OR (@status='offline' AND NOT EXISTS(
             SELECT 1 FROM workers n WHERE n.id=@node AND n.deleted_at IS NULL AND n.last_seen_at>clock_timestamp()-@offline))
           """,c,tx);
-        cmd.Parameters.AddWithValue("node",SqlKind.Uuid,(object?)spec.NodeId??DBNull.Value); cmd.Parameters.AddWithValue("status",spec.NodeStatus!);
+        cmd.Parameters.AddWithValue("node",SqlKind.Uuid,(object?)spec.WorkerId??DBNull.Value); cmd.Parameters.AddWithValue("status",spec.WorkerStatus!);
         cmd.Parameters.AddWithValue("offline",presence.OfflineAfter);
         return (await cmd.ScalarBoolAsync(ct));
     }

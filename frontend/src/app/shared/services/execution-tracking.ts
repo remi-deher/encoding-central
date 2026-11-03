@@ -98,7 +98,7 @@ export class ExecutionTracking {
     let params = new HttpParams();
     if (query?.state) params = params.set('state', query.state);
     if (query?.libraryId) params = params.set('libraryId', query.libraryId);
-    if (query?.nodeId) params = params.set('nodeId', query.nodeId);
+    if (query?.workerId) params = params.set('workerId', query.workerId);
     if (query?.since) params = params.set('since', query.since);
     if (query?.limit !== undefined) params = params.set('limit', String(query.limit));
     if (query?.offset !== undefined) params = params.set('offset', String(query.offset));

@@ -69,7 +69,7 @@ public sealed class ToolPackageSyncService(WorkerAgentOptions options, WorkerIde
     {
         var path = $"api/v1/store/tools/packages/{Uri.EscapeDataString(item.Id)}/{Uri.EscapeDataString(item.Version)}/{Uri.EscapeDataString(item.Platform)}/download";
         using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(new Uri(server), path));
-        request.Headers.Add("X-Node-Token", identity.NodeToken);
+        request.Headers.Add("X-Node-Token", identity.WorkerToken);
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
         if (response.Content.Headers.ContentLength > ToolPackageArchive.MaxArchiveBytes) throw new ToolPackageException("L'archive dépasse 512 Mio.");
@@ -91,7 +91,7 @@ public sealed class ToolPackageSyncService(WorkerAgentOptions options, WorkerIde
     private async Task<List<Listed>> Get(WorkerIdentityState identity, string server, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(new Uri(server), "api/v1/store/tools/installed"));
-        request.Headers.Add("X-Node-Token", identity.NodeToken);
+        request.Headers.Add("X-Node-Token", identity.WorkerToken);
         using var response = await http.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<List<Listed>>(new JsonSerializerOptions(JsonSerializerDefaults.Web), ct) ?? [];

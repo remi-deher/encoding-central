@@ -63,7 +63,7 @@ export function assessClusterHealth(
         access.libraryId === library.id &&
         access.isEnabled &&
         access.mode !== 'unsupported' &&
-        available.has(access.nodeId),
+        available.has(access.workerId),
     );
     if (!reachable) issues.push('Aucun worker disponible n’accède à « ' + library.name + ' ».');
   }

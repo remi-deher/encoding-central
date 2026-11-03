@@ -84,8 +84,8 @@ CentralUiProxy.Use(
             .GetAsync(context.RequestAborted);
         if (!string.IsNullOrWhiteSpace(identity.ApiBaseUrl))
             return identity.ApiBaseUrl;
-        if (!string.IsNullOrWhiteSpace(options.ClusterApiBaseUrl))
-            return options.ClusterApiBaseUrl;
+        if (!string.IsNullOrWhiteSpace(options.CentralApiBaseUrl))
+            return options.CentralApiBaseUrl;
         return context.RequestServices.GetRequiredService<WorkerCentralDiscovery>()
             .List()
             .FirstOrDefault(cluster => cluster.Source == "manual" && cluster.Reachable)
@@ -135,7 +135,7 @@ app.MapGet("/api/v1/worker/status", async (WorkerAgentOptions agentOptions, Work
     var capabilities = await capabilityProbe.DiscoverAsync(cancellationToken);
     return Results.Ok(new
     {
-        nodeId = identity.Id,
+        workerId = identity.Id,
         name = agentOptions.Name,
         roles = agentOptions.Roles,
         maxConcurrentTasks = agentOptions.MaxConcurrentTasks,
@@ -145,10 +145,10 @@ app.MapGet("/api/v1/worker/status", async (WorkerAgentOptions agentOptions, Work
         identity.IsEnrolled,
         pairingKey = identity.IsPairingPending && identity.PairingExpiresAt > DateTimeOffset.UtcNow ? identity.PairingKey : null,
         pairingExpiresAt = identity.IsPairingPending ? identity.PairingExpiresAt : null,
-        clusterId = identity.ClusterId,
-        clusterName = identity.ClusterName,
+        centralId = identity.CentralId,
+        centralName = identity.CentralName,
         displayName = identity.DisplayName ?? agentOptions.DisplayName,
-        verificationCode = identity.HasCredentials ? WorkerVerificationCode.FromToken(identity.Id, identity.NodeToken!) : null,
+        verificationCode = identity.HasCredentials ? WorkerVerificationCode.FromToken(identity.Id, identity.WorkerToken!) : null,
         enrollmentFailure = identity.EnrollmentFailure
     });
 });
@@ -178,7 +178,7 @@ app.MapPost("/api/v1/worker/enroll", async (
     {
         // Session du compte administrateur du central, transmise par le relais de l'interface (ADR 0034).
         var centralSession = http.Request.Headers[Encoding.Contracts.Auth.SessionCookie.RelayHeader].ToString();
-        return (IResult)Results.Ok(await enrollment.EnrollAsync(request.ClusterId, cancellationToken, request.DisplayName, centralSession));
+        return (IResult)Results.Ok(await enrollment.EnrollAsync(request.CentralId, cancellationToken, request.DisplayName, centralSession));
     }
     catch (InvalidOperationException exception)
     {
@@ -197,7 +197,7 @@ app.MapPost("/api/v1/worker/pairing-key", async (
 {
     try
     {
-        return (IResult)Results.Ok(await enrollment.CreatePairingKeyAsync(request.ClusterId, cancellationToken, request.DisplayName));
+        return (IResult)Results.Ok(await enrollment.CreatePairingKeyAsync(request.CentralId, cancellationToken, request.DisplayName));
     }
     catch (InvalidOperationException exception)
     {
@@ -232,4 +232,4 @@ await app.RunAsync();
 
 public sealed record WorkerCentralAddress(string ApiBaseUrl);
 
-public sealed record JoinCentralRequest(Guid ClusterId, string? DisplayName = null);
+public sealed record JoinCentralRequest(Guid CentralId, string? DisplayName = null);

@@ -8,10 +8,10 @@ public static partial class BusinessOperationCatalog
     {
         "create_flow", "clone_flow", "delete_flow", "save_script", "publish_script",
         "save_encoding_profile", "publish_encoding_profile", "create_template_from_flow",
-        "create_component_pack_from_flow", "save_plugin_configuration", "save_flow_plugin_configuration", "configure_library_node_access",
+        "create_component_pack_from_flow", "save_plugin_configuration", "save_flow_plugin_configuration", "configure_library_worker_access",
         "save_library_processing", "set_library_activation", "assign_library_flow", "request_library_discovery",
-        "create_library", "update_library", "delete_library", "save_node_group", "delete_node_group",
-        "save_node_identity", "set_node_draining", "save_node_processing", "cancel_execution", "retry_execution", "resume_execution",
+        "create_library", "update_library", "delete_library", "save_worker_group", "delete_worker_group",
+        "save_worker_identity", "set_worker_draining", "save_worker_processing", "cancel_execution", "retry_execution", "resume_execution",
         "delete_script", "create_resource", "update_resource", "add_resource_version", "delete_resource"
     };
 
@@ -122,10 +122,10 @@ public static partial class BusinessOperationCatalog
             foreach (var (name, node) in properties)
             {
                 if (node is not JsonObject property) continue;
-                if (name is "libraryId" or "flowId" or "nodeId" or "executionId" or "sourceFlowId" or "transferSourceNodeId"
+                if (name is "libraryId" or "flowId" or "workerId" or "executionId" or "sourceFlowId" or "transferSourceWorkerId"
                     or "profileId" or "packId" or "templateId" or "resourceId" || isRoot && name == "id")
                     property["format"] ??= "uuid";
-                if (name == "nodeIds" && property["items"] is JsonObject nodeIdsItem)
+                if (name == "workerIds" && property["items"] is JsonObject nodeIdsItem)
                     nodeIdsItem["format"] ??= "uuid";
                 CompleteSchemaNode(property);
             }
@@ -266,8 +266,8 @@ public static partial class BusinessOperationCatalog
     private static string DomainFor(string name) => name switch
     {
         "get_version" or "get_updates" => "updates",
-        "get_libraries_overview" or "list_libraries" or "create_library" or "update_library" or "delete_library" or "get_library_node_access" or "get_library_workflow" or "get_library_processing" or "configure_library_node_access" or "save_library_processing" or "set_library_activation" or "assign_library_flow" or "request_library_discovery" => "libraries",
-        "list_nodes" or "list_node_groups" or "get_node_group" or "save_node_group" or "delete_node_group" or "get_node_activity" or "get_node_identity" or "save_node_identity" or "set_node_draining" or "get_node_processing" or "save_node_processing" => "nodes-and-groups",
+        "get_libraries_overview" or "list_libraries" or "create_library" or "update_library" or "delete_library" or "get_library_worker_access" or "get_library_workflow" or "get_library_processing" or "configure_library_worker_access" or "save_library_processing" or "set_library_activation" or "assign_library_flow" or "request_library_discovery" => "libraries",
+        "list_workers" or "list_worker_groups" or "get_worker_group" or "save_worker_group" or "delete_worker_group" or "get_worker_activity" or "get_worker_identity" or "save_worker_identity" or "set_worker_draining" or "get_worker_processing" or "save_worker_processing" => "nodes-and-groups",
         "list_executions" or "get_execution" or "get_execution_events" or "get_execution_pipeline" or "cancel_execution" or "retry_execution" or "resume_execution" or "get_system_logs" => "executions-and-logs",
         "get_flow_schema" or "list_flows" or "get_flow" or "create_flow" or "clone_flow" or "delete_flow" => "flows-and-components",
         "list_scripts" or "get_script" or "save_script" or "publish_script" or "delete_script" or "validate_script_draft" => "scripts",

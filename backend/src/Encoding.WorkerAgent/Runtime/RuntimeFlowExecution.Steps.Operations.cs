@@ -23,7 +23,7 @@ internal sealed partial class RuntimeFlowExecution
             // Rejouable après une reprise (ADR 0004) : une publication déjà demandée ou faite pour ce même résultat est adoptée, jamais refaite.
             var already = await client.PublicationStateAsync(lease.ExecutionId, lease.Epoch, job.Token);
             if (already.Requested && already.Sha256 != state.Context.CurrentSha256) throw new PublishResultException("Un autre résultat a déjà été publié pour cette exécution.");
-            if (lease.SourceNodeId == client.NodeId && lease.SourceRoot is not null)
+            if (lease.SourceWorkerId == client.WorkerId && lease.SourceRoot is not null)
                 localPublicationArtifacts.Register(lease.ExecutionId, lease.Epoch, state.Context.CurrentSha256, state.Current);
             if (!already.Requested)
                 await client.PostAsync<object>($"executions/{lease.ExecutionId:D}/finish", new FinishRuntimeExecution(lease.Epoch, Guid.NewGuid(), state.Revision, "succeeded",
@@ -45,7 +45,7 @@ internal sealed partial class RuntimeFlowExecution
     {
         var node = ctx.Node; var c = ctx.Config;
         await EnsureScanAsync();
-        if (lease.SourceNodeId != client.NodeId || lease.SourceRoot is null)
+        if (lease.SourceWorkerId != client.WorkerId || lease.SourceRoot is null)
             throw new InPlaceEditException("La modification sur place exige un worker avec accès direct à la bibliothèque : placez « Exiger un accès direct » (mode strict) avant ce bloc.");
         if (state.Context.Plan.Count > 0 || state.Context.CurrentSha256 != state.SourceSha || state.Variables.ContainsKey("runtime.inPlaceEdited"))
             throw new InPlaceEditException("La modification sur place doit précéder tout autre bloc qui modifie le média, et ne peut être utilisée qu'une fois par flow.");
@@ -159,7 +159,7 @@ internal sealed partial class RuntimeFlowExecution
                 throw new MediaToolException("outil du plan incompatible avec cette action", 1);
             state.Context = state.Context with { Plan = [.. state.Context.Plan, .. steps] };
         }
-        else await ApplyOutcomeAsync(await actions.FfmpegPlanAsync(steps, state.Current, directory, node.Id, client.NodeId, job.Token, knownMetadata: state.Context.CurrentMetadata), node.Id);
+        else await ApplyOutcomeAsync(await actions.FfmpegPlanAsync(steps, state.Current, directory, node.Id, client.WorkerId, job.Token, knownMetadata: state.Context.CurrentMetadata), node.Id);
 
         return StepOutcome.Continue();
     }
@@ -213,7 +213,7 @@ internal sealed partial class RuntimeFlowExecution
             else
             {
                 var stepCfg = new Dictionary<string, JsonElement>(c) { ["cropFilter"] = JsonSerializer.SerializeToElement(crop.ToFilter()) };
-                await ApplyOutcomeAsync(await actions.FfmpegPlanAsync([new(id, stepCfg, node.Id)], state.Current, directory, node.Id, client.NodeId, job.Token,
+                await ApplyOutcomeAsync(await actions.FfmpegPlanAsync([new(id, stepCfg, node.Id)], state.Current, directory, node.Id, client.WorkerId, job.Token,
                     knownMetadata: state.Context.CurrentMetadata), node.Id);
             }
         }
@@ -245,7 +245,7 @@ internal sealed partial class RuntimeFlowExecution
             else
             {
                 await ApplyOutcomeAsync(
-                    await actions.FfmpegPlanAsync([new(id, c, node.Id)], state.Current, directory, node.Id, client.NodeId, job.Token,
+                    await actions.FfmpegPlanAsync([new(id, c, node.Id)], state.Current, directory, node.Id, client.WorkerId, job.Token,
                         knownMetadata: state.Context.CurrentMetadata),
                     node.Id);
             }
@@ -333,13 +333,13 @@ internal sealed partial class RuntimeFlowExecution
                 if (IsFfmpegPlan(plan[index].ComponentId))
                 {
                     var batch = new List<RuntimePlanStep>(); while (index < plan.Count && IsFfmpegPlan(plan[index].ComponentId)) batch.Add(plan[index++]);
-                    var outcome = await actions.FfmpegPlanAsync(batch, state.Current, directory, node.Id + index, client.NodeId, job.Token,
+                    var outcome = await actions.FfmpegPlanAsync(batch, state.Current, directory, node.Id + index, client.WorkerId, job.Token,
                         !state.Variables.TryGetValue("plan.preserveUnchangedTracks", out var preserve) || preserve.GetBoolean(),
                         knownMetadata: state.Context.CurrentMetadata);
                     await ApplyOutcomeAsync(outcome, node.Id);
                 }
                 else { var step = plan[index++]; var configuration = await WithSubtitleFileAsync(step.ComponentId, step.Configuration); await ApplyOutcomeAsync(await actions.ExecuteAsync(step.ComponentId, configuration, state.Current, directory,
-                    node.Id + index, ExtraAsync, client.NodeId, job.Token), node.Id); }
+                    node.Id + index, ExtraAsync, client.WorkerId, job.Token), node.Id); }
             }
             state.Context = state.Context with { Plan = [] };
         }
@@ -368,7 +368,7 @@ internal sealed partial class RuntimeFlowExecution
         else
         {
             var prepared = await WithSubtitleFileAsync(id, c);
-            var outcome = await actions.ExecuteAsync(id, prepared, state.Current, directory, node.Id, ExtraAsync, client.NodeId, job.Token, state.Context.CurrentMetadata);
+            var outcome = await actions.ExecuteAsync(id, prepared, state.Current, directory, node.Id, ExtraAsync, client.WorkerId, job.Token, state.Context.CurrentMetadata);
             if (outcome.Value is { } value) state.Variables[MediaActions.Text(c, "resultVariable", "result")] = value;
             await ApplyOutcomeAsync(outcome, node.Id);
             if (outcome.Primary is null && MediaActions.Flag(c, "refreshMetadata")) state.Context = state.Context with { CurrentMetadata = await scanner.ScanAsync(state.Current, job.Token) };

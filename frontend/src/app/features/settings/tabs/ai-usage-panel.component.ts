@@ -71,7 +71,7 @@ import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-
           <p role="status">Seules les sessions les plus récentes sont comptées.</p>
         }
         <div class="grid">
-          @for (node of view.nodes; track node.nodeId ?? node.name) {
+          @for (node of view.workers; track node.workerId ?? node.name) {
             <article>
               <h4>{{ node.name }}</h4>
               <p class="figures">{{ line(node.total) }}</p>

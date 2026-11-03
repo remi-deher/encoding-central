@@ -11,7 +11,7 @@ public sealed class LocalWorkerLogContext : ISystemLogWorkerContext
     private readonly object gate = new();
     private Guid? nodeId;
 
-    public Guid? NodeId { get { lock (gate) return nodeId; } set { lock (gate) nodeId = value; } }
+    public Guid? WorkerId { get { lock (gate) return nodeId; } set { lock (gate) nodeId = value; } }
 
-    public string? NodeName => "Server";
+    public string? WorkerName => "Server";
 }

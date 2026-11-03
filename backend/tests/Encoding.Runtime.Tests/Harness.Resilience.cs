@@ -76,7 +76,7 @@ internal static partial class Harness
             Check(state!.State=="running","Another worker with direct access to the library keeps the execution alive: "+state.Detail);
             var resumed=await runtime.ClaimAsync(b,CancellationToken.None)??throw new InvalidOperationException("The surviving direct worker must resume the execution.");
             Check(resumed.ExecutionId==id && resumed.Checkpoint?.NextNodeId=="variable","The resume continues at the last checkpoint.");
-            Check(resumed.SourceNodeId==b && resumed.SourceRoot==directory,"The resuming worker uses its own direct access, not the lost worker's.");
+            Check(resumed.SourceWorkerId==b && resumed.SourceRoot==directory,"The resuming worker uses its own direct access, not the lost worker's.");
             Check(await executions.CancelAsync(id,CancellationToken.None),"Clean up.");await ExpireAsync(id);await RecoverCancellationAsync(id);
             Console.WriteLine("PASS: a resume does not stay pinned to the lost worker's own library access.");
         }

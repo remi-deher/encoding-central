@@ -255,7 +255,7 @@ internal static class AuthScenarios
 
         // Initialisation du premier administrateur.
         Check(await anonymous.StatusAsync(post, "/api/v1/auth/setup", new SetupRequest("root", "court"), csrf: false) == HttpStatusCode.BadRequest, "Setup enforces the password policy when credentials are provided.");
-        using (var setup = await anonymous.SendAsync(post, "/api/v1/auth/setup", new SetupRequest("root", AdminPassword, NodeDisplayName: "  Serveur du salon  "), csrf: false))
+        using (var setup = await anonymous.SendAsync(post, "/api/v1/auth/setup", new SetupRequest("root", AdminPassword, WorkerDisplayName: "  Serveur du salon  "), csrf: false))
         {
             Check(setup.StatusCode == HttpStatusCode.Created, "Setup creates the first administrator.");
             admin.Cookie = ReadCookie(setup);
@@ -384,7 +384,7 @@ internal static class AuthScenarios
         var otherVersion = NewNode(Guid.NewGuid(), NodeToken()) with { Version = "0.0.0-autre" };
         Check(await anonymous.StatusAsync(post, "/api/v1/workers/enroll", otherVersion, csrf: false) == HttpStatusCode.BadRequest, "A worker with another version than the central cannot enroll.");
         Check(await anonymous.StatusAsync(post, "/api/v1/workers/enroll", otherVersion with { Version = null }, csrf: false) == HttpStatusCode.BadRequest, "A worker that declares no version cannot enroll.");
-        var stolen = first with { NodeToken = NodeToken() };
+        var stolen = first with { WorkerToken = NodeToken() };
         Check(await anonymous.StatusAsync(post, "/api/v1/workers/enroll", stolen, csrf: false) == HttpStatusCode.Conflict, "Another secret cannot take over an enrolled identity, even with the window open.");
         Check(await admin.StatusAsync(delete, "/api/v1/workers/enrollment-window") == HttpStatusCode.NoContent, "An administrator closes the window.");
         Check(await anonymous.StatusAsync(post, "/api/v1/workers/enroll", first, csrf: false) == HttpStatusCode.OK, "The same identity can repeat its enrollment after the window closes.");
@@ -395,7 +395,7 @@ internal static class AuthScenarios
         Check(await viewer.StatusAsync(post, "/api/v1/workers/enroll", byAdministrator) == HttpStatusCode.Forbidden, "A viewer session cannot admit a node.");
         Check(await admin.StatusAsync(post, "/api/v1/workers/enroll", byAdministrator, csrf: false) == HttpStatusCode.Forbidden, "An administrator session needs the anti-CSRF header to admit a node.");
         Check(await admin.StatusAsync(post, "/api/v1/workers/enroll", byAdministrator) == HttpStatusCode.OK, "An administrator session admits a node outside the enrollment window.");
-        Check(await admin.StatusAsync(post, "/api/v1/workers/enroll", byAdministrator with { NodeToken = NodeToken() }) == HttpStatusCode.Conflict, "Even an administrator cannot take over an enrolled identity with another secret.");
+        Check(await admin.StatusAsync(post, "/api/v1/workers/enroll", byAdministrator with { WorkerToken = NodeToken() }) == HttpStatusCode.Conflict, "Even an administrator cannot take over an enrolled identity with another secret.");
         var window = (await (await admin.SendAsync(get, "/api/v1/workers/enrollment-window")).Content.ReadFromJsonAsync<EnrollmentWindowResponse>(Json))!;
         Check(!window.IsOpen, "The window reports closed.");
 
@@ -410,15 +410,15 @@ internal static class AuthScenarios
 
         // Un worker retiré apprend que son identité est révoquée (410) au lieu de rester « enrôlé » sans jamais être vu ; il ne revient que sous un nouvel identifiant (0017).
         var localBeat = new WorkerHeartbeatRequest(localNode.Name, localNode.Roles, 1, localNode.Capabilities, Version: AppVersion.Current);
-        Check(await anonymous.StatusAsync(post, $"/api/v1/workers/{localNode.Id}/leave", csrf: false, nodeToken: localNode.NodeToken) == HttpStatusCode.NoContent, "A node leaves with its own token.");
-        Check(await anonymous.StatusAsync(put, $"/api/v1/workers/{localNode.Id}/heartbeat", localBeat, csrf: false, nodeToken: localNode.NodeToken) == HttpStatusCode.Gone, "A removed node is told its identity was revoked.");
+        Check(await anonymous.StatusAsync(post, $"/api/v1/workers/{localNode.Id}/leave", csrf: false, nodeToken: localNode.WorkerToken) == HttpStatusCode.NoContent, "A node leaves with its own token.");
+        Check(await anonymous.StatusAsync(put, $"/api/v1/workers/{localNode.Id}/heartbeat", localBeat, csrf: false, nodeToken: localNode.WorkerToken) == HttpStatusCode.Gone, "A removed node is told its identity was revoked.");
         Check(await anonymous.StatusAsync(post, "/api/v1/workers/enroll", localNode, csrf: false, localSecret: LocalSecret) == HttpStatusCode.Conflict, "A removed identity is never re-enrolled, even by the container secret.");
         var reborn = NewNode(Guid.NewGuid(), NodeToken());
         Check(await anonymous.StatusAsync(post, "/api/v1/workers/enroll", reborn, csrf: false, localSecret: LocalSecret) == HttpStatusCode.OK, "The same node re-enrolls under a fresh identity.");
         Check(await anonymous.StatusAsync(put, $"/api/v1/workers/{Guid.NewGuid()}/heartbeat", localBeat, csrf: false, nodeToken: NodeToken()) == HttpStatusCode.Unauthorized, "An unknown identity is still a plain 401.");
 
         // Les workers gardent leur propre authentification, sans session.
-        var token = first.NodeToken;
+        var token = first.WorkerToken;
         var heartbeat = new WorkerHeartbeatRequest(first.Name, first.Roles, 1, first.Capabilities, Version: AppVersion.Current);
         Check(await anonymous.StatusAsync(put, $"/api/v1/workers/{first.Id}/heartbeat", heartbeat, csrf: false, nodeToken: token) == HttpStatusCode.OK, "A worker heartbeats with its token only.");
         Check(await anonymous.StatusAsync(put, $"/api/v1/workers/{first.Id}/heartbeat", heartbeat, csrf: false, nodeToken: NodeToken()) == HttpStatusCode.Unauthorized, "A heartbeat with a wrong token is refused.");
@@ -439,12 +439,12 @@ internal static class AuthScenarios
         Check(await anonymous.StatusAsync(post, "/api/v1/workers/enrollment-requests", requests[0], csrf: false) == HttpStatusCode.Accepted, "A pending worker can refresh its own request at the cap.");
         Check(await anonymous.StatusAsync(get, "/api/v1/workers/enrollment-requests") == HttpStatusCode.Unauthorized, "Pending requests are not public.");
         Check(await anonymous.StatusAsync(post, "/api/v1/workers/enrollment-requests/approve", new ApproveWorkerEnrollmentRequest(pairing[0]), csrf: false) == HttpStatusCode.Unauthorized, "Approval by key needs a session.");
-        Check(await anonymous.StatusAsync(post, $"/api/v1/workers/enrollment-requests/{requests[0].Node.Id}/approve", csrf: false) == HttpStatusCode.Unauthorized, "Approval by identifier needs a session.");
-        Check(await viewer.StatusAsync(post, $"/api/v1/workers/enrollment-requests/{requests[0].Node.Id}/approve") == HttpStatusCode.Forbidden, "Viewers cannot approve.");
+        Check(await anonymous.StatusAsync(post, $"/api/v1/workers/enrollment-requests/{requests[0].Worker.Id}/approve", csrf: false) == HttpStatusCode.Unauthorized, "Approval by identifier needs a session.");
+        Check(await viewer.StatusAsync(post, $"/api/v1/workers/enrollment-requests/{requests[0].Worker.Id}/approve") == HttpStatusCode.Forbidden, "Viewers cannot approve.");
         Check(await viewer.StatusAsync(get, "/api/v1/workers/enrollment-requests") == HttpStatusCode.OK, "Viewers can see pending requests.");
         Check(await admin.StatusAsync(post, "/api/v1/workers/enrollment-requests/approve", new ApproveWorkerEnrollmentRequest(pairing[0])) == HttpStatusCode.OK, "An administrator approves by key.");
-        Check(await admin.StatusAsync(post, $"/api/v1/workers/enrollment-requests/{requests[1].Node.Id}/approve") == HttpStatusCode.OK, "An administrator approves by identifier.");
-        Check(await anonymous.StatusAsync(put, $"/api/v1/workers/{requests[0].Node.Id}/heartbeat", new WorkerHeartbeatRequest(requests[0].Node.Name, requests[0].Node.Roles, 1, requests[0].Node.Capabilities), csrf: false, nodeToken: requests[0].Node.NodeToken) == HttpStatusCode.OK,
+        Check(await admin.StatusAsync(post, $"/api/v1/workers/enrollment-requests/{requests[1].Worker.Id}/approve") == HttpStatusCode.OK, "An administrator approves by identifier.");
+        Check(await anonymous.StatusAsync(put, $"/api/v1/workers/{requests[0].Worker.Id}/heartbeat", new WorkerHeartbeatRequest(requests[0].Worker.Name, requests[0].Worker.Roles, 1, requests[0].Worker.Capabilities), csrf: false, nodeToken: requests[0].Worker.WorkerToken) == HttpStatusCode.OK,
             "A paired worker heartbeats with the secret it generated.");
 
         // Le mode d'un worker ne se change plus à distance : le central est fixe, un worker reste worker.
@@ -454,13 +454,13 @@ internal static class AuthScenarios
         Check(await anonymous.StatusAsync(get, "/api/v1/central/leadership/keys", csrf: false, nodeToken: token) == HttpStatusCode.NotFound, "A node token can no longer download data protection keys.");
 
         // Départ volontaire d'un central (0039) : authentifié par le jeton du worker lui-même, jamais par celui d'un autre.
-        var leaving = requests[1].Node;
+        var leaving = requests[1].Worker;
         var leave = $"/api/v1/workers/{leaving.Id}/leave";
         Check(await anonymous.StatusAsync(post, leave, csrf: false) == HttpStatusCode.Unauthorized, "Leaving a cluster needs the node token.");
         Check(await anonymous.StatusAsync(post, leave, csrf: false, nodeToken: token) == HttpStatusCode.Unauthorized, "Another node's token cannot make a node leave.");
-        Check(await anonymous.StatusAsync(post, leave, csrf: false, nodeToken: leaving.NodeToken) == HttpStatusCode.NoContent, "A node leaves its cluster with its own token.");
-        Check(await anonymous.StatusAsync(post, leave, csrf: false, nodeToken: leaving.NodeToken) == HttpStatusCode.Unauthorized, "A node that left cannot act again with its old identity.");
-        Check(await anonymous.StatusAsync(put, $"/api/v1/workers/{leaving.Id}/heartbeat", new WorkerHeartbeatRequest(leaving.Name, leaving.Roles, 1, leaving.Capabilities), csrf: false, nodeToken: leaving.NodeToken) == HttpStatusCode.Gone, "A node that left is not reactivated by a heartbeat (it is told its identity is revoked).");
+        Check(await anonymous.StatusAsync(post, leave, csrf: false, nodeToken: leaving.WorkerToken) == HttpStatusCode.NoContent, "A node leaves its cluster with its own token.");
+        Check(await anonymous.StatusAsync(post, leave, csrf: false, nodeToken: leaving.WorkerToken) == HttpStatusCode.Unauthorized, "A node that left cannot act again with its old identity.");
+        Check(await anonymous.StatusAsync(put, $"/api/v1/workers/{leaving.Id}/heartbeat", new WorkerHeartbeatRequest(leaving.Name, leaving.Roles, 1, leaving.Capabilities), csrf: false, nodeToken: leaving.WorkerToken) == HttpStatusCode.Gone, "A node that left is not reactivated by a heartbeat (it is told its identity is revoked).");
         var after = (await (await admin.SendAsync(get, "/api/v1/workers")).Content.ReadFromJsonAsync<List<WorkerResponse>>(Json))!;
         Check(after.All(node => node.Id != leaving.Id), "A node that left no longer appears in the cluster.");
 
@@ -493,19 +493,19 @@ internal static class AuthScenarios
         Check(await admin.StatusAsync(put, "/api/v1/workers/first-link", new OpenEnrollmentWindowRequest(0)) == HttpStatusCode.BadRequest, "The first-link duration is bounded.");
         var pendingBefore = new CreateWorkerEnrollmentRequest(NewNode(Guid.NewGuid(), NodeToken()), "BBBBBBBBBBBBBBBB");
         Check(await anonymous.StatusAsync(post, "/api/v1/workers/enrollment-requests", pendingBefore, csrf: false) == HttpStatusCode.Accepted, "A request made while the mode is off stays pending.");
-        Check(await anonymous.StatusAsync(put, $"/api/v1/workers/{pendingBefore.Node.Id}/heartbeat", new WorkerHeartbeatRequest(pendingBefore.Node.Name, pendingBefore.Node.Roles, 1, pendingBefore.Node.Capabilities), csrf: false, nodeToken: pendingBefore.Node.NodeToken) == HttpStatusCode.Unauthorized, "A pending node is not accepted without approval.");
+        Check(await anonymous.StatusAsync(put, $"/api/v1/workers/{pendingBefore.Worker.Id}/heartbeat", new WorkerHeartbeatRequest(pendingBefore.Worker.Name, pendingBefore.Worker.Roles, 1, pendingBefore.Worker.Capabilities), csrf: false, nodeToken: pendingBefore.Worker.WorkerToken) == HttpStatusCode.Unauthorized, "A pending node is not accepted without approval.");
         var pendingList = (await (await admin.SendAsync(get, "/api/v1/workers/enrollment-requests")).Content.ReadFromJsonAsync<List<PendingWorkerEnrollmentResponse>>(Json))!;
-        Check(pendingList.Single(item => item.Id == pendingBefore.Node.Id).VerificationCode == Encoding.Core.Workers.WorkerVerificationCode.FromToken(pendingBefore.Node.Id, pendingBefore.Node.NodeToken),
+        Check(pendingList.Single(item => item.Id == pendingBefore.Worker.Id).VerificationCode == Encoding.Core.Workers.WorkerVerificationCode.FromToken(pendingBefore.Worker.Id, pendingBefore.Worker.WorkerToken),
             "The pending list shows the verification code the node computes on its side.");
         Check(await admin.StatusAsync(put, "/api/v1/workers/first-link", new OpenEnrollmentWindowRequest(5)) == HttpStatusCode.OK, "An administrator enables first-link acceptance.");
         var firstLink = new CreateWorkerEnrollmentRequest(NewNode(Guid.NewGuid(), NodeToken()), "CCCCCCCCCCCCCCCC");
         Check(await anonymous.StatusAsync(post, "/api/v1/workers/enrollment-requests", firstLink, csrf: false) == HttpStatusCode.Accepted, "The first request is received.");
-        Check(await anonymous.StatusAsync(put, $"/api/v1/workers/{firstLink.Node.Id}/heartbeat", new WorkerHeartbeatRequest(firstLink.Node.Name, firstLink.Node.Roles, 1, firstLink.Node.Capabilities), csrf: false, nodeToken: firstLink.Node.NodeToken) == HttpStatusCode.OK,
+        Check(await anonymous.StatusAsync(put, $"/api/v1/workers/{firstLink.Worker.Id}/heartbeat", new WorkerHeartbeatRequest(firstLink.Worker.Name, firstLink.Worker.Roles, 1, firstLink.Worker.Capabilities), csrf: false, nodeToken: firstLink.Worker.WorkerToken) == HttpStatusCode.OK,
             "The first request is accepted without verification.");
         Check(!(await (await admin.SendAsync(get, "/api/v1/workers/first-link")).Content.ReadFromJsonAsync<FirstLinkResponse>(Json))!.IsActive, "First-link acceptance switches itself off after one link.");
         var second = new CreateWorkerEnrollmentRequest(NewNode(Guid.NewGuid(), NodeToken()), "DDDDDDDDDDDDDDDD");
         Check(await anonymous.StatusAsync(post, "/api/v1/workers/enrollment-requests", second, csrf: false) == HttpStatusCode.Accepted, "The next request is received.");
-        Check(await anonymous.StatusAsync(put, $"/api/v1/workers/{second.Node.Id}/heartbeat", new WorkerHeartbeatRequest(second.Node.Name, second.Node.Roles, 1, second.Node.Capabilities, Version: AppVersion.Current), csrf: false, nodeToken: second.Node.NodeToken) == HttpStatusCode.Unauthorized,
+        Check(await anonymous.StatusAsync(put, $"/api/v1/workers/{second.Worker.Id}/heartbeat", new WorkerHeartbeatRequest(second.Worker.Name, second.Worker.Roles, 1, second.Worker.Capabilities, Version: AppVersion.Current), csrf: false, nodeToken: second.Worker.WorkerToken) == HttpStatusCode.Unauthorized,
             "The next request needs approval again.");
 
         // Export des bibliothèques avant de quitter un central : lecture seule, session requise.

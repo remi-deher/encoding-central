@@ -62,7 +62,7 @@ public sealed class AiSettingsService
         if (current == proposed || proposed.Model is null && proposed.Effort is null && proposed.Provider == current.Provider)
             return;
 
-        var nodes = proposed.LocalOnly ? catalog.Nodes.Take(1) : catalog.Nodes;
+        var nodes = proposed.LocalOnly ? catalog.Workers.Take(1) : catalog.Workers;
         var discovered = nodes.SelectMany(node => node.Providers)
             .Where(provider => provider.Provider == proposed.Provider && provider.State == "available")
             .SelectMany(provider => provider.Models)

@@ -12,8 +12,8 @@ public sealed record SetupRequest(
     string? Username = null,
     string? Password = null,
     string? SetupToken = null,
-    string? NodeDisplayName = null,
-    string? ClusterName = null);
+    string? WorkerDisplayName = null,
+    string? CentralName = null);
 
 /// <summary>
 /// Fiche du worker local montrée par l'assistant de premier démarrage, avant toute session (liste blanche de champs) :

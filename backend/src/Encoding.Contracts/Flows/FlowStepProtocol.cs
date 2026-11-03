@@ -12,7 +12,7 @@ public sealed record FlowStepInvocation(
     Guid InvocationId,
     Guid ExecutionId,
     int Attempt,
-    Guid WorkerNodeId,
+    Guid WorkerId,
     long LeaseEpoch,
     string NodeId,
     FlowComponentReference Component,

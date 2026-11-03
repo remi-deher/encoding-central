@@ -7,9 +7,9 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/v1/tools/ai/models*', (route) =>
     route.fulfill({
       json: {
-        nodes: [
+        workers: [
           {
-            nodeId: 'first',
+            workerId: 'first',
             name: 'Salon',
             providers: [
               {
@@ -68,13 +68,15 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/v1/tools/ai/sessions?offset=*', (route) =>
     route.fulfill({ json: { items: [], offset: 0, hasMore: false } }),
   );
-  await page.route('**/api/v1/tools/ai/quotas', (route) => route.fulfill({ json: { nodes: [] } }));
+  await page.route('**/api/v1/tools/ai/quotas', (route) =>
+    route.fulfill({ json: { workers: [] } }),
+  );
   await page.route('**/api/v1/tools/ai/central', (route) =>
     route.fulfill({
       json: {
-        nodes: [
-          { nodeId: 'first', name: 'Salon', providers: ['ollama'] },
-          { nodeId: 'second', name: 'Bureau', providers: ['codex-cli'] },
+        workers: [
+          { workerId: 'first', name: 'Salon', providers: ['ollama'] },
+          { workerId: 'second', name: 'Bureau', providers: ['codex-cli'] },
         ],
       },
     }),
@@ -445,9 +447,9 @@ test('subscription quotas show windows and mark failed refreshes as old', async 
       ? route.fulfill({ status: 503, json: { title: 'Unavailable' } })
       : route.fulfill({
           json: {
-            nodes: [
+            workers: [
               {
-                nodeId: 'first',
+                workerId: 'first',
                 name: 'Salon',
                 providers: [
                   {

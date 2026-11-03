@@ -9,7 +9,7 @@ public sealed record WorkerDirectoryBrowseCompletion(
     string? Error);
 public sealed record WorkerDirectoryBrowserResponse(
     Guid Id,
-    Guid NodeId,
+    Guid WorkerId,
     string Path,
     string State,
     IReadOnlyList<WorkerDirectoryBrowserEntry> Entries,

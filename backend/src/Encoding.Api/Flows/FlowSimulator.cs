@@ -14,7 +14,7 @@ public sealed class FlowSimulator(FlowComponentRegistry registry, FlowDefinition
         if (flow is null || !validation.IsValid) return new("invalid", "Corrigez la définition du flow avant de le tester.", [], Issues: validation.Issues);
         if (request.File is not { } file || string.IsNullOrWhiteSpace(file.Name) || file.Name.Length > 4096
             || file.Metadata.ValueKind != JsonValueKind.Object || file.Variables is null
-            || file.SourceNodeId == Guid.Empty || file.WorkerNodeId == Guid.Empty)
+            || file.SourceWorkerId == Guid.Empty || file.WorkerId == Guid.Empty)
             throw new ArgumentException("Le profil nécessite un nom, des métadonnées, des variables et des identifiants de nœuds valides.");
         if (!ValidMetadata(file.Metadata))
             throw new ArgumentException("Les métadonnées doivent contenir format et streams avec un codec_type par piste.");
@@ -24,12 +24,12 @@ public sealed class FlowSimulator(FlowComponentRegistry registry, FlowDefinition
             if (pair.Value is null || !nodes.TryGetValue(pair.Key, out var node)
                 || !registry.Resolve(node.Component)!.Outputs.Any(output => output.Id == pair.Value.OutputId)
                 || pair.Value.Metadata is { } metadata && !ValidMetadata(metadata)
-                || pair.Value.WorkerNodeId == Guid.Empty || pair.Value.Extension?.Length > 32)
+                || pair.Value.WorkerId == Guid.Empty || pair.Value.Extension?.Length > 32)
                 throw new ArgumentException("Un résultat simulé référence un bloc, une sortie ou un profil invalide.");
         }
         var variables = new Dictionary<string, JsonElement>(file.Variables);
         var context = new RuntimeContext("source", Path.GetExtension(file.Name), variables, file.Metadata, file.Metadata, []);
-        var worker = file.WorkerNodeId;
+        var worker = file.WorkerId;
         string? next = flow.Nodes.Single(node => registry.Resolve(node.Component)!.Kind == "input").Id;
         string? terminal = null, lastOutput = null;
         var steps = new List<FlowSimulationStep>();
@@ -47,7 +47,7 @@ public sealed class FlowSimulator(FlowComponentRegistry registry, FlowDefinition
                 if (node.Component.PluginId == "conditions" && id == "conditions-match")
                 {
                     var tree = ConditionTree.Parse(c["rules"], flow.MediaType);
-                    output = ConditionTree.Evaluate(tree, new(context with { Variables = variables }, file.SourceNodeId, worker, file.LibraryId, file.Name, "source"), observations.Add) ? "yes" : "no";
+                    output = ConditionTree.Evaluate(tree, new(context with { Variables = variables }, file.SourceWorkerId, worker, file.LibraryId, file.Name, "source"), observations.Add) ? "yes" : "no";
                     detail = output == "yes" ? "Conditions satisfaites avec les données courantes." : "Conditions non satisfaites avec les données courantes.";
                 }
                 else if (node.Component.PluginId == "conditions" && MediaConditionEvaluator.IsMediaCondition(id))
@@ -145,7 +145,7 @@ public sealed class FlowSimulator(FlowComponentRegistry registry, FlowDefinition
                     }
                     if (RuntimeHandoffPolicy.IsHandoff(node) && output == "success")
                     {
-                        if (result.WorkerNodeId is not { } target || target == worker)
+                        if (result.WorkerId is not { } target || target == worker)
                             throw new ArgumentException("Indiquez un autre worker pour simuler le relais. Son éligibilité n’est pas attestée par le test.");
                         var selector = RuntimeHandoffPolicy.Resolve(node, nodeDefaults);
                         if (!selector.Accepts(target, worker) && selector.Mode != "selector")

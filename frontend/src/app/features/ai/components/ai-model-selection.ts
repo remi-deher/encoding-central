@@ -1,9 +1,9 @@
 import { AiAssistantModelOption } from '../../../shared/models/ai-tools';
 
 export function aiModelKey(
-  option: Pick<AiAssistantModelOption, 'provider' | 'model' | 'nodeId'>,
+  option: Pick<AiAssistantModelOption, 'provider' | 'model' | 'workerId'>,
 ): string {
-  return `${option.provider}\n${option.model ?? ''}\n${option.nodeId ?? ''}`;
+  return `${option.provider}\n${option.model ?? ''}\n${option.workerId ?? ''}`;
 }
 
 export function aiTypeLabel(provider: string): string {

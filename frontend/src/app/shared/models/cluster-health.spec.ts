@@ -16,7 +16,7 @@ function node(id: string, extra: Partial<NodeResponse> = {}): NodeResponse {
 }
 const library = { id: 'l1', name: 'Films', isActive: true } as LibraryResponse;
 const access = (nodeId: string): LibraryNodeAccessResponse =>
-  ({ libraryId: 'l1', nodeId, mode: 'direct', isEnabled: true }) as LibraryNodeAccessResponse;
+  ({ libraryId: 'l1', workerId: nodeId, mode: 'direct', isEnabled: true }) as LibraryNodeAccessResponse;
 
 describe('assessClusterHealth', () => {
   it('is healthy when a worker reaches every active library', () => {

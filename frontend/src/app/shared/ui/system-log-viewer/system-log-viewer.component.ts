@@ -93,7 +93,7 @@ export class SystemLogViewerComponent implements OnDestroy {
             entry.message,
             entry.exception,
             entry.category,
-            entry.nodeName,
+            entry.workerName,
             entry.id,
             entry.eventId,
           ].some(

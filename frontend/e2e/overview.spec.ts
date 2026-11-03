@@ -10,8 +10,8 @@ const running = {
   flowVersion: 2,
   state: 'running',
   isActivelyProcessing: true,
-  nodeId: 'n1',
-  node: 'Studio',
+  workerId: 'n1',
+  worker: 'Studio',
   progress: 100,
   detail: 'Validation de la sortie',
   attempt: 1,
@@ -181,7 +181,7 @@ test('AI overview is integrated into home and the former route redirects there',
         }),
   );
   await page.route('**/api/v1/tools/ai/central', (r) =>
-    r.fulfill({ json: { nodes: [{ nodeId: 'n1', name: 'Studio', providers: ['ollama'] }] } }),
+    r.fulfill({ json: { workers: [{ workerId: 'n1', name: 'Studio', providers: ['ollama'] }] } }),
   );
   await page.clock.install();
   await page.goto('/ai');

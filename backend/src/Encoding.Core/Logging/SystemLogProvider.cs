@@ -145,8 +145,8 @@ public sealed class SystemLogger : ILogger
                 Category: _category,
                 Message: sanitizedMessage,
                 Exception: sanitizedException,
-                NodeId: nodeContext?.NodeId,
-                NodeName: nodeContext?.NodeName,
+                WorkerId: nodeContext?.WorkerId,
+                WorkerName: nodeContext?.WorkerName,
                 EventId: eventId.Id != 0 ? eventId.Id : null);
 
             _ringBuffer.Add(entry);

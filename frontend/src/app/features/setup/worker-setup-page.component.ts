@@ -156,7 +156,7 @@ interface WorkerHardware {
             </div>
             @if (local.status()?.isEnrolled) {
               <div class="notice" role="status">
-                Ce worker est rattaché à <strong>{{ local.status()?.clusterName }}</strong>.
+                Ce worker est rattaché à <strong>{{ local.status()?.centralName }}</strong>.
               </div>
               <div class="actions">
                 <button matButton="filled" type="button" (click)="openNodes()">

@@ -123,7 +123,7 @@ public sealed class FlowPlacementIntegrationTests
             var plan = JsonSerializer.Deserialize<FlowPlacementPlan>(jsonText, Json);
             Assert.NotNull(plan);
             Assert.Equal(FlowPlacementPlan.StrategyDirectUnified, plan.Strategy);
-            Assert.Equal(nodeA, plan.AssignedNodeId);
+            Assert.Equal(nodeA, plan.AssignedWorkerId);
         }
     }
 
@@ -311,7 +311,7 @@ public sealed class FlowPlacementIntegrationTests
             var plan = JsonSerializer.Deserialize<FlowPlacementPlan>(jsonText, Json);
             Assert.NotNull(plan);
             Assert.Equal(FlowPlacementPlan.StrategyDirectUnified, plan.Strategy);
-            Assert.Equal(nodeA, plan.AssignedNodeId);
+            Assert.Equal(nodeA, plan.AssignedWorkerId);
         }
     }
 
@@ -367,7 +367,7 @@ public sealed class FlowPlacementIntegrationTests
         var lease=await runtime.ClaimAsync(direct,CancellationToken.None);
         Assert.NotNull(lease);
         Assert.Equal(FlowPlacementPlan.StrategySegmented,lease.PlacementPlan?.Strategy);
-        Assert.Equal(gpu,lease.PlacementPlan!.NodeAssignments!["encode"]);
+        Assert.Equal(gpu,lease.PlacementPlan!.WorkerAssignments!["encode"]);
         Assert.Equal(FlowPlacementPlan.StrategySegmented,(await runtime.PersistPlacementPlanAsync(id,direct,lease.Epoch,CancellationToken.None))?.Strategy);
         var metadata=JsonSerializer.SerializeToElement(new { streams=new[]{new{codec_type="video",codec_name="h264",width=16,height=16}} },Json);
         await runtime.RecordSourceMetadataAsync(id,direct,lease.Epoch,metadata,CancellationToken.None);

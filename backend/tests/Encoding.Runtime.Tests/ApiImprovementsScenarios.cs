@@ -58,7 +58,7 @@ internal static class ApiImprovementsScenarios
             var admin = new TestClient(factory.CreateClient(new() { HandleCookies = false, AllowAutoRedirect = false }));
 
             // Initialisation de l'administrateur
-            using (var setup = await anonymous.SendAsync(HttpMethod.Post, "/api/v1/auth/setup", new SetupRequest("admin", AdminPassword, NodeDisplayName: "Noeud API"), csrf: false))
+            using (var setup = await anonymous.SendAsync(HttpMethod.Post, "/api/v1/auth/setup", new SetupRequest("admin", AdminPassword, WorkerDisplayName: "Noeud API"), csrf: false))
             {
                 Check(setup.StatusCode == HttpStatusCode.Created, "Setup succeeds.");
             }
@@ -406,7 +406,7 @@ internal static class ApiImprovementsScenarios
                       && toolsJson.Contains("get_flow_schema")
                       && toolsJson.Contains("create_flow")
                       && toolsJson.Contains("delete_flow")
-                      && toolsJson.Contains("list_nodes"), "MCP exposes all cluster management tools.");
+                      && toolsJson.Contains("list_workers"), "MCP exposes all cluster management tools.");
             }
 
             // C. Appel d'outil (tools/call : get_flow_schema)

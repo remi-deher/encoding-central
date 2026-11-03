@@ -64,12 +64,12 @@ export interface NodeGroupResponse {
   readonly mode: NodeGroupMode;
   readonly criteria: NodeGroupCriteria;
   readonly labels: Readonly<Record<string, string | null>>;
-  readonly nodeIds: readonly string[];
+  readonly workerIds: readonly string[];
   readonly createdAt: string;
   readonly updatedAt: string;
 }
 export interface NodeIdentityResponse {
-  readonly nodeId: string;
+  readonly workerId: string;
   readonly displayName: string | null;
   readonly labels: Readonly<Record<string, string | null>>;
   readonly effectiveLabels: Readonly<Record<string, string | null>>;
@@ -81,9 +81,9 @@ export interface LibraryResponse {
   readonly id: string;
   readonly name: string;
   readonly createdAt: string;
-  readonly configuredNodeCount: number;
-  readonly directAccessNodeCount: number;
-  readonly transferNodeCount: number;
+  readonly configuredWorkerCount: number;
+  readonly directAccessWorkerCount: number;
+  readonly transferWorkerCount: number;
   readonly isActive: boolean;
 }
 export const NODE_ROLE_LABELS: Readonly<Record<NodeRole, string>> = {

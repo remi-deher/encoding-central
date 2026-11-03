@@ -185,7 +185,7 @@ export class FlowSimulationPanelComponent {
           value: `${JSON.stringify(observation.actual) ?? 'Absent'} ${operator} ${JSON.stringify(observation.rule.value) ?? ''} vers ${observation.error ?? (observation.result ? 'Oui' : 'Non')}`,
         };
       }),
-      { section: 'Contexte après cette étape', label: 'Worker simulé', value: step.workerNodeId },
+      { section: 'Contexte après cette étape', label: 'Worker simulé', value: step.workerId },
       { section: 'Contexte après cette étape', label: 'Extension', value: step.context.extension },
       {
         section: 'Contexte après cette étape',
@@ -253,7 +253,7 @@ export class FlowSimulationPanelComponent {
         ...(node?.component.id === 'nodes-handoff'
           ? [
               {
-                id: 'workerNodeId',
+                id: 'workerId',
                 type: 'text' as const,
                 label: 'Identifiant du worker qui prend le relais',
                 required: true,
@@ -271,7 +271,7 @@ export class FlowSimulationPanelComponent {
       metadata: JSON.stringify(this.result()?.steps.at(-1)?.context.currentMetadata ?? {}, null, 2),
       variables: '{}',
       extension: '',
-      workerNodeId: node?.configuration['targetNodeId'] ?? '',
+      workerId: node?.configuration['targetNodeId'] ?? '',
     };
   });
 }

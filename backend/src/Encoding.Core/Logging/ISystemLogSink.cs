@@ -15,8 +15,8 @@ public interface ISystemLogSink
 /// </summary>
 public interface ISystemLogWorkerContext
 {
-    Guid? NodeId { get; }
-    string? NodeName { get; }
+    Guid? WorkerId { get; }
+    string? WorkerName { get; }
 }
 
 public sealed class DefaultSystemLogWorkerContext : ISystemLogWorkerContext
@@ -25,8 +25,8 @@ public sealed class DefaultSystemLogWorkerContext : ISystemLogWorkerContext
 
     public DefaultSystemLogWorkerContext(Guid? nodeId = null, string? nodeName = null)
     {
-        NodeId = nodeId;
-        NodeName = nodeName;
+        WorkerId = nodeId;
+        WorkerName = nodeName;
     }
 
     public DefaultSystemLogWorkerContext(Func<(Guid? NodeId, string? NodeName)> resolver)
@@ -34,6 +34,6 @@ public sealed class DefaultSystemLogWorkerContext : ISystemLogWorkerContext
         _resolver = resolver;
     }
 
-    public Guid? NodeId => _resolver?.Invoke().NodeId ?? field;
-    public string? NodeName => _resolver?.Invoke().NodeName ?? field;
+    public Guid? WorkerId => _resolver?.Invoke().NodeId ?? field;
+    public string? WorkerName => _resolver?.Invoke().NodeName ?? field;
 }

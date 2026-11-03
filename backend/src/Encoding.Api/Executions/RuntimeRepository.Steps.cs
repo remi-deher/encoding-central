@@ -240,16 +240,16 @@ public sealed partial class RuntimeRepository
             var snapshot=await settings.ExecuteScalarAsync(ct) as byte[];
             try { handoff=RuntimeHandoffPolicy.Resolve(node,snapshot is null?null:pluginConfigurations.ReadSnapshot(snapshot).GetValueOrDefault("nodes")); }
             catch(ArgumentException) { return false; }
-            if(cp.Handoff!=handoff || cp.PlacementHandoff || cp.NextNodeId is null || handoff.Mode=="node" && handoff.TargetNodeId==worker) return false;
+            if(cp.Handoff!=handoff || cp.PlacementHandoff || cp.NextNodeId is null || handoff.Mode=="node" && handoff.TargetWorkerId==worker) return false;
         }
         else if(cp.Handoff is not null)
         {
-            if(!cp.PlacementHandoff || cp.NextNodeId is null || cp.Handoff.Mode!="node" || cp.Handoff.TargetNodeId is not { } target) return false;
+            if(!cp.PlacementHandoff || cp.NextNodeId is null || cp.Handoff.Mode!="node" || cp.Handoff.TargetWorkerId is not { } target) return false;
             await using var savedPlan=Sql.Command("SELECT placement_plan::text FROM execution_work WHERE execution_id=@id",c,tx);
             savedPlan.Parameters.AddWithValue("id",id);
             var planJson=await savedPlan.ExecuteScalarAsync(ct) as string;
             var plan=planJson is null?null:JsonSerializer.Deserialize<FlowPlacementPlan>(planJson,Json);
-            if(plan?.NodeAssignments?.TryGetValue(cp.NextNodeId,out var planned)!=true || planned!=target || target==worker) return false;
+            if(plan?.WorkerAssignments?.TryGetValue(cp.NextNodeId,out var planned)!=true || planned!=target || target==worker) return false;
             handoff=cp.Handoff;
         }
         else if(cp.PlacementHandoff) return false;
@@ -297,7 +297,7 @@ public sealed partial class RuntimeRepository
             await metadata.ExecuteNonQueryAsync(ct);
         }
         var detail=handoff is null?$"Étape terminée : {Encoding.Contracts.Text.Mojibake.Repair(node.Name??component.Name)}.":handoff.Mode=="node"
-            ?$"Relais en attente vers le worker {handoff.TargetNodeId:D}.":"Relais en attente d'un autre worker éligible.";
+            ?$"Relais en attente vers le worker {handoff.TargetWorkerId:D}.":"Relais en attente d'un autre worker éligible.";
         if (node.Component.ComponentId == MediaIntegrityPolicy.Component && ExecutionRepository.ReadIntegrityDiagnostic(cp) is { } diagnostic)
             detail += " " + diagnostic.Code + " : " + diagnostic.Message;
         if(wait is not null) detail=ExecutionWaitRepository.Describe(wait);
@@ -409,7 +409,7 @@ public sealed partial class RuntimeRepository
             var identity=await nodeGroups.GetNodeIdentityAsync(node.Id,ct);
             if(identity is not null
                 && eligibility.CanRun(item.Flow,node.Capabilities,node.Id,item.Checkpoint?.NextNodeId,item.Checkpoint is not null,item.Checkpoint?.Context,
-                    identity,node.Inventory,item.PlacementPlan?.NodeAssignments)) return true;
+                    identity,node.Inventory,item.PlacementPlan?.WorkerAssignments)) return true;
         }
         return false;
     }

@@ -45,7 +45,7 @@ public sealed class WorkerHeartbeatService(
                             {
                                 Content = JsonContent.Create(heartbeat, options: AgentJson.Options)
                             };
-                            request.Headers.Add("X-Node-Token", identity.NodeToken);
+                            request.Headers.Add("X-Node-Token", identity.WorkerToken);
                             if (enrollment.IsLocalUrl(serverUrl) && LocalEnrollment.Read(options.LocalEnrollmentSecretFile) is { } secret)
                                 request.Headers.Add(LocalEnrollment.HeaderName, secret);
                             using var response = await httpClient.SendAsync(request, stoppingToken);

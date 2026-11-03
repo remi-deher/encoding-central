@@ -14,9 +14,9 @@ const model = (id: string, label: string) => ({
   reasoningKnown: true,
 });
 const catalog: AiClusterModelCatalog = {
-  nodes: [
+  workers: [
     {
-      nodeId: 'a',
+      workerId: 'a',
       name: 'Salon',
       providers: [
         {
@@ -29,7 +29,7 @@ const catalog: AiClusterModelCatalog = {
       ],
     },
     {
-      nodeId: 'b',
+      workerId: 'b',
       name: 'Bureau',
       providers: [
         {

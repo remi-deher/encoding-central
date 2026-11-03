@@ -25,20 +25,20 @@ public sealed class LibraryProcessingRepository(DbDataSource dataSource)
     }
     public async Task<bool> SaveAsync(Guid library,SaveLibraryProcessingSettings request,CancellationToken ct)
     {
-        if(request.ScanIntervalSeconds is <15 or >86400 || request.MaxConcurrentTasks is <1 or >1000 || request.NodeLimits is null
-            || request.NodeLimits.Count>1000 || request.NodeLimits.Any(limit=>limit is null || limit.MaxConcurrentTasks is <1 or >1000)
-            || request.NodeLimits.Select(limit=>limit.NodeId).Distinct().Count()!=request.NodeLimits.Count || request.ExpectedRevision is <0 or int.MaxValue)
+        if(request.ScanIntervalSeconds is <15 or >86400 || request.MaxConcurrentTasks is <1 or >1000 || request.WorkerLimits is null
+            || request.WorkerLimits.Count>1000 || request.WorkerLimits.Any(limit=>limit is null || limit.MaxConcurrentTasks is <1 or >1000)
+            || request.WorkerLimits.Select(limit=>limit.WorkerId).Distinct().Count()!=request.WorkerLimits.Count || request.ExpectedRevision is <0 or int.MaxValue)
             throw new ArgumentException("Limites invalides : 1 à 1 000 traitements ; intervalle de 15 à 86 400 secondes.");
         await using var c=await dataSource.OpenConnectionAsync(ct);await using var tx=await c.BeginTransactionAsync(ct);
         await using var libraryLock=Sql.Command("SELECT id FROM libraries WHERE id=@id FOR UPDATE",c,tx);
         libraryLock.Parameters.AddWithValue("id",library);if(await libraryLock.ExecuteScalarAsync(ct) is null)return false;
         await using var revision=Sql.Command("SELECT revision FROM library_processing_settings WHERE library_id=@id",c,tx);
         revision.Parameters.AddWithValue("id",library);if((await revision.ScalarInt32Async(ct) ?? 0)!=request.ExpectedRevision)return false;
-        foreach(var limit in request.NodeLimits)
+        foreach(var limit in request.WorkerLimits)
         {
             await using var eligible=Sql.Command("SELECT EXISTS(SELECT 1 FROM library_worker_accesses a JOIN workers n ON n.id=a.worker_id WHERE a.library_id=@library AND a.worker_id=@node AND a.mode<>'unsupported' AND n.deleted_at IS NULL AND 'worker'=ANY(n.roles))",
                 c,tx);
-            eligible.Parameters.AddWithValue("library",library);eligible.Parameters.AddWithValue("node",limit.NodeId);
+            eligible.Parameters.AddWithValue("library",library);eligible.Parameters.AddWithValue("node",limit.WorkerId);
             if(!(await eligible.ScalarBoolAsync(ct)))throw new ArgumentException("Les limites par worker exigent un worker disposant d’un accès à cette bibliothèque.");
         }
         await using var save=Sql.Command("""
@@ -50,10 +50,10 @@ public sealed class LibraryProcessingRepository(DbDataSource dataSource)
         save.Parameters.AddWithValue("id",library);save.Parameters.AddWithValue("watch",request.WatchEnabled);save.Parameters.AddWithValue("interval",request.ScanIntervalSeconds);
         save.Parameters.AddWithValue("maximum",SqlKind.Integer,(object?)request.MaxConcurrentTasks??DBNull.Value);save.Parameters.AddWithValue("revision",request.ExpectedRevision+1);
         await save.ExecuteNonQueryAsync(ct);
-        foreach(var limit in request.NodeLimits)
+        foreach(var limit in request.WorkerLimits)
         {
             await using var insert=Sql.Command("INSERT INTO library_worker_processing_limits(library_id,worker_id,max_concurrent_tasks) VALUES(@library,@node,@maximum)",c,tx);
-            insert.Parameters.AddWithValue("library",library);insert.Parameters.AddWithValue("node",limit.NodeId);insert.Parameters.AddWithValue("maximum",
+            insert.Parameters.AddWithValue("library",library);insert.Parameters.AddWithValue("node",limit.WorkerId);insert.Parameters.AddWithValue("maximum",
                 limit.MaxConcurrentTasks);await insert.ExecuteNonQueryAsync(ct);
         }
         await tx.CommitAsync(ct);return true;

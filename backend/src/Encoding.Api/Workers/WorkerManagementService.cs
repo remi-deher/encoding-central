@@ -11,7 +11,7 @@ public record WorkerEnrollmentOutcome(
     bool HasValidationErrors,
     IDictionary<string, string[]>? ValidationErrors,
     bool WindowOpen,
-    WorkerResponse? Node);
+    WorkerResponse? Worker);
 
 public enum CreatePairingOutcome
 {
@@ -36,7 +36,7 @@ public enum HeartbeatOutcomeKind
 public record HeartbeatResult(
     HeartbeatOutcomeKind Kind,
     IDictionary<string, string[]>? ValidationErrors,
-    WorkerResponse? Node);
+    WorkerResponse? Worker);
 
 public sealed class WorkerManagementService(
     WorkerRepository repository,
@@ -96,11 +96,11 @@ public sealed class WorkerManagementService(
             var firstLink = Get<FirstLinkRepository>();
             var logger = Get<ILogger<WorkerManagementService>>();
             if (firstLink is not null && await firstLink.TryConsumeAsync(ct) is { } administrator
-                && await repository.ApprovePairingRequestAsync(request.Node.Id, ct) is not null)
+                && await repository.ApprovePairingRequestAsync(request.Worker.Id, ct) is not null)
             {
                 logger?.LogWarning(
                     "Le worker {NodeId} ({NodeName}) a été accepté sans vérification au titre de la première liaison activée par {Administrator}.",
-                    request.Node.Id, request.Node.Name, administrator);
+                    request.Worker.Id, request.Worker.Name, administrator);
             }
             return new(CreatePairingOutcome.Accepted, null);
         }

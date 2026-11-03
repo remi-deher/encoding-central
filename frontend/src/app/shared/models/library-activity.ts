@@ -31,8 +31,8 @@ export interface LibraryActivityFile {
   readonly executionId: string | null;
   readonly executionState: string | null;
   readonly detail: string | null;
-  readonly nodeId: string | null;
-  readonly node: string | null;
+  readonly workerId: string | null;
+  readonly worker: string | null;
   readonly progress: number | null;
   readonly updatedAt: string | null;
 }

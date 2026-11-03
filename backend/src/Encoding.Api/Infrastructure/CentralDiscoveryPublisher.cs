@@ -28,8 +28,8 @@ public sealed class CentralDiscoveryPublisher(
                     advertiser?.Dispose();
                     var properties = new Dictionary<string, string>
                     {
-                        ["clusterId"] = identity.Id.ToString("D"),
-                        ["clusterName"] = identity.Name,
+                        ["centralId"] = identity.Id.ToString("D"),
+                        ["centralName"] = identity.Name,
                         ["roles"] = "server"
                     };
                     if (!string.IsNullOrWhiteSpace(apiUrl)) properties["apiUrl"] = apiUrl;

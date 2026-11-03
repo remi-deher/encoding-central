@@ -80,7 +80,7 @@ describe('NodeGroupEditorComponent', () => {
     expect(emittedPayload).toBeDefined();
     expect(emittedPayload!.name).toBe('Pool-Workers');
     expect(emittedPayload!.mode).toBe('manual');
-    expect(emittedPayload!.nodeIds).toEqual(['00000000-0000-0000-0000-000000000001']);
+    expect(emittedPayload!.workerIds).toEqual(['00000000-0000-0000-0000-000000000001']);
     expect(emittedPayload!.criteria).toEqual({});
   });
 

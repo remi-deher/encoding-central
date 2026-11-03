@@ -177,7 +177,7 @@ public static class FlowAiEndpoints
             ?? (settings.FlowProvider is null && (settings.FlowModel is null || settings.FlowModel == settings.DefaultModel)
                 ? settings.DefaultReasoningEffort : null);
         var catalog = await cluster.ModelsAsync(false, ct);
-        var nodes = settings.FlowLocalOnly ? catalog.Nodes.Take(1) : catalog.Nodes;
+        var nodes = settings.FlowLocalOnly ? catalog.Workers.Take(1) : catalog.Workers;
         var models = nodes.SelectMany(node => node.Providers)
             .Where(item => item.Provider == provider && item.State == "available")
             .SelectMany(item => item.Models)

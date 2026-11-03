@@ -885,7 +885,7 @@ export class ActivityExecutionSummaryComponent {
   });
 
   protected readonly workerName = computed(() => {
-    return this.execution()?.node || this.file()?.node || '—';
+    return this.execution()?.worker || this.file()?.worker || '—';
   });
 
   protected readonly executionId = computed(() => {

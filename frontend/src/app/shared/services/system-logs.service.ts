@@ -19,7 +19,7 @@ export class SystemLogsService {
     if (query.minLevel) params = params.set('minLevel', query.minLevel);
     if (query.category) params = params.set('category', query.category);
     if (query.search) params = params.set('search', query.search);
-    if (query.nodeId) params = params.set('nodeId', query.nodeId);
+    if (query.workerId) params = params.set('workerId', query.workerId);
     if (query.limit !== undefined) params = params.set('limit', query.limit.toString());
     if (query.since) params = params.set('since', query.since);
 
@@ -38,7 +38,7 @@ export class SystemLogsService {
 
   getCategories(nodeId?: string | null): Observable<readonly string[]> {
     let params = new HttpParams();
-    if (nodeId) params = params.set('nodeId', nodeId);
+    if (nodeId) params = params.set('workerId', nodeId);
 
     return this.http
       .get<SystemLogCategoriesResponse>('/api/v1/system/logs/categories', { params })
@@ -55,7 +55,7 @@ export class SystemLogsService {
       minLevel?: SystemLogLevel;
       category?: string;
       search?: string;
-      nodeId?: string | null;
+      workerId?: string | null;
     },
     onConnectionChange?: (connected: boolean) => void,
   ): Observable<SystemLogEntry> {
@@ -64,7 +64,7 @@ export class SystemLogsService {
       if (filter?.minLevel) params.set('minLevel', filter.minLevel);
       if (filter?.category) params.set('category', filter.category);
       if (filter?.search) params.set('search', filter.search);
-      if (filter?.nodeId) params.set('nodeId', filter.nodeId);
+      if (filter?.workerId) params.set('workerId', filter.workerId);
 
       const queryString = params.toString();
       const url = `/api/v1/system/logs/stream${queryString ? '?' + queryString : ''}`;

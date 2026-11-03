@@ -86,7 +86,7 @@ public sealed class ExecutionRepository(DbDataSource dataSource, FlowComponentRe
                 cmd.Parameters.AddWithValue("state", query.State.Trim().ToLowerInvariant());
             if (query.LibraryId is { } libraryId)
                 cmd.Parameters.AddWithValue("libraryId", libraryId);
-            if (query.NodeId is { } nodeId)
+            if (query.WorkerId is { } nodeId)
                 cmd.Parameters.AddWithValue("nodeId", nodeId);
             if (query.Since is { } since)
                 cmd.Parameters.AddWithValue("since", since);
@@ -94,7 +94,7 @@ public sealed class ExecutionRepository(DbDataSource dataSource, FlowComponentRe
         // Allow-listed predicates only — values bind via @params, never concatenate query text from the client.
         if (!string.IsNullOrWhiteSpace(query.State)) predicates.Add(StateFilterPredicate);
         if (query.LibraryId is not null) predicates.Add(LibraryFilterPredicate);
-        if (query.NodeId is not null) predicates.Add(NodeFilterPredicate);
+        if (query.WorkerId is not null) predicates.Add(NodeFilterPredicate);
         if (query.Since is not null) predicates.Add(SinceFilterPredicate);
         var whereSql = predicates.Count > 0 ? " WHERE " + string.Join(" AND ", predicates) : string.Empty;
 
@@ -371,7 +371,7 @@ public sealed class ExecutionRepository(DbDataSource dataSource, FlowComponentRe
    RETURNING revision
    """, c, tx);
         cmd.Parameters.AddWithValue("id", id); cmd.Parameters.AddWithValue("revision", update.ExpectedRevision);
-        cmd.Parameters.AddWithValue("state", update.State); cmd.Parameters.AddWithValue("node", SqlKind.Uuid, (object?)update.NodeId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("state", update.State); cmd.Parameters.AddWithValue("node", SqlKind.Uuid, (object?)update.WorkerId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("progress", SqlKind.Decimal, (object?)update.Progress ?? DBNull.Value); cmd.Parameters.AddWithValue("detail", update.Detail);
         if (await cmd.ScalarInt32Async(ct) is not {} revision) return false;
         await AddEvent(c, tx, id, update.EventId, revision, update.State, update.Detail, ct); return true;

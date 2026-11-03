@@ -76,7 +76,7 @@ public sealed class PluginSyncService(WorkerAgentOptions options, WorkerIdentity
     private async Task InstallAsync(WorkerIdentityState identity, string serverUrl, Listed plugin, string target, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(new Uri(serverUrl), $"api/v1/store/packages/{plugin.Id}/{plugin.Version}/download"));
-        request.Headers.Add("X-Node-Token", identity.NodeToken);
+        request.Headers.Add("X-Node-Token", identity.WorkerToken);
         using var response = await http.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
         var archive = await response.Content.ReadAsByteArrayAsync(ct);
@@ -96,7 +96,7 @@ public sealed class PluginSyncService(WorkerAgentOptions options, WorkerIdentity
     private async Task<T?> Get<T>(WorkerIdentityState identity, string serverUrl, string path, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(new Uri(serverUrl), path));
-        request.Headers.Add("X-Node-Token", identity.NodeToken);
+        request.Headers.Add("X-Node-Token", identity.WorkerToken);
         using var response = await http.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<T>(new JsonSerializerOptions(JsonSerializerDefaults.Web), ct);

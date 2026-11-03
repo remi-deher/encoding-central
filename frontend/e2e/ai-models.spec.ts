@@ -9,7 +9,7 @@ const conversation = {
   provider: 'codex-cli',
   model: 'server-model-a',
   reasoningEffort: 'high',
-  nodeId,
+  workerId: nodeId,
   title: 'Inspecter le worker',
   source,
   createdAt: '2030-01-01T00:00:00Z',
@@ -23,8 +23,8 @@ const models = [
     reasoningEfforts: ['low', 'high'],
     defaultReasoningEffort: 'high',
     reasoningKnown: true,
-    nodeId,
-    nodeName: 'Salon',
+    workerId: nodeId,
+    workerName: 'Salon',
   },
   {
     provider: 'claude-cli',
@@ -33,8 +33,8 @@ const models = [
     reasoningEfforts: ['medium', 'max'],
     defaultReasoningEffort: 'medium',
     reasoningKnown: true,
-    nodeId,
-    nodeName: 'Salon',
+    workerId: nodeId,
+    workerName: 'Salon',
   },
 ];
 
@@ -75,7 +75,7 @@ test.beforeEach(async ({ page }) => {
               provider: 'codex-cli',
               model: 'server-model-a',
               reasoningEffort: 'high',
-              nodeId,
+              workerId: nodeId,
             },
             actualModel: 'confirmed-model-a',
           },
@@ -157,7 +157,7 @@ test('backend models and reasoning drive each turn while old turns retain observ
           provider: request.provider,
           model: request.model,
           reasoningEffort: request.reasoningEffort,
-          nodeId,
+          workerId: nodeId,
         },
         actualModel: 'confirmed-model-b',
       },
@@ -188,7 +188,7 @@ test('backend models and reasoning drive each turn while old turns retain observ
     provider: 'claude-cli',
     model: 'server-model-b',
     reasoningEffort: 'max',
-    nodeId,
+    workerId: nodeId,
   });
   await expect(modelButton).toBeDisabled();
   release!();
@@ -232,7 +232,7 @@ test('unavailable catalog blocks a new turn while preserving the selected conver
         models: [],
         catalogs: [
           {
-            nodeId,
+            workerId: nodeId,
             name: 'Salon',
             providers: [
               {
@@ -278,17 +278,17 @@ test('administrators disable discovered models through the backend policy', asyn
       },
     }),
   );
-  await page.route('**/api/v1/tools/ai/central', (route) => route.fulfill({ json: { nodes: [] } }));
-  await page.route('**/api/v1/tools/ai/quotas', (route) => route.fulfill({ json: { nodes: [] } }));
+  await page.route('**/api/v1/tools/ai/central', (route) => route.fulfill({ json: { workers: [] } }));
+  await page.route('**/api/v1/tools/ai/quotas', (route) => route.fulfill({ json: { workers: [] } }));
   await page.route('**/api/v1/tools/ai/sessions?*', (route) =>
     route.fulfill({ json: { items: [], offset: 0, hasMore: false } }),
   );
   await page.route('**/api/v1/tools/ai/models*', (route) =>
     route.fulfill({
       json: {
-        nodes: [
+        workers: [
           {
-            nodeId,
+            workerId: nodeId,
             name: 'Salon',
             providers: [
               {
@@ -383,7 +383,7 @@ test('network retries keep the selected model and request id while validation er
     provider: 'claude-cli',
     model: 'server-model-b',
     reasoningEffort: 'medium',
-    nodeId,
+    workerId: nodeId,
   });
   await expect(assistant.getByRole('textbox', { name: 'Votre question' })).toBeEnabled();
 });
@@ -445,7 +445,7 @@ test('floating launcher follows scrolling and compact chat preserves conversatio
           provider: request.provider,
           model: request.model,
           reasoningEffort: request.reasoningEffort,
-          nodeId,
+          workerId: nodeId,
         },
       },
     });

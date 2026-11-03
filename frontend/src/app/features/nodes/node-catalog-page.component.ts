@@ -282,7 +282,7 @@ export class NodeCatalogPageComponent {
   private readonly groupEditing = signal<NodeGroupResponse | null>(null);
 
   protected readonly localNode = computed(
-    () => this.nodes().find((node) => node.id === this.local.status()?.nodeId) ?? null,
+    () => this.nodes().find((node) => node.id === this.local.status()?.workerId) ?? null,
   );
   protected readonly localOverviewHardware = computed(() =>
     this.nodeOverviewHardware(
@@ -388,7 +388,7 @@ export class NodeCatalogPageComponent {
     return lastSignal ?? (this.local.agentUnavailable() ? 'Indisponible' : 'En attente');
   });
   protected readonly localOverviewLibraries = computed(() =>
-    this.nodeOverviewLibraries(this.localNode()?.id ?? this.local.status()?.nodeId ?? null),
+    this.nodeOverviewLibraries(this.localNode()?.id ?? this.local.status()?.workerId ?? null),
   );
 
   protected onLocalSheetAction(actionId: string): void {
@@ -398,12 +398,12 @@ export class NodeCatalogPageComponent {
     }
   }
   protected readonly clusterName = computed(
-    () => this.clusterIdentity()?.name ?? this.local.status()?.clusterName ?? 'Central',
+    () => this.clusterIdentity()?.name ?? this.local.status()?.centralName ?? 'Central',
   );
   protected readonly clusterAddress = computed(
     () =>
       this.local.target()?.apiBaseUrl ??
-      this.local.clusters().find((cluster) => cluster.id === this.local.status()?.clusterId)
+      this.local.clusters().find((cluster) => cluster.id === this.local.status()?.centralId)
         ?.apiBaseUrl ??
       null,
   );
@@ -1170,7 +1170,7 @@ export class NodeCatalogPageComponent {
     return this.allLibraries().flatMap((library) => {
       const access = this.nodeAccessByLibrary()
         .get(library.id)
-        ?.find((item) => item.nodeId === nodeId);
+        ?.find((item) => item.workerId === nodeId);
       if (!access) return [];
 
       const stateLabel = !library.isActive
@@ -1221,7 +1221,7 @@ export class NodeCatalogPageComponent {
     return this.allLibraries().flatMap((library) => {
       const access = this.nodeAccessByLibrary()
         .get(library.id)
-        ?.find((item) => item.nodeId === node.id);
+        ?.find((item) => item.workerId === node.id);
       if (!access) return [];
       const localMode =
         access.mode === 'direct'
@@ -1260,7 +1260,7 @@ export class NodeCatalogPageComponent {
     return nodeId && libraryId
       ? (this.nodeAccessByLibrary()
           .get(libraryId)
-          ?.find((item) => item.nodeId === nodeId) ?? null)
+          ?.find((item) => item.workerId === nodeId) ?? null)
       : null;
   });
 
@@ -2166,7 +2166,7 @@ export class NodeCatalogPageComponent {
           new Map(current).set(
             library.id,
             (current.get(library.id) ?? []).map((item) =>
-              item.nodeId === node.id ? updated : item,
+              item.workerId === node.id ? updated : item,
             ),
           ),
         );
@@ -2186,18 +2186,18 @@ export class NodeCatalogPageComponent {
     }
 
     const existing = this.nodeAccessByLibrary().get(library.id) ?? [];
-    const access = existing.find((item) => item.nodeId === node.id);
+    const access = existing.find((item) => item.workerId === node.id);
     if (!access) return;
     const configured = existing
-      .filter((item) => event.actionId !== 'delete' || item.nodeId !== node.id)
+      .filter((item) => event.actionId !== 'delete' || item.workerId !== node.id)
       .map((item): LibraryNodeAccessValue => ({
-        nodeId: item.nodeId,
+        workerId: item.workerId,
         mode: item.mode,
         isEnabled: item.isEnabled,
         localPath: item.localPath,
         canRead: item.canRead,
         canWrite: item.canWrite,
-        transferSourceNodeId: item.transferSourceNodeId,
+        transferSourceWorkerId: item.transferSourceWorkerId,
       }));
     this.saveNodeLibraryConfiguration(library, node, configured, event.actionId);
   }
@@ -2231,15 +2231,15 @@ export class NodeCatalogPageComponent {
     const existing = this.nodeAccessByLibrary().get(library.id) ?? [];
     const merged = [
       ...existing
-        .filter((item) => item.nodeId !== node.id)
+        .filter((item) => item.workerId !== node.id)
         .map((item) => ({
-          nodeId: item.nodeId,
+          workerId: item.workerId,
           mode: item.mode,
           isEnabled: item.isEnabled,
           localPath: item.localPath,
           canRead: item.canRead,
           canWrite: item.canWrite,
-          transferSourceNodeId: item.transferSourceNodeId,
+          transferSourceWorkerId: item.transferSourceWorkerId,
         })),
       values[0],
     ];
@@ -2379,7 +2379,7 @@ export class NodeCatalogPageComponent {
     const accesses = this.allLibraries().flatMap((library) => {
       const access = this.nodeAccessByLibrary()
         .get(library.id)
-        ?.find((item) => item.nodeId === nodeId);
+        ?.find((item) => item.workerId === nodeId);
       return access && access.isEnabled && access.mode !== 'unsupported'
         ? [{ library, access }]
         : [];

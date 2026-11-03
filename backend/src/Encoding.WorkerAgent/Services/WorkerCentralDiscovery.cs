@@ -169,13 +169,13 @@ public sealed class WorkerCentralDiscovery(
 
     private async Task AddConfiguredClusterAsync(HttpClient client, CancellationToken cancellationToken)
     {
-        if (options.ClusterApiBaseUrl is null) return;
+        if (options.CentralApiBaseUrl is null) return;
         try
         {
             var identity = await client.GetFromJsonAsync<CentralIdentity>(
-                new Uri(new Uri(options.ClusterApiBaseUrl), "api/v1/central"), cancellationToken);
+                new Uri(new Uri(options.CentralApiBaseUrl), "api/v1/central"), cancellationToken);
             if (identity is null || identity.Id == Guid.Empty) return;
-            clusters[identity.Id] = new DiscoveredCentral(identity.Id, identity.Name, options.ClusterApiBaseUrl, DateTimeOffset.UtcNow, "configured");
+            clusters[identity.Id] = new DiscoveredCentral(identity.Id, identity.Name, options.CentralApiBaseUrl, DateTimeOffset.UtcNow, "configured");
             logger.LogInformation("Cluster configuré découvert : {ClusterName} ({ClusterId}).", identity.Name, identity.Id);
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
@@ -186,7 +186,7 @@ public sealed class WorkerCentralDiscovery(
 
     private void OnServiceFound(ServiceProfile service)
     {
-        if (!service.Properties.TryGetValue("clusterId", out var idValue)
+        if (!service.Properties.TryGetValue("centralId", out var idValue)
             || !Guid.TryParse(idValue, out var clusterId)) return;
 
         var apiBaseUrl = service.Properties.TryGetValue("apiUrl", out var configuredUrl)
@@ -195,7 +195,7 @@ public sealed class WorkerCentralDiscovery(
         if (!Uri.TryCreate(apiBaseUrl, UriKind.Absolute, out var uri)
             || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)) return;
 
-        var clusterName = service.Properties.TryGetValue("clusterName", out var configuredName) && !string.IsNullOrWhiteSpace(configuredName)
+        var clusterName = service.Properties.TryGetValue("centralName", out var configuredName) && !string.IsNullOrWhiteSpace(configuredName)
             ? configuredName
             : service.InstanceName;
         var cluster = new DiscoveredCentral(clusterId, clusterName, uri.AbsoluteUri.EndsWith('/') ? uri.AbsoluteUri : uri.AbsoluteUri + '/', DateTimeOffset.UtcNow);
@@ -205,7 +205,7 @@ public sealed class WorkerCentralDiscovery(
 
     private void OnServiceLost(ServiceProfile service)
     {
-        if (service.Properties.TryGetValue("clusterId", out var idValue) && Guid.TryParse(idValue, out var clusterId))
+        if (service.Properties.TryGetValue("centralId", out var idValue) && Guid.TryParse(idValue, out var clusterId))
             clusters.TryRemove(clusterId, out _);
     }
 

@@ -82,7 +82,7 @@ public static class ResourceEndpoints
                 return Results.Conflict(new
                 {
                     title = "Cette ressource est utilisée : "
-                        + string.Join(" ; ", usage.Select(item => $"flow « {item.FlowName} » (version {item.FlowVersion}), bloc « {item.NodeName ?? item.NodeId} »")),
+                        + string.Join(" ; ", usage.Select(item => $"flow « {item.FlowName} » (version {item.FlowVersion}), bloc « {item.WorkerName ?? item.WorkerId} »")),
                     usage
                 });
             return await repository.DeleteAsync(id, ct) ? Results.NoContent() : Results.NotFound();

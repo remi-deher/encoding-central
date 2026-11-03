@@ -38,8 +38,8 @@ export class AuthService {
   async setup(
     optionsOrUsername?:
       | {
-          nodeDisplayName?: string;
-          clusterName?: string;
+          workerDisplayName?: string;
+          centralName?: string;
           username?: string;
           password?: string;
         }
@@ -51,8 +51,8 @@ export class AuthService {
     const payload =
       typeof optionsOrUsername === 'object' && optionsOrUsername !== null
         ? {
-            nodeDisplayName: optionsOrUsername.nodeDisplayName?.trim() || null,
-            clusterName: optionsOrUsername.clusterName?.trim() || null,
+            nodeDisplayName: optionsOrUsername.workerDisplayName?.trim() || null,
+            clusterName: optionsOrUsername.centralName?.trim() || null,
             username: optionsOrUsername.username?.trim() || null,
             password: optionsOrUsername.password || null,
           }

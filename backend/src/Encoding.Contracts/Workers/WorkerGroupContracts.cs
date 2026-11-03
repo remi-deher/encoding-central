@@ -19,7 +19,7 @@ public sealed record WorkerGroupResponse(
     WorkerGroupMode Mode,
     WorkerGroupCriteria Criteria,
     IReadOnlyDictionary<string, string?> Labels,
-    IReadOnlyList<Guid> NodeIds,
+    IReadOnlyList<Guid> WorkerIds,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
@@ -29,10 +29,10 @@ public sealed record SaveWorkerGroupRequest(
     WorkerGroupMode Mode,
     WorkerGroupCriteria Criteria,
     IReadOnlyDictionary<string, string?> Labels,
-    IReadOnlyList<Guid> NodeIds);
+    IReadOnlyList<Guid> WorkerIds);
 
 public sealed record WorkerIdentityResponse(
-    Guid NodeId,
+    Guid WorkerId,
     string? DisplayName,
     IReadOnlyDictionary<string, string?> Labels,
     IReadOnlyDictionary<string, string?> EffectiveLabels,

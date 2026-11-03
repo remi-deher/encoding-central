@@ -15,9 +15,9 @@ public sealed class RuntimeClient : IDisposable
         this.identity=identity;
         ApiBaseUrl=apiBaseUrl ?? identity.ApiBaseUrl!;
         http.BaseAddress=new Uri(ApiBaseUrl);
-        http.DefaultRequestHeaders.Add("X-Node-Token",identity.NodeToken);
+        http.DefaultRequestHeaders.Add("X-Node-Token",identity.WorkerToken);
     }
-    public Guid NodeId=>identity.Id;
+    public Guid WorkerId=>identity.Id;
     public string ApiBaseUrl { get; }
     private string Route(string path)=>$"api/v1/runtime/workers/{identity.Id:D}/{path}";
     public async Task<T?> PostAsync<T>(string path,object body,CancellationToken ct)

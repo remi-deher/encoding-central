@@ -54,14 +54,14 @@ internal static class MembershipTests
             leaveStatus = HttpStatusCode.NoContent;
             await enrollment.LeaveAsync(CancellationToken.None);
             var left = await store.GetAsync(CancellationToken.None);
-            Check(leaves.Last().Path == $"/api/v1/workers/{joined.Id:D}/leave" && leaves.Last().Token == joined.NodeToken, "The node tells its cluster, authenticated by its own token.");
+            Check(leaves.Last().Path == $"/api/v1/workers/{joined.Id:D}/leave" && leaves.Last().Token == joined.WorkerToken, "The node tells its cluster, authenticated by its own token.");
             Check(!left.HasCredentials && left.Id != joined.Id, "After leaving, the node restarts from a fresh identity (a removed identity never comes back).");
 
             // Cluster distant injoignable : le départ reste possible, localement.
             var orphan = await store.SaveEnrollmentAsync(Guid.NewGuid().ToString("D"), "Central perdu", "http://127.0.0.1:1/", CancellationToken.None);
             await enrollment.LeaveAsync(CancellationToken.None);
             Check(!(await store.GetAsync(CancellationToken.None)).HasCredentials, "An unreachable cluster does not trap the node.");
-            Check(orphan.NodeToken is not null, "Sanity: the abandoned enrollment had credentials.");
+            Check(orphan.WorkerToken is not null, "Sanity: the abandoned enrollment had credentials.");
 
             // Un worker n'a qu'un central : après avoir quitté, il peut en rejoindre un autre avec une identité neuve.
             var arrived = await store.SaveEnrollmentAsync(Guid.NewGuid().ToString("D"), "Central B", "http://127.0.0.1:2/", CancellationToken.None);
@@ -70,10 +70,10 @@ internal static class MembershipTests
             Check(done.IsEnrolled && done.Id == arrived.Id, "After enrolling, the node belongs to its central.");
 
             // Le code de vérification est le même des deux côtés et change avec l'identité.
-            var code = WorkerVerificationCode.FromToken(arrived.Id, arrived.NodeToken!);
-            Check(code.Length == WorkerVerificationCode.Length && code == WorkerVerificationCode.FromTokenHash(arrived.Id, System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(arrived.NodeToken!))),
+            var code = WorkerVerificationCode.FromToken(arrived.Id, arrived.WorkerToken!);
+            Check(code.Length == WorkerVerificationCode.Length && code == WorkerVerificationCode.FromTokenHash(arrived.Id, System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(arrived.WorkerToken!))),
                 "The node and the cluster compute the same verification code.");
-            Check(code != WorkerVerificationCode.FromToken(Guid.NewGuid(), arrived.NodeToken!) && code != WorkerVerificationCode.FromToken(arrived.Id, "autre-jeton"), "Another identity has another code.");
+            Check(code != WorkerVerificationCode.FromToken(Guid.NewGuid(), arrived.WorkerToken!) && code != WorkerVerificationCode.FromToken(arrived.Id, "autre-jeton"), "Another identity has another code.");
 
             Console.WriteLine("PASS: central membership (leave, verification code).");
         }

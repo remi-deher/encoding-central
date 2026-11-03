@@ -24,7 +24,7 @@ public sealed class AiAssistantSendService(AiAssistantSupportService support, Ai
             var conversation = await ResolveConversationAsync(request, ownerId, ct);
             if (conversation is null) return null;
 
-            var session = await support.Cluster.GetSessionAsync(conversation.Id, ct);
+            var session = await support.Central.GetSessionAsync(conversation.Id, ct);
             var legacySession = session is not null && session.SystemPrompt != AiAssistantSupportService.BuildSystemPrompt();
             var requestedTools = request.ToolCalls ?? Array.Empty<AiAssistantToolCall>();
             if (requestedTools.Count > 3 || requestedTools.Select(tool => tool.Name).Distinct().Count() != requestedTools.Count)
@@ -121,7 +121,7 @@ public sealed class AiAssistantSendService(AiAssistantSupportService support, Ai
                 if (request.Provider is not null && (request.Provider != saved.Conversation.Provider
                     || request.Model != saved.Conversation.Model
                     || request.ReasoningEffort != saved.Conversation.ReasoningEffort
-                    || request.NodeId != saved.Conversation.NodeId))
+                    || request.WorkerId != saved.Conversation.WorkerId))
                     throw new ArgumentException("Cet identifiant de requête est déjà associé à une autre configuration de modèle.");
                 if (context is not null && (saved.Conversation.Source.Kind != context.Source.Kind
                     || saved.Conversation.Source.ResourceId != context.Source.ResourceId
@@ -134,7 +134,7 @@ public sealed class AiAssistantSendService(AiAssistantSupportService support, Ai
             var provider = request.Provider ?? options.DefaultProvider;
             var model = request.Provider is null && request.Model is null ? options.DefaultModel : request.Model;
             var selectedOption = options.Models.FirstOrDefault(option => option.Provider == provider && option.Model == model
-                && (request.NodeId is null || option.NodeId == request.NodeId))
+                && (request.WorkerId is null || option.WorkerId == request.WorkerId))
                 ?? throw new ArgumentException("Le fournisseur ou le modèle choisi n’est pas configuré ou disponible dans le support.Cluster.");
             if (request.ReasoningEffort is not null && !selectedOption.ReasoningEfforts.Contains(request.ReasoningEffort, StringComparer.Ordinal))
                 throw new ArgumentException("L’effort choisi n’est pas pris en charge par ce modèle.");
@@ -142,7 +142,7 @@ public sealed class AiAssistantSendService(AiAssistantSupportService support, Ai
             var source = context?.Source ?? new AiAssistantSource("application", Guid.Empty, "Encoding", "/ai");
             var conversation = new AiAssistantConversation(
                 id, provider, AiAssistantSupportService.CreateTitle(request.UserPrompt), source, now, now,
-                Model: model, ReasoningEffort: request.ReasoningEffort, NodeId: request.NodeId,
+                Model: model, ReasoningEffort: request.ReasoningEffort, WorkerId: request.WorkerId,
                 TitleSource: AiAssistantSupportService.TitleSourceFallback);
             await support.SaveConversationAsync(ownerId, conversation, ct);
             return conversation;
@@ -164,7 +164,7 @@ public sealed class AiAssistantSendService(AiAssistantSupportService support, Ai
         {
             var availableSelection = (await support.OptionsAsync(ct)).Models.Any(option =>
                 option.Provider == chosenProvider && option.Model == chosenModel
-                && option.NodeId == (request.NodeId ?? savedConv.NodeId)
+                && option.WorkerId == (request.WorkerId ?? savedConv.WorkerId)
                 && (request.ReasoningEffort is null || option.ReasoningEfforts.Contains(request.ReasoningEffort, StringComparer.Ordinal)));
             if (!availableSelection)
                 throw new ArgumentException("Le fournisseur, le modèle, le worker ou l’effort choisi n’est pas disponible.");
@@ -174,13 +174,13 @@ public sealed class AiAssistantSendService(AiAssistantSupportService support, Ai
             Provider = request.Provider ?? savedConv.Provider,
             Model = request.Model ?? savedConv.Model,
             ReasoningEffort = request.ReasoningEffort ?? savedConv.ReasoningEffort,
-            NodeId = request.NodeId ?? savedConv.NodeId,
+            WorkerId = request.WorkerId ?? savedConv.WorkerId,
         };
         if (savedConv.Provider != updated.Provider && !string.IsNullOrWhiteSpace(updated.Model) && updated.Model != savedConv.Model)
         {
             var availableSelection = (await support.OptionsAsync(ct)).Models.Any(option =>
                 option.Provider == updated.Provider && option.Model == updated.Model
-                && option.NodeId == updated.NodeId
+                && option.WorkerId == updated.WorkerId
                 && (request.ReasoningEffort is null || option.ReasoningEfforts.Contains(request.ReasoningEffort, StringComparer.Ordinal)));
             if (!availableSelection)
                 throw new ArgumentException("Le fournisseur, le modèle, le worker ou l’effort choisi n’est pas disponible.");
@@ -272,7 +272,7 @@ public sealed class AiAssistantSendService(AiAssistantSupportService support, Ai
             && (request.Provider is not null && request.Provider != savedSelection.Provider
                 || request.Model is not null && request.Model != savedSelection.Model
                 || request.ReasoningEffort is not null && request.ReasoningEffort != savedSelection.ReasoningEffort
-                || request.NodeId is not null && request.NodeId != savedSelection.NodeId))
+                || request.WorkerId is not null && request.WorkerId != savedSelection.WorkerId))
             throw new ArgumentException("Cet identifiant de requête est déjà associé à une autre configuration de modèle.");
         if (existingTurn is not null)
         {
@@ -323,7 +323,7 @@ public sealed class AiAssistantSendService(AiAssistantSupportService support, Ai
 
         try
         {
-            var policy = await support.Cluster.GetSettingsAsync(ct);
+            var policy = await support.Central.GetSettingsAsync(ct);
             var modelPlans = storedConversation?.TurnModelPlans?.ToDictionary(p => p.Key, p => p.Value) ?? new();
             var useExistingPrompt = storedConversation?.TurnModelPlans?.ContainsKey(request.RequestId) != true
                 && session?.PendingRequest == request.RequestId;
@@ -353,10 +353,10 @@ public sealed class AiAssistantSendService(AiAssistantSupportService support, Ai
             };
             await support.SaveActivityAsync(ownerId, activity, ct);
 
-            var result = await support.Cluster.GenerateAsync(
+            var result = await support.Central.GenerateAsync(
                 conversation.Provider,
                 new AiPrompt(systemPrompt, updatedPrompt, Model: conversation.Model, SessionId: conversation.Id, RequestId: request.RequestId,
-                    ReasoningEffort: conversation.ReasoningEffort, NodeId: conversation.NodeId),
+                    ReasoningEffort: conversation.ReasoningEffort, WorkerId: conversation.WorkerId),
                 requestCancellation.Token,
                 localOnly: policy.AssistantLocalOnly,
                 allowModelChanges: true);
@@ -424,18 +424,18 @@ public sealed class AiAssistantSendService(AiAssistantSupportService support, Ai
         }
         else
         {
-            var policy = await support.Cluster.GetSettingsAsync(ct);
+            var policy = await support.Central.GetSettingsAsync(ct);
             activity = activity with { Progress = "context", ProgressDetail = "Recherche des informations utiles dans Encoding", UpdatedAt = DateTimeOffset.UtcNow };
             await support.SaveActivityAsync(ownerId, activity, ct);
             var plannerRequestId = AiAssistantSupportService.DeriveRequestId(
                 conversation.Id + "/" + request.RequestId.ToString("N"), "assistant-read-tool-planner");
             var plannerSessionId = $"{conversation.Id.Split('.')[0]}.{plannerRequestId:N}";
             await support.Store.SaveAsync(AiAssistantSupportService.SessionOwnerKey(plannerSessionId), ownerId, ct);
-            var planner = await support.Cluster.GenerateAsync(
+            var planner = await support.Central.GenerateAsync(
                 conversation.Provider,
                 new AiPrompt(AiAssistantSupportService.BuildToolPlannerPrompt(user.IsInRole("admin")), contextualPrompt,
                     Model: conversation.Model, SessionId: plannerSessionId, RequestId: plannerRequestId,
-                    ReasoningEffort: conversation.ReasoningEffort, NodeId: conversation.NodeId),
+                    ReasoningEffort: conversation.ReasoningEffort, WorkerId: conversation.WorkerId),
                 ct, localOnly: policy.AssistantLocalOnly);
             if (!planner.Success)
                 throw new InvalidOperationException(planner.ErrorMessage ?? "Le modèle n’a pas pu choisir une réponse ou un outil de lecture.");
@@ -519,16 +519,16 @@ public sealed class AiAssistantSendService(AiAssistantSupportService support, Ai
         conversation = conversation with { UpdatedAt = DateTimeOffset.UtcNow };
         var updatedSelections = storedConversation?.TurnSelections?.ToDictionary(p => p.Key, p => p.Value) ?? new();
         var selectedOptionForTurn = (await support.OptionsAsync(ct)).Models.FirstOrDefault(option =>
-            option.Provider == conversation.Provider && option.Model == conversation.Model && option.NodeId == conversation.NodeId);
+            option.Provider == conversation.Provider && option.Model == conversation.Model && option.WorkerId == conversation.WorkerId);
         if (selectedOptionForTurn is not null)
             updatedSelections[request.RequestId] = new(conversation.Provider, conversation.Model,
-                conversation.ReasoningEffort, conversation.NodeId);
+                conversation.ReasoningEffort, conversation.WorkerId);
 
         var observedModel = result.Usage?.Model;
         var updatedActualModels = storedConversation?.TurnActualModels?.ToDictionary(p => p.Key, p => p.Value) ?? new();
         updatedActualModels[request.RequestId] = observedModel;
 
-        var latestConv = conversation with { Provider = conversation.Provider, Model = conversation.Model, ReasoningEffort = conversation.ReasoningEffort, NodeId = conversation.NodeId };
+        var latestConv = conversation with { Provider = conversation.Provider, Model = conversation.Model, ReasoningEffort = conversation.ReasoningEffort, WorkerId = conversation.WorkerId };
         if (result.Success && latestConv.TitleSource == AiAssistantSupportService.TitleSourceFallback && userPrompts.Count <= AiAssistantSupportService.MaxTitleAttemptTurns)
         {
             var generated = await support.TryGenerateTitleAsync(latestConv, request.UserPrompt, result.Content, ownerId, userPrompts.Count, ct);
@@ -549,7 +549,7 @@ public sealed class AiAssistantSendService(AiAssistantSupportService support, Ai
             finalSources,
             updatedSelections.GetValueOrDefault(request.RequestId),
             observedModel,
-            result.ExecutorNodeId,
+            result.ExecutorWorkerId,
             actionProposal);
     }
 }

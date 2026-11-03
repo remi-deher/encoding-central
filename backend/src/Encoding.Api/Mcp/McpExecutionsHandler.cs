@@ -38,7 +38,7 @@ public sealed class McpExecutionsHandler(
 
     public IReadOnlyCollection<string> ToolNames { get; } =
     [
-        "list_nodes",
+        "list_workers",
         "get_execution",
         "get_execution_events",
         "get_execution_pipeline",
@@ -57,7 +57,7 @@ public sealed class McpExecutionsHandler(
     public async Task<McpCallToolResult> HandleAsync(string toolName, JsonElement arguments, bool isAdmin, CancellationToken ct) =>
         toolName switch
         {
-            "list_nodes" => await ToolListNodesAsync(ct),
+            "list_workers" => await ToolListNodesAsync(ct),
             "get_execution" => await ToolGetExecutionAsync(arguments, ct),
             "get_execution_events" => await ToolGetExecutionEventsAsync(arguments, ct),
             "get_execution_pipeline" => await ToolGetExecutionPipelineAsync(arguments, ct),

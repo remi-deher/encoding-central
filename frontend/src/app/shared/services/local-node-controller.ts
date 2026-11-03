@@ -57,7 +57,7 @@ export class LocalNodeController {
     const status = this.status();
     return !!(
       this.submittedTargetId() ||
-      (status?.clusterId && !status.isEnrolled)
+      (status?.centralId && !status.isEnrolled)
     );
   });
   readonly canJoin = computed(
@@ -69,7 +69,7 @@ export class LocalNodeController {
       !this.pending(),
   );
   readonly joinableClusters = computed(() => {
-    const localClusterId = this.status()?.clusterId?.toLowerCase();
+    const localClusterId = this.status()?.centralId?.toLowerCase();
     const localIdentityId = this.identity()?.id?.toLowerCase();
     return this.clusters().filter((cluster) => {
       if (cluster.source === 'configured') return false;
@@ -84,7 +84,7 @@ export class LocalNodeController {
     });
   });
   readonly targetName = computed(
-    () => this.target()?.name ?? this.status()?.clusterName ?? 'le central d’accueil',
+    () => this.target()?.name ?? this.status()?.centralName ?? 'le central d’accueil',
   );
 
   constructor() {
@@ -129,7 +129,7 @@ export class LocalNodeController {
         if (setupNode) {
           this.setupNode.set(setupNode);
           this.status.set({
-            nodeId: '',
+            workerId: '',
             name: setupNode.name ?? 'localhost',
             displayName: setupNode.displayName,
             roles: [],
@@ -146,8 +146,8 @@ export class LocalNodeController {
             isEnrolled: false,
             pairingKey: null,
             pairingExpiresAt: null,
-            clusterId: null,
-            clusterName: null,
+            centralId: null,
+            centralName: null,
             verificationCode: null,
             enrollmentFailure: null,
           });
@@ -208,7 +208,7 @@ export class LocalNodeController {
       this.http.post<DiscoveredCluster>('/api/v1/local-worker/centrals', { apiBaseUrl: address }),
       (cluster) => {
         // Seul le rattachement déjà établi de l'agent compte : l'identité relayée par l'interface est celle du central lui-même.
-        const localClusterId = this.status()?.clusterId?.toLowerCase();
+        const localClusterId = this.status()?.centralId?.toLowerCase();
         if (
           (localClusterId && cluster.id.toLowerCase() === localClusterId) ||
           cluster.source === 'configured'
@@ -283,7 +283,7 @@ export class LocalNodeController {
   }
 
   async leave(): Promise<void> {
-    if (!this.isAdmin() || this.busy() || this.agentUnavailable() || !this.status()?.clusterId)
+    if (!this.isAdmin() || this.busy() || this.agentUnavailable() || !this.status()?.centralId)
       return;
     const pending = this.pending();
     const confirmed = await firstValueFrom(
@@ -349,17 +349,17 @@ export class LocalNodeController {
 
   private observeStatus(next: LocalNodeStatus): void {
     let targetId = this.submittedTargetId();
-    if (!targetId && next.clusterId && !next.isEnrolled) {
-      targetId = next.clusterId;
+    if (!targetId && next.centralId && !next.isEnrolled) {
+      targetId = next.centralId;
       this.submittedTargetId.set(targetId);
       this.observedPending = true;
       if (!this.target())
         this.target.set(
           this.clusters().find((cluster) => cluster.id.toLowerCase() === targetId!.toLowerCase()) ??
-            (next.clusterId
+            (next.centralId
               ? {
-                  id: next.clusterId,
-                  name: next.clusterName ?? 'le central d’accueil',
+                  id: next.centralId,
+                  name: next.centralName ?? 'le central d’accueil',
                   apiBaseUrl: '',
                   discoveredAt: '',
                 }
@@ -367,13 +367,13 @@ export class LocalNodeController {
         );
     }
     if (!targetId) return;
-    const sameTarget = next.clusterId?.toLowerCase() === targetId.toLowerCase();
+    const sameTarget = next.centralId?.toLowerCase() === targetId.toLowerCase();
     if (sameTarget && next.isEnrolled) {
       this.submittedTargetId.set(null);
       this.pairing.set(null);
       this.observedPending = false;
       this.joinIndex.set(3);
-      this.notifications.show(`Ce worker a rejoint ${next.clusterName ?? this.targetName()}.`);
+      this.notifications.show(`Ce worker a rejoint ${next.centralName ?? this.targetName()}.`);
     } else if (sameTarget && !next.isEnrolled) {
       this.observedPending = true;
     } else if (this.observedPending) {

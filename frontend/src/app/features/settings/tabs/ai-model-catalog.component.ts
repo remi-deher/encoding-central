@@ -308,7 +308,7 @@ export class AiModelCatalogComponent implements OnDestroy {
     this.api.getModelCatalog().subscribe({
       next: (catalog) => {
         this.catalog.set(catalog);
-        const catalogLoading = catalog.nodes.some((node) =>
+        const catalogLoading = catalog.workers.some((node) =>
           node.providers.some((provider) => provider.state === 'loading'),
         );
         this.loading.set(catalogLoading);
@@ -356,7 +356,7 @@ export class AiModelCatalogComponent implements OnDestroy {
   }
   private buildGroups(catalog: AiClusterModelCatalog | null): readonly ProviderGroup[] {
     if (!catalog) return [];
-    const nodeCount = catalog.nodes.length;
+    const nodeCount = catalog.workers.length;
     const order: string[] = [];
     const byProvider = new Map<
       string,
@@ -366,7 +366,7 @@ export class AiModelCatalogComponent implements OnDestroy {
         problems: { node: string; state: string; message: string | null }[];
       }
     >();
-    for (const node of catalog.nodes) {
+    for (const node of catalog.workers) {
       for (const provider of node.providers) {
         let entry = byProvider.get(provider.provider);
         if (!entry) {

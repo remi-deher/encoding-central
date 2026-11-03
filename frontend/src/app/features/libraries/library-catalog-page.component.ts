@@ -114,11 +114,11 @@ interface LibraryRecord extends DataTableRow {
 
   readonly configuredNodes: string;
 
-  readonly configuredNodeCount: number;
+  readonly configuredWorkerCount: number;
 
-  readonly directAccessNodeCount: number;
+  readonly directAccessWorkerCount: number;
 
-  readonly transferNodeCount: number;
+  readonly transferWorkerCount: number;
 
   readonly isActive: boolean;
 
@@ -142,7 +142,7 @@ interface LibraryRecord extends DataTableRow {
 }
 
 interface LibraryAccessRecord extends DataTableRow {
-  readonly nodeName: string;
+  readonly workerName: string;
 
   readonly isEnabled: boolean;
 
@@ -284,7 +284,7 @@ export class LibraryCatalogPageComponent {
       const workers = nodes.filter(
         (node) =>
           node.roles.includes('worker') &&
-          accesses.some((access) => access.nodeId === node.id && access.mode !== 'unsupported'),
+          accesses.some((access) => access.workerId === node.id && access.mode !== 'unsupported'),
       );
       this.processingNodeIds = workers.map((node) => node.id);
       this.processingRevision = settings.revision;
@@ -301,7 +301,7 @@ export class LibraryCatalogPageComponent {
             workers.map((node) => [
               'limit_' + node.id,
               String(
-                settings.nodeLimits.find((limit) => limit.nodeId === node.id)?.maxConcurrentTasks ??
+                settings.workerLimits.find((limit) => limit.workerId === node.id)?.maxConcurrentTasks ??
                   '',
               ),
             ]),
@@ -363,9 +363,9 @@ export class LibraryCatalogPageComponent {
       watchEnabled: values['watch'] === 'true',
       scanIntervalSeconds: Number(values['interval']),
       maxConcurrentTasks: values['maximum'] ? Number(values['maximum']) : null,
-      nodeLimits: this.processingNodeIds
+      workerLimits: this.processingNodeIds
         .filter((id) => values['limit_' + id])
-        .map((id) => ({ nodeId: id, maxConcurrentTasks: Number(values['limit_' + id]) })),
+        .map((id) => ({ workerId: id, maxConcurrentTasks: Number(values['limit_' + id]) })),
     };
     try {
       await firstValueFrom(
@@ -561,7 +561,7 @@ export class LibraryCatalogPageComponent {
       confirmation: (row) => ({
         title: 'Supprimer cet accès ?',
 
-        message: `L’accès de « ${row['nodeName']} » sera retiré de cette bibliothèque.`,
+        message: `L’accès de « ${row['workerName']} » sera retiré de cette bibliothèque.`,
 
         confirmLabel: 'Supprimer l’accès',
         variant: 'danger',
@@ -853,16 +853,16 @@ export class LibraryCatalogPageComponent {
     if (library?.state === 'Désactivée')
       return 'Bibliothèque désactivée par le serveur. Les chemins et autorisations restent enregistrés.';
 
-    if (!library?.configuredNodeCount)
+    if (!library?.configuredWorkerCount)
       return 'Aucun accès actif. Les workers ne peuvent pas encore traiter ses médias.';
 
     const modes = [
-      library.directAccessNodeCount
-        ? `${library.directAccessNodeCount} accès direct${library.directAccessNodeCount > 1 ? 's' : ''}`
+      library.directAccessWorkerCount
+        ? `${library.directAccessWorkerCount} accès direct${library.directAccessWorkerCount > 1 ? 's' : ''}`
         : '',
 
-      library.transferNodeCount
-        ? `${library.transferNodeCount} transfert${library.transferNodeCount > 1 ? 's' : ''}`
+      library.transferWorkerCount
+        ? `${library.transferWorkerCount} transfert${library.transferWorkerCount > 1 ? 's' : ''}`
         : '',
     ]
 
@@ -870,11 +870,11 @@ export class LibraryCatalogPageComponent {
 
       .join(' · ');
 
-    return `${library.configuredNodeCount} worker${library.configuredNodeCount > 1 ? 's' : ''} utilisable${library.configuredNodeCount > 1 ? 's' : ''} · ${modes}`;
+    return `${library.configuredWorkerCount} worker${library.configuredWorkerCount > 1 ? 's' : ''} utilisable${library.configuredWorkerCount > 1 ? 's' : ''} · ${modes}`;
   });
 
   protected readonly accessColumns: readonly DataTableColumn[] = [
-    { key: 'nodeName', label: 'Worker' },
+    { key: 'workerName', label: 'Worker' },
 
     {
       key: 'isEnabled',
@@ -884,7 +884,7 @@ export class LibraryCatalogPageComponent {
       toggle: {
         showStatusLabel: false,
         ariaLabel: (row, checked) =>
-          `${checked ? 'Désactiver' : row['mode'] === 'unsupported' ? 'Configurer' : 'Activer'} l’accès de ${row['nodeName']}`,
+          `${checked ? 'Désactiver' : row['mode'] === 'unsupported' ? 'Configurer' : 'Activer'} l’accès de ${row['workerName']}`,
 
         disabledWhen: (row) =>
           this.accessActivationBusy().has(`${this.selectedLibrary()?.id}:${row['id']}`),
@@ -895,7 +895,7 @@ export class LibraryCatalogPageComponent {
             : {
                 title: 'Désactiver cet accès ?',
 
-                message: `Le worker « ${row['nodeName']} » ne recevra plus de tâche pour cette bibliothèque.`,
+                message: `Le worker « ${row['workerName']} » ne recevra plus de tâche pour cette bibliothèque.`,
 
                 confirmLabel: 'Désactiver',
               },
@@ -911,9 +911,9 @@ export class LibraryCatalogPageComponent {
 
   protected readonly accessRows = computed<readonly LibraryAccessRecord[]>(() =>
     this.selectedAccesses().map((access) => ({
-      id: access.nodeId,
+      id: access.workerId,
 
-      nodeName: access.nodeName,
+      workerName: access.workerName,
 
       isEnabled: access.isEnabled,
 
@@ -923,7 +923,7 @@ export class LibraryCatalogPageComponent {
         access.mode === 'direct'
           ? (access.localPath ?? 'Chemin absent')
           : access.mode === 'transfer'
-            ? `Depuis ${access.transferSourceNodeName ?? 'source inconnue'}`
+            ? `Depuis ${access.transferSourceWorkerName ?? 'source inconnue'}`
             : 'Aucun accès',
 
       permissions:
@@ -953,7 +953,7 @@ export class LibraryCatalogPageComponent {
     const assignment = this.workflowState()?.assignment;
     const processing = this.processingState() ?? this.processingByLibrary()[library.id] ?? null;
     const scan = this.workflowState()?.scan;
-    const accessCount = library.configuredNodeCount;
+    const accessCount = library.configuredWorkerCount;
     const scanState = scan?.state;
     const scanLabel = scanState
       ? scanState === 'queued'
@@ -1019,11 +1019,11 @@ export class LibraryCatalogPageComponent {
         metrics: [
           {
             label: 'Accès direct',
-            value: `${library.directAccessNodeCount} worker(s)`,
+            value: `${library.directAccessWorkerCount} worker(s)`,
           },
           {
             label: 'Transfert vers worker',
-            value: `${library.transferNodeCount} worker(s)`,
+            value: `${library.transferWorkerCount} worker(s)`,
           },
         ],
       },
@@ -1207,7 +1207,7 @@ export class LibraryCatalogPageComponent {
         this.http.get<{
           format: number;
           exportedAt: string;
-          clusterName: string;
+          centralName: string;
           libraries: readonly LibraryResponse[];
         }>('/api/v1/libraries/export'),
       );
@@ -1330,7 +1330,7 @@ export class LibraryCatalogPageComponent {
       hasFlow
         ? { label: `Flow : ${library.assignedFlow}`, tone: 'ok' }
         : { label: 'Flow à attribuer', tone: 'warn' },
-      library.configuredNodeCount
+      library.configuredWorkerCount
         ? { label: library.accessModes }
         : { label: 'Aucun worker n’a accès', tone: 'warn' },
       { label: `Surveillance ${library.monitoring.toLocaleLowerCase('fr')}` },
@@ -1343,7 +1343,7 @@ export class LibraryCatalogPageComponent {
       subtitle: `Créée le ${library.modifiedAt}`,
       group: !library.isActive
         ? this.libraryGroups[2]
-        : hasFlow && library.configuredNodeCount > 0
+        : hasFlow && library.configuredWorkerCount > 0
           ? this.libraryGroups[1]
           : this.libraryGroups[0],
       rowData: library,
@@ -1521,7 +1521,7 @@ export class LibraryCatalogPageComponent {
   }
 
   protected onAccessRowAction(event: DataTableActionEvent): void {
-    const access = this.selectedAccesses().find((item) => item.nodeId === event.row['id']);
+    const access = this.selectedAccesses().find((item) => item.workerId === event.row['id']);
 
     if (!access) return;
 
@@ -1533,10 +1533,10 @@ export class LibraryCatalogPageComponent {
 
     const updatedAccesses = this.selectedAccesses()
 
-      .filter((item) => event.actionId !== 'delete' || item.nodeId !== access.nodeId)
+      .filter((item) => event.actionId !== 'delete' || item.workerId !== access.workerId)
 
       .map((item) => ({
-        nodeId: item.nodeId,
+        workerId: item.workerId,
 
         mode: item.mode,
 
@@ -1548,14 +1548,14 @@ export class LibraryCatalogPageComponent {
 
         canWrite: item.canWrite,
 
-        transferSourceNodeId: item.transferSourceNodeId,
+        transferSourceWorkerId: item.transferSourceWorkerId,
       }));
 
     this.saveAccessConfiguration(updatedAccesses);
   }
 
   protected onAccessToggle(event: DataTableToggleEvent): void {
-    const access = this.selectedAccesses().find((item) => item.nodeId === event.row['id']);
+    const access = this.selectedAccesses().find((item) => item.workerId === event.row['id']);
 
     if (!access) return;
 
@@ -1569,14 +1569,14 @@ export class LibraryCatalogPageComponent {
 
     if (!library) return;
 
-    const busyKey = `${library.id}:${access.nodeId}`;
+    const busyKey = `${library.id}:${access.workerId}`;
 
     this.accessActivationBusy.update((current) => new Set(current).add(busyKey));
 
     this.http
 
       .put<LibraryNodeAccessResponse>(
-        `/api/v1/libraries/${library.id}/worker-access/${access.nodeId}/activation`,
+        `/api/v1/libraries/${library.id}/worker-access/${access.workerId}/activation`,
 
         { isEnabled: event.checked },
       )
@@ -1601,7 +1601,7 @@ export class LibraryCatalogPageComponent {
 
       .subscribe((updated) => {
         const accesses = this.selectedAccesses().map((item) =>
-          item.nodeId === updated.nodeId ? updated : item,
+          item.workerId === updated.workerId ? updated : item,
         );
 
         this.selectedAccesses.set(accesses);
@@ -1619,7 +1619,7 @@ export class LibraryCatalogPageComponent {
         );
 
         this.notifications.show(
-          `Accès à « ${library.name} » ${event.checked ? 'réactivé' : 'désactivé'} pour ${access.nodeName}.`,
+          `Accès à « ${library.name} » ${event.checked ? 'réactivé' : 'désactivé'} pour ${access.workerName}.`,
         );
       });
   }
@@ -1752,7 +1752,7 @@ export class LibraryCatalogPageComponent {
 
       isActive,
 
-      state: this.libraryState(isActive, library.configuredNodeCount),
+      state: this.libraryState(isActive, library.configuredWorkerCount),
     });
 
     this.http
@@ -1899,7 +1899,7 @@ export class LibraryCatalogPageComponent {
             otherLibraryAccesses
               .flat()
               .filter((access) => access.isEnabled && access.mode === 'direct')
-              .map((access) => access.nodeId),
+              .map((access) => access.workerId),
           ),
         ]);
 
@@ -1915,9 +1915,9 @@ export class LibraryCatalogPageComponent {
     | 'accessModes'
     | 'nodePaths'
     | 'state'
-    | 'configuredNodeCount'
-    | 'directAccessNodeCount'
-    | 'transferNodeCount'
+    | 'configuredWorkerCount'
+    | 'directAccessWorkerCount'
+    | 'transferWorkerCount'
   > {
     const directCount = accesses.filter(
       (access) => access.isEnabled && access.mode === 'direct',
@@ -1940,11 +1940,11 @@ export class LibraryCatalogPageComponent {
       .join(' · ');
 
     return {
-      configuredNodeCount: configuredCount,
+      configuredWorkerCount: configuredCount,
 
-      directAccessNodeCount: directCount,
+      directAccessWorkerCount: directCount,
 
-      transferNodeCount: transferCount,
+      transferWorkerCount: transferCount,
 
       configuredNodes: configuredCount ? `${configuredCount} worker(s) utilisable(s)` : 'Aucun accès',
 
@@ -1955,7 +1955,7 @@ export class LibraryCatalogPageComponent {
 
           .filter((access) => access.isEnabled && access.mode === 'direct')
 
-          .map((access) => `${access.nodeName}: ${access.localPath}`)
+          .map((access) => `${access.workerName}: ${access.localPath}`)
 
           .join(' · ') || 'Aucun chemin direct',
 
@@ -2054,15 +2054,15 @@ export class LibraryCatalogPageComponent {
     | 'accessModes'
     | 'nodePaths'
     | 'state'
-    | 'configuredNodeCount'
-    | 'directAccessNodeCount'
-    | 'transferNodeCount'
+    | 'configuredWorkerCount'
+    | 'directAccessWorkerCount'
+    | 'transferWorkerCount'
   > {
-    const directCount = library.directAccessNodeCount;
+    const directCount = library.directAccessWorkerCount;
 
-    const transferCount = library.transferNodeCount;
+    const transferCount = library.transferWorkerCount;
 
-    const configuredCount = library.configuredNodeCount;
+    const configuredCount = library.configuredWorkerCount;
 
     const modes = [
       directCount ? `${directCount} direct(s)` : '',
@@ -2075,11 +2075,11 @@ export class LibraryCatalogPageComponent {
       .join(' · ');
 
     return {
-      configuredNodeCount: configuredCount,
+      configuredWorkerCount: configuredCount,
 
-      directAccessNodeCount: directCount,
+      directAccessWorkerCount: directCount,
 
-      transferNodeCount: transferCount,
+      transferWorkerCount: transferCount,
 
       configuredNodes: configuredCount ? `${configuredCount} worker(s) utilisable(s)` : 'Aucun accès',
 

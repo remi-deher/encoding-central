@@ -11,7 +11,7 @@ export class LibraryActivity {
     readonly status: LibraryActivityStatus;
     readonly libraryId?: string;
     readonly flow?: string;
-    readonly nodeId?: string;
+    readonly workerId?: string;
     readonly search?: string;
     readonly limit: number;
     readonly offset: number;
@@ -22,7 +22,7 @@ export class LibraryActivity {
       .set('offset', String(options.offset));
     if (options.libraryId) params = params.set('libraryId', options.libraryId);
     if (options.flow) params = params.set('flow', options.flow);
-    if (options.nodeId) params = params.set('nodeId', options.nodeId);
+    if (options.workerId) params = params.set('workerId', options.workerId);
     if (options.search?.trim()) params = params.set('search', options.search.trim());
     return this.http.get<LibraryActivityResponse>('/api/v1/activity/files', { params });
   }
@@ -31,7 +31,7 @@ export class LibraryActivity {
     readonly status: LibraryActivityStatus;
     readonly libraryId?: string;
     readonly flow?: string;
-    readonly nodeId?: string;
+    readonly workerId?: string;
     readonly search?: string;
     readonly limit: number;
     readonly offset: number;
@@ -47,7 +47,7 @@ export class LibraryActivity {
       params.set('offset', String(options.offset));
       if (options.libraryId) params.set('libraryId', options.libraryId);
       if (options.flow) params.set('flow', options.flow);
-      if (options.nodeId) params.set('nodeId', options.nodeId);
+      if (options.workerId) params.set('workerId', options.workerId);
       if (options.search?.trim()) params.set('search', options.search.trim());
 
       const url = `/api/v1/activity/stream?${params.toString()}`;

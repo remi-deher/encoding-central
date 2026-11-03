@@ -30,7 +30,7 @@ public sealed class WorkerEnrollmentService(
             options.Roles,
             options.MaxConcurrentTasks,
             capabilities,
-            pending.NodeToken!,
+            pending.WorkerToken!,
             CreateInventory(),
             DisplayName: effectiveDisplayName,
             Version: AppVersion.Current);
@@ -112,13 +112,13 @@ public sealed class WorkerEnrollmentService(
         {
             using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
             using var message = new HttpRequestMessage(HttpMethod.Post, new Uri(new Uri(identity.ApiBaseUrl!), $"api/v1/workers/{identity.Id:D}/leave"));
-            message.Headers.Add("X-Node-Token", identity.NodeToken);
+            message.Headers.Add("X-Node-Token", identity.WorkerToken);
             using var response = await client.SendAsync(message, cancellationToken);
             return response.StatusCode;
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
-            logger.LogWarning(exception, "Le central {ClusterName} est injoignable ; le worker le quitte localement.", identity.ClusterName);
+            logger.LogWarning(exception, "Le central {ClusterName} est injoignable ; le worker le quitte localement.", identity.CentralName);
             return null;
         }
     }
@@ -129,7 +129,7 @@ public sealed class WorkerEnrollmentService(
         var identity = await identityStore.GetAsync(cancellationToken);
         if (identity.IsEnrolled) return false;
         if (!(identity.HasCredentials && identity.PairingPublished && identity.PairingExpiresAt <= DateTimeOffset.UtcNow)) return false;
-        var target = identity.ClusterName ?? "le central";
+        var target = identity.CentralName ?? "le central";
         var abandoned = await identityStore.AbandonPendingAsync($"{target} n'a pas approuvé l'arrivée à temps", cancellationToken);
         if (abandoned) logger.LogWarning("Rattachement annulé : {Target} n'a pas approuvé l'arrivée à temps.", target);
         return abandoned;
@@ -140,8 +140,8 @@ public sealed class WorkerEnrollmentService(
 
     public bool IsLocalUrl(string apiBaseUrl) =>
         options.LocalEnrollmentSecretFile is not null
-        && options.ClusterApiBaseUrl is not null
-        && string.Equals(apiBaseUrl, options.ClusterApiBaseUrl, StringComparison.OrdinalIgnoreCase)
+        && options.CentralApiBaseUrl is not null
+        && string.Equals(apiBaseUrl, options.CentralApiBaseUrl, StringComparison.OrdinalIgnoreCase)
         && LocalEnrollment.IsLoopback(apiBaseUrl);
 
     public async Task<WorkerPairingResponse> CreatePairingKeyAsync(Guid clusterId, CancellationToken cancellationToken, string? displayName = null)
@@ -164,7 +164,7 @@ public sealed class WorkerEnrollmentService(
                 options.Roles,
                 options.MaxConcurrentTasks,
                 capabilities,
-                pending.NodeToken!,
+                pending.WorkerToken!,
                 CreateInventory(),
                 DisplayName: effectiveDisplayName,
             Version: AppVersion.Current),
@@ -197,7 +197,7 @@ public sealed class WorkerEnrollmentService(
 
         await identityStore.MarkPairingPublishedAsync(cancellationToken);
         logger.LogInformation("Une clé de jumelage a été créée pour le worker {NodeId} vers le central {ClusterId}.", pending.Id, cluster.Id);
-        var verificationCode = WorkerVerificationCode.FromToken(pending.Id, pending.NodeToken!);
+        var verificationCode = WorkerVerificationCode.FromToken(pending.Id, pending.WorkerToken!);
         return new WorkerPairingResponse(pending.PairingKey!, pending.PairingExpiresAt!.Value, verificationCode);
     }
 

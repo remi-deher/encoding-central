@@ -427,17 +427,17 @@ export function localNodeSheet(input: LocalNodeSheetInput): {
       title: 'Identité et appartenance',
       fields: [
         { label: 'Nom technique', value: status?.name ?? 'Indisponible' },
-        { label: 'Identifiant du worker', value: status?.nodeId ?? 'Indisponible', mono: true },
+        { label: 'Identifiant du worker', value: status?.workerId ?? 'Indisponible', mono: true },
         {
           label: 'Central',
-          value: input.clusterName ?? status?.clusterName ?? 'Central',
+          value: input.clusterName ?? status?.centralName ?? 'Central',
         },
       ],
     },
   ];
   return {
     title: node?.displayName?.trim() || status?.name || 'Ce worker',
-    subtitle: `Membre de ${input.clusterName ?? status?.clusterName ?? 'son central'}`,
+    subtitle: `Membre de ${input.clusterName ?? status?.centralName ?? 'son central'}`,
     notices,
     sections,
   };
@@ -473,7 +473,7 @@ interface JoinPresentation {
 }
 
 export function clusterJoinSteps(data: JoinPresentation): readonly GuidedStep[] {
-  const name = data.target?.name ?? data.status?.clusterName ?? 'le central d’accueil';
+  const name = data.target?.name ?? data.status?.centralName ?? 'le central d’accueil';
   const expires =
     data.pairing?.expiresAt ?? data.status?.pairingExpiresAt;
   const expiry = expires

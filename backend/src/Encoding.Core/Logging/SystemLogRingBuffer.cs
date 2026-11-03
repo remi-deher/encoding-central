@@ -69,7 +69,7 @@ public sealed class SystemLogRingBuffer
                     !entry.Category.StartsWith(query.Category.Trim(), StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                if (query.NodeId.HasValue && entry.NodeId != query.NodeId.Value)
+                if (query.WorkerId.HasValue && entry.WorkerId != query.WorkerId.Value)
                     continue;
 
                 if (query.Since.HasValue && entry.Timestamp <= query.Since.Value)

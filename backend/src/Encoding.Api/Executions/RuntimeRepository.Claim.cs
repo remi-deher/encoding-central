@@ -112,7 +112,7 @@ public sealed partial class RuntimeRepository
             var identity = await nodeGroups.GetNodeIdentityAsync(id, ct);
 
             list.Add(new WorkerPlacementCandidate(
-                NodeId: id,
+                WorkerId: id,
                 Name: name,
                 IsWorker: isWorker,
                 IsOnline: isOnline && acceptsWork,
@@ -218,7 +218,7 @@ public sealed partial class RuntimeRepository
 
                 var directUnifiedStayOnWorker = plan.Strategy == FlowPlacementPlan.StrategyDirectUnified
                     && item.Selector?.Mode == "eligible"
-                    && plan.AssignedNodeId == worker;
+                    && plan.AssignedWorkerId == worker;
 
                 if(!directUnifiedStayOnWorker && item.Selector is {} selector && (!item.PreviousWorker.HasValue || !selector.Accepts(worker,item.PreviousWorker.Value,nodeIdentity)))
                     continue;
@@ -227,19 +227,19 @@ public sealed partial class RuntimeRepository
                 {
                     if(plan.Strategy is FlowPlacementPlan.StrategyDirectUnified or FlowPlacementPlan.StrategyTransferWorker)
                     {
-                        if(plan.AssignedNodeId.HasValue && plan.AssignedNodeId.Value != worker) continue;
+                        if(plan.AssignedWorkerId.HasValue && plan.AssignedWorkerId.Value != worker) continue;
                     }
                     else if(plan.Strategy is FlowPlacementPlan.StrategyTranscodeRelay or FlowPlacementPlan.StrategySegmented)
                     {
                         if(item.Checkpoint is null)
                         {
                             var entry=item.Flow.Nodes.Single(node=>components.Resolve(node.Component)?.Kind=="input").Id;
-                            var initialTarget=plan.NodeAssignments?.TryGetValue(entry,out var assignedEntry)==true?assignedEntry:plan.AssignedNodeId;
+                            var initialTarget=plan.WorkerAssignments?.TryGetValue(entry,out var assignedEntry)==true?assignedEntry:plan.AssignedWorkerId;
                             if(initialTarget.HasValue && initialTarget.Value!=worker) continue;
                         }
                         else
                         {
-                            var target = item.Checkpoint.NextNodeId is { } next && plan.NodeAssignments?.TryGetValue(next, out var assigned)==true
+                            var target = item.Checkpoint.NextNodeId is { } next && plan.WorkerAssignments?.TryGetValue(next, out var assigned)==true
                                 ? assigned : (Guid?)null;
                             if(target.HasValue && target.Value != worker) continue;
                         }
@@ -249,12 +249,12 @@ public sealed partial class RuntimeRepository
             else if(item.Probe is null && item.Selector is {} selector
                 && (!item.PreviousWorker.HasValue || !selector.Accepts(worker,item.PreviousWorker.Value,nodeIdentity))) continue;
             var planValidatesWorker = (placementIsPersisted || item.Checkpoint is null) && plan is not null
-                && (plan.Strategy == FlowPlacementPlan.StrategyDirectUnified && plan.AssignedNodeId == worker
-                    || plan.Strategy == FlowPlacementPlan.StrategyTransferWorker && plan.AssignedNodeId == worker);
+                && (plan.Strategy == FlowPlacementPlan.StrategyDirectUnified && plan.AssignedWorkerId == worker
+                    || plan.Strategy == FlowPlacementPlan.StrategyTransferWorker && plan.AssignedWorkerId == worker);
 
             if(item.Probe is null && !planValidatesWorker
                 && !eligibility.CanRun(item.Flow,capabilities,worker,item.Checkpoint?.NextNodeId,item.Checkpoint is not null,item.Checkpoint?.Context,nodeIdentity,inventory,
-                placementIsPersisted || item.Checkpoint is null ? plan?.NodeAssignments : null)) continue;
+                placementIsPersisted || item.Checkpoint is null ? plan?.WorkerAssignments : null)) continue;
             var sourceEditResume=false;
             await using(var waiting=Sql.Command("SELECT EXISTS(SELECT 1 FROM runtime_source_write_waits WHERE execution_id=@id)",c,tx))
             {
@@ -343,7 +343,7 @@ public sealed partial class RuntimeRepository
             {
                 await ExecutionRepository.RecordInTransactionAsync(item.Id,
                     new(Guid.NewGuid(), item.Revision, "failed", worker, null,
-                        $"{missing.Code} : bloc {missing.NodeId}, plugin {missing.PluginId}, paramètre requis {missing.FieldId}."), c, tx, ct);
+                        $"{missing.Code} : bloc {missing.WorkerId}, plugin {missing.PluginId}, paramètre requis {missing.FieldId}."), c, tx, ct);
                 await ReleaseAsync(item.Id, c, tx, ct);
                 await tx.CommitAsync(ct);
                 return new(null);
@@ -365,7 +365,7 @@ public sealed partial class RuntimeRepository
                             "La configuration du relais ne désigne pas un worker valide."),c,tx,ct);
                         await ReleaseAsync(item.Id,c,tx,ct); await tx.CommitAsync(ct); return new(null);
                     }
-                    if(destination.Mode=="node" && destination.TargetNodeId==worker) returnsToSelf=true;
+                    if(destination.Mode=="node" && destination.TargetWorkerId==worker) returnsToSelf=true;
                 }
                 if(returnsToSelf) continue;
             }

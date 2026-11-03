@@ -7,10 +7,10 @@ namespace Encoding.WorkerAgent.Services;
 
 public sealed record WorkerIdentityState(
     Guid Id,
-    string? ClusterId,
-    string? ClusterName,
+    string? CentralId,
+    string? CentralName,
     string? ApiBaseUrl,
-    string? NodeToken,
+    string? WorkerToken,
     bool Enrolled,
     string? PairingKey = null,
     DateTimeOffset? PairingExpiresAt = null,
@@ -20,9 +20,9 @@ public sealed record WorkerIdentityState(
     IReadOnlyList<string>? KnownServerUrls = null)
 {
     public bool HasCredentials =>
-        !string.IsNullOrWhiteSpace(ClusterId)
+        !string.IsNullOrWhiteSpace(CentralId)
         && Uri.TryCreate(ApiBaseUrl, UriKind.Absolute, out _)
-        && !string.IsNullOrWhiteSpace(NodeToken);
+        && !string.IsNullOrWhiteSpace(WorkerToken);
 
     public bool IsEnrolled => Enrolled
         && HasCredentials;
@@ -38,7 +38,7 @@ public sealed record WorkerIdentityState(
             var normalized = uri.GetLeftPart(UriPartial.Path).TrimEnd('/') + "/";
             if (!urls.Contains(normalized, StringComparer.OrdinalIgnoreCase)) urls.Add(normalized);
         }
-        if (IsEnrolled && options.Roles.Contains(NodeRole.Server) && options.ClusterApiBaseUrl is { } localUrl && LocalEnrollment.IsLoopback(localUrl))
+        if (IsEnrolled && options.Roles.Contains(NodeRole.Server) && options.CentralApiBaseUrl is { } localUrl && LocalEnrollment.IsLoopback(localUrl))
             Add(localUrl);
         Add(ApiBaseUrl);
         if (IsEnrolled && KnownServerUrls is not null)
@@ -97,7 +97,7 @@ public sealed class WorkerIdentityStore(WorkerAgentOptions options)
                 await using var stream = File.OpenRead(filePath);
                 state = await JsonSerializer.DeserializeAsync<WorkerIdentityState>(stream, JsonOptions, cancellationToken);
             }
-            var token = state?.NodeToken ?? Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+            var token = state?.WorkerToken ?? Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
             var effectiveDisplayName = displayName ?? state?.DisplayName;
             state = new WorkerIdentityState(state?.Id ?? Guid.NewGuid(), clusterId, clusterName, apiBaseUrl, token, false,
                 DisplayName: effectiveDisplayName);
@@ -129,8 +129,8 @@ public sealed class WorkerIdentityStore(WorkerAgentOptions options)
             if (state?.IsEnrolled == true)
                 throw new InvalidOperationException("Ce worker est déjà rattaché à un central.");
 
-            var token = state?.NodeToken ?? Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-            var canReuseKey = state?.ClusterId == clusterId
+            var token = state?.WorkerToken ?? Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+            var canReuseKey = state?.CentralId == clusterId
                 && state.PairingExpiresAt > DateTimeOffset.UtcNow
                 && !string.IsNullOrWhiteSpace(state.PairingKey);
             var pairingKey = canReuseKey ? state!.PairingKey : Convert.ToHexString(RandomNumberGenerator.GetBytes(8));

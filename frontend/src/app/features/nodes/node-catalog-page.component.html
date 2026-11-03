@@ -91,7 +91,7 @@
         <mat-menu #clusterActions="matMenu">
           <button
             mat-menu-item
-            [disabled]="local.busy() || local.agentUnavailable() || !local.status()?.clusterId"
+            [disabled]="local.busy() || local.agentUnavailable() || !local.status()?.centralId"
             (click)="local.leave()"
           >
             {{ local.pending() ? 'Annuler la demande' : 'Quitter le central avec ce worker' }}

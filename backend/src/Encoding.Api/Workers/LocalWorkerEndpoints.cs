@@ -55,7 +55,7 @@ public static class LocalWorkerEndpoints
         if (JsonNode.Parse(statusJson) is not JsonObject status) return statusJson;
         if (registry is not null)
         {
-            if (Guid.TryParse(status["nodeId"]?.GetValue<string>(), out var nodeId) && nodeId != Guid.Empty)
+            if (Guid.TryParse(status["workerId"]?.GetValue<string>(), out var nodeId) && nodeId != Guid.Empty)
                 await registry.RegisterAsync(nodeId, cancellationToken);
             if (string.IsNullOrWhiteSpace(status["displayName"]?.GetValue<string>()))
             {

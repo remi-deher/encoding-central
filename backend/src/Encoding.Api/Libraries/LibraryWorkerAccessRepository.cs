@@ -31,7 +31,7 @@ public sealed class LibraryWorkerAccessRepository(DbDataSource dataSource)
         if (await command.ExecuteNonQueryAsync(cancellationToken) == 0) return null;
 
         var accesses = await ListAsync(libraryId, cancellationToken);
-        return accesses?.SingleOrDefault(item => item.NodeId == nodeId);
+        return accesses?.SingleOrDefault(item => item.WorkerId == nodeId);
     }
 
     public async Task<IReadOnlyList<LibraryWorkerAccessResponse>?> ListAsync(Guid libraryId, CancellationToken cancellationToken)
@@ -65,7 +65,7 @@ public sealed class LibraryWorkerAccessRepository(DbDataSource dataSource)
         ConfigureLibraryWorkerAccessRequest request,
         CancellationToken cancellationToken)
     {
-        var nodes = request.Nodes ?? [];
+        var nodes = request.Workers ?? [];
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
@@ -83,7 +83,7 @@ public sealed class LibraryWorkerAccessRepository(DbDataSource dataSource)
         if (nodes.Count > 0)
         {
             await using var nodeCommand = Sql.Command("SELECT id, roles FROM workers WHERE id = ANY(@ids) AND deleted_at IS NULL", connection, transaction);
-            nodeCommand.Parameters.AddWithValue("ids", nodes.Select(item => item.NodeId).Distinct().ToArray());
+            nodeCommand.Parameters.AddWithValue("ids", nodes.Select(item => item.WorkerId).Distinct().ToArray());
             await using var nodeReader = await nodeCommand.ExecuteReaderAsync(cancellationToken);
             while (await nodeReader.ReadAsync(cancellationToken)) nodeRoles[nodeReader.GetGuid(0)] = nodeReader.GetStringArray(1);
         }
@@ -111,13 +111,13 @@ public sealed class LibraryWorkerAccessRepository(DbDataSource dataSource)
         {
             await using var insert = Sql.Command(insertSql, connection, transaction);
             insert.Parameters.AddWithValue("library_id", libraryId);
-            insert.Parameters.AddWithValue("worker_id", item.NodeId);
+            insert.Parameters.AddWithValue("worker_id", item.WorkerId);
             insert.Parameters.AddWithValue("mode", item.Mode.ToString().ToLowerInvariant());
             insert.Parameters.AddWithValue("is_enabled", item.Mode != LibraryWorkerAccessMode.Unsupported && item.IsEnabled);
             insert.Parameters.AddWithValue("local_path", (object?)Normalize(item.LocalPath) ?? DBNull.Value);
             insert.Parameters.AddWithValue("can_read", item.CanRead);
             insert.Parameters.AddWithValue("can_write", item.CanWrite);
-            insert.Parameters.AddWithValue("transfer_source_worker_id", (object?)item.TransferSourceNodeId ?? DBNull.Value);
+            insert.Parameters.AddWithValue("transfer_source_worker_id", (object?)item.TransferSourceWorkerId ?? DBNull.Value);
             await insert.ExecuteNonQueryAsync(cancellationToken);
         }
 
@@ -130,15 +130,15 @@ public sealed class LibraryWorkerAccessRepository(DbDataSource dataSource)
         IReadOnlyDictionary<Guid, string[]> registeredNodes)
     {
         var errors = new Dictionary<string, string[]>();
-        if (nodes.Select(item => item.NodeId).Distinct().Count() != nodes.Count)
+        if (nodes.Select(item => item.WorkerId).Distinct().Count() != nodes.Count)
             errors["nodes"] = ["Chaque worker ne peut apparaître qu’une fois."];
 
-        var configured = nodes.GroupBy(item => item.NodeId).ToDictionary(group => group.Key, group => group.First());
+        var configured = nodes.GroupBy(item => item.WorkerId).ToDictionary(group => group.Key, group => group.First());
         for (var index = 0; index < nodes.Count; index++)
         {
             var item = nodes[index];
             var key = $"nodes[{index}]";
-            if (item.NodeId == Guid.Empty || !registeredNodes.ContainsKey(item.NodeId))
+            if (item.WorkerId == Guid.Empty || !registeredNodes.ContainsKey(item.WorkerId))
                 errors[$"{key}.nodeId"] = ["Ce worker n’existe pas dans le central."];
 
             switch (item.Mode)
@@ -146,24 +146,24 @@ public sealed class LibraryWorkerAccessRepository(DbDataSource dataSource)
                 case LibraryWorkerAccessMode.Direct:
                     if (string.IsNullOrWhiteSpace(item.LocalPath)) errors[$"{key}.localPath"] = ["Indiquez le chemin de cette bibliothèque sur le worker."];
                     if (!item.CanRead) errors[$"{key}.canRead"] = ["L’accès direct doit autoriser la lecture de la source."];
-                    if (item.TransferSourceNodeId is not null) errors[$"{key}.transferSourceNodeId"] = ["Un accès direct ne peut pas référencer un worker source."];
+                    if (item.TransferSourceWorkerId is not null) errors[$"{key}.transferSourceNodeId"] = ["Un accès direct ne peut pas référencer un worker source."];
                     break;
                 case LibraryWorkerAccessMode.Unsupported:
-                    if (!string.IsNullOrWhiteSpace(item.LocalPath) || item.CanRead || item.CanWrite || item.TransferSourceNodeId is not null)
+                    if (!string.IsNullOrWhiteSpace(item.LocalPath) || item.CanRead || item.CanWrite || item.TransferSourceWorkerId is not null)
                         errors[key] = ["Un worker sans accès ne peut déclarer ni chemin, ni droit, ni source de transfert."];
                     break;
                 case LibraryWorkerAccessMode.Transfer:
                     if (item.LocalPath is not null) errors[$"{key}.localPath"] = ["Le worker traite une copie locale temporaire ; aucun chemin de bibliothèque n’est requis."];
                     if (!item.CanRead || !item.CanWrite) errors[key] = ["Le worker doit pouvoir lire la copie et renvoyer le résultat."];
-                    if (!item.TransferSourceNodeId.HasValue || item.TransferSourceNodeId == item.NodeId)
+                    if (!item.TransferSourceWorkerId.HasValue || item.TransferSourceWorkerId == item.WorkerId)
                     {
                         errors[$"{key}.transferSourceNodeId"] = ["Sélectionnez un autre worker avec accès direct à la bibliothèque."];
                     }
                     else
                     {
-                        if (!registeredNodes.TryGetValue(item.NodeId, out var roles) || !roles.Contains("worker", StringComparer.OrdinalIgnoreCase))
+                        if (!registeredNodes.TryGetValue(item.WorkerId, out var roles) || !roles.Contains("worker", StringComparer.OrdinalIgnoreCase))
                             errors[$"{key}.nodeId"] = ["Le transfert doit cibler un worker ayant le rôle worker."];
-                        if (!configured.TryGetValue(item.TransferSourceNodeId.Value, out var source)
+                        if (!configured.TryGetValue(item.TransferSourceWorkerId.Value, out var source)
                             || source.Mode != LibraryWorkerAccessMode.Direct || !source.CanRead || !source.CanWrite
                             || (item.IsEnabled && !source.IsEnabled))
                             errors[$"{key}.transferSourceNodeId"] = ["Le worker source doit déclarer un accès direct en lecture et en écriture dans cette configuration."];

@@ -65,7 +65,7 @@ public sealed class WorkerGroupRepository(DbDataSource dataSource)
         {
             await using (var clear = Sql.Command("DELETE FROM worker_group_members WHERE group_id=@id", c, tx))
             { clear.Parameters.AddWithValue("id", groupId); await clear.ExecuteNonQueryAsync(ct); }
-            foreach (var nodeId in request.NodeIds.Distinct())
+            foreach (var nodeId in request.WorkerIds.Distinct())
             {
                 await using var add = Sql.Command("INSERT INTO worker_group_members(group_id,worker_id) SELECT @group,@node WHERE EXISTS(SELECT 1 FROM workers WHERE id=@node AND deleted_at IS NULL)",
                     c, tx);
@@ -136,7 +136,7 @@ public sealed class WorkerGroupRepository(DbDataSource dataSource)
         }
         // Automatic groups are evaluated from the current node inventory at read/assignment time.
         foreach (var group in await ListAsync(ct))
-            if (group.Mode == WorkerGroupMode.Automatic && group.NodeIds.Contains(id))
+            if (group.Mode == WorkerGroupMode.Automatic && group.WorkerIds.Contains(id))
             {
                 ids.Add(group.Id);
                 foreach (var (key, value) in group.Labels) inherited[key] = value;

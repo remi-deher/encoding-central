@@ -59,16 +59,16 @@ public static partial class WorkerGroupEndpoints
     private static Dictionary<string, string[]> Validate(SaveWorkerGroupRequest r)
     {
         var errors = new Dictionary<string, string[]>();
-        if (r.Criteria is null || r.Labels is null || r.NodeIds is null)
+        if (r.Criteria is null || r.Labels is null || r.WorkerIds is null)
             return new Dictionary<string, string[]> { ["request"] = ["Les critères, étiquettes et membres sont obligatoires."] };
         if (string.IsNullOrWhiteSpace(r.Name) || r.Name.Trim().Length > 128) errors["name"] = ["Le nom est obligatoire et limité à 128 caractères."];
         if (r.Description?.Length > 2000) errors["description"] = ["La description est limitée à 2000 caractères."];
         if (r.Criteria.MinimumMemoryMb is < 0 or > 4_194_304 || r.Criteria.MinimumConcurrentTasks is < 0 or > 1024
             || r.Criteria.MinimumProcessorCount is < 0 or > 4096
             || r.Criteria.OperatingSystem?.Length > 128 || r.Criteria.Architecture?.Length > 64
-            || r.Criteria.RequiredToolIds?.Count > 128 || r.NodeIds.Count > 2048) errors["criteria"] = ["Les critères ou la taille du groupe sont invalides."];
+            || r.Criteria.RequiredToolIds?.Count > 128 || r.WorkerIds.Count > 2048) errors["criteria"] = ["Les critères ou la taille du groupe sont invalides."];
         if (r.Criteria.Roles?.Distinct().Count() != r.Criteria.Roles?.Count) errors["criteria.roles"] = ["Les rôles ne doivent pas contenir de doublons."];
-        if (r.Mode == WorkerGroupMode.Automatic && r.NodeIds.Count > 0) errors["nodeIds"] = ["Les membres d’un groupe automatique sont calculés depuis ses critères."];
+        if (r.Mode == WorkerGroupMode.Automatic && r.WorkerIds.Count > 0) errors["nodeIds"] = ["Les membres d’un groupe automatique sont calculés depuis ses critères."];
         if (r.Mode == WorkerGroupMode.Automatic && (r.Criteria.Roles?.Count ?? 0) == 0
             && string.IsNullOrWhiteSpace(r.Criteria.OperatingSystem) && string.IsNullOrWhiteSpace(r.Criteria.Architecture)
             && r.Criteria.MinimumMemoryMb is null && (r.Criteria.RequiredToolIds?.Count ?? 0) == 0

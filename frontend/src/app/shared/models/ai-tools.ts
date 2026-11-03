@@ -142,7 +142,7 @@ export interface AiCredentialStatus {
   readonly syncedAt?: string | null;
 }
 export interface AiNodeAvailability {
-  readonly nodeId: string;
+  readonly workerId: string;
   readonly name: string;
   readonly providers: readonly string[];
   readonly reachable: boolean;
@@ -153,7 +153,7 @@ export interface AiNodeAvailability {
   readonly reconnect?: readonly string[] | null;
 }
 export interface AiClusterView {
-  readonly nodes: readonly AiNodeAvailability[];
+  readonly workers: readonly AiNodeAvailability[];
 }
 
 export interface AiAssistantSource {
@@ -174,7 +174,7 @@ export interface AiAssistantConversation {
   readonly additionalSources?: readonly AiAssistantSource[] | null;
   readonly model?: string | null;
   readonly reasoningEffort?: string | null;
-  readonly nodeId?: string | null;
+  readonly workerId?: string | null;
   /** `ai` (généré), `fallback` (début du message) ou `user` (renommé). */
   readonly titleSource?: 'ai' | 'fallback' | 'user' | null;
   /** Worker qui coordonne la discussion (reprise comprise). */
@@ -185,8 +185,8 @@ export interface AiAssistantModelOption {
   readonly model?: string | null;
   readonly label: string;
   readonly reasoningEfforts: readonly string[];
-  readonly nodeId?: string | null;
-  readonly nodeName?: string | null;
+  readonly workerId?: string | null;
+  readonly workerName?: string | null;
   readonly defaultReasoningEffort?: string | null;
   readonly reasoningKnown?: boolean;
   readonly isDefault?: boolean;
@@ -204,7 +204,7 @@ export interface AiTurnModelSelection {
   readonly provider: string;
   readonly model?: string | null;
   readonly reasoningEffort?: string | null;
-  readonly nodeId?: string | null;
+  readonly workerId?: string | null;
 }
 export interface AiAssistantTurn {
   readonly requestId: string;
@@ -213,7 +213,7 @@ export interface AiAssistantTurn {
   readonly sources?: readonly AiAssistantSource[] | null;
   readonly selection?: AiTurnModelSelection | null;
   readonly actualModel?: string | null;
-  readonly executorNodeId?: string | null;
+  readonly executorWorkerId?: string | null;
 }
 
 export interface AiAssistantConversationDetail {
@@ -250,7 +250,7 @@ export interface AiAssistantMessageRequest {
   readonly provider?: string | null;
   readonly model?: string | null;
   readonly reasoningEffort?: string | null;
-  readonly nodeId?: string | null;
+  readonly workerId?: string | null;
   readonly attachments?: readonly AiAssistantFileAttachment[];
 }
 
@@ -284,7 +284,7 @@ export interface AiAssistantMessageResponse {
   readonly sources: readonly AiAssistantSource[];
   readonly selection?: AiTurnModelSelection | null;
   readonly actualModel?: string | null;
-  readonly executorNodeId?: string | null;
+  readonly executorWorkerId?: string | null;
   readonly actionProposal?: AiAssistantActionProposal | null;
 }
 
@@ -395,12 +395,12 @@ export interface AiQuotaSnapshot {
   readonly message?: string | null;
 }
 export interface AiNodeQuotas {
-  readonly nodeId: string;
+  readonly workerId: string;
   readonly name: string;
   readonly providers: readonly AiQuotaSnapshot[];
 }
 export interface AiClusterQuotas {
-  readonly nodes: readonly AiNodeQuotas[];
+  readonly workers: readonly AiNodeQuotas[];
 }
 
 export interface AiDiscoveredModel {
@@ -420,7 +420,7 @@ export interface AiModelCatalog {
   readonly message?: string | null;
 }
 export interface AiNodeModelCatalog {
-  readonly nodeId: string;
+  readonly workerId: string;
   readonly name: string;
   readonly providers: readonly AiModelCatalog[];
 }
@@ -428,7 +428,7 @@ export interface AiModelPolicy {
   readonly disabledModels: readonly { readonly provider: string; readonly model: string }[];
 }
 export interface AiClusterModelCatalog {
-  readonly nodes: readonly AiNodeModelCatalog[];
+  readonly workers: readonly AiNodeModelCatalog[];
   readonly policy: AiModelPolicy;
 }
 
@@ -445,7 +445,7 @@ export interface AiProviderUsage {
   readonly totals: AiUsageTotals;
 }
 export interface AiNodeUsage {
-  readonly nodeId?: string | null;
+  readonly workerId?: string | null;
   readonly name: string;
   readonly providers: readonly AiProviderUsage[];
   readonly total: AiUsageTotals;
@@ -453,7 +453,7 @@ export interface AiNodeUsage {
 export interface AiClusterUsage {
   readonly days: number;
   readonly since: string;
-  readonly nodes: readonly AiNodeUsage[];
+  readonly workers: readonly AiNodeUsage[];
   readonly total: AiUsageTotals;
   readonly truncated: boolean;
 }

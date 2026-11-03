@@ -9,8 +9,8 @@ export interface SimulationFile {
   readonly name: string;
   readonly metadata: SimulationMetadata;
   readonly variables: Record<string, unknown>;
-  readonly sourceNodeId: string;
-  readonly workerNodeId: string;
+  readonly sourceWorkerId: string;
+  readonly workerId: string;
   readonly libraryId?: string;
 }
 export interface SimulationAssumption {
@@ -19,7 +19,7 @@ export interface SimulationAssumption {
   readonly variables?: Record<string, unknown>;
   readonly modified: boolean;
   readonly extension?: string;
-  readonly workerNodeId?: string;
+  readonly workerId?: string;
 }
 export interface SimulationRequest {
   readonly definition: FlowDocument;
@@ -32,7 +32,7 @@ export interface SimulationStep {
   readonly outputId: string | null;
   readonly detail: string;
   readonly assumed: boolean;
-  readonly workerNodeId: string;
+  readonly workerId: string;
   readonly conditions?: readonly {
     readonly rule: {
       field: string;
@@ -120,8 +120,13 @@ export const SIMULATION_PROFILE_SCHEMA: FlowComponentConfigurationSchema = {
       label: 'Langues des sous-titres, dans l’ordre des pistes',
       description: 'Séparées par des virgules : fra, eng',
     },
-    { id: 'sourceNodeId', type: 'text', label: 'Identifiant du worker d’origine', required: true },
-    { id: 'workerNodeId', type: 'text', label: 'Identifiant du worker courant', required: true },
+    {
+      id: 'sourceWorkerId',
+      type: 'text',
+      label: 'Identifiant du worker d’origine',
+      required: true,
+    },
+    { id: 'workerId', type: 'text', label: 'Identifiant du worker courant', required: true },
     { id: 'libraryId', type: 'text', label: 'Identifiant de la bibliothèque (facultatif)' },
     {
       id: 'variables',
@@ -188,8 +193,8 @@ export function simulationFile(values: FlowComponentConfiguration): SimulationFi
     name: text(values, 'name'),
     metadata: { format, streams },
     variables: simulationObject(text(values, 'variables')),
-    sourceNodeId: text(values, 'sourceNodeId'),
-    workerNodeId: text(values, 'workerNodeId'),
+    sourceWorkerId: text(values, 'sourceWorkerId'),
+    workerId: text(values, 'workerId'),
     ...(text(values, 'libraryId') ? { libraryId: text(values, 'libraryId') } : {}),
   };
 }
@@ -215,8 +220,8 @@ export function simulationProfile(file: SimulationFile): FlowComponentConfigurat
     audioChannels: Number(audio[0]?.['channels']) || null,
     subtitleCount: subtitles.length,
     subtitleLanguages: languages(subtitles),
-    sourceNodeId: file.sourceNodeId,
-    workerNodeId: file.workerNodeId,
+    sourceNodeId: file.sourceWorkerId,
+    workerNodeId: file.workerId,
     libraryId: file.libraryId ?? '',
     variables: JSON.stringify(file.variables, null, 2),
   };

@@ -5,7 +5,7 @@ using Encoding.Contracts.Workers;
 
 namespace Encoding.Contracts.Executions;
 
-public sealed record RuntimeHandoffSelector(string Mode, Guid? TargetNodeId = null, Guid? TargetGroupId = null, string? RequiredLabels = null, bool Resumed = false)
+public sealed record RuntimeHandoffSelector(string Mode, Guid? TargetWorkerId = null, Guid? TargetGroupId = null, string? RequiredLabels = null, bool Resumed = false)
 {
     /// <summary>Ancienne forme d'une reprise (ADR 0004), conservée pour lire les lignes déjà écrites : tout worker éligible.</summary>
     public const string ResumeMode = "resume";
@@ -15,7 +15,7 @@ public sealed record RuntimeHandoffSelector(string Mode, Guid? TargetNodeId = nu
     public bool IsResume => Resumed || Mode == ResumeMode;
 
     public bool Accepts(Guid candidate, Guid previousWorker, WorkerIdentityResponse? identity = null) => (IsResume || candidate != previousWorker)
-        && (Mode is "eligible" or ResumeMode || Mode == "node" && TargetNodeId == candidate
+        && (Mode is "eligible" or ResumeMode || Mode == "node" && TargetWorkerId == candidate
             || Mode == "selector" && identity is not null
                 && (TargetGroupId is null || identity.GroupIds.Contains(TargetGroupId.Value))
                 && WorkerLabelSelector.Matches(RequiredLabels, identity.EffectiveLabels));

@@ -71,7 +71,7 @@ public sealed class WorkerPendingJoinTests
 
         var identity = await store.GetAsync(CancellationToken.None);
         Assert.False(identity.HasCredentials);
-        Assert.Null(identity.ClusterId);
+        Assert.Null(identity.CentralId);
         Assert.Contains("refusé", identity.EnrollmentFailure);
     }
 

@@ -65,7 +65,7 @@ public static class WorkerHeartbeatValidator
     {
         var errors = Validate(new WorkerHeartbeatRequest(request.Name, request.Roles, request.MaxConcurrentTasks, request.Capabilities, request.Inventory));
         if (request.Id == Guid.Empty) errors["id"] = ["L’identifiant du worker doit être un UUID non vide."];
-        if (string.IsNullOrWhiteSpace(request.NodeToken) || request.NodeToken.Length is < 40 or > 256)
+        if (string.IsNullOrWhiteSpace(request.WorkerToken) || request.WorkerToken.Length is < 40 or > 256)
             errors["nodeToken"] = ["L’identité locale du worker est invalide."];
         if (AppVersion.MismatchReason(request.Version) is { } mismatch) errors["version"] = [mismatch];
         if (request.DisplayName is { Length: > 128 })
@@ -75,9 +75,9 @@ public static class WorkerHeartbeatValidator
 
     public static Dictionary<string, string[]> Validate(CreateWorkerEnrollmentRequest request)
     {
-        if (request.Node is null)
+        if (request.Worker is null)
             return new Dictionary<string, string[]> { ["node"] = ["Les informations du worker sont obligatoires."] };
-        var errors = Validate(request.Node);
+        var errors = Validate(request.Worker);
         if (request.PairingKey is null || !PairingKeyPattern.IsMatch(request.PairingKey))
             errors["pairingKey"] = ["La clé de jumelage doit contenir 16 caractères hexadécimaux majuscules."];
         return errors;

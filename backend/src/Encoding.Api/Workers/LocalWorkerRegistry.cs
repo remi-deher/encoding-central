@@ -13,7 +13,7 @@ public sealed class LocalWorkerRegistry(WorkerRepository repository, LocalWorker
     private Guid? nodeId;
     private string? pendingName;
 
-    public Guid? NodeId { get { lock (gate) return nodeId; } }
+    public Guid? WorkerId { get { lock (gate) return nodeId; } }
 
     public static string? NormalizeName(string? value)
     {
@@ -30,7 +30,7 @@ public sealed class LocalWorkerRegistry(WorkerRepository repository, LocalWorker
         lock (gate)
         {
             nodeId = id;
-            if (logContext is not null) logContext.NodeId = id;
+            if (logContext is not null) logContext.WorkerId = id;
             name = pendingName;
             pendingName = null;
         }
