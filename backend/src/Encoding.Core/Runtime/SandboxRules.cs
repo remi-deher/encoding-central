@@ -24,8 +24,15 @@ public static class SandboxRules
     /// </summary>
     public static ulong NetworkAccess(int abi, SandboxPolicy policy) => abi >= NetworkAbi && !policy.AllowNetwork ? BindTcp | ConnectTcp : 0;
 
-    /// <summary>Taille de <c>landlock_ruleset_attr</c> : le champ réseau n'existe qu'à partir de l'ABI 4.</summary>
-    public static int RulesetSize(int abi) => abi >= NetworkAbi ? 16 : 8;
+    /// <summary>Landlock ABI 6 : <c>LANDLOCK_SCOPE_ABSTRACT_UNIX_SOCKET</c> (pas de connexion à un socket abstrait créé hors du domaine).</summary>
+    public const ulong ScopeAbstractUnixSocket = 1UL;
+    public const int ScopeAbi = 6;
+
+    /// <summary>Portées gérées : les plugins ne joignent pas les sockets abstraits de l'hôte (D-Bus, X11). Les CLI IA sont laissés tels quels.</summary>
+    public static ulong Scopes(int abi, SandboxPolicy policy) => abi >= ScopeAbi && !policy.HostProcessAccess ? ScopeAbstractUnixSocket : 0;
+
+    /// <summary>Taille de <c>landlock_ruleset_attr</c> : champ réseau à partir de l'ABI 4, portées à partir de l'ABI 6.</summary>
+    public static int RulesetSize(int abi) => abi >= ScopeAbi ? 24 : abi >= NetworkAbi ? 16 : 8;
 
     private static readonly string[] SystemPaths =
     [

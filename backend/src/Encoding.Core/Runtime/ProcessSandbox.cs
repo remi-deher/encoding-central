@@ -16,8 +16,9 @@ public static class ProcessSandbox
     [DllImport("libc")] private static extern int close(int fd);
     [DllImport("libc")] private static extern int prctl(int option, ulong arg2, ulong arg3, ulong arg4, ulong arg5);
     [DllImport("libc", SetLastError = true)] private static extern int execvpe(string file, string?[] argv, string?[] envp);
+    [DllImport("libc")] private static extern int sigprocmask(int how, byte[] set, byte[]? previous);
     [DllImport("libc")] private static extern nint signal(int number, nint handler);
-    [StructLayout(LayoutKind.Sequential)] private struct Ruleset { public ulong Access; public ulong Network; }
+    [StructLayout(LayoutKind.Sequential)] private struct Ruleset { public ulong Access; public ulong Network; public ulong Scoped; }
     [StructLayout(LayoutKind.Sequential, Pack = 1)] private struct PathRule { public ulong Access; public int Parent; }
     /// <summary>
     /// Variable posée par l'hôte sur le processus relais pour demander un environnement minimal à l'enfant isolé
@@ -58,8 +59,8 @@ public static class ProcessSandbox
             var policy = SandboxPolicy.Parse(Environment.GetEnvironmentVariable(SandboxPolicy.EnvironmentVariable));
             var abi = (int)Syscall(444, 0, 0, 1, 0);
             var all = SandboxRules.FilesystemAccess(abi);
-            buffer = Marshal.AllocHGlobal(16);
-            Marshal.StructureToPtr(new Ruleset { Access = all, Network = SandboxRules.NetworkAccess(abi, policy) }, buffer, false);
+            buffer = Marshal.AllocHGlobal(24);
+            Marshal.StructureToPtr(new Ruleset { Access = all, Network = SandboxRules.NetworkAccess(abi, policy), Scoped = SandboxRules.Scopes(abi, policy) }, buffer, false);
             rulesFd = (int)Syscall(444, buffer, SandboxRules.RulesetSize(abi), 0, 0);
             if (rulesFd < 0) return 79;
             void Allow(string path, ulong access)
@@ -88,6 +89,7 @@ public static class ProcessSandbox
             string?[] argv = [args[2], .. args.Skip(4), null];
             string?[] envp = [.. environment.Select(pair => pair.Key + "=" + pair.Value), null];
             Directory.SetCurrentDirectory(args[1]);
+            sigprocmask(2, new byte[128], null); // SIG_SETMASK with an empty set: the runtime's blocked signals must not reach the tool
             signal(13, 0); // SIGPIPE: the runtime ignores it, the tool must get the default disposition back through execve
             execvpe("", argv, envp); // always fails (ENOENT): binds the native entry point now, before the restriction
 

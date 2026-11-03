@@ -7,7 +7,8 @@ namespace Encoding.Core.Runtime;
 /// Filtre seccomp-BPF minimal du bac à sable (liste de refus, hérité par execve et les descendants). Il complète Landlock, qui ne
 /// couvre ni UDP ni les sockets hors TCP et n'a pas de règle réseau avant l'ABI 4 :
 /// <list type="bullet">
-/// <item>sans capacité réseau, <c>socket</c> et <c>socketpair</c> n'acceptent que <c>AF_UNIX</c> (EPERM sinon) ;</item>
+/// <item><c>socket</c> et <c>socketpair</c> n'acceptent que <c>AF_UNIX</c> sans capacité réseau, et <c>AF_UNIX</c>, <c>AF_INET</c>,
+/// <c>AF_INET6</c>, <c>AF_NETLINK</c> (résolution d'adresses de la libc) avec elle ; EPERM sinon (<c>AF_PACKET</c>, <c>AF_VSOCK</c>…) ;</item>
 /// <item>toujours refusés : <c>ptrace</c>, <c>process_vm_readv/writev</c> (lecture de la mémoire d'un autre processus),
 /// <c>io_uring_*</c> (permet de créer des sockets sans passer par <c>socket</c>), <c>bpf</c>, <c>perf_event_open</c>, <c>userfaultfd</c> ;</item>
 /// <item>architecture inconnue : le processus est tué. Seules x86-64 et ARM64 sont prises en charge (<see cref="IsSupported"/>).</item>
@@ -17,7 +18,11 @@ public static class SeccompFilter
 {
     public readonly record struct Instruction(ushort Code, byte JumpTrue, byte JumpFalse, uint K);
 
-    public const int AfUnix = 1;
+    public const int AfUnix = 1, AfInet = 2, AfInet6 = 10, AfNetlink = 16;
+
+    /// <summary>Familles de sockets acceptées.</summary>
+    public static IReadOnlyList<int> AllowedDomains(bool allowNetwork) => allowNetwork ? [AfUnix, AfInet, AfInet6, AfNetlink] : [AfUnix];
+
     public const uint ReturnAllow = 0x7fff0000, ReturnKillProcess = 0x80000000, ReturnErrnoPermission = 0x00050000 | 1;
     private const ushort Load = 0x20, JumpEqual = 0x15, JumpGreaterOrEqual = 0x35, Return = 0x06;
     private const uint OffsetNumber = 0, OffsetArchitecture = 4, OffsetFirstArgument = 16, X32Flag = 0x40000000;
@@ -53,18 +58,12 @@ public static class SeccompFilter
         // L'ABI x32 (numéros avec le bit 30) contournerait la table ci-dessous : refusée en bloc.
         if (table.Is64BitX86) JumpTo(JumpGreaterOrEqual, X32Flag, "deny");
         foreach (var number in table.Denied) JumpTo(JumpEqual, number, "deny");
-        if (!allowNetwork)
-        {
-            JumpTo(JumpEqual, table.Socket, "domain");
-            JumpTo(JumpEqual, table.SocketPair, "domain");
-        }
+        JumpTo(JumpEqual, table.Socket, "domain");
+        JumpTo(JumpEqual, table.SocketPair, "domain");
         Emit(Return, ReturnAllow);
-        if (!allowNetwork)
-        {
-            labels["domain"] = program.Count;
-            Emit(Load, OffsetFirstArgument); // 32 bits de poids faible de arg0 (little-endian) : le domaine est un int
-            JumpTo(JumpEqual, AfUnix, "allow");
-        }
+        labels["domain"] = program.Count;
+        Emit(Load, OffsetFirstArgument); // 32 bits de poids faible de arg0 (little-endian) : le domaine est un int
+        foreach (var domain in AllowedDomains(allowNetwork)) JumpTo(JumpEqual, (uint)domain, "allow");
         labels["deny"] = program.Count;
         Emit(Return, ReturnErrnoPermission);
         labels["allow"] = program.Count;
