@@ -1,0 +1,49 @@
+@if (catalog.actionType() === 'create') {
+  <app-record-form
+    [embedded]="true"
+    [data]="catalog.createFormData"
+    (submitted)="catalog.createLibrary($event, (record) => access.startSetupForNewLibrary(record.id))"
+    (cancelled)="catalog.closeCreateLibrary()"
+  />
+} @else if (catalog.actionType() === 'edit') {
+  <app-record-form
+    [embedded]="true"
+    [data]="catalog.editFormData()"
+    (submitted)="catalog.updateLibrary($event)"
+    (cancelled)="catalog.closeCreateLibrary()"
+  />
+} @else if (catalog.actionType() === 'processing') {
+  @if (workflow.processingForm(); as form) {
+    <app-record-form
+      [embedded]="true"
+      [data]="form"
+      [busy]="workflow.workflowBusy()"
+      (submitted)="workflow.saveProcessing($event)"
+      (cancelled)="catalog.closeCreateLibrary()"
+    />
+  }
+} @else if (catalog.actionType() === 'flow') {
+  @if (workflow.assignmentForm(); as form) {
+    <app-record-form
+      [embedded]="true"
+      [data]="form"
+      [busy]="workflow.workflowBusy()"
+      (submitted)="workflow.saveFlowAssignment($event)"
+      (cancelled)="catalog.closeCreateLibrary()"
+    />
+  }
+} @else if (access.accessFormLoading()) {
+  <p role="status">Chargement des workers et des accès…</p>
+} @else {
+  <app-library-node-access-form
+    [libraryName]="catalog.selectedLibrary()?.name ?? ''"
+    [setupMode]="catalog.accessSetupMode()"
+    [nodes]="access.accessNodes()"
+    [groups]="access.accessNodeGroups()"
+    [automaticallySelectedNodeIds]="access.automaticallySelectedAccessNodeIds()"
+    [initialAccesses]="access.initialAccesses()"
+    [busy]="catalog.accessFormBusy()"
+    (saved)="access.configureLibraryAccess($event)"
+    (cancelled)="catalog.closeCreateLibrary()"
+  />
+}

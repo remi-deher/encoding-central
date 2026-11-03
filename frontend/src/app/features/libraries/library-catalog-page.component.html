@@ -1,32 +1,37 @@
 <app-library-preparation-template
   [title]="title()"
-  [items]="libraryItems()"
-  [rowActions]="libraryRowActions"
-  [selectionActions]="librarySelectionActions"
-  [groupDefinitions]="libraryGroups"
+  [items]="workflow.libraryItems()"
+  [rowActions]="catalog.libraryRowActions"
+  [selectionActions]="catalog.librarySelectionActions"
+  [groupDefinitions]="workflow.libraryGroups"
   [selectable]="true"
   openMode="title"
   menuPlacement="top-right"
-  [(selectedIds)]="selectedLibraryIds"
+  [(selectedIds)]="catalog.selectedLibraryIds"
   listEmptyMessage="Aucune bibliothèque n’est déclarée."
-  [detailOpen]="selectedLibrary() !== null"
-  [detailTabIndex]="selectedLibraryTabIndex()"
-  (detailTabIndexChange)="selectedLibraryTabIndex.set($event)"
-  [mediaCount]="mediaRows().length"
-  [accessCount]="selectedAccesses().length"
+  [detailOpen]="catalog.selectedLibrary() !== null"
+  [detailTabIndex]="catalog.selectedLibraryTabIndex()"
+  (detailTabIndexChange)="catalog.selectedLibraryTabIndex.set($event)"
+  [mediaCount]="workflow.mediaRows().length"
+  [accessCount]="access.selectedAccesses().length"
   [showToolbar]="false"
-  [actionOpen]="actionOpen()"
-  [actionTitle]="actionTitle()"
-  [actionDescription]="actionDescription()"
+  [actionOpen]="catalog.actionOpen()"
+  [actionTitle]="workflow.actionTitle()"
+  [actionDescription]="workflow.actionDescription()"
   [actionStep]="actionStep()"
-  [detailTitle]="detailTitle()"
-  [detailDescription]="detailDescription()"
-  (detailClosed)="onDetailClosed()"
-  (actionClosed)="closeCreateLibrary()"
-  (open)="onLibraryOpen({ id: $event })"
-  (action)="onLibraryAction($event)"
-  (toggleChange)="onLibraryItemToggle($event)"
-  (selectionAction)="onLibrarySelection($event)"
+  [detailTitle]="workflow.detailTitle()"
+  [detailDescription]="workflow.detailDescription()"
+  (detailClosed)="catalog.onDetailClosed()"
+  (actionClosed)="catalog.closeCreateLibrary()"
+  (open)="catalog.onLibraryOpen({ id: $event })"
+  (action)="
+    catalog.onLibraryAction($event, {
+      onProcessing: () => void workflow.configureProcessing(),
+      onFlow: () => void workflow.assignFlow(),
+    })
+  "
+  (toggleChange)="catalog.onLibraryItemToggle($event)"
+  (selectionAction)="catalog.onLibrarySelection($event)"
 >
   <input
     #libraryImportFile
@@ -42,113 +47,36 @@
   </ng-template>
 
   <ng-template #librarySummary>
-    @if (librarySheet(); as sheet) {
-      <app-resource-sheet
-        [fill]="true"
-        ariaLabel="Accès, traitement et activité de la bibliothèque"
-        [title]="sheet.title"
-        [subtitle]="sheet.subtitle"
-        [notices]="sheet.notices"
-        [sections]="sheet.sections"
-      />
-    }
+    <app-library-summary-tab />
   </ng-template>
 
   <ng-template #libraryMedia>
-    @if (selectedLibrary()) {
-      <h3>Fichiers détectés</h3>
-      <app-data-table
-        [columns]="mediaColumns"
-        [rows]="mediaRows()"
-        [selectable]="true"
-        [listActions]="mediaListActions"
-        [rowActions]="mediaRowActions"
-        [selectionActions]="mediaSelectionActions"
-        (listAction)="discoverFiles()"
-        (rowAction)="processFiles([$event.row['id'].toString()])"
-        (selectionAction)="onMediaSelection($event)"
-        emptyMessage="Aucun fichier détecté. Attribuez un flow puis lancez la découverte."
-      />
-    }
+    <app-library-media-tab />
   </ng-template>
 
   <ng-template #libraryAccess>
-    @if (selectedLibrary()) {
-      <section class="library-access-summary" aria-labelledby="library-access-heading">
-        <div>
-          <h3 id="library-access-heading">Workers autorisés par le serveur</h3>
-          <p>{{ accessStatus() }}</p>
-        </div>
-        <button
-          matButton="outlined"
-          type="button"
-          [disabled]="selectedAccessesLoading() || accessFormLoading() || accessFormBusy()"
-          (click)="configureAccesses()"
-        >
-          Modifier les accès
-        </button>
-      </section>
-      @if (selectedAccesses().length) {
-        <app-data-table
-          [columns]="accessColumns"
-          [rows]="accessRows()"
-          [rowActions]="accessRowActions"
-          [separateRowActionColumns]="true"
-          (rowAction)="onAccessRowAction($event)"
-          (toggleChange)="onAccessToggle($event)"
-          emptyMessage="Aucun accès configuré."
-        />
-      } @else {
-        <p class="library-access-empty">
-          Aucun worker n’a encore accès à cette bibliothèque. Elle ne sera pas traitée tant qu’un
-          accès n’est pas configuré.
-        </p>
-      }
-    }
+    <app-library-access-tab />
   </ng-template>
 
   <ng-template #libraryHistory>
-    @if (selectedLibrary()) {
-      <h3>Historique des exécutions</h3>
-      @if (executionTrackingState().status === 'error') {
-        <p role="status">Actualisation des exécutions impossible.</p>
-      }
-      <div class="library-execution-cards">
-        @for (execution of libraryExecutions(); track execution.id) {
-          <app-execution-card
-            [execution]="execution"
-            [showPipelineAction]="true"
-            (pipelineRequested)="onProcessingExecutionAction(execution.id)"
-          />
-        } @empty {
-          <p>Aucune exécution récente pour cette bibliothèque.</p>
-        }
-      </div>
-      @if (selectedProcessingExecutionId(); as executionId) {
-        <app-execution-pipeline-logs
-          [executionId]="executionId"
-          [steps]="processingPipelineState().steps"
-          [feedback]="processingPipelineState().message"
-        />
-      }
-    }
+    <app-library-history-tab />
   </ng-template>
 
   <ng-template #detailHeaderActions>
-    @if (selectedLibrary()) {
+    @if (catalog.selectedLibrary()) {
       <app-drawer-action-button
         label="Attribuer un flow"
         variant="outlined"
-        (activated)="assignFlow()"
+        (activated)="workflow.assignFlow()"
       />
       <app-drawer-action-button
         label="Surveillance et limites"
         variant="outlined"
-        (activated)="configureProcessing()"
+        (activated)="workflow.configureProcessing()"
       />
       <app-drawer-action-button
         label="Attribuer un worker / groupe"
-        (activated)="configureAccesses()"
+        (activated)="access.configureAccesses()"
       />
     }
   </ng-template>
@@ -160,54 +88,6 @@
   </ng-template>
 
   <ng-template #actionContent>
-    @if (actionType() === 'create') {
-      <app-record-form
-        [embedded]="true"
-        [data]="createFormData"
-        (submitted)="createLibrary($event)"
-        (cancelled)="closeCreateLibrary()"
-      />
-    } @else if (actionType() === 'edit') {
-      <app-record-form
-        [embedded]="true"
-        [data]="editFormData()"
-        (submitted)="updateLibrary($event)"
-        (cancelled)="closeCreateLibrary()"
-      />
-    } @else if (actionType() === 'processing') {
-      @if (processingForm(); as form) {
-        <app-record-form
-          [embedded]="true"
-          [data]="form"
-          [busy]="workflowBusy()"
-          (submitted)="saveProcessing($event)"
-          (cancelled)="closeCreateLibrary()"
-        />
-      }
-    } @else if (actionType() === 'flow') {
-      @if (assignmentForm(); as form) {
-        <app-record-form
-          [embedded]="true"
-          [data]="form"
-          [busy]="workflowBusy()"
-          (submitted)="saveFlowAssignment($event)"
-          (cancelled)="closeCreateLibrary()"
-        />
-      }
-    } @else if (accessFormLoading()) {
-      <p role="status">Chargement des workers et des accès…</p>
-    } @else {
-      <app-library-node-access-form
-        [libraryName]="selectedLibrary()?.name ?? ''"
-        [setupMode]="accessSetupMode()"
-        [nodes]="accessNodes()"
-        [groups]="accessNodeGroups()"
-        [automaticallySelectedNodeIds]="automaticallySelectedAccessNodeIds()"
-        [initialAccesses]="initialAccesses()"
-        [busy]="accessFormBusy()"
-        (saved)="configureLibraryAccess($event)"
-        (cancelled)="closeCreateLibrary()"
-      />
-    }
+    <app-library-action-drawer />
   </ng-template>
 </app-library-preparation-template>
