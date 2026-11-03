@@ -35,7 +35,6 @@ import {
   forkJoin,
   map,
   of,
-  timer,
   switchMap,
   exhaustMap,
   firstValueFrom,
@@ -101,6 +100,7 @@ import {
   PageShellContextService,
   PageShellSearchResult,
 } from '../../core/layout/page-shell-context';
+import { LiveUpdates } from '../../shared/services/live-updates';
 
 interface LibraryExportFile {
   readonly format: number;
@@ -203,6 +203,7 @@ export class LibraryCatalogPageComponent {
 
   private readonly http = inject(HttpClient);
 
+  private readonly live = inject(LiveUpdates);
   private readonly clusterApi = inject(CentralApi);
 
   private readonly executionTracking = inject(ExecutionTracking);
@@ -242,7 +243,7 @@ export class LibraryCatalogPageComponent {
     ).pipe(
       switchMap(({ library }) =>
         library
-          ? timer(0, 5000).pipe(
+          ? this.live.drive(['libraries', 'executions']).pipe(
               exhaustMap(() =>
                 this.clusterApi.libraryProcessing(library.id).pipe(catchError(() => of(null))),
               ),
@@ -427,7 +428,7 @@ export class LibraryCatalogPageComponent {
     toObservable(this.selectedProcessingExecutionId).pipe(
       switchMap((id) =>
         id
-          ? timer(0, 3000).pipe(
+          ? this.live.drive(['executions', 'execution-logs']).pipe(
               exhaustMap(() =>
                 this.executionTracking.pipeline(id).pipe(
                   map((steps) => ({ message: '', steps })),
@@ -585,7 +586,8 @@ export class LibraryCatalogPageComponent {
     ).pipe(
       switchMap(({ library }) =>
         library
-          ? timer(0, 5000)
+          ? this.live
+              .drive(['libraries', 'executions'])
               .pipe(
                 exhaustMap(() =>
                   this.clusterApi.libraryWorkflow(library.id).pipe(

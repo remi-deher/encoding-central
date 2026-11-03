@@ -1,7 +1,8 @@
 import { Injectable } from '@angular/core';
-import { debounceTime, filter, map, merge, Observable, of, share, timer } from 'rxjs';
+import { debounceTime, EMPTY, filter, map, merge, Observable, of, share, timer } from 'rxjs';
 
-export type LiveTopic = 'executions' | 'nodes' | 'libraries' | 'plugins';
+export type LiveTopic =
+  'executions' | 'execution-logs' | 'workers' | 'libraries' | 'plugins' | 'flows' | 'settings';
 
 /**
  * Une connexion pour toute l'interface. Le serveur nomme le sujet modifié.
@@ -33,9 +34,17 @@ export class LiveUpdates {
     return () => source.close();
   }).pipe(share());
 
-  /** Émet tout de suite, puis quand un sujet change, puis lentement si le flux ne répond plus. */
-  drive(topics: readonly LiveTopic[], quietMs = 30_000): Observable<void> {
+  /**
+   * Émet tout de suite, puis quand un sujet change, puis lentement si le flux ne répond plus.
+   * `refreshMs` ajoute un rafraîchissement lent permanent, pour un état que nul appel ne modifie
+   * (vivacité d'un worker : battements de cœur et expirations se passent côté serveur).
+   */
+  drive(
+    topics: readonly LiveTopic[],
+    options: { readonly quietMs?: number; readonly refreshMs?: number } = {},
+  ): Observable<void> {
     const wanted = new Set(topics);
+    const quietMs = options.quietMs ?? 30_000;
     return merge(
       of(undefined),
       this.topics$.pipe(
@@ -47,6 +56,9 @@ export class LiveUpdates {
         filter(() => Date.now() - this.lastTraffic > quietMs),
         map(() => undefined),
       ),
+      options.refreshMs
+        ? timer(options.refreshMs, options.refreshMs).pipe(map(() => undefined))
+        : EMPTY,
     );
   }
 }

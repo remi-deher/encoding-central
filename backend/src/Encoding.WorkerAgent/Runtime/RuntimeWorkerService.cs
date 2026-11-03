@@ -4,17 +4,19 @@ using Encoding.WorkerAgent.Services;
 
 namespace Encoding.WorkerAgent.Runtime;
 
-public sealed class RuntimeWorkerService(WorkerAgentOptions options,WorkerIdentityStore identities,RuntimeFlowRunner runner,ILogger<RuntimeWorkerService> logger) : BackgroundService
+public sealed class RuntimeWorkerService(WorkerAgentOptions options,WorkerIdentityStore identities,RuntimeFlowRunner runner,WorkerWakeSignal wake,ILogger<RuntimeWorkerService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         var tasks=new List<Task>();
+        var waiter=wake.CreateWaiter();
         try
         {
             await WorkerPolling.DelayAsync(0,ct);
             while(!ct.IsCancellationRequested)
             {
                 tasks.RemoveAll(task=>task.IsCompleted);
+                var claimed=false;
                 try
                 {
                     var identity=await identities.GetAsync(ct);
@@ -35,8 +37,10 @@ public sealed class RuntimeWorkerService(WorkerAgentOptions options,WorkerIdenti
                                     tasks.Add(Task.Run(async()=>
                                     {
                                         using var executionClient=new RuntimeClient(identity,boundUrl);
-                                        await runner.RunAsync(lease,executionClient,ct);
+                                        try { await runner.RunAsync(lease,executionClient,ct); }
+                                        finally { wake.Pulse(); }
                                     },CancellationToken.None));
+                                    claimed=true;
                                     break;
                                 }
                             }
@@ -47,7 +51,8 @@ public sealed class RuntimeWorkerService(WorkerAgentOptions options,WorkerIdenti
                 }
                 catch(OperationCanceledException) when(ct.IsCancellationRequested) { break; }
                 catch(Exception exception) { logger.LogWarning("Attribution worker momentanément indisponible : {Type}.",exception.GetType().Name); }
-                await WorkerPolling.DelayAsync(2000,ct);
+                // Un claim réussi peut en annoncer un autre (capacité restante) : on repasse tout de suite, sinon on attend un signal.
+                if(!claimed) await waiter.WaitAsync(2000,ct);
             }
         }
         catch(OperationCanceledException) when(ct.IsCancellationRequested) { }

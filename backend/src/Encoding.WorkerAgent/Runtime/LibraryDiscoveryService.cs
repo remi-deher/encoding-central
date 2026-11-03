@@ -3,13 +3,15 @@ using Encoding.Contracts.Libraries;
 using Encoding.WorkerAgent.Services;
 namespace Encoding.WorkerAgent.Runtime;
 
-public sealed class LibraryDiscoveryService(WorkerAgentOptions options,WorkerIdentityStore identities,ILogger<LibraryDiscoveryService> logger):BackgroundService
+public sealed class LibraryDiscoveryService(WorkerAgentOptions options,WorkerIdentityStore identities,WorkerWakeSignal wake,ILogger<LibraryDiscoveryService> logger):BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         try { await WorkerPolling.DelayAsync(0,ct); } catch(OperationCanceledException) when(ct.IsCancellationRequested) { return; }
+        var waiter=wake.CreateWaiter();
         while(!ct.IsCancellationRequested)
         {
+            var scanned=false;
             try
             {
                 var identity=await identities.GetAsync(ct);
@@ -22,7 +24,7 @@ public sealed class LibraryDiscoveryService(WorkerAgentOptions options,WorkerIde
                             using var client=new RuntimeClient(identity,serverUrl);
                             using var timeout=CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(20));
                             var lease=await client.PostAsync<LibraryScanLease>("library-scans/claim",new{},timeout.Token);
-                            if(lease is not null) { await ScanAsync(lease,client,ct); break; }
+                            if(lease is not null) { await ScanAsync(lease,client,ct); scanned=true; break; }
                         }
                         catch(OperationCanceledException) when(ct.IsCancellationRequested) { throw; }
                         catch(Exception exception) { logger.LogDebug(exception, "Claim de scan bibliothèque momentanément indisponible."); }
@@ -31,7 +33,8 @@ public sealed class LibraryDiscoveryService(WorkerAgentOptions options,WorkerIde
             }
             catch(OperationCanceledException) when(ct.IsCancellationRequested) {break;}
             catch(Exception e) {logger.LogWarning("Découverte momentanément indisponible : {Type}.",e.GetType().Name);}
-            try {await WorkerPolling.DelayAsync(3000,ct);} catch(OperationCanceledException) when(ct.IsCancellationRequested){break;}
+            // Un scan terminé peut en laisser un autre en attente : on repasse tout de suite, sinon on attend un signal.
+            try {if(!scanned) await waiter.WaitAsync(3000,ct);} catch(OperationCanceledException) when(ct.IsCancellationRequested){break;}
         }
     }
     private static async Task ScanAsync(LibraryScanLease lease,RuntimeClient client,CancellationToken ct)

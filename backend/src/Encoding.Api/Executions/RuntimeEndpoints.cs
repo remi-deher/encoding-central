@@ -26,6 +26,7 @@ public static class RuntimeEndpoints
             return await next(context);
         });
 
+        group.MapRuntimeWakeEndpoint();
         group.MapRuntimeDirectoryBrowserEndpoints();
         group.MapRuntimeAiEndpoints();
         group.MapRuntimeStatusAndCapacityEndpoints();

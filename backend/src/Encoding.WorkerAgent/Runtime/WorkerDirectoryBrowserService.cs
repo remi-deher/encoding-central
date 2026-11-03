@@ -6,12 +6,14 @@ namespace Encoding.WorkerAgent.Runtime;
 public sealed class WorkerDirectoryBrowserService(
     WorkerAgentOptions options,
     WorkerIdentityStore identities,
+    WorkerWakeSignal wake,
     ILogger<WorkerDirectoryBrowserService> logger) : BackgroundService
 {
     private const int MaximumEntries = 200;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        var waiter = wake.CreateWaiter();
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -49,7 +51,7 @@ public sealed class WorkerDirectoryBrowserService(
             {
                 logger.LogDebug("L’exploration des dossiers est temporairement indisponible ({Type}).", exception.GetType().Name);
             }
-            try { await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken); }
+            try { await waiter.WaitAsync(2000, stoppingToken); }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
         }
     }

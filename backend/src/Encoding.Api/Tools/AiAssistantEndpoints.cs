@@ -31,6 +31,9 @@ public static class AiAssistantEndpoints
                 ? Results.Ok(activity)
                 : Results.NoContent()));
 
+        // Flux de progression d'une demande : remplace le sondage de /activity/{requestId}.
+        group.MapGet("/activity/{requestId:guid}/stream", StreamActivityAsync);
+
         group.MapGet("/conversations/{id}", async (string id, HttpContext http, AiAssistantService service, CancellationToken ct) =>
             await GuardAsync(async () =>
             {
@@ -187,5 +190,44 @@ public static class AiAssistantEndpoints
         catch (CryptographicException) { return Results.BadRequest(new { title = "Message IA invalide." }); }
         catch (JsonException) { return Results.BadRequest(new { title = "Message IA invalide." }); }
         catch (FormatException) { return Results.BadRequest(new { title = "Message IA invalide." }); }
+    }
+
+    /// <summary>
+    /// Le propriétaire est vérifié par GetActivityAsync à chaque lecture : le flux ne porte que l'activité de l'appelant
+    /// et se ferme quand la demande se termine.
+    /// </summary>
+    private static async Task<IResult> StreamActivityAsync(Guid requestId, HttpContext http, AiAssistantService service, CancellationToken ct)
+    {
+        if (requestId == Guid.Empty) return Results.BadRequest();
+        var stream = http.RequestServices.GetService<AiActivityBroadcaster>();
+        if (stream is null) return Results.NotFound();
+        Encoding.Api.Executions.ExecutionStreamBroadcaster.PrepareResponse(http.Response);
+        var version = stream.CurrentVersion;
+        AiAssistantActivity? sent = null;
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                var activity = await service.GetActivityAsync(requestId, http.User, ct);
+                if (activity is not null && (sent is null || activity.UpdatedAt != sent.UpdatedAt || activity.Status != sent.Status
+                    || activity.Progress != sent.Progress || activity.ProgressDetail != sent.ProgressDetail))
+                {
+                    sent = activity;
+                    await WriteEventAsync(http, "activity", JsonSerializer.Serialize(activity, Encoding.Api.Executions.ExecutionStreamBroadcaster.SseJsonOptions), ct);
+                    if (activity.Status != "running") { await WriteEventAsync(http, "end", "{}", ct); break; }
+                }
+                var next = await stream.WaitAsync(version, TimeSpan.FromSeconds(15), ct);
+                if (next == version) await WriteEventAsync(http, "ping", "{}", ct);
+                version = next;
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { /* le client a fermé le flux */ }
+        return Results.Empty;
+    }
+
+    private static async Task WriteEventAsync(HttpContext http, string eventType, string json, CancellationToken ct)
+    {
+        await http.Response.WriteAsync($"event: {eventType}\ndata: {json}\n\n", ct);
+        await http.Response.Body.FlushAsync(ct);
     }
 }

@@ -11,12 +11,12 @@ import {
   switchMap,
   Subject,
   timeout,
-  timer,
 } from 'rxjs';
 import { CentralApi } from './central-api';
 import { LibraryResponse, WorkerResponse } from '../models/central';
 import { CentralIdentity } from '../models/local-worker';
 import { LibraryWorkerAccessResponse } from '../ui/library-worker-access-types';
+import { LiveUpdates } from './live-updates';
 
 export interface CentralSnapshot {
   readonly identity: CentralIdentity;
@@ -35,8 +35,12 @@ export const INITIAL_CLUSTER_OVERVIEW: CentralOverviewState = { status: 'loading
 @Injectable({ providedIn: 'root' })
 export class CentralOverview {
   private readonly api = inject(CentralApi);
+  private readonly live = inject(LiveUpdates);
   private readonly refreshRequested = new Subject<void>();
-  readonly state$ = merge(timer(0, 10000), this.refreshRequested).pipe(
+  readonly state$ = merge(
+    this.live.drive(['workers', 'libraries'], { refreshMs: 30_000 }),
+    this.refreshRequested,
+  ).pipe(
     exhaustMap(() =>
       forkJoin({
         identity: this.api.identity(),

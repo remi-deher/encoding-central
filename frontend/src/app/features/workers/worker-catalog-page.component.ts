@@ -86,7 +86,6 @@ import {
   map,
   of,
   switchMap,
-  timer,
   startWith,
   exhaustMap,
   Observable,
@@ -130,6 +129,7 @@ import {
   PageShellContextService,
   PageShellSearchResult,
 } from '../../core/layout/page-shell-context';
+import { LiveUpdates } from '../../shared/services/live-updates';
 
 interface WorkerLibraryRecord extends DataTableRow {
   readonly id: string;
@@ -242,6 +242,7 @@ export class WorkerCatalogPageComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly pageShellContext = inject(PageShellContextService);
   private readonly http = inject(HttpClient);
+  private readonly live = inject(LiveUpdates);
   private readonly clusterApi = inject(CentralApi);
   private readonly dialog = inject(MatDialog);
   private readonly notifications = inject(NotificationService);
@@ -301,7 +302,7 @@ export class WorkerCatalogPageComponent {
     toObservable(computed(() => this.localNode()?.id ?? null)).pipe(
       switchMap((id) =>
         id
-          ? timer(0, 5000).pipe(
+          ? this.live.drive(['workers', 'executions'], { refreshMs: 30_000 }).pipe(
               exhaustMap(() =>
                 this.http
                   .get<WorkerActivityResponse>('/api/v1/workers/' + id + '/activity')
@@ -602,7 +603,7 @@ export class WorkerCatalogPageComponent {
     toObservable(computed(() => this.selectedNode()?.id ?? null)).pipe(
       switchMap((id) =>
         id
-          ? timer(0, 5000).pipe(
+          ? this.live.drive(['workers', 'executions'], { refreshMs: 30_000 }).pipe(
               exhaustMap(() =>
                 this.http
                   .get<WorkerActivityResponse>('/api/v1/workers/' + id + '/activity')
@@ -791,7 +792,7 @@ export class WorkerCatalogPageComponent {
     toObservable(computed(() => this.selectedNode()?.id ?? null)).pipe(
       switchMap((id) =>
         id
-          ? timer(0, 5000).pipe(
+          ? this.live.drive(['workers', 'executions'], { refreshMs: 30_000 }).pipe(
               exhaustMap(() => this.clusterApi.nodeProcessing(id).pipe(catchError(() => of(null)))),
               startWith(null),
             )
@@ -1775,7 +1776,8 @@ export class WorkerCatalogPageComponent {
     void this.loadGroups();
     this.installProcessingSettingsEffect();
     this.loadLibraryAccessSummary();
-    timer(0, 10_000)
+    this.live
+      .drive(['workers', 'executions'], { refreshMs: 30_000 })
       .pipe(
         switchMap(() =>
           forkJoin({

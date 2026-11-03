@@ -4,10 +4,11 @@ using Encoding.WorkerAgent.Services;
 namespace Encoding.WorkerAgent.Runtime;
 
 /// <summary>Exécute, sur le worker ayant l'accès direct, les restaurations demandées et la purge des sauvegardes après la période de grâce.</summary>
-public sealed class SourceReplacementService(WorkerAgentOptions options,WorkerIdentityStore identities,ILogger<SourceReplacementService> logger) : BackgroundService
+public sealed class SourceReplacementService(WorkerAgentOptions options,WorkerIdentityStore identities,WorkerWakeSignal wake,ILogger<SourceReplacementService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
+        var waiter=wake.CreateWaiter();
         while(!ct.IsCancellationRequested)
         {
             var handled=false;
@@ -30,7 +31,8 @@ public sealed class SourceReplacementService(WorkerAgentOptions options,WorkerId
             }
             catch(OperationCanceledException) when(ct.IsCancellationRequested) { break; }
             catch(Exception exception) { logger.LogWarning("Canal de remplacement momentanément indisponible : {Type}.",exception.GetType().Name); }
-            try { await WorkerPolling.DelayAsync(handled?2000:30000,ct); } catch(OperationCanceledException) { break; }
+            // Une tâche différée (verrou occupé, garde d'écriture) est retentée à courte échéance ; sinon on attend un signal.
+            try { if(handled) await WorkerPolling.DelayAsync(2000,ct); else await waiter.WaitAsync(30000,ct); } catch(OperationCanceledException) { break; }
         }
     }
     private async Task HandleAsync(RuntimeReplacementTask task,RuntimeClient client,CancellationToken ct)
