@@ -48,6 +48,18 @@ public sealed class ProcessSandboxRulesTests
         Assert.Equal(16, SandboxRules.RulesetSize(4));
     }
 
+    [Theory]
+    [InlineData(5, false, 0UL, 16)]
+    [InlineData(6, false, 1UL, 24)]
+    [InlineData(6, true, 1UL, 24)]
+    public void AbstractUnixSocketsAreScopedForPluginsFromAbi6(int abi, bool network, ulong scopes, int size)
+    {
+        var expected = abi >= 6 ? scopes : 0UL;
+        Assert.Equal(expected, SandboxRules.Scopes(abi, SandboxPolicy.ForPlugin(network)));
+        Assert.Equal(0UL, SandboxRules.Scopes(6, SandboxPolicy.AiCli));
+        Assert.Equal(size, SandboxRules.RulesetSize(abi));
+    }
+
     [Fact]
     public void PluginsSeeOnlyTheirOwnProcessDirectoryUnderProc()
     {
@@ -103,17 +115,22 @@ public sealed class ProcessSandboxRulesTests
             Assert.Contains(ptrace, numbers);
             Assert.Contains(processVm, numbers);
             Assert.Contains(ioUring, numbers);
-            // Les sockets ne sont filtrées que sans capacité réseau ; avec elle, l'appel système n'est pas examiné.
-            Assert.Equal(!network, numbers.Contains(socket) && numbers.Contains(socketPair));
+            // Les sockets sont toujours filtrées par famille, avec ou sans capacité réseau.
+            Assert.True(numbers.Contains(socket) && numbers.Contains(socketPair));
         }
     }
 
     [Fact]
-    public void SeccompRestrictsSocketsToUnixDomainWithoutNetwork()
+    public void SeccompRestrictsSocketFamiliesEvenWithTheNetworkCapability()
     {
-        var strict = SeccompFilter.Build(Architecture.X64, false);
-        Assert.Contains(strict, item => item.Code == 0x15 && item.K == SeccompFilter.AfUnix);
-        Assert.DoesNotContain(SeccompFilter.Build(Architecture.X64, true), item => item.Code == 0x15 && item.K == SeccompFilter.AfUnix);
+        Assert.Equal([1], SeccompFilter.AllowedDomains(false));
+        Assert.Equal([1, 2, 10, 16], SeccompFilter.AllowedDomains(true));
+        foreach (var network in new[] { false, true })
+        {
+            var domains = SeccompFilter.Build(Architecture.X64, network).Where(item => item.Code == 0x15 && item.K is < 32).Select(item => (int)item.K).ToHashSet();
+            Assert.Equal(SeccompFilter.AllowedDomains(network).ToHashSet(), domains);
+            Assert.DoesNotContain(17, domains); // AF_PACKET
+        }
     }
 
     [Fact]
@@ -134,5 +151,40 @@ public sealed class ProcessSandboxRulesTests
         Assert.False(PluginCapabilities.AllowsNetwork(read(json(",\"capabilities\":[]"))));
         Assert.True(PluginCapabilities.AllowsNetwork(read(json(",\"capabilities\":[\"network\"]"))));
         Assert.DoesNotContain("filesystem", PluginCapabilities.Ids);
+    }
+
+    private static PluginManifest Manifest(params string[]? capabilities)
+        => new(1, "p", "1.0.0", "P", [1], [], Capabilities: capabilities);
+
+    [Fact]
+    public void FingerprintIgnoresAbsentCapabilitiesButTracksDeclaredOnes()
+    {
+        var legacy = PluginManifestFingerprint.Compute(Manifest());
+        Assert.Equal(legacy, PluginManifestFingerprint.Compute(Manifest(Array.Empty<string>())));
+        Assert.Equal(legacy, PluginManifestFingerprint.Compute(Manifest(null!)));
+        var network = PluginManifestFingerprint.Compute(Manifest("network"));
+        Assert.NotEqual(legacy, network);
+        Assert.Equal(network, PluginManifestFingerprint.Compute(Manifest("network", "network")));
+    }
+
+    [Fact]
+    public void WorkerTakesCapabilitiesFromThePackageNotFromTheDescribeAnswer()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "encoding-caps-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var launch = new Encoding.WorkerAgent.Runtime.PluginLaunch { Id = "p", Version = "1.0.0", ReadOnlyPaths = [directory] };
+            var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+            File.WriteAllText(Path.Combine(directory, "plugin.json"), JsonSerializer.Serialize(Manifest(), options));
+            Encoding.WorkerAgent.Runtime.PluginProcessHost.VerifyCapabilities(launch, Manifest());
+            var added = Assert.Throws<IOException>(() => Encoding.WorkerAgent.Runtime.PluginProcessHost.VerifyCapabilities(launch, Manifest("network")));
+            Assert.Contains("différentes", added.Message);
+            File.WriteAllText(Path.Combine(directory, "plugin.json"), JsonSerializer.Serialize(Manifest("network"), options));
+            Encoding.WorkerAgent.Runtime.PluginProcessHost.VerifyCapabilities(launch, Manifest("network"));
+            Assert.Throws<IOException>(() => Encoding.WorkerAgent.Runtime.PluginProcessHost.VerifyCapabilities(launch, Manifest()));
+            Assert.Throws<IOException>(() => Encoding.WorkerAgent.Runtime.PluginProcessHost.VerifyCapabilities(launch, Manifest("network", "filesystem")));
+        }
+        finally { Directory.Delete(directory, true); }
     }
 }

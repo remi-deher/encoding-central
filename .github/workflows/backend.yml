@@ -199,6 +199,11 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      - name: Show the kernel and Landlock ABI
+        run: |
+          uname -r
+          cat /sys/kernel/security/lsm; echo
+          python3 -c "import ctypes; libc = ctypes.CDLL(None, use_errno=True); print('Landlock ABI:', libc.syscall(444, None, 0, 1))"
       - name: Install the pinned official CLI packages
         run: |
           npm install --prefix "$RUNNER_TEMP/encoding-ai-cli" --no-audit --no-fund \
