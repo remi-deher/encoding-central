@@ -13,7 +13,7 @@ using ApiAssembly = Encoding.Api.Auth.AuthOptions;
 
 namespace Encoding.Runtime.Tests;
 
-/// <summary>Initialisation du premier administrateur : jeton d'initialisation et mot de passe généré.</summary>
+/// <summary>Initialisation du premier administrateur : jeton d'initialisation, mot de passe généré, mode sans authentification.</summary>
 public sealed class AuthSetupTests
 {
     private const string Token = "jeton-d-initialisation-de-test";
@@ -156,6 +156,39 @@ public sealed class AuthSetupTests
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
     });
 
+    [Fact]
+    public void DisabledAuthenticationIsOnlyAllowedInDevelopment()
+    {
+        var disabled = Options(new() { ["Auth:Enabled"] = "false" });
+        disabled.EnsureAllowedIn(new FakeEnvironment(Environments.Development));
+        foreach (var name in new[] { Environments.Production, Environments.Staging, "Test" })
+        {
+            var error = Assert.Throws<InvalidOperationException>(() => disabled.EnsureAllowedIn(new FakeEnvironment(name)));
+            Assert.Contains("Auth:Enabled=false", error.Message);
+        }
+        Options(new()).EnsureAllowedIn(new FakeEnvironment(Environments.Production));
+    }
+
+    [Fact(Timeout = 60000)]
+    public async Task HostRefusesToStartWithoutAuthenticationOutsideDevelopment()
+    {
+        var failure = await Record.ExceptionAsync(() => WithFactoryAsync("Production", new() { ["Auth:Enabled"] = "false" }, factory =>
+        {
+            using var client = factory.CreateClient();
+            return Task.CompletedTask;
+        }));
+        Assert.NotNull(failure);
+        Assert.Contains("Auth:Enabled=false est refusé", failure!.ToString());
+    }
+
     private static AuthOptions Options(Dictionary<string, string?> values) =>
         AuthOptions.From(new ConfigurationBuilder().AddInMemoryCollection(values).Build());
+
+    private sealed class FakeEnvironment(string name) : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = name;
+        public string ApplicationName { get; set; } = "test";
+        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+        public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; } = new Microsoft.Extensions.FileProviders.NullFileProvider();
+    }
 }

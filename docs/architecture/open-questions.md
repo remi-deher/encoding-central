@@ -7,7 +7,7 @@ Dressé le 2026-10-21 en relisant les anciens ADR contre le code de `dev`. Cette
 ## À traiter en priorité (production)
 
 ### 1. Authentification par défaut : décidé (2026-10-21)
-- Décision de Rémi : le setup d'un admin est imposé. `Auth:Enabled` vaut désormais `true` par défaut ; les écritures MCP exigent un jeton à portée explicite. Voir [auth-ops](domains/auth-ops.md). Reste à faire : vérifier sur les deux hôtes TrueNAS (comptes existants ? sinon l'assistant d'admin apparaîtra à la mise à jour) et ajouter un jeton MCP scopé pour les clients existants.
+- Décision de Rémi : le setup d'un admin est imposé. `Auth:Enabled` vaut désormais `true` par défaut ; les écritures MCP exigent un jeton à portée explicite. Voir [auth-ops](domains/auth-ops.md). Reste à faire : vérifier sur les deux hôtes TrueNAS (comptes existants ? sinon l'assistant d'admin apparaîtra à la mise à jour) et ajouter un jeton MCP scopé pour les clients existants. Complément (2026-11-03) : `Auth:Enabled=false` est refusé au démarrage hors Development ; jeton optionnel `Auth:SetupToken` pour le premier administrateur.
 
 ### 2. Deux mécanismes de réplication : retrait décidé et implémenté (2026-10-25)
 Rémi retient le maillage LWW comme modèle unique. Le mode de consensus, sa dépendance, son coordinateur SQL, ses routes, tests et outils dédiés sont retirés (ADR [0013](adr/0013-retrait-mode-raft.md)). Le protocole du maillage ne change pas. La sortie d'une ancienne installation utilisant ce mode nécessite une sauvegarde et une transition explicite ; aucune conversion automatique n'est livrée. La reprise inter-serveurs est livrée séparément par l’ADR [0016](adr/0016-transferts-et-reprise-manuelle.md).
