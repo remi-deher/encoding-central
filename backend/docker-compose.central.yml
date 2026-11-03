@@ -12,6 +12,8 @@ services:
     hostname: encoding-central
     environment:
       Worker__Name: encoding-central
+      # Adresse annoncée en DNS-SD : le nom .local ne se résout pas dans le conteneur du worker.
+      Central__AdvertisedApiBaseUrl: http://server:8080
     ports:
       - "${CENTRAL_API_PORT:-5080}:8080"
     volumes:
