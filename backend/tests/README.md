@@ -4,8 +4,16 @@ La suite utilise les vrais dépôts, des fichiers SQLite temporaires, les endpoi
 
 Avec .NET 10, vérifications légères en local (règle TEST_RULES.md, section 8 : pas de suite complète ni de test lourd en local) :
 
+Par défaut, cibler les tests liés aux fichiers modifiés (périmètre minimal, économie CPU : voir TEST_RULES.md, section 8) :
+
 ```powershell
-dotnet test backend/tests/Encoding.Runtime.Tests --configuration Release --filter "Category!=Stress&FullyQualifiedName!~WorkerProcessLossTests&FullyQualifiedName!~DockerCentralTests"
+nice -n 19 dotnet test backend/tests/Encoding.Runtime.Tests --no-build --filter "FullyQualifiedName~<Classe ou namespace>"
+```
+
+Élargissement au projet de tests entier (contrat partagé modifié, échec ciblé suggérant un impact large, ou ultime vérification avant livraison, une seule fois, à justifier) :
+
+```powershell
+nice -n 19 dotnet test backend/tests/Encoding.Runtime.Tests --configuration Release --filter "Category!=Stress&FullyQualifiedName!~WorkerProcessLossTests&FullyQualifiedName!~DockerCentralTests"
 ```
 
 La suite utilise xUnit (`dotnet test`). Les scénarios de base s’exécutent toujours sur SQLite. FFmpeg, ffprobe et MediaInfo sont nécessaires aux scénarios média ; `backend/tests/Dockerfile` fournit le SDK et ces outils. La **suite complète** (outils média exigés, couverture, résultats `.trx`) est réservée à la CI (job `backend-runtime-tests` de `backend.yml`) : ne pas la lancer en local.

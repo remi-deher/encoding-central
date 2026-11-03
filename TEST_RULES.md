@@ -63,9 +63,19 @@ Ces règles sont obligatoires pour les changements du projet. Les tests doivent 
 **Léger — autorisé en local :**
 
 - Lint et format : `npm run lint`, `npm run format:flows`, `npm run format:settings` (frontend).
-- Compilation / typecheck : `dotnet build backend/Encoding.sln --configuration Release` (avec `-warnaserror` et le `.editorconfig` racine), `npm run build`.
+- Compilation / typecheck : `dotnet build <projet.csproj> --no-restore` sur les projets touchés (avec `-warnaserror` et le `.editorconfig` racine ; la solution entière uniquement dans les cas d’élargissement ci-dessous), `npm run build`.
 - Tests unitaires ciblés et rapides : `npm test` et `node --test tests/*.test.mjs` (frontend) ; côté backend, des filtres ciblés, par exemple `dotnet test backend/tests/Encoding.Runtime.Tests -c Release --filter "Category!=Stress&FullyQualifiedName!~WorkerProcessLossTests&FullyQualifiedName!~DockerCentralTests"`, ou des classes de tests précises liées au changement.
 - E2E léger : `npm run test:e2e` (parcours Playwright smoke, API simulée, sans backend ni média réel).
+
+**Périmètre minimal — économie CPU (backend .NET et frontend Angular) :** vérifier d’abord **uniquement les fichiers modifiés ou créés**. Liste : `git diff --name-only HEAD` plus `git ls-files --others --exclude-standard`.
+
+1. **Format** : jamais `dotnet format` sur `Encoding.sln` pendant le travail courant. Utiliser `dotnet format <projet.csproj> --verify-no-changes --no-restore --include <fichiers modifiés>`.
+2. **Build** : seulement les projets touchés, `dotnet build <projet.csproj> --no-restore`, pas la solution.
+3. **Tests** : d’abord ceux liés aux fichiers modifiés, `dotnet test <projet.Tests.csproj> --no-build --filter "FullyQualifiedName~<Classe ou namespace>"`.
+4. **Élargissement** (projet entier, puis solution) seulement si : un contrat partagé est modifié (interface, DTO, classe de base, configuration commune, `Directory.Build.props`, package) ; les tests ciblés échouent d’une façon qui suggère un impact plus large ; ou pour l’ultime vérification avant commit / livraison finale (**une seule fois**, pas à chaque itération). Dire explicitement pourquoi. L’élargissement reste soumis aux limites « léger / lourd » de cette section : la suite complète et les tests lourds restent réservés à la CI.
+5. **Frontend Angular** : `ng lint --lint-file-patterns <fichiers>`, `ng test --include <spec>`, et seulement les specs Playwright concernées.
+6. **Commandes lourdes** (build, format, test) avec `nice -n 19`, **jamais en parallèle** entre elles : un seul build / format / test à la fois par session.
+7. **Rapport final** : indiquer le périmètre vérifié (fichiers, projets, tests) et la justification de chaque élargissement.
 
 **Lourd — CI uniquement, ne jamais lancer en local :**
 
