@@ -87,7 +87,6 @@ import {
   map,
   of,
   switchMap,
-  timer,
   startWith,
   exhaustMap,
   Observable,
@@ -303,7 +302,7 @@ export class WorkerCatalogPageComponent {
     toObservable(computed(() => this.localNode()?.id ?? null)).pipe(
       switchMap((id) =>
         id
-          ? timer(0, 5000).pipe(
+          ? this.live.drive(['executions', 'workers']).pipe(
               exhaustMap(() =>
                 this.http
                   .get<WorkerActivityResponse>('/api/v1/workers/' + id + '/activity')
@@ -604,7 +603,7 @@ export class WorkerCatalogPageComponent {
     toObservable(computed(() => this.selectedNode()?.id ?? null)).pipe(
       switchMap((id) =>
         id
-          ? timer(0, 5000).pipe(
+          ? this.live.drive(['executions', 'workers']).pipe(
               exhaustMap(() =>
                 this.http
                   .get<WorkerActivityResponse>('/api/v1/workers/' + id + '/activity')
@@ -793,7 +792,7 @@ export class WorkerCatalogPageComponent {
     toObservable(computed(() => this.selectedNode()?.id ?? null)).pipe(
       switchMap((id) =>
         id
-          ? timer(0, 5000).pipe(
+          ? this.live.drive(['executions', 'workers']).pipe(
               exhaustMap(() => this.clusterApi.nodeProcessing(id).pipe(catchError(() => of(null)))),
               startWith(null),
             )
@@ -1802,8 +1801,9 @@ export class WorkerCatalogPageComponent {
         this.pendingEnrollments.set(pending);
         this.loadState.set('ready');
       });
-    // Le nombre de tâches actives suit les exécutions, qui n'émettent pas sur ce sujet : relevé à intervalle.
-    timer(0, 10_000)
+    // Le nombre de tâches actives suit les exécutions et la présence des workers.
+    this.live
+      .drive(['executions', 'workers'])
       .pipe(
         switchMap(() =>
           this.http
