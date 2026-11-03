@@ -54,6 +54,12 @@ public sealed class SourceReplacementService(WorkerAgentOptions options,WorkerId
                 report=SourceReplacer.Finalize(task.Root,task,out var detail)?new("finalized",null):new("failed",detail);
             }
         }
+        catch(OrphanSourceWriteLockException orphan)
+        {
+            // Visible côté central (détail de la tâche) et dans le journal ; le verrou n'est jamais retiré automatiquement.
+            logger.LogWarning("Remplacement {ExecutionId} : verrou d'écriture orphelin sur {Path} (hôte {Host}, processus {ProcessId}).",task.ExecutionId,task.OriginalPath,orphan.Status.Info?.Host,orphan.Status.Info?.ProcessId);
+            report=new("failed",orphan.Message+" Source et sauvegarde conservées.");
+        }
         catch(SourceWriteDeferredException) { return; }
         catch(HttpRequestException) { return; }
         catch(SafeMediaPaths.MediaLockBusyException) { return; }

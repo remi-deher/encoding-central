@@ -50,13 +50,33 @@ public static class SourceReplacer
     public static async Task<SourceReplacementReport> ReplaceAsync(string root, Guid executionId, string mediaPath, string resultFile, string sourceSha, string resultSha,
         string resultExtension, Func<CancellationToken, Task<bool>> stillAuthorized, CancellationToken ct)
     {
+        try { return await ReplaceCoreAsync(root, executionId, mediaPath, resultFile, sourceSha, resultSha, resultExtension, stillAuthorized, ct); }
+        catch (OrphanSourceWriteLockException exception) { return Failed(exception.Message + " La source est conservée."); }
+    }
+
+    private static async Task<SourceReplacementReport> ReplaceCoreAsync(string root, Guid executionId, string mediaPath, string resultFile, string sourceSha, string resultSha,
+        string resultExtension, Func<CancellationToken, Task<bool>> stillAuthorized, CancellationToken ct)
+    {
         if (await ResumeAsync(root, executionId, mediaPath, sourceSha, resultSha, resultExtension, ct) is { } resumed) return resumed;
         var original = SafeMediaPaths.Resolve(root, mediaPath);
-        using var shared=SharedSourceWriteLock.Acquire(original);
+        using var shared=SharedSourceWriteLock.Acquire(original, executionId);
         var finalRelative = FinalPath(mediaPath, resultExtension); var final = SafeMediaPaths.Resolve(root, finalRelative);
         var backupRelative = BackupPath(executionId, mediaPath); var backup = SafeMediaPaths.Resolve(root, backupRelative);
         if (!File.Exists(original) || await SafeMediaPaths.DigestAsync(original, ct) != sourceSha) return Failed("La source a changé ; elle est conservée.");
-        if (original != final && File.Exists(final)) return Failed("Un autre fichier occupe déjà le nom du résultat ; la source est conservée.");
+        if (original != final && File.Exists(final))
+        {
+            // Reprise après coupure entre la publication du résultat et la suppression de l'ancien nom : seul un final identique au résultat validé,
+            // avec une sauvegarde vérifiée de la source, est reconnu comme le nôtre. Tout autre fichier est préservé.
+            if (File.Exists(backup) && await SafeMediaPaths.DigestAsync(backup, ct) == sourceSha && await SafeMediaPaths.DigestAsync(final, ct) == resultSha)
+            {
+                if (!await stillAuthorized(ct)) return Failed("Le bail ou l'exécution n'est plus valide ; la source est conservée.");
+                // Les empreintes ci-dessus peuvent durer : la source est revérifiée juste avant de supprimer l'ancien nom.
+                if (await SafeMediaPaths.DigestAsync(original, ct) != sourceSha) return Failed("La source a changé avant le remplacement ; elle est conservée.");
+                File.Delete(original); AtomicFilePublication.Confirm(final);
+                return Replaced(finalRelative, backupRelative, final);
+            }
+            return Failed("Un autre fichier occupe déjà le nom du résultat ; la source est conservée.");
+        }
         var modified = File.GetLastWriteTimeUtc(original);
         Directory.CreateDirectory(Path.GetDirectoryName(backup)!); backup = SafeMediaPaths.Resolve(root, backupRelative);
         var stagedBackup = backup + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -75,9 +95,20 @@ public static class SourceReplacer
             if (await SafeMediaPaths.DigestAsync(stagedResult, ct) != resultSha) return Failed("La copie du résultat est invalide ; la source est conservée.");
             if (!await stillAuthorized(ct)) return Failed("Le bail ou l'exécution n'est plus valide ; la source est conservée.");
             if (await SafeMediaPaths.DigestAsync(original, ct) != sourceSha) return Failed("La source a changé avant le remplacement ; elle est conservée.");
-            mutated = true;
-            if (original == final) { File.Move(stagedResult, original, true); AtomicFilePublication.Confirm(original); }
-            else { AtomicFilePublication.Publish(stagedResult, final); File.Delete(original); AtomicFilePublication.Confirm(final); }
+            if (original == final) { mutated = true; File.Move(stagedResult, original, true); AtomicFilePublication.Confirm(original); }
+            else
+            {
+                // Publication sans écrasement : si un tiers a créé le fichier final depuis le contrôle initial, le déplacement échoue et le résultat reste en attente.
+                // Ce fichier n'est alors pas le nôtre : rien n'est modifié ni restauré (donc jamais supprimé).
+                try { AtomicFilePublication.Publish(stagedResult, final); }
+                catch (Exception) when (!File.Exists(stagedResult)) { mutated = true; throw; } // déplacé, mais synchronisation disque échouée : le final est le nôtre
+                catch (IOException) when (File.Exists(stagedResult))
+                {
+                    return Failed(File.Exists(final) ? "Un autre fichier occupe déjà le nom du résultat ; la source est conservée."
+                        : "La publication du résultat a échoué ; la source est conservée.");
+                }
+                mutated = true; File.Delete(original); AtomicFilePublication.Confirm(final);
+            }
             if (await SafeMediaPaths.DigestAsync(final, ct) != resultSha) throw new IOException("Le fichier remplaçant ne correspond pas au résultat validé.");
             success = true;
             return Replaced(finalRelative, backupRelative, final);
@@ -102,7 +133,7 @@ public static class SourceReplacer
     /// <summary>Restaure la source depuis la sauvegarde. Refuse si le fichier remplaçant a été modifié depuis.</summary>
     public static async Task<SourceReplacementReport> RollbackAsync(string root, RuntimeReplacementTask task, CancellationToken ct,Func<CancellationToken,Task<bool>>? stillAuthorized=null)
     {
-        using var shared=SharedSourceWriteLock.Acquire(SafeMediaPaths.Resolve(root,task.OriginalPath));
+        using var shared=SharedSourceWriteLock.Acquire(SafeMediaPaths.Resolve(root,task.OriginalPath),task.ExecutionId);
         try
         {
             var report = await RestoreFilesAsync(root, task.OriginalPath, task.FinalPath, task.BackupPath, task.SourceSha256, task.ResultSha256, false, ct,stillAuthorized);
@@ -111,7 +142,7 @@ public static class SourceReplacer
         catch (InvalidOperationException exception) { return Failed(exception.Message); }
     }
 
-    private static async Task<SourceReplacementReport> RestoreFilesAsync(string root, string mediaPath, string finalRelative, string backupRelative,
+    internal static async Task<SourceReplacementReport> RestoreFilesAsync(string root, string mediaPath, string finalRelative, string backupRelative,
         string sourceSha, string resultSha, bool force, CancellationToken ct,Func<CancellationToken,Task<bool>>? stillAuthorized=null)
     {
         var original = SafeMediaPaths.Resolve(root, mediaPath); var final = SafeMediaPaths.Resolve(root, finalRelative); var backup = SafeMediaPaths.Resolve(root, backupRelative);
@@ -129,15 +160,20 @@ public static class SourceReplacer
         var staged = original + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
-            if (!(original != final && File.Exists(original) && await SafeMediaPaths.DigestAsync(original, ct) == sourceSha))
+            var sourceInPlace = File.Exists(original) && await SafeMediaPaths.DigestAsync(original, ct) == sourceSha;
+            if (!sourceInPlace)
             {
+                // Même en restauration forcée, on n'écrase que le résultat de cette exécution : un fichier tiers à l'emplacement d'origine est préservé.
+                if (original == final && File.Exists(original) && await SafeMediaPaths.DigestAsync(original, ct) != resultSha)
+                    throw new InvalidOperationException("Un autre fichier occupe l'emplacement d'origine ; restauration refusée.");
                 await CopyAsync(backup, staged, File.GetLastWriteTimeUtc(backup), ct);
                 if (await SafeMediaPaths.DigestAsync(staged, ct) != sourceSha) throw new InvalidOperationException("La copie restaurée est invalide.");
                 if(stillAuthorized is not null && !await stillAuthorized(ct)) throw new SourceWriteDeferredException();
                 if (original == final) File.Move(staged, original, true); else AtomicFilePublication.Publish(staged, original);
                 AtomicFilePublication.Confirm(original);
             }
-            if (original != final && File.Exists(final) && (force || await SafeMediaPaths.DigestAsync(final, ct) == resultSha)) File.Delete(final);
+            // Le fichier final n'est supprimé que s'il est le résultat de cette exécution (empreinte), jamais un fichier tiers, forcé ou non.
+            if (original != final && File.Exists(final) && await SafeMediaPaths.DigestAsync(final, ct) == resultSha) File.Delete(final);
             File.Delete(backup);
             var directory = Path.GetDirectoryName(backup)!; if (!Directory.EnumerateFileSystemEntries(directory).Any()) Directory.Delete(directory);
             return Restored(mediaPath, original);
@@ -153,7 +189,7 @@ public static class SourceReplacer
     /// <summary>Supprime la sauvegarde après la période de grâce, seulement si le fichier remplaçant existe encore.</summary>
     public static bool Finalize(string root, RuntimeReplacementTask task, out string? detail)
     {
-        using var shared=SharedSourceWriteLock.Acquire(SafeMediaPaths.Resolve(root,task.OriginalPath));
+        using var shared=SharedSourceWriteLock.Acquire(SafeMediaPaths.Resolve(root,task.OriginalPath),task.ExecutionId);
         var final = SafeMediaPaths.Resolve(root, task.FinalPath); var backup = SafeMediaPaths.Resolve(root, task.BackupPath);
         if (!File.Exists(final)) { detail = "Le fichier remplaçant est absent ; la sauvegarde est conservée."; return false; }
         if (File.Exists(backup)) File.Delete(backup);

@@ -52,5 +52,8 @@ Décidés par l'[ADR 0036](adr/0036-separation-stricte-central-worker.md) : cent
 ## Non vérifié en conditions réelles (à ne pas présenter comme garanti)
 Landlock en conteneur de production ; GPU réel (QSV, VAAPI, NVENC) ; Plex/Jellyfin/Sonarr/Radarr réels ; NAS/NFS (atomicité du renommage et des verrous) ; cluster multi-hôtes sous charge (changement de mode, reprise après perte de worker) ; thème sombre et mobile de la page Nœuds et de l'éditeur de flow.
 
+## Verrou d'écriture de source orphelin (ADR 0014)
+Détection livrée (états `Orphaned`/`ProbablyOrphaned`, voir [runtime](domains/runtime.md)). Reste à faire : brancher `ReleaseOrphan` sur une action opérateur (corriger sa fenêtre TOCTOU entre inspection et suppression, journaliser l'acteur), vérifier les verrous d'un autre hôte auprès du central (exécution terminée ou époque expirée) et valider le comportement sur NAS/NFS.
+
 ## Reprise après perte du worker (ADR 0004)
 Livrée : reprise au dernier checkpoint, bornée à 2, blocs rejouables. Reste à décider : attendre le retour du nœud d'accès (au lieu d'échouer) quand le traitement continue ailleurs ; reprendre le verrou de disque libéré ; checkpoint intermédiaire à l'intérieur d'un encodage long (aujourd'hui, le bloc est refait depuis son début).
