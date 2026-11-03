@@ -5,7 +5,7 @@ Les workflows utilisent les mêmes filtres de chemins ; ils se déclenchent sur 
 | Workflow | Fichiers concernés |
 | --- | --- |
 | Backend | backend et son workflow |
-| Backend dev | backend et son workflow ; PR et push vers dev uniquement : build `-warnaserror` + `ArchitectureTests` (job `backend-dev-fast`) |
+| Backend dev | PR et push vers dev uniquement ; `backend-dev-fast` (build `-warnaserror` + `ArchitectureTests`) si backend ou son workflow changent ; agrégateur `dev-ci` toujours présent |
 | Frontend | frontend et son workflow |
 | Image | backend, frontend, .dockerignore et son workflow |
 | Release scripts | scripts GitHub et workflows release*.yml |
@@ -14,8 +14,10 @@ Les workflows utilisent les mêmes filtres de chemins ; ils se déclenchent sur 
 Backend dev est un workflow à part : `backend.yml` ne s'exécute pas sur dev, car ses jobs ignorés
 produiraient des contrôles « skipped » que `wait-ci.mjs` lirait comme des échecs. Le contrôle
 `backend-dev-fast` n'est pas dans `ci-scopes.mjs` : la promotion et la release l'ignorent.
-Il peut être requis dans la protection de dev seulement si on accepte qu'une PR sans changement
-backend reste en attente (filtre de chemins), ou via un contrôle agrégateur.
+Le workflow n'a pas de filtre de chemins : un job `changes` détecte les fichiers backend, et le
+contrôle agrégateur `dev-ci` conclut toujours (succès si `backend-dev-fast` a réussi ou a été ignoré
+faute de changement backend, échec sinon). C'est `dev-ci`, et lui seul, qu'il faut rendre requis dans
+la protection de dev ; ne pas requérir `backend-dev-fast`, absent des PR hors backend.
 Tous les workflows déclarent `permissions: contents: read` au minimum ; seuls policy, promotion et release élargissent.
 
 Une documentation ordinaire ne déclenche aucune compilation. Les changements des
