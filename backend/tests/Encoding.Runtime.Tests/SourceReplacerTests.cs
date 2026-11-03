@@ -200,6 +200,32 @@ public sealed class SourceReplacerTests : IDisposable
     }
 
     [Fact]
+    public async Task OrphanWriteLockBlocksReplacementWithoutTouchingSourceOrLock()
+    {
+        var media = Create("Locked.mkv");
+        var lockPath = SharedSourceWriteLock.LockPath(Full(media.Source));
+        File.WriteAllText(lockPath, JsonSerializer.Serialize(new SourceWriteLockInfo("dead", Environment.MachineName, int.MaxValue, 1, execution, DateTimeOffset.UtcNow)));
+
+        var report = await ReplaceAsync(media, ".mkv");
+
+        Assert.Equal("failed", report.Status);
+        Assert.Contains("orphelin", report.Detail);
+        Assert.True(File.Exists(lockPath));
+        Assert.Equal(media.SourceBytes, File.ReadAllBytes(Full(media.Source)));
+    }
+
+    [Fact]
+    public async Task LiveWriteLockMakesReplacementWaitInsteadOfFailing()
+    {
+        var media = Create("Busy.mkv");
+        using var held = SharedSourceWriteLock.Acquire(Full(media.Source), execution);
+
+        await Assert.ThrowsAsync<SafeMediaPaths.MediaLockBusyException>(() => ReplaceAsync(media, ".mkv"));
+
+        Assert.Equal(media.SourceBytes, File.ReadAllBytes(Full(media.Source)));
+    }
+
+    [Fact]
     public void FinalizeKeepsBackupWhenReplacementFileIsMissing()
     {
         var media = Create("Grace.mkv");

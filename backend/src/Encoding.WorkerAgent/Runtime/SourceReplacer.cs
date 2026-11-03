@@ -50,9 +50,16 @@ public static class SourceReplacer
     public static async Task<SourceReplacementReport> ReplaceAsync(string root, Guid executionId, string mediaPath, string resultFile, string sourceSha, string resultSha,
         string resultExtension, Func<CancellationToken, Task<bool>> stillAuthorized, CancellationToken ct)
     {
+        try { return await ReplaceCoreAsync(root, executionId, mediaPath, resultFile, sourceSha, resultSha, resultExtension, stillAuthorized, ct); }
+        catch (OrphanSourceWriteLockException exception) { return Failed(exception.Message + " La source est conservée."); }
+    }
+
+    private static async Task<SourceReplacementReport> ReplaceCoreAsync(string root, Guid executionId, string mediaPath, string resultFile, string sourceSha, string resultSha,
+        string resultExtension, Func<CancellationToken, Task<bool>> stillAuthorized, CancellationToken ct)
+    {
         if (await ResumeAsync(root, executionId, mediaPath, sourceSha, resultSha, resultExtension, ct) is { } resumed) return resumed;
         var original = SafeMediaPaths.Resolve(root, mediaPath);
-        using var shared=SharedSourceWriteLock.Acquire(original);
+        using var shared=SharedSourceWriteLock.Acquire(original, executionId);
         var finalRelative = FinalPath(mediaPath, resultExtension); var final = SafeMediaPaths.Resolve(root, finalRelative);
         var backupRelative = BackupPath(executionId, mediaPath); var backup = SafeMediaPaths.Resolve(root, backupRelative);
         if (!File.Exists(original) || await SafeMediaPaths.DigestAsync(original, ct) != sourceSha) return Failed("La source a changé ; elle est conservée.");
@@ -120,7 +127,7 @@ public static class SourceReplacer
     /// <summary>Restaure la source depuis la sauvegarde. Refuse si le fichier remplaçant a été modifié depuis.</summary>
     public static async Task<SourceReplacementReport> RollbackAsync(string root, RuntimeReplacementTask task, CancellationToken ct,Func<CancellationToken,Task<bool>>? stillAuthorized=null)
     {
-        using var shared=SharedSourceWriteLock.Acquire(SafeMediaPaths.Resolve(root,task.OriginalPath));
+        using var shared=SharedSourceWriteLock.Acquire(SafeMediaPaths.Resolve(root,task.OriginalPath),task.ExecutionId);
         try
         {
             var report = await RestoreFilesAsync(root, task.OriginalPath, task.FinalPath, task.BackupPath, task.SourceSha256, task.ResultSha256, false, ct,stillAuthorized);
@@ -176,7 +183,7 @@ public static class SourceReplacer
     /// <summary>Supprime la sauvegarde après la période de grâce, seulement si le fichier remplaçant existe encore.</summary>
     public static bool Finalize(string root, RuntimeReplacementTask task, out string? detail)
     {
-        using var shared=SharedSourceWriteLock.Acquire(SafeMediaPaths.Resolve(root,task.OriginalPath));
+        using var shared=SharedSourceWriteLock.Acquire(SafeMediaPaths.Resolve(root,task.OriginalPath),task.ExecutionId);
         var final = SafeMediaPaths.Resolve(root, task.FinalPath); var backup = SafeMediaPaths.Resolve(root, task.BackupPath);
         if (!File.Exists(final)) { detail = "Le fichier remplaçant est absent ; la sauvegarde est conservée."; return false; }
         if (File.Exists(backup)) File.Delete(backup);
