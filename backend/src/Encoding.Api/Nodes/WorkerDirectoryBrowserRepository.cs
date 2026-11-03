@@ -15,19 +15,19 @@ public sealed class WorkerDirectoryBrowserRepository(DbDataSource dataSource)
         if (normalized.Length > 4096 || normalized.IndexOf('\0') >= 0) return null;
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
-        await using (var node = Sql.Command("SELECT EXISTS(SELECT 1 FROM cluster_nodes WHERE id=@id AND deleted_at IS NULL)", connection, transaction))
+        await using (var node = Sql.Command("SELECT EXISTS(SELECT 1 FROM workers WHERE id=@id AND deleted_at IS NULL)", connection, transaction))
         {
             node.Parameters.AddWithValue("id", nodeId);
             if (!Convert.ToBoolean(await node.ExecuteScalarAsync(ct))) return null;
         }
-        await using (var prune = Sql.Command("DELETE FROM node_directory_browse_requests WHERE expires_at < @now", connection, transaction))
+        await using (var prune = Sql.Command("DELETE FROM worker_directory_browse_requests WHERE expires_at < @now", connection, transaction))
         {
             prune.Parameters.AddWithValue("now", DateTimeOffset.UtcNow.AddMinutes(-5));
             await prune.ExecuteNonQueryAsync(ct);
         }
         var id = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
-        await using (var insert = Sql.Command("INSERT INTO node_directory_browse_requests(id,node_id,path,state,entries,error,created_at,updated_at,expires_at,claim_until) VALUES(@id,@node,@path,'queued','[]',NULL,@now,@now,@expires,NULL)",
+        await using (var insert = Sql.Command("INSERT INTO worker_directory_browse_requests(id,worker_id,path,state,entries,error,created_at,updated_at,expires_at,claim_until) VALUES(@id,@node,@path,'queued','[]',NULL,@now,@now,@expires,NULL)",
             connection, transaction))
         {
             insert.Parameters.AddWithValue("id", id);
@@ -43,7 +43,7 @@ public sealed class WorkerDirectoryBrowserRepository(DbDataSource dataSource)
 
     public async Task<WorkerDirectoryBrowserResponse?> GetAsync(Guid id, Guid nodeId, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("SELECT path,state,entries,has_more,error FROM node_directory_browse_requests WHERE id=@id AND node_id=@node AND expires_at>@now");
+        await using var command = dataSource.CreateCommand("SELECT path,state,entries,has_more,error FROM worker_directory_browse_requests WHERE id=@id AND worker_id=@node AND expires_at>@now");
         command.Parameters.AddWithValue("id", id);
         command.Parameters.AddWithValue("node", nodeId);
         command.Parameters.AddWithValue("now", DateTimeOffset.UtcNow);
@@ -59,7 +59,7 @@ public sealed class WorkerDirectoryBrowserRepository(DbDataSource dataSource)
         var now = DateTimeOffset.UtcNow;
         Guid? id = null;
         string? path = null;
-        await using (var select = dataSource.CreateCommand("SELECT id,path FROM node_directory_browse_requests WHERE node_id=@node AND expires_at>@now AND (state='queued' OR (state='claimed' AND claim_until<@now)) ORDER BY created_at,id LIMIT 1"))
+        await using (var select = dataSource.CreateCommand("SELECT id,path FROM worker_directory_browse_requests WHERE worker_id=@node AND expires_at>@now AND (state='queued' OR (state='claimed' AND claim_until<@now)) ORDER BY created_at,id LIMIT 1"))
         {
             select.Parameters.AddWithValue("node", nodeId);
             select.Parameters.AddWithValue("now", now);
@@ -71,7 +71,7 @@ public sealed class WorkerDirectoryBrowserRepository(DbDataSource dataSource)
         // La plupart des sondages ne trouvent aucune demande : ne prennent alors aucun verrou d’écriture SQLite.
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
-        await using (var update = Sql.Command("UPDATE node_directory_browse_requests SET state='claimed',claim_until=@until,updated_at=@now WHERE id=@id AND node_id=@node AND expires_at>@now AND (state='queued' OR (state='claimed' AND claim_until<@now))",
+        await using (var update = Sql.Command("UPDATE worker_directory_browse_requests SET state='claimed',claim_until=@until,updated_at=@now WHERE id=@id AND worker_id=@node AND expires_at>@now AND (state='queued' OR (state='claimed' AND claim_until<@now))",
             connection, transaction))
         {
             update.Parameters.AddWithValue("until", now.AddSeconds(30));
@@ -90,7 +90,7 @@ public sealed class WorkerDirectoryBrowserRepository(DbDataSource dataSource)
         if (entries.Count > 200 || entries.Any(entry => entry is null || entry.Name.Length is 0 or > 255 || entry.Path.Length is 0 or > 4096)
             || (completion.Error?.Length ?? 0) > 500)
             return false;
-        await using var command = dataSource.CreateCommand("UPDATE node_directory_browse_requests SET state=@state,entries=@entries,has_more=@has_more,error=@error,claim_until=NULL,updated_at=@now WHERE id=@id AND node_id=@node AND state='claimed' AND expires_at>@now");
+        await using var command = dataSource.CreateCommand("UPDATE worker_directory_browse_requests SET state=@state,entries=@entries,has_more=@has_more,error=@error,claim_until=NULL,updated_at=@now WHERE id=@id AND worker_id=@node AND state='claimed' AND expires_at>@now");
         command.Parameters.AddWithValue("state", completion.Error is null ? "completed" : "failed");
         command.Parameters.AddWithValue("entries", JsonSerializer.Serialize(entries, Json));
         command.Parameters.AddWithValue("has_more", completion.HasMore);

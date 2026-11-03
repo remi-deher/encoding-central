@@ -31,7 +31,7 @@ public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEli
     public async Task<bool> AuthenticateAsync(Guid node,string token,CancellationToken ct)
     {
         if(string.IsNullOrWhiteSpace(token) || token.Length>256) return false;
-        await using var cmd=dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM cluster_nodes WHERE id=@node AND deleted_at IS NULL AND node_token_hash=@hash)");
+        await using var cmd=dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM workers WHERE id=@node AND deleted_at IS NULL AND worker_token_hash=@hash)");
         cmd.Parameters.AddWithValue("node",node); cmd.Parameters.AddWithValue("hash",SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
         return (await cmd.ScalarBoolAsync(ct));
     }
@@ -48,8 +48,8 @@ public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEli
             JOIN execution_work w ON w.execution_id=e.id
             JOIN execution_steps s ON s.execution_id=e.id
             WHERE e.id=@execution AND e.state='running'
-              AND w.worker_node_id=@worker AND w.lease_epoch=@epoch AND w.lease_until>clock_timestamp()
-              AND s.node_id=@flow_node AND s.invocation_id=@invocation AND s.completed_at IS NULL
+              AND w.worker_id=@worker AND w.lease_epoch=@epoch AND w.lease_until>clock_timestamp()
+              AND s.flow_node_id=@flow_node AND s.invocation_id=@invocation AND s.completed_at IS NULL
             """);
         command.Parameters.AddWithValue("execution", executionId);
         command.Parameters.AddWithValue("worker", workerId);
@@ -72,8 +72,8 @@ public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEli
             SELECT e.flow_definition::text FROM executions e
             JOIN execution_work w ON w.execution_id=e.id
             JOIN execution_steps s ON s.execution_id=e.id
-            WHERE e.id=@execution AND e.state='running' AND w.worker_node_id=@worker AND w.lease_epoch=@epoch
-              AND w.lease_until>clock_timestamp() AND s.node_id=@flow_node AND s.invocation_id=@invocation
+            WHERE e.id=@execution AND e.state='running' AND w.worker_id=@worker AND w.lease_epoch=@epoch
+              AND w.lease_until>clock_timestamp() AND s.flow_node_id=@flow_node AND s.invocation_id=@invocation
               AND s.completed_at IS NULL
             """);
         command.Parameters.AddWithValue("execution", executionId);
@@ -128,12 +128,12 @@ public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEli
     internal static readonly TimeSpan SourceOfflineGrace = TimeSpan.FromMinutes(5);
 
     private static readonly string UnavailableSourcesSql = $"""
-        SELECT e.id,e.node_id,e.revision FROM executions e JOIN execution_work w ON w.execution_id=e.id
+        SELECT e.id,e.worker_id,e.revision FROM executions e JOIN execution_work w ON w.execution_id=e.id
         WHERE e.state IN ('queued','running') AND NOT EXISTS(
-          SELECT 1 FROM library_node_accesses a JOIN cluster_nodes n ON n.id=a.node_id
+          SELECT 1 FROM library_worker_accesses a JOIN workers n ON n.id=a.worker_id
           WHERE a.library_id=w.library_id AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.local_path IS NOT NULL
             AND n.deleted_at IS NULL AND n.last_seen_at>clock_timestamp()-@offline
-            AND (w.handoff_selector IS NULL OR w.source_node_id IS NULL OR a.node_id=w.source_node_id OR w.handoff_selector->>'mode'='resume' OR w.handoff_selector->>'resumed' IN (1,'true')))
+            AND (w.handoff_selector IS NULL OR w.source_worker_id IS NULL OR a.worker_id=w.source_worker_id OR w.handoff_selector->>'mode'='resume' OR w.handoff_selector->>'resumed' IN (1,'true')))
         LIMIT 100
         """;
 

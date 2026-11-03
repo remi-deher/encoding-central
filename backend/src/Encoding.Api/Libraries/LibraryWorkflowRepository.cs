@@ -133,15 +133,15 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
         await using var cmd=Sql.Command("""
           SELECT s.id,s.library_id,s.epoch,a.local_path,s.media_type FROM library_scans s
           JOIN libraries l ON l.id=s.library_id AND l.is_active
-          JOIN library_node_accesses a ON a.library_id=s.library_id AND a.node_id=@node AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.local_path IS NOT NULL
-          JOIN cluster_nodes n ON n.id=a.node_id AND n.deleted_at IS NULL AND n.accepts_work AND n.last_seen_at>clock_timestamp()-@offline
+          JOIN library_worker_accesses a ON a.library_id=s.library_id AND a.worker_id=@node AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.local_path IS NOT NULL
+          JOIN workers n ON n.id=a.worker_id AND n.deleted_at IS NULL AND n.accepts_work AND n.last_seen_at>clock_timestamp()-@offline
           WHERE s.state IN ('queued','running') AND (s.lease_until IS NULL OR s.lease_until<=clock_timestamp())
           ORDER BY s.created_at LIMIT 1 FOR UPDATE OF s SKIP LOCKED
           """,c,tx);
         cmd.Parameters.AddWithValue("node",node); cmd.Parameters.AddWithValue("offline",presence.OfflineAfter);
         await using var r=await cmd.ExecuteReaderAsync(ct); if(!await r.ReadAsync(ct)) return null;
         var lease=new LibraryScanLease(r.GetGuid(0),r.GetGuid(1),checked(r.GetInt64(2)+1),r.GetString(3),r.GetString(4)); await r.DisposeAsync();
-        await using var update=Sql.Command("UPDATE library_scans SET node_id=@node,source_root=@root,epoch=@epoch,state='running',lease_until=clock_timestamp()+interval '180 seconds',detail='Découverte des fichiers en cours.' WHERE id=@id",
+        await using var update=Sql.Command("UPDATE library_scans SET worker_id=@node,source_root=@root,epoch=@epoch,state='running',lease_until=clock_timestamp()+interval '180 seconds',detail='Découverte des fichiers en cours.' WHERE id=@id",
             c,tx);
         update.Parameters.AddWithValue("root",lease.Root); update.Parameters.AddWithValue("id",lease.Id); update.Parameters.AddWithValue("node",node);
             update.Parameters.AddWithValue("epoch",lease.Epoch);
@@ -151,8 +151,8 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
     {
         await using var cmd=dataSource.CreateCommand("""
           UPDATE library_scans s SET lease_until=clock_timestamp()+interval '180 seconds'
-          WHERE s.id=@id AND s.node_id=@node AND s.epoch=@epoch AND s.state='running' AND s.lease_until>clock_timestamp()
-          AND EXISTS(SELECT 1 FROM library_node_accesses a JOIN libraries l ON l.id=a.library_id WHERE a.library_id=s.library_id AND a.node_id=@node AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.local_path=s.source_root AND l.is_active)
+          WHERE s.id=@id AND s.worker_id=@node AND s.epoch=@epoch AND s.state='running' AND s.lease_until>clock_timestamp()
+          AND EXISTS(SELECT 1 FROM library_worker_accesses a JOIN libraries l ON l.id=a.library_id WHERE a.library_id=s.library_id AND a.worker_id=@node AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.local_path=s.source_root AND l.is_active)
           """);
         cmd.Parameters.AddWithValue("id",id); cmd.Parameters.AddWithValue("node",node); cmd.Parameters.AddWithValue("epoch",epoch);
         return await cmd.ExecuteNonQueryAsync(ct)==1;
@@ -165,9 +165,9 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
         await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
         await using var cmd=Sql.Command("""
           SELECT s.library_id,s.media_type FROM library_scans s
-          JOIN library_node_accesses a ON a.library_id=s.library_id AND a.node_id=@node AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.local_path=s.source_root
+          JOIN library_worker_accesses a ON a.library_id=s.library_id AND a.worker_id=@node AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.local_path=s.source_root
           JOIN libraries l ON l.id=s.library_id AND l.is_active
-          WHERE s.id=@id AND s.node_id=@node AND s.epoch=@epoch AND s.state='running' AND s.lease_until>clock_timestamp()
+          WHERE s.id=@id AND s.worker_id=@node AND s.epoch=@epoch AND s.state='running' AND s.lease_until>clock_timestamp()
           FOR UPDATE OF s
           """,c,tx);
         cmd.Parameters.AddWithValue("id",id); cmd.Parameters.AddWithValue("node",node); cmd.Parameters.AddWithValue("epoch",request.Epoch);
@@ -276,9 +276,9 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
         if(node is not {} resolvedNode) return true;
         if(localNode?.NodeId is null) await localNode!.RegisterAsync(resolvedNode,ct);
         await using var access=Sql.Command("""
-          SELECT EXISTS(SELECT 1 FROM library_node_accesses a JOIN cluster_nodes n ON n.id=a.node_id AND n.deleted_at IS NULL AND 'server'=ANY(n.roles)
+          SELECT EXISTS(SELECT 1 FROM library_worker_accesses a JOIN workers n ON n.id=a.worker_id AND n.deleted_at IS NULL AND 'server'=ANY(n.roles)
                         WHERE a.library_id=@library AND a.mode='direct' AND a.is_enabled AND a.can_read),
-                 EXISTS(SELECT 1 FROM library_node_accesses a WHERE a.library_id=@library AND a.node_id=@node AND a.mode='direct' AND a.is_enabled AND a.can_read)
+                 EXISTS(SELECT 1 FROM library_worker_accesses a WHERE a.library_id=@library AND a.worker_id=@node AND a.mode='direct' AND a.is_enabled AND a.can_read)
           """,c,tx);
         access.Parameters.AddWithValue("library",library);access.Parameters.AddWithValue("node",resolvedNode);
         await using var r=await access.ExecuteReaderAsync(ct);

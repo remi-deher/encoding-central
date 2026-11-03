@@ -11,14 +11,14 @@ public sealed class LibraryRepository(DbDataSource dataSource)
     {
         const string sql = """
             SELECT l.id, l.name, l.created_at,
-                   count(a.node_id) FILTER (WHERE a.is_enabled AND a.mode <> 'unsupported')::integer,
-                   count(a.node_id) FILTER (WHERE a.is_enabled AND a.mode = 'direct')::integer,
-                   count(a.node_id) FILTER (WHERE a.is_enabled AND a.mode = 'transfer')::integer,
+                   count(a.worker_id) FILTER (WHERE a.is_enabled AND a.mode <> 'unsupported')::integer,
+                   count(a.worker_id) FILTER (WHERE a.is_enabled AND a.mode = 'direct')::integer,
+                   count(a.worker_id) FILTER (WHERE a.is_enabled AND a.mode = 'transfer')::integer,
                    l.is_active,
                    (SELECT v.definition->>'name' FROM library_flow_assignments f JOIN flow_versions v ON v.flow_id=f.flow_id AND v.version=f.flow_version WHERE f.library_id=l.id),
                    (SELECT f.flow_version FROM library_flow_assignments f WHERE f.library_id=l.id)
             FROM libraries l
-            LEFT JOIN library_node_accesses a ON a.library_id = l.id
+            LEFT JOIN library_worker_accesses a ON a.library_id = l.id
             WHERE NOT l.is_deleted
             GROUP BY l.id
             ORDER BY l.name, l.id
@@ -111,13 +111,13 @@ public sealed class LibraryRepository(DbDataSource dataSource)
     {
         const string sql = """
             SELECT l.id, l.name, l.created_at,
-                   count(a.node_id) FILTER (WHERE a.is_enabled AND a.mode <> 'unsupported')::integer,
-                   count(a.node_id) FILTER (WHERE a.is_enabled AND a.mode = 'direct')::integer,
-                   count(a.node_id) FILTER (WHERE a.is_enabled AND a.mode = 'transfer')::integer,
+                   count(a.worker_id) FILTER (WHERE a.is_enabled AND a.mode <> 'unsupported')::integer,
+                   count(a.worker_id) FILTER (WHERE a.is_enabled AND a.mode = 'direct')::integer,
+                   count(a.worker_id) FILTER (WHERE a.is_enabled AND a.mode = 'transfer')::integer,
                    l.is_active,
                    (SELECT v.definition->>'name' FROM library_flow_assignments f JOIN flow_versions v ON v.flow_id=f.flow_id AND v.version=f.flow_version WHERE f.library_id=l.id),
                    (SELECT f.flow_version FROM library_flow_assignments f WHERE f.library_id=l.id)
-            FROM libraries l LEFT JOIN library_node_accesses a ON a.library_id = l.id
+            FROM libraries l LEFT JOIN library_worker_accesses a ON a.library_id = l.id
             WHERE l.id = @id AND NOT l.is_deleted GROUP BY l.id
             """;
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -140,8 +140,8 @@ public sealed class LibraryRepository(DbDataSource dataSource)
                    (SELECT v.definition->>'name' FROM library_flow_assignments f JOIN flow_versions v ON v.flow_id=f.flow_id AND v.version=f.flow_version WHERE f.library_id=l.id),
                    (SELECT f.flow_version FROM library_flow_assignments f WHERE f.library_id=l.id),
                    (SELECT f.flow_id FROM library_flow_assignments f WHERE f.library_id=l.id),
-                   count(DISTINCT a.node_id) FILTER (WHERE a.is_enabled AND a.mode <> 'unsupported')::integer,
-                   count(DISTINCT a.node_id) FILTER (WHERE a.is_enabled AND a.mode = 'direct')::integer,
+                   count(DISTINCT a.worker_id) FILTER (WHERE a.is_enabled AND a.mode <> 'unsupported')::integer,
+                   count(DISTINCT a.worker_id) FILTER (WHERE a.is_enabled AND a.mode = 'direct')::integer,
                    COALESCE(p.watch_enabled, true),
                    COALESCE(p.scan_interval_seconds, 3600),
                    (SELECT count(*) FROM library_media m WHERE m.library_id = l.id)::integer,
@@ -150,7 +150,7 @@ public sealed class LibraryRepository(DbDataSource dataSource)
                    (SELECT count(*) FROM executions e WHERE e.library_name = l.name AND e.state = 'completed')::integer,
                    (SELECT count(*) FROM executions e WHERE e.library_name = l.name AND e.state = 'failed')::integer
             FROM libraries l
-            LEFT JOIN library_node_accesses a ON a.library_id = l.id
+            LEFT JOIN library_worker_accesses a ON a.library_id = l.id
             LEFT JOIN library_processing_settings p ON p.library_id = l.id
             WHERE NOT l.is_deleted
             GROUP BY l.id, l.name, l.is_active, l.created_at, p.watch_enabled, p.scan_interval_seconds

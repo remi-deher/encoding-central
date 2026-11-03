@@ -37,7 +37,7 @@ public sealed class LoadContentionTests
         await using var connection = await database.Db.OpenConnectionAsync(CancellationToken.None);
         await using var transaction = await connection.BeginTransactionAsync(CancellationToken.None);
         await Run(connection, transaction, "INSERT INTO libraries(id, name) VALUES (@id, 'load')", ("id", library.ToString("D")));
-        await Run(connection, transaction, "INSERT INTO library_node_accesses(library_id, node_id, mode, local_path, can_read, can_write) VALUES (@l, @n, 'direct', '/media/load', 1, 1)",
+        await Run(connection, transaction, "INSERT INTO library_worker_accesses(library_id, worker_id, mode, local_path, can_read, can_write) VALUES (@l, @n, 'direct', '/media/load', 1, 1)",
             ("l", library.ToString("D")), ("n", nodes[0].ToString("D")));
         for (var i = 0; i < queued; i++)
         {
@@ -134,13 +134,13 @@ public sealed class LoadContentionTests
         var recovery = new RuntimeRecoveryService(db, NullLogger<RuntimeRecoveryService>.Instance, presence: new WorkerPresenceOptions(TimeSpan.FromSeconds(30)));
 
         // Le worker qui détient l'accès direct ne s'est pas manifesté depuis 90 s (heartbeat retardé par un verrou ou un redémarrage).
-        await Exec(db, "UPDATE cluster_nodes SET last_seen_at = strftime('%Y-%m-%d %H:%M:%f', 'now', '-90 seconds') || '000Z'");
+        await Exec(db, "UPDATE workers SET last_seen_at = strftime('%Y-%m-%d %H:%M:%f', 'now', '-90 seconds') || '000Z'");
         for (var i = 0; i < 3; i++) await recovery.ProcessOnceAsync(CancellationToken.None);
         Assert.Equal(40L, await Scalar(db, "SELECT count(*) FROM executions WHERE state = 'queued'"));
         Assert.Equal(0L, await Scalar(db, "SELECT count(*) FROM executions WHERE state = 'failed'"));
 
         // Un worker réellement perdu (absent depuis 30 minutes) finit par faire échouer les exécutions qui dépendent de lui.
-        await Exec(db, "UPDATE cluster_nodes SET last_seen_at = strftime('%Y-%m-%d %H:%M:%f', 'now', '-30 minutes') || '000Z'");
+        await Exec(db, "UPDATE workers SET last_seen_at = strftime('%Y-%m-%d %H:%M:%f', 'now', '-30 minutes') || '000Z'");
         for (var i = 0; i < 3; i++) await recovery.ProcessOnceAsync(CancellationToken.None);
         Assert.Equal(40L, await Scalar(db, "SELECT count(*) FROM executions WHERE state = 'failed'"));
     }

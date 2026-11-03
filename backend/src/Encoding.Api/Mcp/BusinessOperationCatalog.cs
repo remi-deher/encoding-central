@@ -152,7 +152,7 @@ public static partial class BusinessOperationCatalog
                     category = new { type = "string", description = "Préfixe de catégorie de log (ex. 'Encoding.NodeAgent', 'Encoding.Plugins')." },
                     search = new { type = "string", description = "Recherche textuelle dans le message ou l'exception du log." },
                     limit = new { type = "integer", description = "Nombre maximal d'entrées (défaut: 50, max: 200).", @default = 50 },
-                    node_id = new { type = "string", description = "Identifiant UUID optionnel du worker concerné." }
+                    worker_id = new { type = "string", description = "Identifiant UUID optionnel du worker concerné." }
                 },
                 required = Array.Empty<string>()
             }

@@ -48,25 +48,25 @@ public sealed partial class RuntimeRepository
     {
         const string sql = """
           SELECT n.id, n.name, n.roles,
-            COALESCE((SELECT p.max_concurrent_tasks FROM node_processing_settings p WHERE p.node_id=n.id), n.max_concurrent_tasks) AS max_tasks,
-            (SELECT count(*) FROM execution_work aw JOIN executions ae ON ae.id=aw.execution_id WHERE aw.worker_node_id=n.id AND aw.execution_id<>@exclude_execution AND aw.lease_until>clock_timestamp() AND ae.state IN ('running','cancelling')) AS active_tasks,
+            COALESCE((SELECT p.max_concurrent_tasks FROM worker_processing_settings p WHERE p.worker_id=n.id), n.max_concurrent_tasks) AS max_tasks,
+            (SELECT count(*) FROM execution_work aw JOIN executions ae ON ae.id=aw.execution_id WHERE aw.worker_id=n.id AND aw.execution_id<>@exclude_execution AND aw.lease_until>clock_timestamp() AND ae.state IN ('running','cancelling')) AS active_tasks,
             n.capabilities::text,
             n.inventory::text,
             n.last_seen_at >= clock_timestamp() - @offline AS is_online,
             n.accepts_work,
             a.mode, a.local_path, a.can_read, a.can_write,
-            (SELECT p.schedule_timezone FROM node_processing_settings p WHERE p.node_id=n.id AND p.schedule_enabled) AS sched_tz,
-            (SELECT p.schedule_slots FROM node_processing_settings p WHERE p.node_id=n.id AND p.schedule_enabled) AS sched_slots,
+            (SELECT p.schedule_timezone FROM worker_processing_settings p WHERE p.worker_id=n.id AND p.schedule_enabled) AS sched_tz,
+            (SELECT p.schedule_slots FROM worker_processing_settings p WHERE p.worker_id=n.id AND p.schedule_enabled) AS sched_slots,
             n.labels::text,
             EXISTS(
-              SELECT 1 FROM library_node_accesses da JOIN cluster_nodes dn ON dn.id=da.node_id
+              SELECT 1 FROM library_worker_accesses da JOIN workers dn ON dn.id=da.worker_id
               WHERE da.library_id=@library AND da.mode='direct' AND da.is_enabled AND da.can_read
                 AND da.local_path IS NOT NULL
                 AND dn.deleted_at IS NULL AND dn.last_seen_at>clock_timestamp()-@offline
                 AND dn.accepts_work AND 'worker'=ANY(dn.roles)
             ) AS has_valid_transfer_source
-          FROM cluster_nodes n
-          LEFT JOIN library_node_accesses a ON a.node_id=n.id AND a.library_id=@library AND a.is_enabled
+          FROM workers n
+          LEFT JOIN library_worker_accesses a ON a.worker_id=n.id AND a.library_id=@library AND a.is_enabled
           WHERE n.deleted_at IS NULL
           """;
         await using var cmd = Sql.Command(sql, c, tx);
@@ -129,7 +129,7 @@ public sealed partial class RuntimeRepository
     {
         await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
         IReadOnlyList<WorkerToolCapability> capabilities; int capacity; WorkerInventory? inventory;
-        await using(var node=Sql.Command("SELECT capabilities::text,COALESCE((SELECT p.max_concurrent_tasks FROM node_processing_settings p WHERE p.node_id=cluster_nodes.id),max_concurrent_tasks),(SELECT p.schedule_timezone FROM node_processing_settings p WHERE p.node_id=cluster_nodes.id AND p.schedule_enabled),(SELECT p.schedule_slots FROM node_processing_settings p WHERE p.node_id=cluster_nodes.id AND p.schedule_enabled),inventory::text FROM cluster_nodes WHERE id=@node AND deleted_at IS NULL AND accepts_work AND 'worker'=ANY(roles) AND last_seen_at>clock_timestamp()-@offline FOR UPDATE",
+        await using(var node=Sql.Command("SELECT capabilities::text,COALESCE((SELECT p.max_concurrent_tasks FROM worker_processing_settings p WHERE p.worker_id=workers.id),max_concurrent_tasks),(SELECT p.schedule_timezone FROM worker_processing_settings p WHERE p.worker_id=workers.id AND p.schedule_enabled),(SELECT p.schedule_slots FROM worker_processing_settings p WHERE p.worker_id=workers.id AND p.schedule_enabled),inventory::text FROM workers WHERE id=@node AND deleted_at IS NULL AND accepts_work AND 'worker'=ANY(roles) AND last_seen_at>clock_timestamp()-@offline FOR UPDATE",
             c,tx))
         {
             node.Parameters.AddWithValue("offline",presence.OfflineAfter); node.Parameters.AddWithValue("node",worker); await using var r=await node.ExecuteReaderAsync(ct);
@@ -139,7 +139,7 @@ public sealed partial class RuntimeRepository
             // Le calendrier ne bloque que les nouveaux démarrages : les baux actifs ne sont ni révoqués ni interrompus.
             if(!r.IsDBNull(2) && !r.IsDBNull(3) && !new WorkerSchedule(true,r.GetString(2),r.GetString(3)).IsOpen(DateTimeOffset.UtcNow)) return new(null);
         }
-        await using(var active=Sql.Command("SELECT count(*) FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.worker_node_id=@worker AND w.lease_until>clock_timestamp() AND e.state IN ('running','cancelling')",
+        await using(var active=Sql.Command("SELECT count(*) FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.worker_id=@worker AND w.lease_until>clock_timestamp() AND e.state IN ('running','cancelling')",
             c,tx))
         { active.Parameters.AddWithValue("worker",worker); if((long)(await active.ExecuteScalarAsync(ct))!>=capacity) return new(null); }
         var nodeIdentity=await nodeGroups.GetNodeIdentityAsync(worker,ct);
@@ -151,17 +151,17 @@ public sealed partial class RuntimeRepository
         await using(var read=Sql.Command($"""
           SELECT e.id,w.library_id,w.media_path,w.media_key,e.flow_definition::text,e.attempt,e.revision,w.lease_epoch,
             (SELECT checkpoint::text FROM execution_steps WHERE execution_id=e.id AND completed_at IS NOT NULL ORDER BY completed_revision DESC LIMIT 1),
-            w.handoff_selector::text,w.previous_worker_node_id,w.source_node_id,w.plugin_configuration_snapshot,
+            w.handoff_selector::text,w.previous_worker_id,w.source_worker_id,w.plugin_configuration_snapshot,
             CASE WHEN w.wait_probe_due THEN (SELECT x.spec::text FROM execution_waits x WHERE x.execution_id=e.id AND x.state='waiting') END,e.queued_at,w.placement_plan::text,w.before_metadata::text
           FROM execution_work w JOIN executions e ON e.id=w.execution_id JOIN libraries l ON l.id=w.library_id
-          WHERE (e.state='queued' OR e.state='running' AND w.worker_node_id IS NULL)
+          WHERE (e.state='queued' OR e.state='running' AND w.worker_id IS NULL)
           AND l.is_active AND w.available_at<=clock_timestamp()
           AND w.lease_until IS NULL
           {cursorPredicate}
           AND NOT EXISTS(SELECT 1 FROM library_processing_settings p WHERE p.library_id=l.id AND p.max_concurrent_tasks IS NOT NULL
             AND p.max_concurrent_tasks<=(SELECT count(*) FROM execution_work aw JOIN executions ae ON ae.id=aw.execution_id WHERE aw.library_id=l.id AND aw.lease_until>clock_timestamp() AND ae.state IN ('running','cancelling')))
-          AND NOT EXISTS(SELECT 1 FROM library_node_processing_limits p WHERE p.library_id=l.id AND p.node_id=@worker
-            AND p.max_concurrent_tasks<=(SELECT count(*) FROM execution_work aw JOIN executions ae ON ae.id=aw.execution_id WHERE aw.library_id=l.id AND aw.worker_node_id=@worker AND aw.lease_until>clock_timestamp() AND ae.state IN ('running','cancelling')))
+          AND NOT EXISTS(SELECT 1 FROM library_worker_processing_limits p WHERE p.library_id=l.id AND p.worker_id=@worker
+            AND p.max_concurrent_tasks<=(SELECT count(*) FROM execution_work aw JOIN executions ae ON ae.id=aw.execution_id WHERE aw.library_id=l.id AND aw.worker_id=@worker AND aw.lease_until>clock_timestamp() AND ae.state IN ('running','cancelling')))
           ORDER BY e.queued_at,e.id LIMIT @page_size
           FOR UPDATE OF e,w SKIP LOCKED
           """,c,tx))
@@ -263,7 +263,7 @@ public sealed partial class RuntimeRepository
             }
             // Library row serializes claims from all workers before counting active leases.
             await using(var limits=Sql.Command("""
-              SELECT p.max_concurrent_tasks,(SELECT max_concurrent_tasks FROM library_node_processing_limits WHERE library_id=l.id AND node_id=@worker)
+              SELECT p.max_concurrent_tasks,(SELECT max_concurrent_tasks FROM library_worker_processing_limits WHERE library_id=l.id AND worker_id=@worker)
               FROM libraries l LEFT JOIN library_processing_settings p ON p.library_id=l.id
               WHERE l.id=@library AND l.is_active FOR UPDATE OF l SKIP LOCKED
               """,c,tx))
@@ -272,7 +272,7 @@ public sealed partial class RuntimeRepository
                 await using var r=await limits.ExecuteReaderAsync(ct); if(!await r.ReadAsync(ct)) continue;
                 int? global=r.IsDBNull(0)?null:r.GetInt32(0); int? local=r.IsDBNull(1)?null:r.GetInt32(1); await r.DisposeAsync();
                 await using var count=Sql.Command("""
-                  SELECT count(*)::integer,count(*) FILTER(WHERE w.worker_node_id=@worker)::integer
+                  SELECT count(*)::integer,count(*) FILTER(WHERE w.worker_id=@worker)::integer
                   FROM execution_work w JOIN executions e ON e.id=w.execution_id
                   WHERE w.library_id=@library AND w.lease_until>clock_timestamp() AND e.state IN ('running','cancelling')
                   """,c,tx);
@@ -302,11 +302,11 @@ public sealed partial class RuntimeRepository
             if(item.Probe is null)
             {
                 await using(var access=Sql.Command("""
-                  SELECT COALESCE(a.transfer_source_node_id,a.node_id),CASE WHEN a.mode='direct' THEN a.local_path END
-                  FROM library_node_accesses a JOIN cluster_nodes n ON n.id=a.node_id
-                  LEFT JOIN library_node_accesses s ON s.library_id=a.library_id AND s.node_id=a.transfer_source_node_id
-                  LEFT JOIN cluster_nodes sn ON sn.id=s.node_id
-                  WHERE a.library_id=@library AND a.node_id=@worker AND a.is_enabled AND a.can_read
+                  SELECT COALESCE(a.transfer_source_worker_id,a.worker_id),CASE WHEN a.mode='direct' THEN a.local_path END
+                  FROM library_worker_accesses a JOIN workers n ON n.id=a.worker_id
+                  LEFT JOIN library_worker_accesses s ON s.library_id=a.library_id AND s.worker_id=a.transfer_source_worker_id
+                  LEFT JOIN workers sn ON sn.id=s.worker_id
+                  WHERE a.library_id=@library AND a.worker_id=@worker AND a.is_enabled AND a.can_read
                   AND ((a.mode='direct' AND a.local_path IS NOT NULL AND (NOT @write OR a.can_write))
                     OR (NOT @direct AND NOT @defer AND a.mode='transfer' AND s.mode='direct' AND s.is_enabled AND s.can_read AND (NOT @write OR s.can_write)
                         AND sn.deleted_at IS NULL AND sn.last_seen_at>clock_timestamp()-@offline))
@@ -324,8 +324,8 @@ public sealed partial class RuntimeRepository
                 {
                     // A relay does not move ownership of the library or reinterpret the source path.
                     await using var originalAccess=Sql.Command("""
-                      SELECT EXISTS(SELECT 1 FROM library_node_accesses a JOIN cluster_nodes n ON n.id=a.node_id
-                        WHERE a.library_id=@library AND a.node_id=@source AND a.mode='direct' AND a.is_enabled
+                      SELECT EXISTS(SELECT 1 FROM library_worker_accesses a JOIN workers n ON n.id=a.worker_id
+                        WHERE a.library_id=@library AND a.worker_id=@source AND a.mode='direct' AND a.is_enabled
                         AND a.can_read AND (NOT @write OR a.can_write) AND a.local_path IS NOT NULL
                         AND n.deleted_at IS NULL AND n.last_seen_at>clock_timestamp()-@offline)
                       """,c,tx);
@@ -359,7 +359,7 @@ public sealed partial class RuntimeRepository
                     try { destination=RuntimeHandoffPolicy.Resolve(relay,pluginSettings.GetValueOrDefault("nodes")); }
                     catch(ArgumentException)
                     {
-                        await using var actor=Sql.Command("UPDATE executions SET node_id=@worker WHERE id=@id",c,tx);
+                        await using var actor=Sql.Command("UPDATE executions SET worker_id=@worker WHERE id=@id",c,tx);
                         actor.Parameters.AddWithValue("id",item.Id); actor.Parameters.AddWithValue("worker",worker); await actor.ExecuteNonQueryAsync(ct);
                         await ExecutionRepository.RecordInTransactionAsync(item.Id,new(Guid.NewGuid(),item.Revision,"failed",worker,null,
                             "La configuration du relais ne désigne pas un worker valide."),c,tx,ct);
@@ -387,10 +387,10 @@ public sealed partial class RuntimeRepository
                 clear.Parameters.AddWithValue("id",item.Id);await clear.ExecuteNonQueryAsync(ct);
             }
             await using(var set=Sql.Command("""
-              UPDATE execution_work SET worker_node_id=@worker,source_node_id=@source,lease_epoch=@epoch,handoff_pending=false,
+              UPDATE execution_work SET worker_id=@worker,source_worker_id=@source,lease_epoch=@epoch,handoff_pending=false,
                  plugin_configuration_snapshot=COALESCE(plugin_configuration_snapshot,@settings),
                  lease_until=clock_timestamp()+interval '180 seconds' WHERE execution_id=@id;
-              UPDATE executions SET node_id=@worker WHERE id=@id;
+              UPDATE executions SET worker_id=@worker WHERE id=@id;
               """,c,tx))
             { set.Parameters.AddWithValue("worker",worker); set.Parameters.AddWithValue("source",source); set.Parameters.AddWithValue("epoch",epoch); set.Parameters.AddWithValue("id",item.Id);
                 set.Parameters.AddWithValue("settings",SqlKind.Bytes,pluginConfigurations.ProtectSnapshot(pluginSettings)); await set.ExecuteNonQueryAsync(ct); }

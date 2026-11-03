@@ -54,7 +54,7 @@ public sealed class SourceReplacementRepository(DbDataSource dataSource,SourceWr
     {
         var replaced=report.Status=="replaced";
         await using var insert=Sql.Command("""
-          INSERT INTO source_replacements(execution_id,library_id,source_node_id,original_path,final_path,backup_path,source_sha,result_sha,state,detail,grace_until)
+          INSERT INTO source_replacements(execution_id,library_id,source_worker_id,original_path,final_path,backup_path,source_sha,result_sha,state,detail,grace_until)
           VALUES(@execution,@library,@node,@original,@final,@backup,@source,@result,@state,@detail,CASE WHEN @replaced THEN clock_timestamp()+@grace END)
           ON CONFLICT(execution_id) DO NOTHING
           """,c,tx);
@@ -122,9 +122,9 @@ public sealed class SourceReplacementRepository(DbDataSource dataSource,SourceWr
 
         await using var cmd=dataSource.CreateCommand($"""
           SELECT r.execution_id,CASE WHEN r.state='rollback_requested' THEN 'rollback' ELSE 'finalize' END,a.local_path,r.original_path,r.final_path,r.backup_path,r.source_sha,r.result_sha
-          FROM source_replacements r JOIN library_node_accesses a ON a.library_id=r.library_id AND a.node_id=r.source_node_id
-          JOIN cluster_nodes n ON n.id=r.source_node_id AND n.accepts_work AND n.deleted_at IS NULL
-          WHERE r.source_node_id=@node AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.can_write AND a.local_path IS NOT NULL
+          FROM source_replacements r JOIN library_worker_accesses a ON a.library_id=r.library_id AND a.worker_id=r.source_worker_id
+          JOIN workers n ON n.id=r.source_worker_id AND n.accepts_work AND n.deleted_at IS NULL
+          WHERE r.source_worker_id=@node AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.can_write AND a.local_path IS NOT NULL
           AND (r.state='rollback_requested' OR (r.state='replaced' AND r.grace_until<=clock_timestamp()))
           ORDER BY r.replaced_at LIMIT 20
           """);
@@ -137,7 +137,7 @@ public sealed class SourceReplacementRepository(DbDataSource dataSource,SourceWr
     /// <summary>Enregistre le résultat d'une restauration ou d'une purge ; seul le worker d'accès à l'origine du remplacement peut le faire.</summary>
     public async Task<bool> AuthorizeAsync(Guid execution,Guid node,string root,CancellationToken ct)
     {
-        await using var cmd=dataSource.CreateCommand($"SELECT EXISTS(SELECT 1 FROM source_replacements r JOIN library_node_accesses a ON a.library_id=r.library_id AND a.node_id=r.source_node_id WHERE r.execution_id=@id AND r.source_node_id=@node AND a.is_enabled AND a.can_write AND a.mode='direct' AND a.local_path=@root AND (r.state='rollback_requested' OR r.state='replaced' AND r.grace_until<=clock_timestamp()))");
+        await using var cmd=dataSource.CreateCommand($"SELECT EXISTS(SELECT 1 FROM source_replacements r JOIN library_worker_accesses a ON a.library_id=r.library_id AND a.worker_id=r.source_worker_id WHERE r.execution_id=@id AND r.source_worker_id=@node AND a.is_enabled AND a.can_write AND a.mode='direct' AND a.local_path=@root AND (r.state='rollback_requested' OR r.state='replaced' AND r.grace_until<=clock_timestamp()))");
         cmd.Parameters.AddWithValue("id",execution);cmd.Parameters.AddWithValue("node",node);cmd.Parameters.AddWithValue("root",root);if(!await cmd.ScalarBoolAsync(ct)) return false;
         if(sourceWrites is not null)
         {
@@ -153,7 +153,7 @@ public sealed class SourceReplacementRepository(DbDataSource dataSource,SourceWr
         await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
         await using var read=Sql.Command("""
           SELECT r.state,r.grace_until<=clock_timestamp(),r.library_id,r.original_path,w.media_key FROM source_replacements r JOIN execution_work w ON w.execution_id=r.execution_id
-          WHERE r.execution_id=@id AND r.source_node_id=@node FOR UPDATE OF r
+          WHERE r.execution_id=@id AND r.source_worker_id=@node FOR UPDATE OF r
           """,c,tx);
         read.Parameters.AddWithValue("id",execution); read.Parameters.AddWithValue("node",node); string state; bool expired; Guid library; string original; string key;
         await using(var r=await read.ExecuteReaderAsync(ct))

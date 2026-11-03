@@ -15,7 +15,7 @@ public sealed class RuntimeCommandJournalTests
         await using var db = await TestDatabase.CreateSqliteAsync("command-journal");
         await DatabaseMigrator.ApplyAsync(db.Db, Harness.RepositoryRoot(), default);
         var id = Guid.NewGuid(); var invocation = Guid.NewGuid(); var commandId = Guid.NewGuid();
-        await using (var insert = db.Db.CreateCommand("INSERT INTO executions(id,media,library_name,flow_name,flow_version,flow_definition,state,attempt) VALUES(@id,'synthetic','test','test',1,'{}','running',1); INSERT INTO execution_steps(execution_id,node_id,invocation_id,idempotent) VALUES(@id,'check',@invocation,true)"))
+        await using (var insert = db.Db.CreateCommand("INSERT INTO executions(id,media,library_name,flow_name,flow_version,flow_definition,state,attempt) VALUES(@id,'synthetic','test','test',1,'{}','running',1); INSERT INTO execution_steps(execution_id,flow_node_id,invocation_id,idempotent) VALUES(@id,'check',@invocation,true)"))
         {
             insert.Parameters.AddWithValue("id", id); insert.Parameters.AddWithValue("invocation", invocation); await insert.ExecuteNonQueryAsync();
         }
@@ -59,7 +59,7 @@ public sealed class RuntimeCommandJournalTests
         await using (var insert = db.Db.CreateCommand("""
             INSERT INTO executions(id,media,library_name,flow_name,flow_version,flow_definition,state,attempt)
             VALUES(@id,'synthetic','test','test',1,'{}','running',1);
-            INSERT INTO execution_steps(execution_id,node_id,invocation_id,idempotent,command_logs)
+            INSERT INTO execution_steps(execution_id,flow_node_id,invocation_id,idempotent,command_logs)
             VALUES(@id,'check',@invocation,true,'[]'||@logs)
             """))
         {

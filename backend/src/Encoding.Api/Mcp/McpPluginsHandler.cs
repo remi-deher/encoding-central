@@ -550,7 +550,7 @@ public sealed class McpPluginsHandler(
             : 50;
 
         Guid? nodeId = null;
-        if (arguments.ValueKind == JsonValueKind.Object && arguments.TryGetProperty("node_id", out var nProp) &&
+        if (arguments.ValueKind == JsonValueKind.Object && arguments.TryGetProperty("worker_id", out var nProp) &&
             Guid.TryParse(nProp.GetString(), out var parsedNodeId))
         {
             nodeId = parsedNodeId;

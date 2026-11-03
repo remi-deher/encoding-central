@@ -1,6 +1,6 @@
 namespace Encoding.Api.Infrastructure;
 
-/// <summary>Identifiant stable du central (lu une fois dans <c>cluster_identity</c>), utilisé pour préfixer les sessions IA.</summary>
+/// <summary>Identifiant stable du central (lu une fois dans <c>central_identity</c>), utilisé pour préfixer les sessions IA.</summary>
 public sealed class CentralId(CentralIdentityRepository repository)
 {
     private Guid value;

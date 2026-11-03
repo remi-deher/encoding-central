@@ -36,7 +36,7 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
 
     private static readonly string ExpiredWorkPredicate = $"""
         ((e.state='cancelling' AND (w.lease_until IS NULL OR w.lease_until<=clock_timestamp()))
-        OR (e.state='running' AND w.worker_node_id IS NOT NULL AND w.lease_until IS NOT NULL AND w.lease_until<=clock_timestamp()))
+        OR (e.state='running' AND w.worker_id IS NOT NULL AND w.lease_until IS NOT NULL AND w.lease_until<=clock_timestamp()))
         """;
 
     private async Task<bool> HasExpiredWorkAsync(CancellationToken ct)
@@ -49,7 +49,7 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
     /// <summary>
     /// Closes cancelled work. An attempt whose assigned worker lost its lease is resumed at its last durable checkpoint by another
     /// eligible worker (same execution ID, bounded) when every unfinished step is replayable; otherwise it fails and must be retried
-    /// as a new execution. An explicit relay or wait (worker_node_id = NULL) is claimed again under the same execution ID.
+    /// as a new execution. An explicit relay or wait (worker_id = NULL) is claimed again under the same execution ID.
     /// </summary>
     public async Task<int> ProcessOnceAsync(CancellationToken ct)
     {
@@ -60,7 +60,7 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
         await RuntimeRepository.FailUnavailableSourcesAsync(c, tx, offlineAfter, ct);
         var expired=new List<(Guid Id,Guid? Worker,int Revision,string State,int Attempt,string Flow,bool HasNonIdempotentStep,bool Uncertain,bool Waiting,int Resumes)>();
         await using(var cmd=Sql.Command($"""
-          SELECT e.id,e.node_id,e.revision,e.state,e.attempt,e.flow_definition::text,
+          SELECT e.id,e.worker_id,e.revision,e.state,e.attempt,e.flow_definition::text,
             EXISTS(SELECT 1 FROM execution_steps s WHERE s.execution_id=e.id AND NOT s.idempotent),
             EXISTS(SELECT 1 FROM execution_steps s WHERE s.execution_id=e.id AND s.completed_at IS NULL AND NOT s.idempotent),
             EXISTS(SELECT 1 FROM execution_waits x WHERE x.execution_id=e.id AND x.state='waiting'),w.resume_count
@@ -135,8 +135,8 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
         }
         var resumeSelector=(previousSelector??new RuntimeHandoffSelector("eligible")) with { Resumed=true };
         await using var yield=Sql.Command("""
-          UPDATE execution_work SET handoff_pending=true,handoff_selector=@selector,previous_worker_node_id=@worker,
-            worker_node_id=NULL,lease_until=NULL,lease_epoch=lease_epoch+1,resume_count=resume_count+1 WHERE execution_id=@id;
+          UPDATE execution_work SET handoff_pending=true,handoff_selector=@selector,previous_worker_id=@worker,
+            worker_id=NULL,lease_until=NULL,lease_epoch=lease_epoch+1,resume_count=resume_count+1 WHERE execution_id=@id;
           UPDATE media_reservations SET lease_epoch=(SELECT lease_epoch FROM execution_work WHERE execution_id=@id),lease_until='infinity'::timestamptz WHERE execution_id=@id;
           DELETE FROM disk_locks WHERE execution_id=@id;
           """,c,tx);
@@ -154,11 +154,11 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
             Guid Library,Guid? Source,string? Checkpoint,DateTimeOffset Updated,FlowPlacementPlan? Plan)>();
         await using(var c=await dataSource.OpenConnectionAsync(ct))
         await using(var cmd=Sql.Command($"""
-          SELECT e.id,e.node_id,e.revision,e.state,e.flow_definition::text,COALESCE(w.handoff_selector::text,''),
-            w.previous_worker_node_id,w.library_id,w.source_node_id,
+          SELECT e.id,e.worker_id,e.revision,e.state,e.flow_definition::text,COALESCE(w.handoff_selector::text,''),
+            w.previous_worker_id,w.library_id,w.source_worker_id,
             (SELECT checkpoint::text FROM execution_steps s WHERE s.execution_id=e.id AND s.completed_at IS NOT NULL ORDER BY s.completed_revision DESC LIMIT 1),e.updated_at,w.placement_plan::text
           FROM executions e JOIN execution_work w ON w.execution_id=e.id
-          WHERE w.worker_node_id IS NULL AND w.available_at<=clock_timestamp()
+          WHERE w.worker_id IS NULL AND w.available_at<=clock_timestamp()
             AND (w.handoff_selector IS NOT NULL
                   AND ((e.state='running' AND w.handoff_pending) OR (e.state='queued' AND e.retry_of IS NOT NULL))
               OR w.handoff_selector IS NULL AND e.state='queued' AND e.retry_of IS NULL AND w.lease_until IS NULL
@@ -211,11 +211,11 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
         await using(var c=await dataSource.OpenConnectionAsync(ct))
         await using(var cmd=Sql.Command("""
           SELECT n.id,n.capabilities::text,
-            COALESCE((SELECT p.max_concurrent_tasks FROM node_processing_settings p WHERE p.node_id=n.id),n.max_concurrent_tasks),
-            COALESCE((SELECT p.schedule_enabled FROM node_processing_settings p WHERE p.node_id=n.id),false),
-            (SELECT p.schedule_timezone FROM node_processing_settings p WHERE p.node_id=n.id AND p.schedule_enabled),
-            (SELECT p.schedule_slots FROM node_processing_settings p WHERE p.node_id=n.id AND p.schedule_enabled),n.inventory::text
-          FROM cluster_nodes n WHERE n.deleted_at IS NULL AND n.accepts_work AND 'worker'=ANY(n.roles)
+            COALESCE((SELECT p.max_concurrent_tasks FROM worker_processing_settings p WHERE p.worker_id=n.id),n.max_concurrent_tasks),
+            COALESCE((SELECT p.schedule_enabled FROM worker_processing_settings p WHERE p.worker_id=n.id),false),
+            (SELECT p.schedule_timezone FROM worker_processing_settings p WHERE p.worker_id=n.id AND p.schedule_enabled),
+            (SELECT p.schedule_slots FROM worker_processing_settings p WHERE p.worker_id=n.id AND p.schedule_enabled),n.inventory::text
+          FROM workers n WHERE n.deleted_at IS NULL AND n.accepts_work AND 'worker'=ANY(n.roles)
             AND (@fresh OR NOT n.draining AND NOT n.quarantined) AND n.incompatible_reason IS NULL
             AND n.last_seen_at>clock_timestamp()-@offline
           """,c))
@@ -244,10 +244,10 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
             await using var c=await dataSource.OpenConnectionAsync(ct);
             await using(var access=Sql.Command("""
               SELECT EXISTS(
-                SELECT 1 FROM library_node_accesses a JOIN cluster_nodes n ON n.id=a.node_id
-                LEFT JOIN library_node_accesses s ON s.library_id=a.library_id AND s.node_id=a.transfer_source_node_id
-                LEFT JOIN cluster_nodes sn ON sn.id=s.node_id
-                WHERE a.library_id=@library AND a.node_id=@worker AND a.is_enabled AND a.can_read
+                SELECT 1 FROM library_worker_accesses a JOIN workers n ON n.id=a.worker_id
+                LEFT JOIN library_worker_accesses s ON s.library_id=a.library_id AND s.worker_id=a.transfer_source_worker_id
+                LEFT JOIN workers sn ON sn.id=s.worker_id
+                WHERE a.library_id=@library AND a.worker_id=@worker AND a.is_enabled AND a.can_read
                   AND ((a.mode='direct' AND a.local_path IS NOT NULL AND (NOT @write OR a.can_write))
                     OR (a.mode='transfer' AND s.mode='direct' AND s.is_enabled AND s.can_read AND (NOT @write OR s.can_write)
                         AND sn.deleted_at IS NULL AND sn.last_seen_at>clock_timestamp()-@offline))
@@ -261,8 +261,8 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
             if(item.Source is {} originalSource)
             {
                 await using var original=Sql.Command("""
-                  SELECT EXISTS(SELECT 1 FROM library_node_accesses a JOIN cluster_nodes n ON n.id=a.node_id
-                    WHERE a.library_id=@library AND a.node_id=@source AND a.mode='direct' AND a.is_enabled AND a.can_read
+                  SELECT EXISTS(SELECT 1 FROM library_worker_accesses a JOIN workers n ON n.id=a.worker_id
+                    WHERE a.library_id=@library AND a.worker_id=@source AND a.mode='direct' AND a.is_enabled AND a.can_read
                       AND (NOT @write OR a.can_write) AND a.local_path IS NOT NULL AND n.deleted_at IS NULL
                       AND n.last_seen_at>clock_timestamp()-@offline)
                   """,c);

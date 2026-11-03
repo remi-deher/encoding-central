@@ -23,9 +23,9 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
     {
         var tokenHash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(request.NodeToken));
         const string sql = """
-            INSERT INTO cluster_nodes (id, name, roles, max_concurrent_tasks, capabilities, inventory, last_seen_at, node_token_hash, display_name)
-            SELECT @id, @name, @roles, @max_concurrent_tasks, @capabilities, @inventory, clock_timestamp(), @node_token_hash, @display_name
-            WHERE @allow_new OR EXISTS (SELECT 1 FROM cluster_nodes WHERE id = @id AND deleted_at IS NULL AND node_token_hash = @node_token_hash)
+            INSERT INTO workers (id, name, roles, max_concurrent_tasks, capabilities, inventory, last_seen_at, worker_token_hash, display_name)
+            SELECT @id, @name, @roles, @max_concurrent_tasks, @capabilities, @inventory, clock_timestamp(), @worker_token_hash, @display_name
+            WHERE @allow_new OR EXISTS (SELECT 1 FROM workers WHERE id = @id AND deleted_at IS NULL AND worker_token_hash = @worker_token_hash)
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
                 roles = EXCLUDED.roles,
@@ -33,15 +33,15 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
                 capabilities = EXCLUDED.capabilities,
                 inventory = EXCLUDED.inventory,
                 last_seen_at = clock_timestamp(),
-                display_name = COALESCE(cluster_nodes.display_name, EXCLUDED.display_name)
-            WHERE cluster_nodes.deleted_at IS NULL AND (cluster_nodes.node_token_hash IS NULL OR cluster_nodes.node_token_hash = EXCLUDED.node_token_hash)
+                display_name = COALESCE(workers.display_name, EXCLUDED.display_name)
+            WHERE workers.deleted_at IS NULL AND (workers.worker_token_hash IS NULL OR workers.worker_token_hash = EXCLUDED.worker_token_hash)
             RETURNING id, name, roles, max_concurrent_tasks, capabilities, last_seen_at, inventory, display_name, labels
             """;
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var command = Sql.Command(sql, connection);
         AddNodeParameters(command, request);
         command.Parameters.AddWithValue("display_name", (object?)request.DisplayName ?? DBNull.Value);
-        command.Parameters.AddWithValue("node_token_hash", SqlKind.Bytes, tokenHash);
+        command.Parameters.AddWithValue("worker_token_hash", SqlKind.Bytes, tokenHash);
         command.Parameters.AddWithValue("allow_new", allowNewNode);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken) ? ReadResponse(reader, true) : null;
@@ -49,7 +49,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
 
     public async Task DeletePairingRequestAsync(Guid nodeId, CancellationToken cancellationToken)
     {
-        await using var command = dataSource.CreateCommand("DELETE FROM node_enrollment_requests WHERE node_id = @id");
+        await using var command = dataSource.CreateCommand("DELETE FROM worker_enrollment_requests WHERE worker_id = @id");
         command.Parameters.AddWithValue("id", nodeId);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
@@ -57,14 +57,14 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
     /// <summary>Authentifie un worker par son seul secret ; l’empreinte SHA-256 de ce secret aléatoire à 256 bits identifie le worker.</summary>
     public async Task<bool> AuthenticateTokenAsync(string token, CancellationToken cancellationToken)
     {
-        await using var command = dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM cluster_nodes WHERE node_token_hash = @hash AND deleted_at IS NULL)");
+        await using var command = dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM workers WHERE worker_token_hash = @hash AND deleted_at IS NULL)");
         command.Parameters.AddWithValue("hash", SqlKind.Bytes, HashSecret(token));
         return (await command.ScalarBoolAsync(cancellationToken));
     }
 
     public async Task<bool> AuthenticateTokenAsync(Guid nodeId, string token, CancellationToken cancellationToken)
     {
-        await using var command = dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM cluster_nodes WHERE id = @id AND node_token_hash = @hash AND deleted_at IS NULL)");
+        await using var command = dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM workers WHERE id = @id AND worker_token_hash = @hash AND deleted_at IS NULL)");
         command.Parameters.AddWithValue("id", nodeId);
         command.Parameters.AddWithValue("hash", SqlKind.Bytes, HashSecret(token));
         return await command.ScalarBoolAsync(cancellationToken);
@@ -73,21 +73,21 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
     /// <summary>Vrai si cet identifiant a été retiré du central (suppression ou départ) : le worker doit repartir d'une identité neuve (0017).</summary>
     public async Task<bool> IsRemovedAsync(Guid id, CancellationToken cancellationToken)
     {
-        await using var command = dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM cluster_nodes WHERE id = @id AND deleted_at IS NOT NULL)");
+        await using var command = dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM workers WHERE id = @id AND deleted_at IS NOT NULL)");
         command.Parameters.AddWithValue("id", id);
         return await command.ScalarBoolAsync(cancellationToken);
     }
 
     public async Task<PairingRequestResult> CreatePairingRequestAsync(CreateWorkerEnrollmentRequest request, int maxPending, CancellationToken cancellationToken)
     {
-        await using var deleted=dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM cluster_nodes WHERE id=@id AND deleted_at IS NOT NULL)");
+        await using var deleted=dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM workers WHERE id=@id AND deleted_at IS NOT NULL)");
         deleted.Parameters.AddWithValue("id",request.Node.Id); if((await deleted.ScalarBoolAsync(cancellationToken))) return PairingRequestResult.Conflict;
         // Borne les demandes en attente pour qu’un appelant anonyme ne puisse pas saturer la liste d’approbation.
-        await using var pending=dataSource.CreateCommand("SELECT count(*) FROM node_enrollment_requests WHERE expires_at > clock_timestamp() AND node_id <> @id");
+        await using var pending=dataSource.CreateCommand("SELECT count(*) FROM worker_enrollment_requests WHERE expires_at > clock_timestamp() AND worker_id <> @id");
         pending.Parameters.AddWithValue("id",request.Node.Id); if((long)(await pending.ExecuteScalarAsync(cancellationToken))! >= maxPending) return PairingRequestResult.TooMany;
         var pairingKeyHash = HashSecret(request.PairingKey);
         var nodeTokenHash = HashSecret(request.Node.NodeToken);
-        await using (var existingNode = dataSource.CreateCommand("SELECT node_token_hash FROM cluster_nodes WHERE id=@id AND deleted_at IS NULL"))
+        await using (var existingNode = dataSource.CreateCommand("SELECT worker_token_hash FROM workers WHERE id=@id AND deleted_at IS NULL"))
         {
             existingNode.Parameters.AddWithValue("id",request.Node.Id);
             var existing = await existingNode.ExecuteScalarAsync(cancellationToken);
@@ -96,24 +96,24 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         }
 
         const string sql = """
-            INSERT INTO node_enrollment_requests
-                (node_id, pairing_key_hash, node_token_hash, name, roles, max_concurrent_tasks, capabilities, inventory, display_name, expires_at)
+            INSERT INTO worker_enrollment_requests
+                (worker_id, pairing_key_hash, worker_token_hash, name, roles, max_concurrent_tasks, capabilities, inventory, display_name, expires_at)
             VALUES
-                (@id, @pairing_key_hash, @node_token_hash, @name, @roles, @max_concurrent_tasks, @capabilities, @inventory, @display_name, clock_timestamp() + interval '10 minutes')
-            ON CONFLICT (node_id) DO UPDATE SET
+                (@id, @pairing_key_hash, @worker_token_hash, @name, @roles, @max_concurrent_tasks, @capabilities, @inventory, @display_name, clock_timestamp() + interval '10 minutes')
+            ON CONFLICT (worker_id) DO UPDATE SET
                 pairing_key_hash = EXCLUDED.pairing_key_hash,
-                node_token_hash = EXCLUDED.node_token_hash,
+                worker_token_hash = EXCLUDED.worker_token_hash,
                 name = EXCLUDED.name,
                 roles = EXCLUDED.roles,
                 max_concurrent_tasks = EXCLUDED.max_concurrent_tasks,
                 capabilities = EXCLUDED.capabilities,
                 inventory = EXCLUDED.inventory,
-                display_name = COALESCE(EXCLUDED.display_name, node_enrollment_requests.display_name),
+                display_name = COALESCE(EXCLUDED.display_name, worker_enrollment_requests.display_name),
                 created_at = clock_timestamp(),
                 expires_at = EXCLUDED.expires_at
-            WHERE node_enrollment_requests.node_token_hash = EXCLUDED.node_token_hash
-               OR node_enrollment_requests.expires_at <= clock_timestamp()
-            RETURNING node_id
+            WHERE worker_enrollment_requests.worker_token_hash = EXCLUDED.worker_token_hash
+               OR worker_enrollment_requests.expires_at <= clock_timestamp()
+            RETURNING worker_id
             """;
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
@@ -126,7 +126,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
             request.Node.Inventory));
         command.Parameters.AddWithValue("display_name", (object?)request.Node.DisplayName ?? DBNull.Value);
         command.Parameters.AddWithValue("pairing_key_hash", SqlKind.Bytes, pairingKeyHash);
-        command.Parameters.AddWithValue("node_token_hash", SqlKind.Bytes, nodeTokenHash);
+        command.Parameters.AddWithValue("worker_token_hash", SqlKind.Bytes, nodeTokenHash);
         if (await command.ExecuteScalarAsync(cancellationToken) is null) return PairingRequestResult.Conflict;
         await transaction.CommitAsync(cancellationToken);
         return PairingRequestResult.Created;
@@ -135,10 +135,10 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
     public async Task<IReadOnlyList<PendingWorkerEnrollmentResponse>> ListPendingPairingRequestsAsync(CancellationToken cancellationToken)
     {
         const string sql = """
-            SELECT node_id, name, roles, max_concurrent_tasks, capabilities, created_at, expires_at, inventory, node_token_hash, display_name
-            FROM node_enrollment_requests
-            WHERE expires_at > clock_timestamp() AND NOT EXISTS(SELECT 1 FROM cluster_nodes n WHERE n.id=node_enrollment_requests.node_id AND n.deleted_at IS NOT NULL)
-            ORDER BY created_at, node_id
+            SELECT worker_id, name, roles, max_concurrent_tasks, capabilities, created_at, expires_at, inventory, worker_token_hash, display_name
+            FROM worker_enrollment_requests
+            WHERE expires_at > clock_timestamp() AND NOT EXISTS(SELECT 1 FROM workers n WHERE n.id=worker_enrollment_requests.worker_id AND n.deleted_at IS NOT NULL)
+            ORDER BY created_at, worker_id
             """;
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var command = Sql.Command(sql, connection);
@@ -174,10 +174,10 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-        var requestPredicate = requestedNodeId.HasValue ? "node_id = @node_id" : "pairing_key_hash = @pairing_key_hash";
+        var requestPredicate = requestedNodeId.HasValue ? "worker_id = @worker_id" : "pairing_key_hash = @pairing_key_hash";
         var selectSql = $"""
-            SELECT node_id, node_token_hash, name, roles, max_concurrent_tasks, capabilities, inventory, display_name
-            FROM node_enrollment_requests
+            SELECT worker_id, worker_token_hash, name, roles, max_concurrent_tasks, capabilities, inventory, display_name
+            FROM worker_enrollment_requests
             WHERE {requestPredicate} AND expires_at > clock_timestamp()
             FOR UPDATE
             """;
@@ -187,7 +187,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         WorkerHeartbeatRequest heartbeat;
         await using (var selectCommand = Sql.Command(selectSql, connection, transaction))
         {
-            if (requestedNodeId.HasValue) selectCommand.Parameters.AddWithValue("node_id", requestedNodeId.Value);
+            if (requestedNodeId.HasValue) selectCommand.Parameters.AddWithValue("worker_id", requestedNodeId.Value);
             else selectCommand.Parameters.AddWithValue("pairing_key_hash", SqlKind.Bytes, pairingKeyHash!);
             await using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken);
             if (!await reader.ReadAsync(cancellationToken))
@@ -207,8 +207,8 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         }
 
         const string enrollSql = """
-            INSERT INTO cluster_nodes (id, name, roles, max_concurrent_tasks, capabilities, inventory, last_seen_at, node_token_hash, display_name)
-            VALUES (@id, @name, @roles, @max_concurrent_tasks, @capabilities, @inventory, clock_timestamp(), @node_token_hash, @display_name)
+            INSERT INTO workers (id, name, roles, max_concurrent_tasks, capabilities, inventory, last_seen_at, worker_token_hash, display_name)
+            VALUES (@id, @name, @roles, @max_concurrent_tasks, @capabilities, @inventory, clock_timestamp(), @worker_token_hash, @display_name)
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
                 roles = EXCLUDED.roles,
@@ -216,8 +216,8 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
                 capabilities = EXCLUDED.capabilities,
                 inventory = EXCLUDED.inventory,
                 last_seen_at = clock_timestamp(),
-                display_name = COALESCE(cluster_nodes.display_name, EXCLUDED.display_name)
-            WHERE cluster_nodes.deleted_at IS NULL AND (cluster_nodes.node_token_hash IS NULL OR cluster_nodes.node_token_hash = EXCLUDED.node_token_hash)
+                display_name = COALESCE(workers.display_name, EXCLUDED.display_name)
+            WHERE workers.deleted_at IS NULL AND (workers.worker_token_hash IS NULL OR workers.worker_token_hash = EXCLUDED.worker_token_hash)
             RETURNING id, name, roles, max_concurrent_tasks, capabilities, last_seen_at, inventory, display_name, labels
             """;
         WorkerResponse? node;
@@ -225,7 +225,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         {
             AddNodeParameters(enrollCommand, nodeId, heartbeat);
             enrollCommand.Parameters.AddWithValue("display_name", (object?)displayName ?? DBNull.Value);
-            enrollCommand.Parameters.AddWithValue("node_token_hash", SqlKind.Bytes, nodeTokenHash);
+            enrollCommand.Parameters.AddWithValue("worker_token_hash", SqlKind.Bytes, nodeTokenHash);
             await using var reader = await enrollCommand.ExecuteReaderAsync(cancellationToken);
             node = await reader.ReadAsync(cancellationToken) ? ReadResponse(reader, true) : null;
         }
@@ -236,7 +236,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         }
 
         await using (var deleteCommand = Sql.Command(
-            "DELETE FROM node_enrollment_requests WHERE node_id = @id", connection, transaction))
+            "DELETE FROM worker_enrollment_requests WHERE worker_id = @id", connection, transaction))
         {
             deleteCommand.Parameters.AddWithValue("id", nodeId);
             await deleteCommand.ExecuteNonQueryAsync(cancellationToken);
@@ -250,22 +250,22 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         using var priority = Encoding.Api.Infrastructure.Data.Sqlite.SqliteWriter.Prioritize();
         var tokenHash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token));
         const string unchanged = """
-            UPDATE cluster_nodes SET last_seen_at = clock_timestamp()
-            WHERE id=@id AND deleted_at IS NULL AND node_token_hash=@node_token_hash
+            UPDATE workers SET last_seen_at = clock_timestamp()
+            WHERE id=@id AND deleted_at IS NULL AND worker_token_hash=@worker_token_hash
               AND name=@name AND roles=@roles AND max_concurrent_tasks=@max_concurrent_tasks
               AND capabilities=@capabilities AND inventory IS NOT DISTINCT FROM @inventory
             RETURNING id, name, roles, max_concurrent_tasks, capabilities, last_seen_at, true AS is_online,
                 inventory, display_name, labels, app_version, session_nonce, incompatible_reason
             """;
         const string changed = """
-            UPDATE cluster_nodes SET
+            UPDATE workers SET
                 name = @name,
                 roles = @roles,
                 max_concurrent_tasks = @max_concurrent_tasks,
                 capabilities = @capabilities,
                 inventory = @inventory,
                 last_seen_at = clock_timestamp()
-            WHERE id = @id AND deleted_at IS NULL AND node_token_hash = @node_token_hash
+            WHERE id = @id AND deleted_at IS NULL AND worker_token_hash = @worker_token_hash
             RETURNING id, name, roles, max_concurrent_tasks, capabilities, last_seen_at, true AS is_online, inventory, display_name, labels,
                 app_version, session_nonce, incompatible_reason
             """;
@@ -274,7 +274,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         {
             await using var command = Sql.Command(sql, connection);
             AddNodeParameters(command, nodeId, request);
-            command.Parameters.AddWithValue("node_token_hash", SqlKind.Bytes, tokenHash);
+            command.Parameters.AddWithValue("worker_token_hash", SqlKind.Bytes, tokenHash);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             if (!await reader.ReadAsync(cancellationToken)) return (null, false);
             var version = reader.IsDBNull(10) ? null : reader.GetString(10);
@@ -299,7 +299,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
     private static async Task TrackSessionAsync(DbConnection connection, Guid nodeId, WorkerHeartbeatRequest request, CancellationToken ct)
     {
         const string sql = """
-            UPDATE cluster_nodes SET
+            UPDATE workers SET
                 app_version = @version,
                 incompatible_reason = @reason,
                 quarantined = quarantined OR COALESCE(@nonce IS NOT NULL AND session_nonce IS NOT NULL AND session_nonce <> @nonce
@@ -321,7 +321,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
     private async Task<IReadOnlyList<WorkerResponse>> WithLifecycleAsync(IReadOnlyList<WorkerResponse> nodes, CancellationToken ct)
     {
         if (nodes.Count == 0) return nodes;
-        await using var command = dataSource.CreateCommand("SELECT id, draining, quarantined, incompatible_reason FROM cluster_nodes WHERE id = ANY(@ids)");
+        await using var command = dataSource.CreateCommand("SELECT id, draining, quarantined, incompatible_reason FROM workers WHERE id = ANY(@ids)");
         command.Parameters.AddWithValue("ids", nodes.Select(node => node.Id).ToArray());
         var states = new Dictionary<Guid, (bool Draining, bool Quarantined, string? Incompatible)>();
         await using (var reader = await command.ExecuteReaderAsync(ct))
@@ -343,7 +343,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
     /// <summary>Vidange : aucune nouvelle tâche pour ce worker, les baux en cours se terminent normalement.</summary>
     public async Task<bool> SetDrainingAsync(Guid nodeId, bool draining, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("UPDATE cluster_nodes SET draining = @draining WHERE id = @id AND deleted_at IS NULL");
+        await using var command = dataSource.CreateCommand("UPDATE workers SET draining = @draining WHERE id = @id AND deleted_at IS NULL");
         command.Parameters.AddWithValue("id", nodeId);
         command.Parameters.AddWithValue("draining", draining);
         return await command.ExecuteNonQueryAsync(ct) == 1;
@@ -353,7 +353,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
     public async Task<bool> ClearQuarantineAsync(Guid nodeId, CancellationToken ct)
     {
         await using var command = dataSource.CreateCommand(
-            "UPDATE cluster_nodes SET quarantined = false, session_nonce = NULL, previous_nonce = NULL, nonce_changed_at = NULL WHERE id = @id AND deleted_at IS NULL AND quarantined");
+            "UPDATE workers SET quarantined = false, session_nonce = NULL, previous_nonce = NULL, nonce_changed_at = NULL WHERE id = @id AND deleted_at IS NULL AND quarantined");
         command.Parameters.AddWithValue("id", nodeId);
         return await command.ExecuteNonQueryAsync(ct) == 1;
     }

@@ -30,7 +30,7 @@ internal static class RuntimeCommandJournal
             || JsonSerializer.SerializeToUtf8Bytes(commands, Json).Length > 524288) return false;
         foreach (var group in commands.GroupBy(item => (item.NodeId, item.InvocationId)))
         {
-            await using var read = Sql.Command("SELECT command_logs,completed_at FROM execution_steps WHERE execution_id=@id AND node_id=@node AND invocation_id=@invocation", connection, transaction);
+            await using var read = Sql.Command("SELECT command_logs,completed_at FROM execution_steps WHERE execution_id=@id AND flow_node_id=@node AND invocation_id=@invocation", connection, transaction);
             read.Parameters.AddWithValue("id", execution); read.Parameters.AddWithValue("node", group.Key.NodeId); read.Parameters.AddWithValue("invocation", group.Key.InvocationId);
             await using var reader = await read.ExecuteReaderAsync(ct);
             if (!await reader.ReadAsync(ct)) return false;
@@ -41,7 +41,7 @@ internal static class RuntimeCommandJournal
             var logs = Merge(existing, group.Select(item => item.Command));
             var serialized = JsonSerializer.Serialize(logs, Json);
             if (System.Text.Encoding.UTF8.GetByteCount(serialized) > 524288) return false;
-            await using var update = Sql.Command("UPDATE execution_steps SET command_logs=@logs WHERE execution_id=@id AND node_id=@node AND invocation_id=@invocation AND ((@completed AND completed_at IS NOT NULL) OR (NOT @completed AND completed_at IS NULL))",
+            await using var update = Sql.Command("UPDATE execution_steps SET command_logs=@logs WHERE execution_id=@id AND flow_node_id=@node AND invocation_id=@invocation AND ((@completed AND completed_at IS NOT NULL) OR (NOT @completed AND completed_at IS NULL))",
                 connection, transaction);
             update.Parameters.AddWithValue("id", execution); update.Parameters.AddWithValue("node",
                 group.Key.NodeId); update.Parameters.AddWithValue("invocation", group.Key.InvocationId); update.Parameters.AddWithValue("logs", SqlKind.Json,

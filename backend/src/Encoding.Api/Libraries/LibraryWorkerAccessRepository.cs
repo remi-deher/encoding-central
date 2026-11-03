@@ -19,14 +19,14 @@ public sealed class LibraryWorkerAccessRepository(DbDataSource dataSource)
         CancellationToken cancellationToken)
     {
         const string sql = """
-            UPDATE library_node_accesses
+            UPDATE library_worker_accesses
             SET is_enabled = @is_enabled, updated_at = clock_timestamp()
-            WHERE library_id = @library_id AND node_id = @node_id AND mode <> 'unsupported'
+            WHERE library_id = @library_id AND worker_id = @worker_id AND mode <> 'unsupported'
             """;
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var command = Sql.Command(sql, connection);
         command.Parameters.AddWithValue("library_id", libraryId);
-        command.Parameters.AddWithValue("node_id", nodeId);
+        command.Parameters.AddWithValue("worker_id", nodeId);
         command.Parameters.AddWithValue("is_enabled", isEnabled);
         if (await command.ExecuteNonQueryAsync(cancellationToken) == 0) return null;
 
@@ -44,11 +44,11 @@ public sealed class LibraryWorkerAccessRepository(DbDataSource dataSource)
         }
 
         const string sql = """
-            SELECT a.library_id, a.node_id, n.name, a.mode, a.is_enabled, a.local_path, a.can_read, a.can_write,
-                   a.transfer_source_node_id, source.name, a.updated_at
-            FROM library_node_accesses a
-            JOIN cluster_nodes n ON n.id = a.node_id AND n.deleted_at IS NULL
-            LEFT JOIN cluster_nodes source ON source.id = a.transfer_source_node_id
+            SELECT a.library_id, a.worker_id, n.name, a.mode, a.is_enabled, a.local_path, a.can_read, a.can_write,
+                   a.transfer_source_worker_id, source.name, a.updated_at
+            FROM library_worker_accesses a
+            JOIN workers n ON n.id = a.worker_id AND n.deleted_at IS NULL
+            LEFT JOIN workers source ON source.id = a.transfer_source_worker_id
             WHERE a.library_id = @library_id
             ORDER BY n.name, n.id
             """;
@@ -82,7 +82,7 @@ public sealed class LibraryWorkerAccessRepository(DbDataSource dataSource)
         var nodeRoles = new Dictionary<Guid, string[]>();
         if (nodes.Count > 0)
         {
-            await using var nodeCommand = Sql.Command("SELECT id, roles FROM cluster_nodes WHERE id = ANY(@ids) AND deleted_at IS NULL", connection, transaction);
+            await using var nodeCommand = Sql.Command("SELECT id, roles FROM workers WHERE id = ANY(@ids) AND deleted_at IS NULL", connection, transaction);
             nodeCommand.Parameters.AddWithValue("ids", nodes.Select(item => item.NodeId).Distinct().ToArray());
             await using var nodeReader = await nodeCommand.ExecuteReaderAsync(cancellationToken);
             while (await nodeReader.ReadAsync(cancellationToken)) nodeRoles[nodeReader.GetGuid(0)] = nodeReader.GetStringArray(1);
@@ -95,29 +95,29 @@ public sealed class LibraryWorkerAccessRepository(DbDataSource dataSource)
             throw new LibraryWorkerAccessValidationException(errors);
         }
 
-        await using (var delete = Sql.Command("DELETE FROM library_node_accesses WHERE library_id = @library_id", connection, transaction))
+        await using (var delete = Sql.Command("DELETE FROM library_worker_accesses WHERE library_id = @library_id", connection, transaction))
         {
             delete.Parameters.AddWithValue("library_id", libraryId);
             await delete.ExecuteNonQueryAsync(cancellationToken);
         }
 
         const string insertSql = """
-            INSERT INTO library_node_accesses
-                (library_id, node_id, mode, is_enabled, local_path, can_read, can_write, transfer_source_node_id)
+            INSERT INTO library_worker_accesses
+                (library_id, worker_id, mode, is_enabled, local_path, can_read, can_write, transfer_source_worker_id)
             VALUES
-                (@library_id, @node_id, @mode, @is_enabled, @local_path, @can_read, @can_write, @transfer_source_node_id)
+                (@library_id, @worker_id, @mode, @is_enabled, @local_path, @can_read, @can_write, @transfer_source_worker_id)
             """;
         foreach (var item in nodes)
         {
             await using var insert = Sql.Command(insertSql, connection, transaction);
             insert.Parameters.AddWithValue("library_id", libraryId);
-            insert.Parameters.AddWithValue("node_id", item.NodeId);
+            insert.Parameters.AddWithValue("worker_id", item.NodeId);
             insert.Parameters.AddWithValue("mode", item.Mode.ToString().ToLowerInvariant());
             insert.Parameters.AddWithValue("is_enabled", item.Mode != LibraryWorkerAccessMode.Unsupported && item.IsEnabled);
             insert.Parameters.AddWithValue("local_path", (object?)Normalize(item.LocalPath) ?? DBNull.Value);
             insert.Parameters.AddWithValue("can_read", item.CanRead);
             insert.Parameters.AddWithValue("can_write", item.CanWrite);
-            insert.Parameters.AddWithValue("transfer_source_node_id", (object?)item.TransferSourceNodeId ?? DBNull.Value);
+            insert.Parameters.AddWithValue("transfer_source_worker_id", (object?)item.TransferSourceNodeId ?? DBNull.Value);
             await insert.ExecuteNonQueryAsync(cancellationToken);
         }
 

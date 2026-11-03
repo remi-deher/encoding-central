@@ -67,10 +67,10 @@ public sealed class FlowPlacementIntegrationTests
         {
             await using var cmd = Sql.Command("""
                 INSERT INTO libraries(id, name, is_active) VALUES(@lib, 'TestLib', true);
-                INSERT INTO cluster_nodes(id, name, roles, max_concurrent_tasks, capabilities, last_seen_at)
+                INSERT INTO workers(id, name, roles, max_concurrent_tasks, capabilities, last_seen_at)
                 VALUES(@nodeA, 'Node-A-Direct', ARRAY['worker'], 4, @capsA, clock_timestamp()),
                       (@nodeB, 'Node-B-Transfer', ARRAY['worker'], 4, @capsB, clock_timestamp());
-                INSERT INTO library_node_accesses(library_id, node_id, mode, local_path, can_read, can_write, is_enabled, transfer_source_node_id)
+                INSERT INTO library_worker_accesses(library_id, worker_id, mode, local_path, can_read, can_write, is_enabled, transfer_source_worker_id)
                 VALUES(@lib, @nodeA, 'direct', '/media/library', true, true, true, NULL),
                       (@lib, @nodeB, 'transfer', NULL, true, true, true, @nodeA);
                 """, c, tx);
@@ -148,9 +148,9 @@ public sealed class FlowPlacementIntegrationTests
         {
             await using var cmd = Sql.Command("""
                 INSERT INTO libraries(id, name, is_active) VALUES(@lib, 'TestLib', true);
-                INSERT INTO cluster_nodes(id, name, roles, max_concurrent_tasks, capabilities, last_seen_at)
+                INSERT INTO workers(id, name, roles, max_concurrent_tasks, capabilities, last_seen_at)
                 VALUES(@nodeA, 'Node-A', ARRAY['worker'], 4, @capsA, clock_timestamp());
-                INSERT INTO library_node_accesses(library_id, node_id, mode, local_path, can_read, can_write, is_enabled)
+                INSERT INTO library_worker_accesses(library_id, worker_id, mode, local_path, can_read, can_write, is_enabled)
                 VALUES(@lib, @nodeA, 'direct', '/media/library', true, true, true);
                 """, c, tx);
             cmd.Parameters.AddWithValue("lib", libId);
@@ -223,10 +223,10 @@ public sealed class FlowPlacementIntegrationTests
         {
             await using var cmd = Sql.Command("""
                 INSERT INTO libraries(id, name, is_active) VALUES(@lib, 'TestLib', true);
-                INSERT INTO cluster_nodes(id, name, roles, max_concurrent_tasks, capabilities, last_seen_at)
+                INSERT INTO workers(id, name, roles, max_concurrent_tasks, capabilities, last_seen_at)
                 VALUES(@nodeA, 'Node-A-Direct', ARRAY['worker'], 4, @capsA, clock_timestamp()),
                       (@nodeB, 'Node-B-Transfer', ARRAY['worker'], 4, @capsB, clock_timestamp());
-                INSERT INTO library_node_accesses(library_id, node_id, mode, local_path, can_read, can_write, is_enabled, transfer_source_node_id)
+                INSERT INTO library_worker_accesses(library_id, worker_id, mode, local_path, can_read, can_write, is_enabled, transfer_source_worker_id)
                 VALUES(@lib, @nodeA, 'direct', '/media/library', true, true, true, NULL),
                       (@lib, @nodeB, 'transfer', NULL, true, true, true, @nodeA);
                 """, c, tx);
@@ -341,10 +341,10 @@ public sealed class FlowPlacementIntegrationTests
         {
             await using var insert=Sql.Command("""
                 INSERT INTO libraries(id,name,is_active) VALUES(@library,'Synthetic',true);
-                INSERT INTO cluster_nodes(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at)
+                INSERT INTO workers(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at)
                 VALUES(@direct,'Direct',ARRAY['worker'],4,@directCapabilities,clock_timestamp()),
                       (@gpu,'GPU',ARRAY['worker'],4,@gpuCapabilities,clock_timestamp());
-                INSERT INTO library_node_accesses(library_id,node_id,mode,local_path,can_read,can_write,is_enabled,transfer_source_node_id)
+                INSERT INTO library_worker_accesses(library_id,worker_id,mode,local_path,can_read,can_write,is_enabled,transfer_source_worker_id)
                 VALUES(@library,@direct,'direct','/synthetic',true,true,true,NULL),(@library,@gpu,'transfer',NULL,true,true,true,@direct);
                 """,c,tx);
             insert.Parameters.AddWithValue("library",library);insert.Parameters.AddWithValue("direct",direct);insert.Parameters.AddWithValue("gpu",gpu);

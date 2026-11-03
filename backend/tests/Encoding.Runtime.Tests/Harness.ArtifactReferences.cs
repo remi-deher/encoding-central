@@ -20,7 +20,7 @@ internal static partial class Harness
             var capabilities = Capabilities(true).Concat(new WorkerToolCapability[] {
                 new("mkvtoolnix", "90.0", ["video"], []),
                 new(FlowArtifactReference.Capability, "1.0.0", ["general"], []) }).ToArray();
-            await using (var advertise = db.CreateCommand("UPDATE cluster_nodes SET capabilities=@caps"))
+            await using (var advertise = db.CreateCommand("UPDATE workers SET capabilities=@caps"))
             {
                 advertise.Parameters.AddWithValue("caps", SqlKind.Json, JsonSerializer.Serialize(capabilities, Json));
                 await advertise.ExecuteNonQueryAsync();
@@ -97,7 +97,7 @@ internal static partial class Harness
             }
             finally
             {
-                await using var restore = db.CreateCommand("UPDATE cluster_nodes SET capabilities=@caps");
+                await using var restore = db.CreateCommand("UPDATE workers SET capabilities=@caps");
                 restore.Parameters.AddWithValue("caps", SqlKind.Json, JsonSerializer.Serialize(Capabilities(true), Json));
                 await restore.ExecuteNonQueryAsync();
             }

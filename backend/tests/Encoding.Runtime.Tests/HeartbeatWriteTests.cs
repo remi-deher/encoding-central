@@ -21,9 +21,9 @@ public sealed class HeartbeatWriteTests
         Assert.NotNull(await nodes.RecordHeartbeatAsync(id, token, heartbeat, CancellationToken.None));
         await ExecuteAsync(database, """
             CREATE TABLE heartbeat_write_counts(kind TEXT NOT NULL);
-            CREATE TRIGGER count_heartbeat_metadata AFTER UPDATE OF name,roles,max_concurrent_tasks,capabilities,inventory ON cluster_nodes
+            CREATE TRIGGER count_heartbeat_metadata AFTER UPDATE OF name,roles,max_concurrent_tasks,capabilities,inventory ON workers
             BEGIN INSERT INTO heartbeat_write_counts VALUES('metadata'); END;
-            CREATE TRIGGER count_heartbeat_session AFTER UPDATE OF protocol_version,session_nonce ON cluster_nodes
+            CREATE TRIGGER count_heartbeat_session AFTER UPDATE OF protocol_version,session_nonce ON workers
             BEGIN INSERT INTO heartbeat_write_counts VALUES('session'); END;
             """);
         for (var i = 0; i < 10; i++)

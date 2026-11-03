@@ -54,7 +54,7 @@ internal static partial class Harness
             Check(commands.Count(command=>command.Command.Contains("ffprobe"))==(failFirst?2:3),"One source scan and one per successful output; command composition and metadata readers reuse the cache.");
             Check(!steps.Single(step=>step.NodeId=="validateAgain").Commands.Any(command=>command.Command.Contains("-f null")),
                 "Repeated validation of the same result does not decode it again.");
-            await using var read=db.CreateCommand("SELECT checkpoint::text FROM execution_steps WHERE execution_id=@id AND node_id='end'");
+            await using var read=db.CreateCommand("SELECT checkpoint::text FROM execution_steps WHERE execution_id=@id AND flow_node_id='end'");
             read.Parameters.AddWithValue("id",id);
             var checkpoint=JsonSerializer.Deserialize<RuntimeCheckpoint>((string)(await read.ExecuteScalarAsync())!,Json)!;
             Check(checkpoint.Context.Plan.Count==0 && !FfmpegBuilderPolicy.Active(checkpoint.Context.Variables),"Builders close after success/error without leaking a previous plan into the next conversion.");

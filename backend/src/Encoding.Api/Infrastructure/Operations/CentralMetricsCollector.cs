@@ -57,7 +57,7 @@ public sealed class CentralMetricsCollector(DbDataSource dataSource, WorkerPrese
 
         var nodes = await Rows(connection, """
             SELECT CASE WHEN last_seen_at >= clock_timestamp() - make_interval(secs => @offline) THEN 'online' ELSE 'offline' END, count(*)
-            FROM cluster_nodes WHERE deleted_at IS NULL GROUP BY 1
+            FROM workers WHERE deleted_at IS NULL GROUP BY 1
             """, ct, ("offline", presence.OfflineAfter.TotalSeconds));
         foreach (var status in new[] { "online", "offline" })
             writer.Gauge("encoding_nodes", "Workers enrôlés non retirés, par présence.", nodes.GetValueOrDefault(status), ("status", status));

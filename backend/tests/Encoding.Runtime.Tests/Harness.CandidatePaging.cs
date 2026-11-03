@@ -12,10 +12,10 @@ internal static partial class Harness
             var blockedLibrary = missingAccess ? Guid.NewGuid() : library;
             await using (var seed = db.CreateCommand("""
                 INSERT INTO libraries(id,name) VALUES(@library,@name);
-                INSERT INTO library_node_accesses(library_id,node_id,mode,local_path,can_read,can_write)
+                INSERT INTO library_worker_accesses(library_id,worker_id,mode,local_path,can_read,can_write)
                     VALUES(@library,@worker,'direct',@root,true,true);
                 INSERT INTO library_processing_settings(library_id,max_concurrent_tasks) VALUES(@library,1);
-                UPDATE cluster_nodes SET max_concurrent_tasks=1 WHERE id=@worker;
+                UPDATE workers SET max_concurrent_tasks=1 WHERE id=@worker;
                 """))
             {
                 seed.Parameters.AddWithValue("library", library); seed.Parameters.AddWithValue("name", library.ToString());
@@ -24,7 +24,7 @@ internal static partial class Harness
             }
             await using (var access = db.CreateCommand("""
                 INSERT INTO libraries(id,name) VALUES(@library,@name) ON CONFLICT DO NOTHING;
-                INSERT INTO library_node_accesses(library_id,node_id,mode,local_path,can_read,can_write)
+                INSERT INTO library_worker_accesses(library_id,worker_id,mode,local_path,can_read,can_write)
                     VALUES(@library,@worker,'direct',@root,true,true);
                 """))
             {

@@ -14,7 +14,7 @@ public sealed class CentralIdentityRepository(DbDataSource dataSource)
     public async Task<CentralIdentity> GetAsync(CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        await using var command = Sql.Command("SELECT id, name FROM cluster_identity WHERE singleton = true", connection);
+        await using var command = Sql.Command("SELECT id, name FROM central_identity WHERE singleton = true", connection);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken)) throw new InvalidOperationException("L’identité du central est absente.");
         return new CentralIdentity(reader.GetGuid(0), reader.GetString(1));
@@ -25,7 +25,7 @@ public sealed class CentralIdentityRepository(DbDataSource dataSource)
     /// <summary>Renomme le central.</summary>
     public async Task RenameAsync(string name, CancellationToken cancellationToken)
     {
-        await using var command = dataSource.CreateCommand("UPDATE cluster_identity SET name = @name WHERE singleton = true");
+        await using var command = dataSource.CreateCommand("UPDATE central_identity SET name = @name WHERE singleton = true");
         command.Parameters.AddWithValue("name", name.Trim());
         await command.ExecuteNonQueryAsync(cancellationToken);
     }

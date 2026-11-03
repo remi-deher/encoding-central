@@ -13,11 +13,11 @@ public sealed class WorkerGroupRepository(DbDataSource dataSource)
     {
         var groups = new List<GroupRow>();
         await using var c = await dataSource.OpenConnectionAsync(ct);
-        await using (var cmd = Sql.Command("SELECT id,name,description,mode,criteria,labels,created_at,updated_at FROM node_groups ORDER BY name,id", c))
+        await using (var cmd = Sql.Command("SELECT id,name,description,mode,criteria,labels,created_at,updated_at FROM worker_groups ORDER BY name,id", c))
         await using (var r = await cmd.ExecuteReaderAsync(ct))
             while (await r.ReadAsync(ct)) groups.Add(ReadGroup(r));
         var manualMembers = new Dictionary<Guid, List<Guid>>();
-        await using (var cmd = Sql.Command("SELECT m.group_id,m.node_id FROM node_group_members m JOIN cluster_nodes n ON n.id=m.node_id WHERE n.deleted_at IS NULL ORDER BY m.node_id", c))
+        await using (var cmd = Sql.Command("SELECT m.group_id,m.worker_id FROM worker_group_members m JOIN workers n ON n.id=m.worker_id WHERE n.deleted_at IS NULL ORDER BY m.worker_id", c))
         await using (var r = await cmd.ExecuteReaderAsync(ct))
             while (await r.ReadAsync(ct))
             {
@@ -25,7 +25,7 @@ public sealed class WorkerGroupRepository(DbDataSource dataSource)
                 ids.Add(r.GetGuid(1));
             }
         var nodes = new List<WorkerResponse>();
-        const string nodeSql = "SELECT id,name,roles,max_concurrent_tasks,capabilities,last_seen_at,true,inventory,display_name,labels FROM cluster_nodes WHERE deleted_at IS NULL";
+        const string nodeSql = "SELECT id,name,roles,max_concurrent_tasks,capabilities,last_seen_at,true,inventory,display_name,labels FROM workers WHERE deleted_at IS NULL";
         await using (var cmd = Sql.Command(nodeSql, c))
         await using (var r = await cmd.ExecuteReaderAsync(ct))
             while (await r.ReadAsync(ct)) nodes.Add(WorkerRepository.ReadResponse(r, true));
@@ -44,10 +44,10 @@ public sealed class WorkerGroupRepository(DbDataSource dataSource)
         await using var tx = await c.BeginTransactionAsync(ct);
         var groupId = id ?? Guid.NewGuid();
         var upsert = id.HasValue ? """
-            UPDATE node_groups SET name=@name,description=@description,mode=@mode,criteria=@criteria,labels=@labels,updated_at=clock_timestamp()
+            UPDATE worker_groups SET name=@name,description=@description,mode=@mode,criteria=@criteria,labels=@labels,updated_at=clock_timestamp()
             WHERE id=@id RETURNING id
             """ : """
-            INSERT INTO node_groups(id,name,description,mode,criteria,labels)
+            INSERT INTO worker_groups(id,name,description,mode,criteria,labels)
             VALUES(@id,@name,@description,@mode,@criteria,@labels)
             RETURNING id
             """;
@@ -63,11 +63,11 @@ public sealed class WorkerGroupRepository(DbDataSource dataSource)
         }
         if (request.Mode == WorkerGroupMode.Manual)
         {
-            await using (var clear = Sql.Command("DELETE FROM node_group_members WHERE group_id=@id", c, tx))
+            await using (var clear = Sql.Command("DELETE FROM worker_group_members WHERE group_id=@id", c, tx))
             { clear.Parameters.AddWithValue("id", groupId); await clear.ExecuteNonQueryAsync(ct); }
             foreach (var nodeId in request.NodeIds.Distinct())
             {
-                await using var add = Sql.Command("INSERT INTO node_group_members(group_id,node_id) SELECT @group,@node WHERE EXISTS(SELECT 1 FROM cluster_nodes WHERE id=@node AND deleted_at IS NULL)",
+                await using var add = Sql.Command("INSERT INTO worker_group_members(group_id,worker_id) SELECT @group,@node WHERE EXISTS(SELECT 1 FROM workers WHERE id=@node AND deleted_at IS NULL)",
                     c, tx);
                 add.Parameters.AddWithValue("group", groupId); add.Parameters.AddWithValue("node", nodeId);
                 if (await add.ExecuteNonQueryAsync(ct) == 0) return false;
@@ -75,7 +75,7 @@ public sealed class WorkerGroupRepository(DbDataSource dataSource)
         }
         else
         {
-            await using var clear = Sql.Command("DELETE FROM node_group_members WHERE group_id=@id", c, tx);
+            await using var clear = Sql.Command("DELETE FROM worker_group_members WHERE group_id=@id", c, tx);
             clear.Parameters.AddWithValue("id", groupId); await clear.ExecuteNonQueryAsync(ct);
         }
         await tx.CommitAsync(ct);
@@ -87,7 +87,7 @@ public sealed class WorkerGroupRepository(DbDataSource dataSource)
     {
         await using var c = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await c.BeginTransactionAsync(ct);
-        await using (var exists = Sql.Command("SELECT 1 FROM node_groups WHERE id=@id FOR UPDATE", c, tx))
+        await using (var exists = Sql.Command("SELECT 1 FROM worker_groups WHERE id=@id FOR UPDATE", c, tx))
         {
             exists.Parameters.AddWithValue("id", id);
             if (await exists.ExecuteScalarAsync(ct) is null) return "missing";
@@ -101,7 +101,7 @@ public sealed class WorkerGroupRepository(DbDataSource dataSource)
             used.Parameters.AddWithValue("id", id.ToString());
             if ((await used.ScalarBoolAsync(ct))) return "in-use";
         }
-        await using var cmd = Sql.Command("DELETE FROM node_groups WHERE id=@id", c, tx);
+        await using var cmd = Sql.Command("DELETE FROM worker_groups WHERE id=@id", c, tx);
         cmd.Parameters.AddWithValue("id", id);
         await cmd.ExecuteNonQueryAsync(ct);
         await tx.CommitAsync(ct);
@@ -112,7 +112,7 @@ public sealed class WorkerGroupRepository(DbDataSource dataSource)
     {
         await using var c = await dataSource.OpenConnectionAsync(ct);
         string? displayName; IReadOnlyDictionary<string, string?> local;
-        await using (var cmd = Sql.Command("SELECT display_name,labels FROM cluster_nodes WHERE id=@id AND deleted_at IS NULL", c))
+        await using (var cmd = Sql.Command("SELECT display_name,labels FROM workers WHERE id=@id AND deleted_at IS NULL", c))
         {
             cmd.Parameters.AddWithValue("id", id); await using var r = await cmd.ExecuteReaderAsync(ct);
             if (!await r.ReadAsync(ct)) return null;
@@ -122,8 +122,8 @@ public sealed class WorkerGroupRepository(DbDataSource dataSource)
         var inherited = new Dictionary<string, string?>(StringComparer.Ordinal);
         var ids = new List<Guid>();
         const string sql = """
-            SELECT g.id,g.labels FROM node_groups g LEFT JOIN node_group_members m ON m.group_id=g.id
-            WHERE m.node_id=@node ORDER BY g.name,g.id
+            SELECT g.id,g.labels FROM worker_groups g LEFT JOIN worker_group_members m ON m.group_id=g.id
+            WHERE m.worker_id=@node ORDER BY g.name,g.id
             """;
         await using (var cmd = Sql.Command(sql, c))
         {
@@ -147,7 +147,7 @@ public sealed class WorkerGroupRepository(DbDataSource dataSource)
 
     public async Task<bool> SaveNodeIdentityAsync(Guid id, SaveWorkerIdentityRequest request, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("UPDATE cluster_nodes SET display_name=@name,labels=@labels WHERE id=@id AND deleted_at IS NULL");
+        await using var cmd = dataSource.CreateCommand("UPDATE workers SET display_name=@name,labels=@labels WHERE id=@id AND deleted_at IS NULL");
         cmd.Parameters.AddWithValue("id", id);
         cmd.Parameters.AddWithValue("name", string.IsNullOrWhiteSpace(request.DisplayName) ? DBNull.Value : request.DisplayName.Trim());
         cmd.Parameters.AddWithValue("labels", SqlKind.Json, JsonSerializer.Serialize(request.Labels, Json));

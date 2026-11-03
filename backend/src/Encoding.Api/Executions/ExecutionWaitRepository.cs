@@ -26,16 +26,16 @@ public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresen
     internal static async Task BeginAsync(Guid id,string nodeId,RuntimeWait wait,long epoch,DbConnection c,DbTransaction tx,CancellationToken ct)
     {
         await using var cmd=Sql.Command("""
-          INSERT INTO execution_waits(execution_id,node_id,spec,state,started_at,deadline,due_at,next_check_at,resolved_at,probe_count,last_probe_at,last_probe_output)
+          INSERT INTO execution_waits(execution_id,flow_node_id,spec,state,started_at,deadline,due_at,next_check_at,resolved_at,probe_count,last_probe_at,last_probe_output)
           VALUES(@id,@node,@spec,'waiting',clock_timestamp(),
             CASE WHEN @max::integer IS NULL THEN NULL ELSE clock_timestamp()+make_interval(mins=>@max) END,
             CASE WHEN @delay::integer IS NULL THEN NULL ELSE clock_timestamp()+make_interval(mins=>@delay) END,
             CASE WHEN @delay::integer IS NULL THEN clock_timestamp() ELSE clock_timestamp()+make_interval(mins=>@delay) END,NULL,0,NULL,NULL)
-          ON CONFLICT(execution_id) DO UPDATE SET node_id=EXCLUDED.node_id,spec=EXCLUDED.spec,state='waiting',started_at=EXCLUDED.started_at,
+          ON CONFLICT(execution_id) DO UPDATE SET flow_node_id=EXCLUDED.flow_node_id,spec=EXCLUDED.spec,state='waiting',started_at=EXCLUDED.started_at,
             deadline=EXCLUDED.deadline,due_at=EXCLUDED.due_at,next_check_at=EXCLUDED.next_check_at,resolved_at=NULL,probe_count=0,last_probe_at=NULL,last_probe_output=NULL;
           UPDATE execution_waits SET next_check_at=LEAST(next_check_at,COALESCE(deadline,'infinity'::timestamptz)) WHERE execution_id=@id;
-          UPDATE execution_work SET worker_node_id=NULL,lease_until=NULL,lease_epoch=lease_epoch+1,available_at='infinity'::timestamptz,wait_probe_due=false,
-            handoff_pending=false,handoff_selector=NULL,previous_worker_node_id=NULL,media_policy=@media WHERE execution_id=@id;
+          UPDATE execution_work SET worker_id=NULL,lease_until=NULL,lease_epoch=lease_epoch+1,available_at='infinity'::timestamptz,wait_probe_due=false,
+            handoff_pending=false,handoff_selector=NULL,previous_worker_id=NULL,media_policy=@media WHERE execution_id=@id;
           UPDATE media_reservations SET lease_epoch=@epoch+1,lease_until='infinity'::timestamptz WHERE execution_id=@id;
           DELETE FROM disk_locks WHERE execution_id=@id;
           """,c,tx);
@@ -55,7 +55,7 @@ public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresen
         if(!await RuntimeRepository.FenceAsync(id,worker,request.Epoch,c,tx,ct)) return false;
         RuntimeWait spec; int revision; Guid? actor;
         await using(var read=Sql.Command("""
-          SELECT x.spec::text,e.revision,e.node_id FROM execution_waits x JOIN execution_work k ON k.execution_id=x.execution_id
+          SELECT x.spec::text,e.revision,e.worker_id FROM execution_waits x JOIN execution_work k ON k.execution_id=x.execution_id
           JOIN executions e ON e.id=x.execution_id
           WHERE x.execution_id=@id AND x.state='waiting' AND k.wait_probe_due FOR UPDATE OF x
           """,c,tx))
@@ -70,7 +70,7 @@ public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresen
             state=CASE WHEN @met THEN 'met' ELSE state END,resolved_at=CASE WHEN @met THEN clock_timestamp() ELSE NULL END,
             next_check_at=CASE WHEN @met THEN next_check_at ELSE LEAST(clock_timestamp()+make_interval(secs=>@poll),COALESCE(deadline,'infinity'::timestamptz)) END
             WHERE execution_id=@id;
-          UPDATE execution_work SET worker_node_id=NULL,lease_until=NULL,lease_epoch=lease_epoch+1,wait_probe_due=false,
+          UPDATE execution_work SET worker_id=NULL,lease_until=NULL,lease_epoch=lease_epoch+1,wait_probe_due=false,
             available_at=CASE WHEN @met THEN clock_timestamp() ELSE 'infinity'::timestamptz END WHERE execution_id=@id;
           UPDATE media_reservations SET lease_epoch=@epoch+1,lease_until='infinity'::timestamptz WHERE execution_id=@id;
           """,c,tx))
@@ -105,8 +105,8 @@ public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresen
           """,c,tx)) await closed.ExecuteNonQueryAsync(ct);
         var due=new List<(Guid Id,string Node,RuntimeWait Spec,bool Expired,bool TimerDue,int Revision,Guid? Actor,FlowDefinition Flow,Guid Library,bool ProbePending)>();
         await using(var read=Sql.Command("""
-          SELECT x.execution_id,x.node_id,x.spec::text,COALESCE(x.deadline<=clock_timestamp(),false),COALESCE(x.due_at<=clock_timestamp(),false),
-            e.revision,e.node_id,e.flow_definition::text,k.library_id,k.wait_probe_due
+          SELECT x.execution_id,x.flow_node_id,x.spec::text,COALESCE(x.deadline<=clock_timestamp(),false),COALESCE(x.due_at<=clock_timestamp(),false),
+            e.revision,e.worker_id,e.flow_definition::text,k.library_id,k.wait_probe_due
           FROM execution_waits x JOIN executions e ON e.id=x.execution_id JOIN execution_work k ON k.execution_id=x.execution_id
           WHERE x.state='waiting' AND x.next_check_at<=clock_timestamp() AND e.state='running'
           ORDER BY x.next_check_at LIMIT 50 FOR UPDATE OF x,e,k SKIP LOCKED
@@ -148,11 +148,11 @@ public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresen
             // Le contexte ne change pas pendant l'attente : seule la sortie du dernier checkpoint est remplacée, par une connexion validée du flow publié.
             var (output,nextNode)=RuntimeWaitPolicy.TimeoutRoute(item.Flow,item.Node);
             string? json;
-            await using(var read=Sql.Command("SELECT checkpoint::text FROM execution_steps WHERE execution_id=@id AND node_id=@node AND completed_at IS NOT NULL",c,tx))
+            await using(var read=Sql.Command("SELECT checkpoint::text FROM execution_steps WHERE execution_id=@id AND flow_node_id=@node AND completed_at IS NOT NULL",c,tx))
             { read.Parameters.AddWithValue("id",item.Id); read.Parameters.AddWithValue("node",item.Node); json=await read.ExecuteScalarAsync(ct) as string; }
             if(json is null) return;
             var checkpoint=JsonSerializer.Deserialize<RuntimeCheckpoint>(json,Json)! with { OutputId=output,NextNodeId=nextNode,Wait=null };
-            await using(var write=Sql.Command("UPDATE execution_steps SET checkpoint=@checkpoint WHERE execution_id=@id AND node_id=@node",c,tx))
+            await using(var write=Sql.Command("UPDATE execution_steps SET checkpoint=@checkpoint WHERE execution_id=@id AND flow_node_id=@node",c,tx))
             {
                 write.Parameters.AddWithValue("id",item.Id); write.Parameters.AddWithValue("node",item.Node);
                 write.Parameters.AddWithValue("checkpoint",SqlKind.Json,JsonSerializer.Serialize(checkpoint,Json)); await write.ExecuteNonQueryAsync(ct);
@@ -172,14 +172,14 @@ public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresen
     {
         await using var cmd=Sql.Command("""
           SELECT EXISTS(
-            SELECT 1 FROM cluster_nodes n
+            SELECT 1 FROM workers n
             WHERE n.deleted_at IS NULL AND 'worker'=ANY(n.roles) AND (@node::uuid IS NULL OR n.id=@node)
               AND @status<>'offline' AND n.last_seen_at>clock_timestamp()-@offline
               AND (@status='online' OR (SELECT count(*) FROM execution_work w JOIN executions e ON e.id=w.execution_id
-                    WHERE w.worker_node_id=n.id AND w.lease_until>clock_timestamp() AND e.state IN('running','cancelling'))
-                  <COALESCE((SELECT p.max_concurrent_tasks FROM node_processing_settings p WHERE p.node_id=n.id),n.max_concurrent_tasks)))
+                    WHERE w.worker_id=n.id AND w.lease_until>clock_timestamp() AND e.state IN('running','cancelling'))
+                  <COALESCE((SELECT p.max_concurrent_tasks FROM worker_processing_settings p WHERE p.worker_id=n.id),n.max_concurrent_tasks)))
           OR (@status='offline' AND NOT EXISTS(
-            SELECT 1 FROM cluster_nodes n WHERE n.id=@node AND n.deleted_at IS NULL AND n.last_seen_at>clock_timestamp()-@offline))
+            SELECT 1 FROM workers n WHERE n.id=@node AND n.deleted_at IS NULL AND n.last_seen_at>clock_timestamp()-@offline))
           """,c,tx);
         cmd.Parameters.AddWithValue("node",SqlKind.Uuid,(object?)spec.NodeId??DBNull.Value); cmd.Parameters.AddWithValue("status",spec.NodeStatus!);
         cmd.Parameters.AddWithValue("offline",presence.OfflineAfter);

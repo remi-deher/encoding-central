@@ -12,7 +12,7 @@ public sealed class SourceWriteGuard(DbDataSource db)
 {
     internal async Task<bool> NodeCanWriteAsync(Guid node,DbConnection c,DbTransaction? tx,CancellationToken ct)
     {
-        await using var actor=Sql.Command("SELECT EXISTS(SELECT 1 FROM cluster_nodes WHERE id=@node AND deleted_at IS NULL AND NOT quarantined AND incompatible_reason IS NULL)",c,tx);
+        await using var actor=Sql.Command("SELECT EXISTS(SELECT 1 FROM workers WHERE id=@node AND deleted_at IS NULL AND NOT quarantined AND incompatible_reason IS NULL)",c,tx);
         actor.Parameters.AddWithValue("node",node);
         return await actor.ScalarBoolAsync(ct);
     }

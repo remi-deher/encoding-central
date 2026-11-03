@@ -13,11 +13,11 @@ public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionS
           SELECT w.execution_id,w.lease_epoch,a.local_path,w.media_path,w.source_sha,w.result_sha,w.result_extension,w.publication_requested,e.flow_definition::text,a.can_write,w.replacement_grace_hours,w.library_id,
             (SELECT checkpoint::text FROM execution_steps WHERE execution_id=w.execution_id AND completed_at IS NOT NULL ORDER BY completed_revision DESC LIMIT 1),
             w.media_policy<>'beside' AND EXISTS(SELECT 1 FROM library_replacement_policies p WHERE p.library_id=w.library_id AND p.enabled),
-            (SELECT node_id FROM execution_steps s WHERE s.execution_id=w.execution_id ORDER BY (s.completed_at IS NULL) DESC,s.started_at DESC LIMIT 1),
+            (SELECT flow_node_id FROM execution_steps s WHERE s.execution_id=w.execution_id ORDER BY (s.completed_at IS NULL) DESC,s.started_at DESC LIMIT 1),
             (SELECT invocation_id FROM execution_steps s WHERE s.execution_id=w.execution_id ORDER BY (s.completed_at IS NULL) DESC,s.started_at DESC LIMIT 1)
           FROM execution_work w JOIN executions e ON e.id=w.execution_id
-          JOIN library_node_accesses a ON a.library_id=w.library_id AND a.node_id=w.source_node_id
-          WHERE w.source_node_id=@node AND w.lease_until>clock_timestamp() AND e.state='running'
+          JOIN library_worker_accesses a ON a.library_id=w.library_id AND a.worker_id=w.source_worker_id
+          WHERE w.source_worker_id=@node AND w.lease_until>clock_timestamp() AND e.state='running'
           AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.local_path IS NOT NULL
           AND (w.source_sha IS NULL AND w.source_preparation_requested OR (w.publication_requested AND w.published_path IS NULL AND a.can_write))
           ORDER BY e.queued_at LIMIT 20
@@ -51,7 +51,7 @@ public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionS
         await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
         if(!await RuntimeRepository.FenceAsync(id,source,request.Epoch,c,tx,ct,true)) return false;
         Guid worker; Guid library; string original; string sourceSha; string resultSha; int? graceHours; string mediaPolicy; bool continueFlow;
-        await using(var read=Sql.Command("SELECT worker_node_id,library_id,media_path,source_sha,result_sha,replacement_grace_hours,media_policy,continue_after_publication FROM execution_work WHERE execution_id=@id AND result_sha=@sha AND publication_requested AND @path='.encoding-results/'||execution_id::text||'/result'||result_extension",
+        await using(var read=Sql.Command("SELECT worker_id,library_id,media_path,source_sha,result_sha,replacement_grace_hours,media_policy,continue_after_publication FROM execution_work WHERE execution_id=@id AND result_sha=@sha AND publication_requested AND @path='.encoding-results/'||execution_id::text||'/result'||result_extension",
             c,tx))
         {
             read.Parameters.AddWithValue("id",id); read.Parameters.AddWithValue("sha",request.Sha256); read.Parameters.AddWithValue("path",request.PublishedPath);
@@ -100,7 +100,7 @@ public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionS
         if (!Encoding.Contracts.Flows.MediaIntegrityPolicy.IsExplicit(flow)) return true;
         var checks = flow.Nodes.Where(node => node.Component.PluginId == "probe"
             && node.Component.ComponentId == Encoding.Contracts.Flows.MediaIntegrityPolicy.Component).Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
-        await using var read = Sql.Command("SELECT node_id,checkpoint FROM execution_steps WHERE execution_id=@id AND completed_at IS NOT NULL", c, tx);
+        await using var read = Sql.Command("SELECT flow_node_id,checkpoint FROM execution_steps WHERE execution_id=@id AND completed_at IS NOT NULL", c, tx);
         read.Parameters.AddWithValue("id", id);
         await using var reader = await read.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
@@ -126,7 +126,7 @@ public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionS
         if(sourceFailure)
         {
             if(request.State!="failed") return false;
-            await using var read=Sql.Command("SELECT worker_node_id FROM execution_work WHERE execution_id=@id",c,tx); read.Parameters.AddWithValue("id",id);
+            await using var read=Sql.Command("SELECT worker_id FROM execution_work WHERE execution_id=@id",c,tx); read.Parameters.AddWithValue("id",id);
                 worker=(await read.ScalarGuidAsync(ct))!.Value;
         }
         if(request.ContinueFlow)
@@ -164,7 +164,7 @@ public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionS
               UPDATE execution_work w SET result_sha=@sha,result_extension=@extension,publication_requested=true,continue_after_publication=@continue,
               replacement_grace_hours=CASE WHEN w.media_policy='beside' THEN NULL ELSE (SELECT p.grace_period_hours FROM library_replacement_policies p WHERE p.library_id=w.library_id AND p.enabled) END
               WHERE execution_id=@id AND EXISTS(SELECT 1 FROM execution_artifacts a WHERE a.execution_id=w.execution_id AND a.sha256=@sha)
-              AND EXISTS(SELECT 1 FROM library_node_accesses a WHERE a.library_id=w.library_id AND a.node_id=w.source_node_id AND a.is_enabled AND a.can_write)
+              AND EXISTS(SELECT 1 FROM library_worker_accesses a WHERE a.library_id=w.library_id AND a.worker_id=w.source_worker_id AND a.is_enabled AND a.can_write)
               """,c,tx);
             set.Parameters.AddWithValue("id",id); set.Parameters.AddWithValue("sha",sha); set.Parameters.AddWithValue("extension",request.Extension);
                 set.Parameters.AddWithValue("continue",request.ContinueFlow);

@@ -31,7 +31,7 @@ public sealed class WorkerDirectoryBrowserTests
         var nodeId = Guid.NewGuid();
         await using (var insert = database.Db.CreateCommand())
         {
-            insert.CommandText = "INSERT INTO cluster_nodes(id,name,roles,max_concurrent_tasks,last_seen_at) VALUES(@id,'worker','worker',1,@seen)";
+            insert.CommandText = "INSERT INTO workers(id,name,roles,max_concurrent_tasks,last_seen_at) VALUES(@id,'worker','worker',1,@seen)";
             var id = insert.CreateParameter();
             id.ParameterName = "@id";
             id.Value = nodeId;

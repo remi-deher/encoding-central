@@ -26,8 +26,8 @@ public sealed class SystemLogRepository
         await using var transaction = await connection.BeginTransactionAsync(ct);
 
         await using var cmd = Sql.Command("""
-            INSERT INTO system_logs (id, timestamp, level, category, message, exception, node_id, node_name, event_id)
-            VALUES (@id, @timestamp, @level, @category, @message, @exception, @node_id, @node_name, @event_id)
+            INSERT INTO system_logs (id, timestamp, level, category, message, exception, worker_id, worker_name, event_id)
+            VALUES (@id, @timestamp, @level, @category, @message, @exception, @worker_id, @worker_name, @event_id)
             """, connection, transaction);
 
         var pId = cmd.Parameters.AddWithValue("id", DBNull.Value);
@@ -36,8 +36,8 @@ public sealed class SystemLogRepository
         var pCategory = cmd.Parameters.AddWithValue("category", DBNull.Value);
         var pMessage = cmd.Parameters.AddWithValue("message", DBNull.Value);
         var pException = cmd.Parameters.AddWithValue("exception", DBNull.Value);
-        var pNodeId = cmd.Parameters.AddWithValue("node_id", DBNull.Value);
-        var pNodeName = cmd.Parameters.AddWithValue("node_name", DBNull.Value);
+        var pNodeId = cmd.Parameters.AddWithValue("worker_id", DBNull.Value);
+        var pNodeName = cmd.Parameters.AddWithValue("worker_name", DBNull.Value);
         var pEventId = cmd.Parameters.AddWithValue("event_id", DBNull.Value);
 
         foreach (var entry in entries)
@@ -65,7 +65,7 @@ public sealed class SystemLogRepository
 
         await using var connection = await _dataSource.OpenConnectionAsync(ct);
 
-        var sql = "SELECT id, timestamp, level, category, message, exception, node_id, node_name, event_id FROM system_logs WHERE 1=1";
+        var sql = "SELECT id, timestamp, level, category, message, exception, worker_id, worker_name, event_id FROM system_logs WHERE 1=1";
 
         if (query.MinLevel.HasValue)
         {
@@ -85,7 +85,7 @@ public sealed class SystemLogRepository
 
         if (query.NodeId.HasValue)
         {
-            sql += " AND node_id = @node_id";
+            sql += " AND worker_id = @worker_id";
         }
 
         if (query.Since.HasValue)
@@ -110,7 +110,7 @@ public sealed class SystemLogRepository
 
         if (query.NodeId.HasValue)
         {
-            cmd.Parameters.AddWithValue("node_id", query.NodeId.Value.ToString());
+            cmd.Parameters.AddWithValue("worker_id", query.NodeId.Value.ToString());
         }
 
         if (query.Since.HasValue)

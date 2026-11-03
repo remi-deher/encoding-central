@@ -221,7 +221,7 @@ public sealed class LocalAgentAccessTests
                         ClusterName: "Cluster Salon"));
                 Assert.Equal(HttpStatusCode.Created, setupResponse.StatusCode);
 
-                // Display name is saved on the already-enrolled local node in cluster_nodes:
+                // Display name is saved on the already-enrolled local node in workers:
                 var nodesJson = await secondClient.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/v1/workers");
                 var updatedNode = Assert.Single(nodesJson.EnumerateArray(), n => n.GetProperty("id").GetGuid() == localNodeId);
                 Assert.Equal("Serveur Principal", updatedNode.GetProperty("displayName").GetString());

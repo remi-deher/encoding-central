@@ -59,9 +59,9 @@ internal static class TriggerTests
         var library = Guid.NewGuid();
         var token = "fixture-node-token-is-long-enough-for-authentication";
         await using (var setup = db.CreateCommand("""
-            INSERT INTO cluster_nodes(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at,node_token_hash) VALUES(@node,'scanner',ARRAY['worker'],1,'[]'::jsonb,clock_timestamp(),@token);
+            INSERT INTO workers(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at,worker_token_hash) VALUES(@node,'scanner',ARRAY['worker'],1,'[]'::jsonb,clock_timestamp(),@token);
             INSERT INTO libraries(id,name) VALUES(@library,'Séries');
-            INSERT INTO library_node_accesses(library_id,node_id,mode,local_path,can_read,can_write) VALUES(@library,@node,'direct',@root,true,true);
+            INSERT INTO library_worker_accesses(library_id,worker_id,mode,local_path,can_read,can_write) VALUES(@library,@node,'direct',@root,true,true);
             """))
         {
             setup.Parameters.AddWithValue("node", node);

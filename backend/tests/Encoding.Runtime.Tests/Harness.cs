@@ -266,7 +266,7 @@ internal static partial class Harness
             artifacts=new(db,config); executions=new(db);
             foreach(var id in new[]{a,b,c})
             {
-                await using var command=db.CreateCommand("INSERT INTO cluster_nodes(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at,node_token_hash) VALUES(@id,@name,ARRAY['worker'],100,@caps,clock_timestamp(),@token)");
+                await using var command=db.CreateCommand("INSERT INTO workers(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at,worker_token_hash) VALUES(@id,@name,ARRAY['worker'],100,@caps,clock_timestamp(),@token)");
                 command.Parameters.AddWithValue("id",id); command.Parameters.AddWithValue("name",id.ToString());
                 command.Parameters.AddWithValue("caps",SqlKind.Json,JsonSerializer.Serialize(Capabilities(true),Json));
                 command.Parameters.AddWithValue("token",SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Token))); await command.ExecuteNonQueryAsync();
@@ -352,7 +352,7 @@ internal static partial class Harness
         public async Task NodeGroupsAndLabelsAsync()
         {
             var groups = new WorkerGroupRepository(db);
-            await using (var inventory = db.CreateCommand("UPDATE cluster_nodes SET inventory=@inventory WHERE id=@id"))
+            await using (var inventory = db.CreateCommand("UPDATE workers SET inventory=@inventory WHERE id=@id"))
             {
                 inventory.Parameters.AddWithValue("id", a);
                 inventory.Parameters.AddWithValue("inventory", SqlKind.Json, JsonSerializer.Serialize(new WorkerInventory("Linux", "X64", 8, 32768), Json));
@@ -375,7 +375,7 @@ internal static partial class Harness
 
             var production = (await groups.ListAsync(CancellationToken.None)).Single(g => g.Name == "Production");
             Check(production.NodeIds.Contains(b), "A manual group lists its active members.");
-            await using (var retire = db.CreateCommand("UPDATE cluster_nodes SET deleted_at=clock_timestamp() WHERE id=@id"))
+            await using (var retire = db.CreateCommand("UPDATE workers SET deleted_at=clock_timestamp() WHERE id=@id"))
             { retire.Parameters.AddWithValue("id", b); await retire.ExecuteNonQueryAsync(); }
             try
             {
@@ -384,7 +384,7 @@ internal static partial class Harness
             }
             finally
             {
-                await using var restore = db.CreateCommand("UPDATE cluster_nodes SET deleted_at=NULL WHERE id=@id");
+                await using var restore = db.CreateCommand("UPDATE workers SET deleted_at=NULL WHERE id=@id");
                 restore.Parameters.AddWithValue("id", b); await restore.ExecuteNonQueryAsync();
             }
 
@@ -411,7 +411,7 @@ internal static partial class Harness
                 UPDATE executions SET state='cancelled'
                 WHERE state='queued' OR state='running' AND id IN (
                   SELECT execution_id FROM execution_work
-                  WHERE worker_node_id IS NULL AND lease_until IS NULL AND available_at<=clock_timestamp()
+                  WHERE worker_id IS NULL AND lease_until IS NULL AND available_at<=clock_timestamp()
                 )
                 """:"UPDATE executions SET state='cancelled' WHERE state='queued'";
             await using(var leftovers=db.CreateCommand(cleanup)) await leftovers.ExecuteNonQueryAsync();
@@ -422,9 +422,9 @@ internal static partial class Harness
             var library=Guid.NewGuid(); var id=Guid.NewGuid();
             await using var command=db.CreateCommand("""
                 INSERT INTO libraries(id,name) VALUES(@library,@name);
-                INSERT INTO library_node_accesses(library_id,node_id,mode,local_path,can_read,can_write)
+                INSERT INTO library_worker_accesses(library_id,worker_id,mode,local_path,can_read,can_write)
                   VALUES(@library,@a,'direct',@root,true,true);
-                INSERT INTO library_node_accesses(library_id,node_id,mode,can_read,can_write,transfer_source_node_id)
+                INSERT INTO library_worker_accesses(library_id,worker_id,mode,can_read,can_write,transfer_source_worker_id)
                   VALUES(@library,@b,'transfer',true,true,@a),(@library,@c,'transfer',true,true,@a);
                 """);
             command.Parameters.AddWithValue("library",library); command.Parameters.AddWithValue("name",library.ToString());
@@ -432,7 +432,7 @@ internal static partial class Harness
             await command.ExecuteNonQueryAsync();
             if(directRead)
             {
-                await using var capable=db.CreateCommand("UPDATE cluster_nodes SET capabilities=@caps WHERE id=@id");
+                await using var capable=db.CreateCommand("UPDATE workers SET capabilities=@caps WHERE id=@id");
                 capable.Parameters.AddWithValue("id",a);
                 capable.Parameters.AddWithValue("caps",SqlKind.Json,JsonSerializer.Serialize(Capabilities(true)
                     .Select(capability=>capability.ToolId=="ffmpeg"?capability with { Encoders=[..capability.Encoders??[],"ac3"] }:capability)
@@ -441,7 +441,7 @@ internal static partial class Harness
             }
             if (MediaIntegrityPolicy.IsExplicit(flow))
             {
-                await using var latest = db.CreateCommand("UPDATE cluster_nodes SET capabilities=@caps WHERE id IN (@a,@b,@c)");
+                await using var latest = db.CreateCommand("UPDATE workers SET capabilities=@caps WHERE id IN (@a,@b,@c)");
                 latest.Parameters.AddWithValue("a",a); latest.Parameters.AddWithValue("b",b); latest.Parameters.AddWithValue("c",c);
                 latest.Parameters.AddWithValue("caps",SqlKind.Json,JsonSerializer.Serialize(Capabilities(true)
                     .Select(cap => cap.ToolId == "plugin/probe" ? cap with { Version = "1.1.0" } : cap)
@@ -454,7 +454,7 @@ internal static partial class Harness
             if(directRead)
             {
                 // Only this lease exercises the new capability; do not leak it into unrelated shared-fixture scenarios.
-                await using var reset=db.CreateCommand("UPDATE cluster_nodes SET capabilities=@caps WHERE id=@id");
+                await using var reset=db.CreateCommand("UPDATE workers SET capabilities=@caps WHERE id=@id");
                 reset.Parameters.AddWithValue("id",a); reset.Parameters.AddWithValue("caps",SqlKind.Json,JsonSerializer.Serialize(Capabilities(true),Json));
                 await reset.ExecuteNonQueryAsync();
             }
@@ -515,7 +515,7 @@ internal static partial class Harness
             Check(await runtime.ClaimAsync(c,CancellationToken.None) is null,"A different worker cannot take a precise target's relay.");
             if(converted)
             {
-                await using var direct=db.CreateCommand("UPDATE library_node_accesses SET mode='direct',local_path='/another/mount',transfer_source_node_id=NULL WHERE node_id=@node AND library_id=(SELECT library_id FROM execution_work WHERE execution_id=@id)");
+                await using var direct=db.CreateCommand("UPDATE library_worker_accesses SET mode='direct',local_path='/another/mount',transfer_source_worker_id=NULL WHERE worker_id=@node AND library_id=(SELECT library_id FROM execution_work WHERE execution_id=@id)");
                 direct.Parameters.AddWithValue("id",id);direct.Parameters.AddWithValue("node",b);await direct.ExecuteNonQueryAsync();
             }
             await using(var pending=db.CreateCommand("SELECT lease_until='infinity'::timestamptz FROM media_reservations WHERE execution_id=@id"))
@@ -553,9 +553,9 @@ internal static partial class Harness
             var library = Guid.NewGuid(); var id = Guid.NewGuid();
             await using var command = db.CreateCommand("""
                 INSERT INTO libraries(id,name) VALUES(@library,@name);
-                INSERT INTO library_node_accesses(library_id,node_id,mode,local_path,can_read,can_write)
+                INSERT INTO library_worker_accesses(library_id,worker_id,mode,local_path,can_read,can_write)
                   VALUES(@library,@a,'direct',@root,true,true);
-                INSERT INTO library_node_accesses(library_id,node_id,mode,can_read,can_write,transfer_source_node_id)
+                INSERT INTO library_worker_accesses(library_id,worker_id,mode,can_read,can_write,transfer_source_worker_id)
                   VALUES(@library,@b,'transfer',true,true,@a);
                 """);
             command.Parameters.AddWithValue("library", library); command.Parameters.AddWithValue("name", library.ToString());
@@ -577,9 +577,9 @@ internal static partial class Harness
             var library = Guid.NewGuid(); var id = Guid.NewGuid();
             await using(var command = db.CreateCommand("""
                 INSERT INTO libraries(id,name) VALUES(@library,@name);
-                INSERT INTO library_node_accesses(library_id,node_id,mode,local_path,can_read,can_write)
+                INSERT INTO library_worker_accesses(library_id,worker_id,mode,local_path,can_read,can_write)
                   VALUES(@library,@a,'direct',@root,true,true);
-                INSERT INTO library_node_accesses(library_id,node_id,mode,can_read,can_write,transfer_source_node_id)
+                INSERT INTO library_worker_accesses(library_id,worker_id,mode,can_read,can_write,transfer_source_worker_id)
                   VALUES(@library,@b,'transfer',true,true,@a);
                 """))
             {
@@ -591,10 +591,10 @@ internal static partial class Harness
             Check(await runtime.EnqueueAsync(new(id, library, "source.mkv", flow.Id, flow.Version), flow, CancellationToken.None), "Enqueue fixture.");
             Check(await runtime.ClaimAsync(b, CancellationToken.None) is null, "Le worker par transfert laisse la main au worker direct capable.");
             // Le worker direct perd ses capacités : le worker par transfert prend alors le relais, sans attente indéfinie.
-            await using(var strip = db.CreateCommand("UPDATE cluster_nodes SET capabilities='[]'::jsonb WHERE id=@a")) { strip.Parameters.AddWithValue("a", a); await strip.ExecuteNonQueryAsync(); }
+            await using(var strip = db.CreateCommand("UPDATE workers SET capabilities='[]'::jsonb WHERE id=@a")) { strip.Parameters.AddWithValue("a", a); await strip.ExecuteNonQueryAsync(); }
             var claim = await runtime.ClaimAsync(b, CancellationToken.None);
             await ResetNodesAsync();
-            await using(var restore = db.CreateCommand("UPDATE cluster_nodes SET capabilities=@caps WHERE id=@a"))
+            await using(var restore = db.CreateCommand("UPDATE workers SET capabilities=@caps WHERE id=@a"))
             { restore.Parameters.AddWithValue("a", a); restore.Parameters.AddWithValue("caps", SqlKind.Json, JsonSerializer.Serialize(Capabilities(true), Json)); await restore.ExecuteNonQueryAsync(); }
             Check(claim is not null && claim.ExecutionId == id, "Sans worker direct capable, le worker par transfert réclame.");
         }
@@ -622,13 +622,13 @@ internal static partial class Harness
             catch(InvalidDataException) { corruptRejected=true; }
             Check(corruptRejected,"A corrupt transfer must be rejected before registration.");
             await CompleteAsync(id,a,lease,"relay",context);
-            await using(var offline=db.CreateCommand("UPDATE cluster_nodes SET last_seen_at=clock_timestamp()-interval '2 hours' WHERE id=@id"))
+            await using(var offline=db.CreateCommand("UPDATE workers SET last_seen_at=clock_timestamp()-interval '2 hours' WHERE id=@id"))
             { offline.Parameters.AddWithValue("id",b);await offline.ExecuteNonQueryAsync(); }
             Check(await runtime.ClaimAsync(b,CancellationToken.None) is null,"An offline target cannot claim.");
-            await using(var busy=db.CreateCommand("UPDATE cluster_nodes SET last_seen_at=clock_timestamp(),max_concurrent_tasks=0 WHERE id=@id"))
+            await using(var busy=db.CreateCommand("UPDATE workers SET last_seen_at=clock_timestamp(),max_concurrent_tasks=0 WHERE id=@id"))
             { busy.Parameters.AddWithValue("id",b);await busy.ExecuteNonQueryAsync(); }
             Check(await runtime.ClaimAsync(b,CancellationToken.None) is null,"Capacity limits still apply to a relay.");
-            await using(var unsupported=db.CreateCommand("UPDATE cluster_nodes SET max_concurrent_tasks=10 WHERE id=@node; UPDATE library_node_accesses SET is_enabled=false WHERE node_id=@node AND library_id=(SELECT library_id FROM execution_work WHERE execution_id=@execution)"))
+            await using(var unsupported=db.CreateCommand("UPDATE workers SET max_concurrent_tasks=10 WHERE id=@node; UPDATE library_worker_accesses SET is_enabled=false WHERE worker_id=@node AND library_id=(SELECT library_id FROM execution_work WHERE execution_id=@execution)"))
             { unsupported.Parameters.AddWithValue("node",b);unsupported.Parameters.AddWithValue("execution",id);await unsupported.ExecuteNonQueryAsync(); }
             Check(await runtime.ClaimAsync(b,CancellationToken.None) is null,"The receiver needs an enabled library access.");
             Check(await new WorkerRepository(db).DeleteAsync(a,CancellationToken.None)=="busy","The original source cannot be removed during a waiting relay.");
@@ -739,7 +739,7 @@ internal static partial class Harness
                 ? capability with { AccelerationTypes=[..capability.AccelerationTypes,"qsv"],Encoders=[..capability.Encoders??[],"hevc_qsv"],
                     EncoderChecks=[..capability.EncoderChecks??[],new WorkerEncoderCapability("hevc_qsv","usable")] }
                 : capability).ToArray();
-            await using(var announce=db.CreateCommand("UPDATE cluster_nodes SET capabilities=@caps"))
+            await using(var announce=db.CreateCommand("UPDATE workers SET capabilities=@caps"))
             { announce.Parameters.AddWithValue("caps",SqlKind.Json,JsonSerializer.Serialize(advertised,Json)); await announce.ExecuteNonQueryAsync(); }
             foreach(var direct in new[]{true,false})
             {
@@ -753,7 +753,7 @@ internal static partial class Harness
                 // Accès par transfert : le worker reçoit une copie, sans chemin local de la bibliothèque.
                 await Runner("library-access-"+direct,out _).RunAsync(direct?lease:lease with { SourceRoot=null },client,deadline.Token);
                 // Le média fictif échoue ensuite au scan : seul le checkpoint du bloc, écrit avant, compte ici.
-                Check(await ScalarAsync<string>("SELECT checkpoint->>'outputId' FROM execution_steps WHERE execution_id=@id AND node_id='access' AND completed_at IS NOT NULL",("id",id))==(direct?"yes":"no"),
+                Check(await ScalarAsync<string>("SELECT checkpoint->>'outputId' FROM execution_steps WHERE execution_id=@id AND flow_node_id='access' AND completed_at IS NOT NULL",("id",id))==(direct?"yes":"no"),
                     direct?"A node that mounts the library follows « Oui ».":"A node without direct access follows « Non ».");
             }
             foreach(var capable in new[]{true,false})
@@ -762,7 +762,7 @@ internal static partial class Harness
                 var(id,lease,_)=await EnqueueAsync(gated);
                 using var deadline=new CancellationTokenSource(TimeSpan.FromSeconds(20)); using var client=Client(a);
                 await Runner("library-access-encoder-"+capable,out _,capable?new FixedProbe("hevc_qsv"):new FixedProbe("libx265")).RunAsync(lease,client,deadline.Token);
-                Check(await ScalarAsync<string>("SELECT checkpoint->>'outputId' FROM execution_steps WHERE execution_id=@id AND node_id='access' AND completed_at IS NOT NULL",("id",id))==(capable?"yes":"no"),
+                Check(await ScalarAsync<string>("SELECT checkpoint->>'outputId' FROM execution_steps WHERE execution_id=@id AND flow_node_id='access' AND completed_at IS NOT NULL",("id",id))==(capable?"yes":"no"),
                     capable?"A direct-access node with the profile encoder follows « Oui ».":"A direct-access node without the profile encoder follows « Non ».");
             }
             Console.WriteLine("PASS: the library access block branches on direct access.");
@@ -801,7 +801,7 @@ internal static partial class Harness
             var(id,lease,_)=await EnqueueAsync(flow);
             using var deadline=new CancellationTokenSource(TimeSpan.FromSeconds(20));using var client=Client(a);
             var runner=Runner("condition-"+outcome,out var options);await runner.RunAsync(lease,client,deadline.Token);
-            await using var read=db.CreateCommand("SELECT checkpoint->>'outputId' FROM execution_steps WHERE execution_id=@id AND node_id='condition'");
+            await using var read=db.CreateCommand("SELECT checkpoint->>'outputId' FROM execution_steps WHERE execution_id=@id AND flow_node_id='condition'");
             read.Parameters.AddWithValue("id",id);Check((string?)await read.ExecuteScalarAsync()==outcome,"A native condition must take its declared "+outcome+" output.");
             Check(!Directory.EnumerateFiles(options.DataDirectory,"*",SearchOption.AllDirectories).Any(),"Variable and origin conditions must not download or scan media before the relay.");
             var received=await runtime.ClaimAsync(b,CancellationToken.None);Check(received?.ExecutionId==id,"The condition branch hands off the same execution.");

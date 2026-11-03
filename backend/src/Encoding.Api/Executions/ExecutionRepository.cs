@@ -13,20 +13,20 @@ public sealed class ExecutionRepository(DbDataSource dataSource, FlowComponentRe
     private static readonly JsonSerializerOptions Json=new(JsonSerializerDefaults.Web);
     // Le bail vit dans la base du propriétaire : sans preuve locale et non expirée, l'état répliqué ne suffit pas.
     private static string ActivelyProcessingSql(string executionAlias) =>
-        $"({executionAlias}.state='running' AND w.worker_node_id IS NOT NULL AND w.lease_until>clock_timestamp())";
+        $"({executionAlias}.state='running' AND w.worker_id IS NOT NULL AND w.lease_until>clock_timestamp())";
 
     private const string StateFilterPredicate = "e.state=@state";
     private const string LibraryFilterPredicate = "w.library_id=@libraryId";
-    private const string NodeFilterPredicate = "e.node_id=@nodeId";
+    private const string NodeFilterPredicate = "e.worker_id=@nodeId";
     private const string SinceFilterPredicate = "e.updated_at>=@since";
     private const string AfterRevisionFilterSql = " AND revision>@afterRevision";
     private const string LimitFilterSql = " LIMIT @limit";
 
     private static readonly string Columns = $"""
- e.id,e.media,e.library_name,e.flow_name,e.flow_version,e.state,e.node_id,n.name,
+ e.id,e.media,e.library_name,e.flow_name,e.flow_version,e.state,e.worker_id,n.name,
  e.progress,e.detail,e.attempt,e.revision,e.queued_at,e.started_at,e.finished_at,e.updated_at,w.before_metadata::text,w.after_metadata::text,w.published_path
  ,(SELECT checkpoint::text FROM execution_steps s WHERE s.execution_id=e.id AND s.completed_at IS NOT NULL ORDER BY s.completed_revision DESC LIMIT 1),w.library_id
- ,(SELECT s.node_id FROM execution_steps s WHERE s.execution_id=e.id AND s.completed_at IS NULL ORDER BY s.started_at DESC LIMIT 1)
+ ,(SELECT s.flow_node_id FROM execution_steps s WHERE s.execution_id=e.id AND s.completed_at IS NULL ORDER BY s.started_at DESC LIMIT 1)
  ,CASE WHEN e.state NOT IN ('running','cancelling') THEN NULL
        WHEN w.publication_requested AND w.published_path IS NULL THEN 'publication'
        WHEN w.source_preparation_requested AND w.source_sha IS NULL THEN 'source_transfer'
@@ -112,7 +112,7 @@ public sealed class ExecutionRepository(DbDataSource dataSource, FlowComponentRe
         }
 
         var list = new List<ExecutionResponse>();
-        await using (var cmd = Sql.Command($"SELECT {Columns} FROM executions e LEFT JOIN cluster_nodes n ON n.id=e.node_id LEFT JOIN execution_work w ON w.execution_id=e.id{whereSql} ORDER BY CASE WHEN {ActivelyProcessingSql("e")} THEN 0 ELSE 1 END,CASE WHEN e.state IN ('queued','running','cancelling') THEN 0 ELSE 1 END,e.updated_at DESC,e.id LIMIT @limit OFFSET @offset",
+        await using (var cmd = Sql.Command($"SELECT {Columns} FROM executions e LEFT JOIN workers n ON n.id=e.worker_id LEFT JOIN execution_work w ON w.execution_id=e.id{whereSql} ORDER BY CASE WHEN {ActivelyProcessingSql("e")} THEN 0 ELSE 1 END,CASE WHEN e.state IN ('queued','running','cancelling') THEN 0 ELSE 1 END,e.updated_at DESC,e.id LIMIT @limit OFFSET @offset",
             c, tx))
         {
             BindFilters(cmd);
@@ -136,7 +136,7 @@ public sealed class ExecutionRepository(DbDataSource dataSource, FlowComponentRe
     public async Task<ExecutionResponse?> GetAsync(Guid id, CancellationToken ct)
     {
         await using var c = await dataSource.OpenConnectionAsync(ct);
-        await using var cmd = Sql.Command($"SELECT {Columns} FROM executions e LEFT JOIN cluster_nodes n ON n.id=e.node_id LEFT JOIN execution_work w ON w.execution_id=e.id WHERE e.id=@id",
+        await using var cmd = Sql.Command($"SELECT {Columns} FROM executions e LEFT JOIN workers n ON n.id=e.worker_id LEFT JOIN execution_work w ON w.execution_id=e.id WHERE e.id=@id",
             c);
         cmd.Parameters.AddWithValue("id", id); await using var r = await cmd.ExecuteReaderAsync(ct);
         return await r.ReadAsync(ct) ? Read(r) : null;
@@ -186,8 +186,8 @@ public sealed class ExecutionRepository(DbDataSource dataSource, FlowComponentRe
         var flowNodes=(flow?.Nodes ?? []).GroupBy(node=>node.Id,StringComparer.Ordinal)
             .ToDictionary(group=>group.Key,group=>group.First(),StringComparer.Ordinal);
         await using var cmd=dataSource.CreateCommand("""
-          SELECT s.node_id,s.invocation_id,s.started_at,s.completed_at,s.checkpoint::text,s.command_logs::text
-          FROM execution_steps s WHERE s.execution_id=@id ORDER BY s.started_at,s.node_id
+          SELECT s.flow_node_id,s.invocation_id,s.started_at,s.completed_at,s.checkpoint::text,s.command_logs::text
+          FROM execution_steps s WHERE s.execution_id=@id ORDER BY s.started_at,s.flow_node_id
           """);
         cmd.Parameters.AddWithValue("id",id); await using var r=await cmd.ExecuteReaderAsync(ct);
         var result=new List<ExecutionPipelineStepResponse>();
@@ -330,7 +330,7 @@ public sealed class ExecutionRepository(DbDataSource dataSource, FlowComponentRe
         }
         await AddEvent(c,tx,next,Guid.NewGuid(),0,"queued",detail,ct);
         await using(var work=Sql.Command("""
-          INSERT INTO execution_work(execution_id,library_id,media_path,media_key,handoff_selector,previous_worker_node_id,placement_plan)
+          INSERT INTO execution_work(execution_id,library_id,media_path,media_key,handoff_selector,previous_worker_id,placement_plan)
           SELECT @next,w.library_id,COALESCE(w.media_path,e.media),COALESCE(w.media_key,upper(e.media)),@selector,@previous,NULL
           FROM executions e LEFT JOIN execution_work w ON w.execution_id=e.id
           WHERE e.id=@id AND w.library_id IS NOT NULL
@@ -359,11 +359,11 @@ public sealed class ExecutionRepository(DbDataSource dataSource, FlowComponentRe
         await using (var duplicate = Sql.Command("SELECT EXISTS(SELECT 1 FROM execution_events WHERE id=@event AND execution_id=@id)", c, tx))
         { duplicate.Parameters.AddWithValue("event", update.EventId); duplicate.Parameters.AddWithValue("id", id); if ((await duplicate.ScalarBoolAsync(ct))) return true; }
         await using var cmd = Sql.Command($"""
-   UPDATE executions SET state=@state,node_id=COALESCE(node_id,@node),progress=@progress,detail=@detail,
+   UPDATE executions SET state=@state,worker_id=COALESCE(worker_id,@node),progress=@progress,detail=@detail,
    revision=revision+1,updated_at=clock_timestamp(),
    started_at=CASE WHEN @state='running' THEN COALESCE(started_at,clock_timestamp()) ELSE started_at END,
    finished_at=CASE WHEN @state IN ('succeeded','failed','cancelled','deferred') THEN clock_timestamp() ELSE finished_at END
-   WHERE id=@id AND revision=@revision AND (node_id IS NULL OR node_id=@node)
+   WHERE id=@id AND revision=@revision AND (worker_id IS NULL OR worker_id=@node)
    AND ((state='queued' AND @state IN ('running','failed','cancelled'))
     OR (state='running' AND @state IN ('running','succeeded','failed','cancelled','deferred'))
     OR (state='cancelling' AND @state IN ('cancelled','failed')))

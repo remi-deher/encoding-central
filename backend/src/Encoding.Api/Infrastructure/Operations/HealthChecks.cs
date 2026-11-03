@@ -75,7 +75,7 @@ public sealed class CentralHealthCheck(DbDataSource dataSource, WorkerPresenceOp
         {
             await using var command = dataSource.CreateCommand("""
                 SELECT
-                  (SELECT count(*) FROM cluster_nodes WHERE deleted_at IS NULL AND 'worker' = ANY(roles) AND last_seen_at >= clock_timestamp() - make_interval(secs => @offline)),
+                  (SELECT count(*) FROM workers WHERE deleted_at IS NULL AND 'worker' = ANY(roles) AND last_seen_at >= clock_timestamp() - make_interval(secs => @offline)),
                   (SELECT count(*) FROM execution_work w JOIN executions e ON e.id = w.execution_id
                     WHERE e.state IN ('running','cancelling') AND (w.lease_until IS NULL OR w.lease_until <= clock_timestamp() - interval '2 minutes'))
                 """);

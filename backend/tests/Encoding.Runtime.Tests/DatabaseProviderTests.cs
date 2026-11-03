@@ -51,7 +51,7 @@ public sealed class DatabaseProviderTests
         Assert.Empty(firstStatus.Pending);
         Assert.Empty(firstStatus.Unknown);
         Assert.Equal(MigrationCatalog.Load(MigrationCatalog.ResolveDirectory(contentRoot)).Last().Version, firstStatus.Latest);
-        await using (var identity = database.Db.CreateCommand("SELECT count(*) FROM cluster_identity"))
+        await using (var identity = database.Db.CreateCommand("SELECT count(*) FROM central_identity"))
             Assert.Equal(1L, await identity.ExecuteScalarAsync());
 
         await DatabaseMigrator.ApplyAsync(database.Db, contentRoot, CancellationToken.None);

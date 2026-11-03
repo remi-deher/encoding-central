@@ -104,7 +104,7 @@ internal static partial class Harness
             await ScalarAsync<object>("UPDATE execution_waits SET next_check_at=clock_timestamp()-interval '1 second' WHERE execution_id=@id RETURNING 1",("id",second));
             await Waits.ProcessDueAsync(CancellationToken.None);
             Check(await ScalarAsync<string>("SELECT state FROM execution_waits WHERE execution_id=@id",("id",second))=="waiting","An online worker does not satisfy an offline wait.");
-            await ScalarAsync<object>("UPDATE cluster_nodes SET last_seen_at=clock_timestamp()-interval '3 hours' WHERE id=@c RETURNING 1",("c",c));
+            await ScalarAsync<object>("UPDATE workers SET last_seen_at=clock_timestamp()-interval '3 hours' WHERE id=@c RETURNING 1",("c",c));
             await ScalarAsync<object>("UPDATE execution_waits SET next_check_at=clock_timestamp()-interval '1 second' WHERE execution_id=@id RETURNING 1",("id",second));
             await Waits.ProcessDueAsync(CancellationToken.None);
             Check(await ScalarAsync<string>("SELECT state FROM execution_waits WHERE execution_id=@id",("id",second))=="met","A worker that stops answering wakes the wait.");
@@ -119,8 +119,8 @@ internal static partial class Harness
             var (id,lease,_,_)=await WaitingAsync(flow,["playback"]);
             // Seuls les workers disposant du plugin surveillé peuvent évaluer la condition.
             await ScalarAsync<object>(TestDatabase.IsSqlite
-                ? "UPDATE cluster_nodes SET capabilities=(SELECT COALESCE(json_group_array(json(c.value)),'[]') FROM json_each(capabilities) c WHERE c.value->>'toolId'<>'plugin/plex') WHERE id=@c RETURNING 1"
-                : "UPDATE cluster_nodes SET capabilities=(SELECT jsonb_agg(c) FROM jsonb_array_elements(capabilities) c WHERE c->>'toolId'<>'plugin/plex') WHERE id=@c RETURNING 1",("c",c));
+                ? "UPDATE workers SET capabilities=(SELECT COALESCE(json_group_array(json(c.value)),'[]') FROM json_each(capabilities) c WHERE c.value->>'toolId'<>'plugin/plex') WHERE id=@c RETURNING 1"
+                : "UPDATE workers SET capabilities=(SELECT jsonb_agg(c) FROM jsonb_array_elements(capabilities) c WHERE c->>'toolId'<>'plugin/plex') WHERE id=@c RETURNING 1",("c",c));
             await Waits.ProcessDueAsync(CancellationToken.None);
             Check(await runtime.ClaimAsync(c,CancellationToken.None) is null,"A worker without the plugin cannot evaluate the condition.");
             var probe=await runtime.ClaimAsync(b,CancellationToken.None)??throw new InvalidOperationException("A capable worker must receive the probe.");
