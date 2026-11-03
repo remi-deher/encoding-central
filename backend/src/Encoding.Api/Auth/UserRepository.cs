@@ -91,7 +91,7 @@ public sealed class UserRepository(DbDataSource dataSource)
         await using var command = dataSource.CreateCommand("""
             UPDATE users SET failed_attempts = failed_attempts + 1,
                 locked_until = CASE WHEN failed_attempts + 1 >= @threshold
-                    THEN clock_timestamp() + LEAST(15, power(2, failed_attempts + 1 - @threshold)::integer) * interval '1 minute'
+                    THEN (strftime('%Y-%m-%d %H:%M:%f', 'now', '+' || (MIN(15, power(2, failed_attempts + 1 - @threshold))) || ' minutes') || '000Z')
                     ELSE locked_until END
             WHERE id = @id
             """);
@@ -113,7 +113,7 @@ public sealed class UserRepository(DbDataSource dataSource)
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
-        await using var update = Sql.Command("UPDATE users SET password_hash = @hash, failed_attempts = 0, locked_until = NULL, updated_at = clock_timestamp() WHERE id = @id",
+        await using var update = Sql.Command("UPDATE users SET password_hash = @hash, failed_attempts = 0, locked_until = NULL, updated_at = (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') WHERE id = @id",
             connection, transaction);
         update.Parameters.AddWithValue("id", id);
         update.Parameters.AddWithValue("hash", passwordHash);
@@ -129,7 +129,7 @@ public sealed class UserRepository(DbDataSource dataSource)
         await using var transaction = await connection.BeginTransactionAsync(ct);
         if (!await ExistsAsync(connection, transaction, id, ct)) return UserChangeResult.NotFound;
         if ((role != UserRole.Admin || !isActive) && await IsLastActiveAdministratorAsync(connection, transaction, id, ct)) return UserChangeResult.LastAdministrator;
-        await using var update = Sql.Command("UPDATE users SET role = @role, is_active = @active, updated_at = clock_timestamp() WHERE id = @id", connection, transaction);
+        await using var update = Sql.Command("UPDATE users SET role = @role, is_active = @active, updated_at = (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') WHERE id = @id", connection, transaction);
         update.Parameters.AddWithValue("id", id);
         update.Parameters.AddWithValue("role", RoleName(role));
         update.Parameters.AddWithValue("active", isActive);
@@ -172,7 +172,7 @@ public sealed class UserRepository(DbDataSource dataSource)
     public async Task CreateSessionAsync(Guid userId, byte[] tokenHash, AuthOptions options, CancellationToken ct)
     {
         await using var command = dataSource.CreateCommand("""
-            DELETE FROM user_sessions WHERE expires_at <= clock_timestamp();
+            DELETE FROM user_sessions WHERE expires_at <= (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z');
             INSERT INTO user_sessions(token_hash, user_id, expires_at) VALUES (@hash, @user, @expires)
             """);
         command.Parameters.AddWithValue("hash", SqlKind.Bytes, tokenHash);
@@ -198,7 +198,7 @@ public sealed class UserRepository(DbDataSource dataSource)
         await using (var read = Sql.Command("""
             SELECT u.id, u.username, u.role, s.created_at, s.last_seen_at
             FROM user_sessions s JOIN users u ON u.id = s.user_id
-            WHERE s.token_hash = @hash AND u.is_active AND s.expires_at > clock_timestamp()
+            WHERE s.token_hash = @hash AND u.is_active AND s.expires_at > (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
             """, connection, transaction))
         {
             read.Parameters.AddWithValue("hash", SqlKind.Bytes, tokenHash);

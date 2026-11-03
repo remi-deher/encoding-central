@@ -4,12 +4,12 @@ using Microsoft.Data.Sqlite;
 
 namespace Encoding.Api.Infrastructure.Data;
 
-/// <summary>Types de paramètres dont le sens dépend du fournisseur (JSON, binaire, tableaux).</summary>
-public enum SqlKind { Text, Json, Bytes, Integer, Decimal, Uuid, TextArray }
+/// <summary>Indication de type des paramètres SQLite (texte JSON, binaire…) ; les tableaux se passent en JSON, sans type dédié.</summary>
+public enum SqlKind { Text, Json, Bytes, Integer, Decimal, Uuid }
 
 /// <summary>
 /// Seul point du backend qui connaît le fournisseur de base de données.
-/// Les dépôts manipulent des types ADO.NET génériques (DbConnection, DbCommand…) ; voir l'architecture 0043.
+/// Le SQL des dépôts est du SQLite natif, exécuté tel quel (aucune traduction) ; voir l'ADR 0043.
 /// </summary>
 public static class Sql
 {
@@ -24,7 +24,11 @@ public static class Sql
     public static bool IsSqlite(DbConnection connection) => connection is SqliteConnectionWrapper;
     public static bool IsSqlite(DbDataSource dataSource) => dataSource is SqliteDataSource;
 
-    public static string UtcNow => SqliteTranslator.NowUtc;
+    /// <summary>
+    /// Instant courant en SQLite natif, au format texte UTC de largeur fixe (<see cref="Instant"/>) : l'ordre alphabétique est l'ordre
+    /// chronologique. Insérer dans une requête interpolée ; à défaut, écrire l'expression littérale (voir <c>BACKEND_RULES.md</c>).
+    /// </summary>
+    public const string UtcNow = "(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')";
 
     public static DbParameter Parameter(string name, SqlKind kind, object? value)
     {

@@ -21,7 +21,7 @@ public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEli
     public async Task<IReadOnlyList<RuntimeExecutionState>> StatesAsync(IReadOnlyCollection<Guid> ids,CancellationToken ct)
     {
         if(ids.Count==0) return [];
-        await using var cmd=dataSource.CreateCommand("SELECT id,state FROM executions WHERE id=ANY(@ids)");
+        await using var cmd=dataSource.CreateCommand("SELECT id,state FROM executions WHERE id IN (SELECT value FROM json_each(@ids))");
         cmd.Parameters.AddWithValue("ids",ids.ToArray());
         await using var reader=await cmd.ExecuteReaderAsync(ct);
         var states=new List<RuntimeExecutionState>();
@@ -43,12 +43,12 @@ public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEli
         if (executionId == Guid.Empty || workerId == Guid.Empty || request.Epoch < 1 || request.InvocationId == Guid.Empty
             || string.IsNullOrWhiteSpace(request.FlowNodeId) || request.FlowNodeId.Length > 128) return null;
         await using var command = dataSource.CreateCommand("""
-            SELECT e.flow_definition::text
+            SELECT e.flow_definition
             FROM executions e
             JOIN execution_work w ON w.execution_id=e.id
             JOIN execution_steps s ON s.execution_id=e.id
             WHERE e.id=@execution AND e.state='running'
-              AND w.worker_id=@worker AND w.lease_epoch=@epoch AND w.lease_until>clock_timestamp()
+              AND w.worker_id=@worker AND w.lease_epoch=@epoch AND w.lease_until>(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
               AND s.flow_node_id=@flow_node AND s.invocation_id=@invocation AND s.completed_at IS NULL
             """);
         command.Parameters.AddWithValue("execution", executionId);
@@ -69,11 +69,11 @@ public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEli
         if (executionId == Guid.Empty || workerId == Guid.Empty || request.Epoch < 1 || request.InvocationId == Guid.Empty
             || string.IsNullOrWhiteSpace(request.FlowNodeId) || request.FlowNodeId.Length > 128) return null;
         await using var command = dataSource.CreateCommand("""
-            SELECT e.flow_definition::text FROM executions e
+            SELECT e.flow_definition FROM executions e
             JOIN execution_work w ON w.execution_id=e.id
             JOIN execution_steps s ON s.execution_id=e.id
             WHERE e.id=@execution AND e.state='running' AND w.worker_id=@worker AND w.lease_epoch=@epoch
-              AND w.lease_until>clock_timestamp() AND s.flow_node_id=@flow_node AND s.invocation_id=@invocation
+              AND w.lease_until>(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') AND s.flow_node_id=@flow_node AND s.invocation_id=@invocation
               AND s.completed_at IS NULL
             """);
         command.Parameters.AddWithValue("execution", executionId);
@@ -99,7 +99,7 @@ public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEli
     internal static async Task<bool> EnqueueInTransactionAsync(EnqueueMediaRequest request,FlowDefinition flow,DbConnection c,DbTransaction tx,CancellationToken ct, string requestOrigin = "api")
     {
         var path=NormalizePath(request.MediaPath);
-        await using var library=Sql.Command("SELECT name FROM libraries WHERE id=@id AND is_active FOR UPDATE",c,tx);
+        await using var library=Sql.Command("SELECT name FROM libraries WHERE id=@id AND is_active",c,tx);
         library.Parameters.AddWithValue("id",request.LibraryId);
         if(await library.ExecuteScalarAsync(ct) is not string name) return false;
         await using var duplicate=Sql.Command("SELECT EXISTS(SELECT 1 FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.library_id=@library AND w.media_key=@key AND e.state IN ('queued','running','cancelling'))",
@@ -132,7 +132,7 @@ public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEli
         WHERE e.state IN ('queued','running') AND NOT EXISTS(
           SELECT 1 FROM library_worker_accesses a JOIN workers n ON n.id=a.worker_id
           WHERE a.library_id=w.library_id AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.local_path IS NOT NULL
-            AND n.deleted_at IS NULL AND n.last_seen_at>clock_timestamp()-@offline
+            AND n.deleted_at IS NULL AND n.last_seen_at>(strftime('%Y-%m-%d %H:%M:%f', 'now', @offlineAgo) || '000Z')
             AND (w.handoff_selector IS NULL OR w.source_worker_id IS NULL OR a.worker_id=w.source_worker_id OR w.handoff_selector->>'mode'='resume' OR w.handoff_selector->>'resumed' IN (1,'true')))
         LIMIT 100
         """;
@@ -143,7 +143,7 @@ public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEli
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await connection.BeginTransactionAsync(System.Data.IsolationLevel.Snapshot, ct);
         await using var command = Sql.Command(UnavailableSourcesSql + " ", connection, tx);
-        command.Parameters.AddWithValue("offline", offlineAfter > SourceOfflineGrace ? offlineAfter : SourceOfflineGrace);
+        command.Parameters.AddWithValue("offlineAgo", -(offlineAfter > SourceOfflineGrace ? offlineAfter : SourceOfflineGrace));
         await using var rows = await command.ExecuteReaderAsync(ct);
         return await rows.ReadAsync(ct);
     }
@@ -151,9 +151,9 @@ public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEli
     internal static async Task<int> FailUnavailableSourcesAsync(DbConnection connection, DbTransaction tx, TimeSpan offlineAfter, CancellationToken ct)
     {
         var failures = new List<(Guid Id, Guid? Worker, int Revision)>();
-        await using (var command = Sql.Command(UnavailableSourcesSql + " FOR UPDATE OF e,w SKIP LOCKED", connection, tx))
+        await using (var command = Sql.Command(UnavailableSourcesSql, connection, tx))
         {
-            command.Parameters.AddWithValue("offline", offlineAfter > SourceOfflineGrace ? offlineAfter : SourceOfflineGrace);
+            command.Parameters.AddWithValue("offlineAgo", -(offlineAfter > SourceOfflineGrace ? offlineAfter : SourceOfflineGrace));
             await using var rows = await command.ExecuteReaderAsync(ct);
             while (await rows.ReadAsync(ct)) failures.Add((rows.GetGuid(0), rows.IsDBNull(1) ? null : rows.GetGuid(1), rows.GetInt32(2)));
         }

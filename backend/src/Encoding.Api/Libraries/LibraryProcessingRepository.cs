@@ -30,13 +30,13 @@ public sealed class LibraryProcessingRepository(DbDataSource dataSource)
             || request.WorkerLimits.Select(limit=>limit.WorkerId).Distinct().Count()!=request.WorkerLimits.Count || request.ExpectedRevision is <0 or int.MaxValue)
             throw new ArgumentException("Limites invalides : 1 à 1 000 traitements ; intervalle de 15 à 86 400 secondes.");
         await using var c=await dataSource.OpenConnectionAsync(ct);await using var tx=await c.BeginTransactionAsync(ct);
-        await using var libraryLock=Sql.Command("SELECT id FROM libraries WHERE id=@id FOR UPDATE",c,tx);
+        await using var libraryLock=Sql.Command("SELECT id FROM libraries WHERE id=@id",c,tx);
         libraryLock.Parameters.AddWithValue("id",library);if(await libraryLock.ExecuteScalarAsync(ct) is null)return false;
         await using var revision=Sql.Command("SELECT revision FROM library_processing_settings WHERE library_id=@id",c,tx);
         revision.Parameters.AddWithValue("id",library);if((await revision.ScalarInt32Async(ct) ?? 0)!=request.ExpectedRevision)return false;
         foreach(var limit in request.WorkerLimits)
         {
-            await using var eligible=Sql.Command("SELECT EXISTS(SELECT 1 FROM library_worker_accesses a JOIN workers n ON n.id=a.worker_id WHERE a.library_id=@library AND a.worker_id=@node AND a.mode<>'unsupported' AND n.deleted_at IS NULL AND 'worker'=ANY(n.roles))",
+            await using var eligible=Sql.Command("SELECT EXISTS(SELECT 1 FROM library_worker_accesses a JOIN workers n ON n.id=a.worker_id WHERE a.library_id=@library AND a.worker_id=@node AND a.mode<>'unsupported' AND n.deleted_at IS NULL AND EXISTS(SELECT 1 FROM json_each(n.roles) WHERE value = 'worker'))",
                 c,tx);
             eligible.Parameters.AddWithValue("library",library);eligible.Parameters.AddWithValue("node",limit.WorkerId);
             if(!(await eligible.ScalarBoolAsync(ct)))throw new ArgumentException("Les limites par worker exigent un worker disposant d’un accès à cette bibliothèque.");
@@ -60,7 +60,7 @@ public sealed class LibraryProcessingRepository(DbDataSource dataSource)
     }
     public async Task<WorkerProcessingSettings?> WorkerAsync(Guid worker,CancellationToken ct)
     {
-        await using var cmd=dataSource.CreateCommand("SELECT p.max_concurrent_tasks,COALESCE(p.max_concurrent_tasks,n.max_concurrent_tasks),COALESCE(p.revision,0),COALESCE(p.schedule_enabled,false),COALESCE(p.schedule_timezone,'UTC'),COALESCE(p.schedule_slots,repeat('1',672)) FROM workers n LEFT JOIN worker_processing_settings p ON p.worker_id=n.id WHERE n.id=@id AND n.deleted_at IS NULL");
+        await using var cmd=dataSource.CreateCommand("SELECT p.max_concurrent_tasks,COALESCE(p.max_concurrent_tasks,n.max_concurrent_tasks),COALESCE(p.revision,0),COALESCE(p.schedule_enabled,false),COALESCE(p.schedule_timezone,'UTC'),COALESCE(p.schedule_slots,replace(substr(hex(zeroblob(336)), 1, 672), '0', '1')) FROM workers n LEFT JOIN worker_processing_settings p ON p.worker_id=n.id WHERE n.id=@id AND n.deleted_at IS NULL");
         cmd.Parameters.AddWithValue("id",worker);await using var r=await cmd.ExecuteReaderAsync(ct);
         return await r.ReadAsync(ct)?new(r.IsDBNull(0)?null:r.GetInt32(0),r.GetInt32(1),r.GetInt32(2),new WorkerSchedule(r.GetBoolean(3),r.GetString(4),r.GetString(5))):null;
     }
@@ -69,7 +69,7 @@ public sealed class LibraryProcessingRepository(DbDataSource dataSource)
         if(request.MaxConcurrentTasks is <1 or >1000 || request.ExpectedRevision is <0 or int.MaxValue)throw new ArgumentException("La limite doit être comprise entre 1 et 1 000, ou laissée vide.");
         var schedule=request.Schedule??WorkerSchedule.AlwaysOpen; if(schedule.Validate() is {} scheduleError)throw new ArgumentException(scheduleError);
         await using var c=await dataSource.OpenConnectionAsync(ct);await using var tx=await c.BeginTransactionAsync(ct);
-        await using var locked=Sql.Command("SELECT id FROM workers WHERE id=@id AND deleted_at IS NULL FOR UPDATE",c,tx);
+        await using var locked=Sql.Command("SELECT id FROM workers WHERE id=@id AND deleted_at IS NULL",c,tx);
         locked.Parameters.AddWithValue("id",worker);if(await locked.ExecuteScalarAsync(ct) is null)return false;
         await using var current=Sql.Command("SELECT revision FROM worker_processing_settings WHERE worker_id=@id",c,tx);current.Parameters.AddWithValue("id",worker);
         if((await current.ScalarInt32Async(ct) ?? 0)!=request.ExpectedRevision)return false;

@@ -59,3 +59,4 @@ Une décision structurante : nouveau principe, changement d'un invariant des fic
 | [0039](0039-version-exacte-worker-central.md) | Un worker doit avoir la version exacte du central | implemented | workers |
 | [0040](0040-vocabulaire-central-worker.md) | Vocabulaire central / worker | accepted | workers |
 | [0041](0041-sse-a-la-place-du-sondage.md) | SSE à la place du sondage, pour l'interface et pour les workers | accepted | runtime |
+| [0043](0043-sql-sqlite-natif.md) | SQL SQLite natif, sans couche de traduction | implemented | storage |

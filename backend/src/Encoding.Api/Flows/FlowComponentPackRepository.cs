@@ -11,7 +11,7 @@ public sealed class FlowComponentPackRepository(DbDataSource dataSource, FlowCom
     {
         await using var command = dataSource.CreateCommand("""
             SELECT id,name,description,media_type,source_flow_id,source_version,source_flow_name,
-                   jsonb_array_length(definition->'nodes') - 1,created_at
+                   json_array_length(definition->'nodes') - 1,created_at
             FROM flow_component_packs ORDER BY lower(name),id
             """);
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -24,7 +24,7 @@ public sealed class FlowComponentPackRepository(DbDataSource dataSource, FlowCom
     {
         await using var command = dataSource.CreateCommand("""
             SELECT id,name,description,media_type,source_flow_id,source_version,source_flow_name,
-                   jsonb_array_length(definition->'nodes') - 1,created_at,definition::text,input_node_id,outputs::text
+                   json_array_length(definition->'nodes') - 1,created_at,definition,input_node_id,outputs
             FROM flow_component_packs WHERE id=@id
             """);
         command.Parameters.AddWithValue("id", id);
@@ -47,7 +47,7 @@ public sealed class FlowComponentPackRepository(DbDataSource dataSource, FlowCom
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
         await using var source = Sql.Command(
-            "SELECT definition::text FROM flow_versions WHERE flow_id=@flowId AND version=@version",
+            "SELECT definition FROM flow_versions WHERE flow_id=@flowId AND version=@version",
             connection, transaction);
         source.Parameters.AddWithValue("flowId", request.SourceFlowId);
         source.Parameters.AddWithValue("version", request.SourceVersion);

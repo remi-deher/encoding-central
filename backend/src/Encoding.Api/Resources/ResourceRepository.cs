@@ -25,7 +25,7 @@ public sealed class ResourceRepository(DbDataSource dataSource, ResourceBlobStor
                 resources.Add((reader.GetGuid(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetFieldValue<DateTimeOffset>(4)));
         }
         var latest = new Dictionary<Guid, ResourceVersion>();
-        await using (var command = Sql.Command("SELECT resource_id,version,files::text,total_bytes,created_at FROM flow_resource_versions ORDER BY version", connection))
+        await using (var command = Sql.Command("SELECT resource_id,version,files,total_bytes,created_at FROM flow_resource_versions ORDER BY version", connection))
         {
             await using var reader = await command.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct)) { var version = ReadVersion(reader); latest[version.ResourceId] = version; }
@@ -45,7 +45,7 @@ public sealed class ResourceRepository(DbDataSource dataSource, ResourceBlobStor
             header = (reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetFieldValue<DateTimeOffset>(3));
         }
         var versions = new List<ResourceVersion>();
-        await using (var command = Sql.Command("SELECT resource_id,version,files::text,total_bytes,created_at FROM flow_resource_versions WHERE resource_id=@id ORDER BY version DESC", connection))
+        await using (var command = Sql.Command("SELECT resource_id,version,files,total_bytes,created_at FROM flow_resource_versions WHERE resource_id=@id ORDER BY version DESC", connection))
         {
             command.Parameters.AddWithValue("id", id);
             await using var reader = await command.ExecuteReaderAsync(ct);
@@ -56,7 +56,7 @@ public sealed class ResourceRepository(DbDataSource dataSource, ResourceBlobStor
 
     public async Task<ResourceVersion?> GetVersionAsync(Guid id, int version, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("SELECT resource_id,version,files::text,total_bytes,created_at FROM flow_resource_versions WHERE resource_id=@id AND version=@version");
+        await using var command = dataSource.CreateCommand("SELECT resource_id,version,files,total_bytes,created_at FROM flow_resource_versions WHERE resource_id=@id AND version=@version");
         command.Parameters.AddWithValue("id", id);
         command.Parameters.AddWithValue("version", version);
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -65,7 +65,7 @@ public sealed class ResourceRepository(DbDataSource dataSource, ResourceBlobStor
 
     public async Task<ResourceDetails?> UpdateAsync(Guid id, string name, string description, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("UPDATE flow_resources SET name=@name,description=@description,updated_at=now() WHERE id=@id");
+        await using var command = dataSource.CreateCommand("UPDATE flow_resources SET name=@name,description=@description,updated_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') WHERE id=@id");
         command.Parameters.AddWithValue("id", id);
         command.Parameters.AddWithValue("name", name.Trim());
         command.Parameters.AddWithValue("description", description.Trim());
@@ -110,7 +110,7 @@ public sealed class ResourceRepository(DbDataSource dataSource, ResourceBlobStor
             next = Convert.ToInt32(await read.ExecuteScalarAsync(ct));
         }
         await InsertVersionAsync(id, next, resolved, connection, transaction, ct);
-        await using (var update = Sql.Command("UPDATE flow_resources SET updated_at=now() WHERE id=@id", connection, transaction))
+        await using (var update = Sql.Command("UPDATE flow_resources SET updated_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') WHERE id=@id", connection, transaction))
         {
             update.Parameters.AddWithValue("id", id);
             await update.ExecuteNonQueryAsync(ct);
@@ -123,7 +123,7 @@ public sealed class ResourceRepository(DbDataSource dataSource, ResourceBlobStor
     public async Task<IReadOnlyList<ResourceVersion>> LatestVersionsAsync(CancellationToken ct)
     {
         var latest = new Dictionary<Guid, ResourceVersion>();
-        await using var command = dataSource.CreateCommand("SELECT resource_id,version,files::text,total_bytes,created_at FROM flow_resource_versions ORDER BY version");
+        await using var command = dataSource.CreateCommand("SELECT resource_id,version,files,total_bytes,created_at FROM flow_resource_versions ORDER BY version");
         await using var reader = await command.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct)) { var version = ReadVersion(reader); latest[version.ResourceId] = version; }
         return latest.Values.ToArray();
@@ -133,7 +133,7 @@ public sealed class ResourceRepository(DbDataSource dataSource, ResourceBlobStor
     public async Task<ResourceFile?> FindFileAsync(string digest, CancellationToken ct)
     {
         if (!ResourceBlobStore.ValidDigest(digest)) return null;
-        await using var command = dataSource.CreateCommand("SELECT resource_id,version,files::text,total_bytes,created_at FROM flow_resource_versions WHERE files::text LIKE @pattern");
+        await using var command = dataSource.CreateCommand("SELECT resource_id,version,files,total_bytes,created_at FROM flow_resource_versions WHERE files LIKE @pattern");
         command.Parameters.AddWithValue("pattern", "%" + digest + "%");
         await using var reader = await command.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
@@ -146,7 +146,7 @@ public sealed class ResourceRepository(DbDataSource dataSource, ResourceBlobStor
     {
         var files = new List<ResourceFile>();
         await using var connection = await dataSource.OpenConnectionAsync(ct);
-        await using var command = Sql.Command("SELECT resource_id,version,files::text,total_bytes,created_at FROM flow_resource_versions ORDER BY version DESC", connection);
+        await using var command = Sql.Command("SELECT resource_id,version,files,total_bytes,created_at FROM flow_resource_versions ORDER BY version DESC", connection);
         await using var reader = await command.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct)) files.AddRange(ReadVersion(reader).Files);
         return files.Where(file => !isPresent(file.Sha256)).DistinctBy(file => file.Sha256).ToArray();
@@ -158,7 +158,7 @@ public sealed class ResourceRepository(DbDataSource dataSource, ResourceBlobStor
         var needle = id.ToString("D");
         var usage = new List<ResourceUsage>();
         await using var connection = await dataSource.OpenConnectionAsync(ct);
-        await using var command = Sql.Command("SELECT flow_id,version,definition::text FROM flow_versions WHERE definition::text LIKE @pattern ORDER BY flow_id,version", connection);
+        await using var command = Sql.Command("SELECT flow_id,version,definition FROM flow_versions WHERE definition LIKE @pattern ORDER BY flow_id,version", connection);
         command.Parameters.AddWithValue("pattern", "%" + needle + "%");
         await using var reader = await command.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
@@ -201,7 +201,7 @@ public sealed class ResourceRepository(DbDataSource dataSource, ResourceBlobStor
     {
         foreach (var digest in digests)
         {
-            await using var command = dataSource.CreateCommand("SELECT COUNT(*) FROM flow_resource_versions WHERE files::text LIKE @pattern");
+            await using var command = dataSource.CreateCommand("SELECT COUNT(*) FROM flow_resource_versions WHERE files LIKE @pattern");
             command.Parameters.AddWithValue("pattern", "%" + digest + "%");
             if (Convert.ToInt64(await command.ExecuteScalarAsync(ct)) == 0) blobs.Delete(digest);
         }

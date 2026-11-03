@@ -18,7 +18,7 @@ public sealed class RuntimeArtifactStore(DbDataSource dataSource,IConfiguration 
         await using var command=dataSource.CreateCommand("""
             SELECT DISTINCT item.value->>'sha256',item.value->>'name',a.byte_length
             FROM execution_steps s
-            CROSS JOIN LATERAL jsonb_each(COALESCE(s.checkpoint->'context'->'variables','{}'::jsonb)) item
+            , json_each(COALESCE(s.checkpoint->'context'->'variables','{}')) item
             JOIN execution_artifacts a ON a.execution_id=s.execution_id AND a.sha256=item.value->>'sha256'
             WHERE s.execution_id=@id AND s.completed_at IS NOT NULL AND item.key LIKE 'artifact.%'
             ORDER BY 2,1

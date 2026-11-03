@@ -13,13 +13,13 @@ public sealed partial class FlowRepository(DbDataSource dataSource)
     {
         await using var command = dataSource.CreateCommand("""
             SELECT f.id,COALESCE(d.definition,v.definition)->>'name',COALESCE(d.definition,v.definition)->>'mediaType',f.current_version,
-                   jsonb_array_length(COALESCE(d.definition,v.definition)->'nodes'),CASE WHEN d.flow_id IS NOT NULL THEN COALESCE(db.status,'pending') ELSE COALESCE(b.status,'pending') END,
-                   GREATEST(f.updated_at,COALESCE(d.updated_at,f.updated_at)),d.flow_id IS NOT NULL
+                   json_array_length(COALESCE(d.definition,v.definition)->'nodes'),CASE WHEN d.flow_id IS NOT NULL THEN COALESCE(db.status,'pending') ELSE COALESCE(b.status,'pending') END,
+                   MAX(f.updated_at,COALESCE(d.updated_at,f.updated_at)),d.flow_id IS NOT NULL
             FROM flows f LEFT JOIN flow_versions v ON v.flow_id=f.id AND v.version=f.current_version
             LEFT JOIN flow_drafts d ON d.flow_id=f.id LEFT JOIN flow_draft_backups db ON db.flow_id=d.flow_id AND db.revision=d.revision
             LEFT JOIN flow_backup_jobs b ON b.flow_id=v.flow_id AND b.version=v.version
             WHERE f.deleted_at IS NULL AND (d.flow_id IS NOT NULL OR v.flow_id IS NOT NULL)
-            ORDER BY GREATEST(f.updated_at,COALESCE(d.updated_at,f.updated_at)) DESC,f.id
+            ORDER BY MAX(f.updated_at,COALESCE(d.updated_at,f.updated_at)) DESC,f.id
             """);
         await using var reader = await command.ExecuteReaderAsync(ct);
         var result = new List<FlowSummary>();
@@ -31,7 +31,7 @@ public sealed partial class FlowRepository(DbDataSource dataSource)
     public async Task<FlowVersionResponse?> GetAsync(Guid id, int? version, CancellationToken ct)
     {
         await using var command = dataSource.CreateCommand("""
-            SELECT v.definition::text,b.status,v.created_at FROM flows f
+            SELECT v.definition,b.status,v.created_at FROM flows f
             JOIN flow_versions v ON v.flow_id=f.id AND v.version=COALESCE(@version,f.current_version)
             JOIN flow_backup_jobs b ON b.flow_id=v.flow_id AND b.version=v.version
             WHERE f.id=@id AND (@version IS NOT NULL OR f.deleted_at IS NULL)
@@ -45,7 +45,7 @@ public sealed partial class FlowRepository(DbDataSource dataSource)
 
     public async Task<FlowDraftResponse?> DraftAsync(Guid id,CancellationToken ct)
     {
-        await using var command=dataSource.CreateCommand("SELECT d.definition::text,d.revision,f.current_version,d.updated_at,b.status FROM flow_drafts d JOIN flows f ON f.id=d.flow_id JOIN flow_draft_backups b ON b.flow_id=d.flow_id AND b.revision=d.revision WHERE f.id=@id AND f.deleted_at IS NULL");
+        await using var command=dataSource.CreateCommand("SELECT d.definition,d.revision,f.current_version,d.updated_at,b.status FROM flow_drafts d JOIN flows f ON f.id=d.flow_id JOIN flow_draft_backups b ON b.flow_id=d.flow_id AND b.revision=d.revision WHERE f.id=@id AND f.deleted_at IS NULL");
         command.Parameters.AddWithValue("id",id); await using var reader=await command.ExecuteReaderAsync(ct);
         return await reader.ReadAsync(ct) ? new(JsonSerializer.Deserialize<FlowDefinition>(reader.GetString(0),JsonOptions)!,reader.GetInt32(1),
             reader.GetInt32(2),reader.GetString(4),reader.GetFieldValue<DateTimeOffset>(3)) : null;
@@ -55,11 +55,11 @@ public sealed partial class FlowRepository(DbDataSource dataSource)
         request=request with { Definition=request.Definition.RepairText() };
         await using var connection=await dataSource.OpenConnectionAsync(ct); await using var tx=await connection.BeginTransactionAsync(ct);
         await using var command=Sql.Command(
-          "INSERT INTO flows(id) VALUES(@id) ON CONFLICT DO NOTHING; SELECT current_version FROM flows WHERE id=@id FOR UPDATE",connection,tx);
+          "INSERT INTO flows(id) VALUES(@id) ON CONFLICT DO NOTHING; SELECT current_version FROM flows WHERE id=@id",connection,tx);
         command.Parameters.AddWithValue("id",request.Definition.Id);
         var published=(await command.ScalarInt32Async(ct))!.Value;
         await using var save=Sql.Command(
-          "INSERT INTO flow_drafts(flow_id,revision,definition) SELECT @id,1,@document WHERE @expected=0 ON CONFLICT(flow_id) DO UPDATE SET definition=EXCLUDED.definition,revision=flow_drafts.revision+1,updated_at=clock_timestamp() WHERE flow_drafts.revision=@expected RETURNING revision",
+          "INSERT INTO flow_drafts(flow_id,revision,definition) SELECT @id,1,@document WHERE @expected=0 ON CONFLICT(flow_id) DO UPDATE SET definition=EXCLUDED.definition,revision=flow_drafts.revision+1,updated_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') WHERE flow_drafts.revision=@expected RETURNING revision",
               connection,tx);
         save.Parameters.AddWithValue("id",request.Definition.Id); save.Parameters.AddWithValue("expected",request.ExpectedRevision);
         save.Parameters.AddWithValue("document",SqlKind.Json,JsonSerializer.Serialize(request.Definition,JsonOptions));
@@ -72,7 +72,7 @@ public sealed partial class FlowRepository(DbDataSource dataSource)
         highest.Parameters.AddWithValue("id",request.Definition.Id);
         var nextRevision=(await highest.ScalarInt32Async(ct))!.Value;
         save.Parameters.AddWithValue("next",nextRevision);
-        save.CommandText="INSERT INTO flow_drafts(flow_id,revision,definition) VALUES(@id,@next,@document) ON CONFLICT(flow_id) DO UPDATE SET definition=EXCLUDED.definition,revision=EXCLUDED.revision,updated_at=clock_timestamp() RETURNING revision,updated_at";
+        save.CommandText="INSERT INTO flow_drafts(flow_id,revision,definition) VALUES(@id,@next,@document) ON CONFLICT(flow_id) DO UPDATE SET definition=EXCLUDED.definition,revision=EXCLUDED.revision,updated_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') RETURNING revision,updated_at";
         await using var written=await save.ExecuteReaderAsync(ct); await written.ReadAsync(ct); var result=new FlowDraftResponse(request.Definition,
             written.GetInt32(0),published,"draft",written.GetFieldValue<DateTimeOffset>(1)); await written.DisposeAsync();
         await using(var backup=Sql.Command("INSERT INTO flow_draft_backups(flow_id,revision,definition) VALUES(@id,@revision,@document)",connection,tx)) {
@@ -85,7 +85,7 @@ public sealed partial class FlowRepository(DbDataSource dataSource)
 
     public async Task<IReadOnlyList<FlowDefinition>> VersionsAsync(Guid id, CancellationToken ct)
     {
-        await using var command=dataSource.CreateCommand("SELECT definition::text FROM flow_versions WHERE flow_id=@id ORDER BY version");
+        await using var command=dataSource.CreateCommand("SELECT definition FROM flow_versions WHERE flow_id=@id ORDER BY version");
         command.Parameters.AddWithValue("id",id);
         await using var reader=await command.ExecuteReaderAsync(ct);
         var list=new List<FlowDefinition>();
@@ -109,7 +109,7 @@ public sealed partial class FlowRepository(DbDataSource dataSource)
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await connection.BeginTransactionAsync(ct);
         foreach(var id in requests.Select(r=>r.Definition.Id).Concat((drafts??[]).Select(d=>d.Definition.Id)).Distinct().Order()) {
-            await using var guard=Sql.Command("INSERT INTO flows(id) VALUES(@id) ON CONFLICT DO NOTHING; SELECT id FROM flows WHERE id=@id FOR UPDATE",connection,tx);
+            await using var guard=Sql.Command("INSERT INTO flows(id) VALUES(@id) ON CONFLICT DO NOTHING; SELECT id FROM flows WHERE id=@id",connection,tx);
             guard.Parameters.AddWithValue("id",id); await guard.ExecuteScalarAsync(ct);
         }
         foreach (var request in requests.OrderBy(r => r.Definition.Id).ThenBy(r => r.Definition.Version))
@@ -141,7 +141,7 @@ public sealed partial class FlowRepository(DbDataSource dataSource)
         await using (var insert = Sql.Command("INSERT INTO flows(id) VALUES(@id) ON CONFLICT DO NOTHING",connection,tx))
         { insert.Parameters.AddWithValue("id",definition.Id); await insert.ExecuteNonQueryAsync(ct); }
         int current;
-        await using (var read = Sql.Command("SELECT current_version FROM flows WHERE id=@id FOR UPDATE",connection,tx))
+        await using (var read = Sql.Command("SELECT current_version FROM flows WHERE id=@id",connection,tx))
         { read.Parameters.AddWithValue("id",definition.Id); current = (await read.ScalarInt32Async(ct))!.Value; }
         var json = JsonSerializer.Serialize(definition,JsonOptions);
         // An identical retry is acknowledged even after a newer publication. It never changes the head.
@@ -178,7 +178,7 @@ public sealed partial class FlowRepository(DbDataSource dataSource)
         await using var command = Sql.Command("""
             INSERT INTO flow_versions(flow_id,version,definition) VALUES(@id,@version,@document);
             INSERT INTO flow_backup_jobs(flow_id,version) VALUES(@id,@version);
-            UPDATE flows SET updated_at=CASE WHEN current_version<@version THEN clock_timestamp() ELSE updated_at END,current_version=GREATEST(current_version,@version) WHERE id=@id;
+            UPDATE flows SET updated_at=CASE WHEN current_version<@version THEN (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') ELSE updated_at END,current_version=MAX(current_version,@version) WHERE id=@id;
             """,connection,tx);
         command.Parameters.AddWithValue("id",definition.Id); command.Parameters.AddWithValue("version",definition.Version);
         command.Parameters.AddWithValue("document",SqlKind.Json,json);
@@ -243,7 +243,7 @@ public sealed partial class FlowRepository(DbDataSource dataSource)
         clearDraft.Parameters.AddWithValue("id", id);
         await clearDraft.ExecuteNonQueryAsync(ct);
 
-        await using var softDelete = Sql.Command("UPDATE flows SET deleted_at = clock_timestamp(), updated_at = clock_timestamp() WHERE id = @id AND (@expectedVersion IS NULL OR current_version = @expectedVersion)",
+        await using var softDelete = Sql.Command("UPDATE flows SET deleted_at = (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'), updated_at = (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') WHERE id = @id AND (@expectedVersion IS NULL OR current_version = @expectedVersion)",
             connection, tx);
         softDelete.Parameters.AddWithValue("id", id);
         softDelete.Parameters.AddWithValue("expectedVersion", (object?)expectedVersion ?? DBNull.Value);
@@ -274,7 +274,7 @@ public sealed partial class FlowRepository(DbDataSource dataSource)
 
         if (currentVersion == 0 && versionCount == 0)
         {
-            await using var removeFlow = Sql.Command("UPDATE flows SET deleted_at = clock_timestamp(), updated_at = clock_timestamp() WHERE id = @id", connection, tx);
+            await using var removeFlow = Sql.Command("UPDATE flows SET deleted_at = (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'), updated_at = (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') WHERE id = @id", connection, tx);
             removeFlow.Parameters.AddWithValue("id", id);
             await removeFlow.ExecuteNonQueryAsync(ct);
         }

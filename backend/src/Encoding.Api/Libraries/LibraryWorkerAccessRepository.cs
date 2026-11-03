@@ -20,7 +20,7 @@ public sealed class LibraryWorkerAccessRepository(DbDataSource dataSource)
     {
         const string sql = """
             UPDATE library_worker_accesses
-            SET is_enabled = @is_enabled, updated_at = clock_timestamp()
+            SET is_enabled = @is_enabled, updated_at = (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
             WHERE library_id = @library_id AND worker_id = @worker_id AND mode <> 'unsupported'
             """;
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -82,7 +82,7 @@ public sealed class LibraryWorkerAccessRepository(DbDataSource dataSource)
         var nodeRoles = new Dictionary<Guid, string[]>();
         if (workers.Count > 0)
         {
-            await using var nodeCommand = Sql.Command("SELECT id, roles FROM workers WHERE id = ANY(@ids) AND deleted_at IS NULL", connection, transaction);
+            await using var nodeCommand = Sql.Command("SELECT id, roles FROM workers WHERE id IN (SELECT value FROM json_each(@ids)) AND deleted_at IS NULL", connection, transaction);
             nodeCommand.Parameters.AddWithValue("ids", workers.Select(item => item.WorkerId).Distinct().ToArray());
             await using var nodeReader = await nodeCommand.ExecuteReaderAsync(cancellationToken);
             while (await nodeReader.ReadAsync(cancellationToken)) nodeRoles[nodeReader.GetGuid(0)] = nodeReader.GetStringArray(1);

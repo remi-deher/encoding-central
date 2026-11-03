@@ -22,7 +22,7 @@ public sealed class FlowScriptRepository(DbDataSource dataSource)
         var versions = new Dictionary<Guid, List<FlowScriptVersionSummary>>();
         await using (var command = Sql.Command("""
             SELECT script_id,version,name,language,description,created_at FROM flow_script_versions
-            WHERE script_id=ANY(@ids) ORDER BY version DESC
+            WHERE script_id IN (SELECT value FROM json_each(@ids)) ORDER BY version DESC
             """, connection))
         {
             command.Parameters.AddWithValue("ids", scripts.Select(script => script.Id).ToArray());
@@ -72,7 +72,7 @@ public sealed class FlowScriptRepository(DbDataSource dataSource)
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
-        await using (var lockScript = Sql.Command("SELECT id FROM flow_scripts WHERE id=@id FOR UPDATE", connection, transaction))
+        await using (var lockScript = Sql.Command("SELECT id FROM flow_scripts WHERE id=@id", connection, transaction))
         {
             lockScript.Parameters.AddWithValue("id", id);
             if (await lockScript.ExecuteScalarAsync(ct) is null) return false;
@@ -105,7 +105,7 @@ public sealed class FlowScriptRepository(DbDataSource dataSource)
     {
         await using var command = dataSource.CreateCommand("""
             UPDATE flow_scripts SET draft_revision=draft_revision+1,draft_name=@name,draft_language=@language,
-                draft_description=@description,draft_code=@code,updated_at=now()
+                draft_description=@description,draft_code=@code,updated_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
             WHERE id=@id AND draft_revision=@revision
             """);
         AddDraft(command, request.Draft);
@@ -123,7 +123,7 @@ public sealed class FlowScriptRepository(DbDataSource dataSource)
         int version;
         await using (var read = Sql.Command("""
             SELECT draft_name,draft_language,draft_description,draft_code,published_version
-            FROM flow_scripts WHERE id=@id AND draft_revision=@revision FOR UPDATE
+            FROM flow_scripts WHERE id=@id AND draft_revision=@revision
             """, connection, transaction))
         {
             read.Parameters.AddWithValue("id", id);
@@ -149,7 +149,7 @@ public sealed class FlowScriptRepository(DbDataSource dataSource)
             insert.Parameters.AddWithValue("code", code);
             await insert.ExecuteNonQueryAsync(ct);
         }
-        await using (var update = Sql.Command("UPDATE flow_scripts SET published_version=@version,updated_at=now() WHERE id=@id", connection, transaction))
+        await using (var update = Sql.Command("UPDATE flow_scripts SET published_version=@version,updated_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') WHERE id=@id", connection, transaction))
         {
             update.Parameters.AddWithValue("id", id);
             update.Parameters.AddWithValue("version", version);

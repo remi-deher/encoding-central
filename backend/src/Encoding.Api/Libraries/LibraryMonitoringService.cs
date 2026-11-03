@@ -12,12 +12,12 @@ public sealed class LibraryMonitoringService(DbDataSource dataSource,LibraryWork
 
                 await using var cmd=dataSource.CreateCommand("""
                   INSERT INTO library_scans(id,library_id,media_type)
-                  SELECT gen_random_uuid(),l.id,v.definition->>'mediaType'
+                  SELECT lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)), 2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(hex(randomblob(2)), 2) || '-' || hex(randomblob(6))),l.id,v.definition->>'mediaType'
                   FROM libraries l JOIN library_flow_assignments a ON a.library_id=l.id
                   JOIN flow_versions v ON v.flow_id=a.flow_id AND v.version=a.flow_version
                   LEFT JOIN library_processing_settings p ON p.library_id=l.id
                   WHERE l.is_active AND COALESCE(p.watch_enabled,true)
-                  AND NOT EXISTS(SELECT 1 FROM library_scans s WHERE s.library_id=l.id AND s.created_at>clock_timestamp()-make_interval(secs=>COALESCE(p.scan_interval_seconds,60)))
+                  AND NOT EXISTS(SELECT 1 FROM library_scans s WHERE s.library_id=l.id AND s.created_at>(strftime('%Y-%m-%d %H:%M:%f', 'now', '-' || (COALESCE(p.scan_interval_seconds,60)) || ' seconds') || '000Z'))
                   ON CONFLICT DO NOTHING
                   """);
                 // Une demande de scan née ici n'a pas de requête HTTP derrière elle : on la signale, sinon les workers ne la verraient qu'à leur filet de sécurité.

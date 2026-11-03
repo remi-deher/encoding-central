@@ -19,8 +19,8 @@ public sealed class LibraryActivityCancelledTests
             INSERT INTO flows(id,current_version) VALUES(@flow,1);
             INSERT INTO flow_versions(flow_id,version,definition) VALUES(@flow,1,'{"name":"Synthetic"}');
             INSERT INTO library_flow_assignments(library_id,flow_id,flow_version,revision) VALUES(@library,@flow,1,1);
-            INSERT INTO library_scans(id,library_id,media_type,state,completed_at) VALUES(@scan,@library,'video','completed',clock_timestamp());
-            INSERT INTO library_media(id,library_id,relative_path,byte_length,modified_at,scan_id) VALUES(@media,@library,'synthetic.mkv',1,clock_timestamp(),@scan);
+            INSERT INTO library_scans(id,library_id,media_type,state,completed_at) VALUES(@scan,@library,'video','completed',(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'));
+            INSERT INTO library_media(id,library_id,relative_path,byte_length,modified_at,scan_id) VALUES(@media,@library,'synthetic.mkv',1,(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),@scan);
             INSERT INTO executions(id,media,library_name,flow_name,flow_version,flow_definition,state,attempt,detail)
               VALUES(@execution,'synthetic.mkv','Synthetic','Synthetic',1,'{}','cancelled',1,'Interrupted by user.');
             INSERT INTO execution_work(execution_id,library_id,media_path,media_key)

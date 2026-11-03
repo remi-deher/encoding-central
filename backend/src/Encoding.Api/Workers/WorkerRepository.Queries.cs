@@ -15,13 +15,13 @@ public sealed partial class WorkerRepository
     {
         const string sql = """
             SELECT id, name, roles, max_concurrent_tasks, capabilities, last_seen_at,
-                   last_seen_at >= clock_timestamp() - @offline_after AS is_online, inventory, display_name, labels
+                   last_seen_at >= (strftime('%Y-%m-%d %H:%M:%f', 'now', @offlineAgo) || '000Z') AS is_online, inventory, display_name, labels
             FROM workers WHERE deleted_at IS NULL
             ORDER BY name, id
             """;
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var command = Sql.Command(sql, connection);
-        command.Parameters.AddWithValue("offline_after", offlineAfter);
+        command.Parameters.AddWithValue("offlineAgo", -offlineAfter);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         var workers = new List<WorkerResponse>();
         while (await reader.ReadAsync(cancellationToken)) workers.Add(ReadResponse(reader, reader.GetBoolean(6)));
@@ -33,13 +33,13 @@ public sealed partial class WorkerRepository
     {
         const string sql = """
             SELECT id, name, roles, max_concurrent_tasks, capabilities, last_seen_at,
-                   last_seen_at >= clock_timestamp() - @offline_after AS is_online, inventory, display_name, labels
+                   last_seen_at >= (strftime('%Y-%m-%d %H:%M:%f', 'now', @offlineAgo) || '000Z') AS is_online, inventory, display_name, labels
             FROM workers WHERE id = @id AND deleted_at IS NULL
             """;
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var command = Sql.Command(sql, connection);
         command.Parameters.AddWithValue("id", workerId);
-        command.Parameters.AddWithValue("offline_after", offlineAfter);
+        command.Parameters.AddWithValue("offlineAgo", -offlineAfter);
         WorkerResponse? worker;
         await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
             worker = await reader.ReadAsync(cancellationToken) ? ReadResponse(reader, reader.GetBoolean(6)) : null;
@@ -92,25 +92,25 @@ public sealed partial class WorkerRepository
     public async Task<string> DeleteAsync(Guid id,CancellationToken ct)
     {
         bool server;
-        await using(var read=dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM workers WHERE id=@id AND 'server'=ANY(roles))")) {read.Parameters.AddWithValue("id",
+        await using(var read=dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM workers WHERE id=@id AND EXISTS(SELECT 1 FROM json_each(roles) WHERE value = 'server'))")) {read.Parameters.AddWithValue("id",
             id);server=await read.ScalarBoolAsync(ct);}
         if(server) return "coordination"; // Le central ne se retire pas : il est l'unique serveur.
         await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
-        await using var node=Sql.Command("SELECT id FROM workers WHERE id=@id AND deleted_at IS NULL FOR UPDATE",c,tx);
+        await using var node=Sql.Command("SELECT id FROM workers WHERE id=@id AND deleted_at IS NULL",c,tx);
         node.Parameters.AddWithValue("id",id); if(await node.ExecuteScalarAsync(ct) is null) return "missing";
-        if(!server) {await using var changed=Sql.Command("SELECT EXISTS(SELECT 1 FROM workers WHERE id=@id AND 'server'=ANY(roles))",c,tx);
+        if(!server) {await using var changed=Sql.Command("SELECT EXISTS(SELECT 1 FROM workers WHERE id=@id AND EXISTS(SELECT 1 FROM json_each(roles) WHERE value = 'server'))",c,tx);
             changed.Parameters.AddWithValue("id",id);if(await changed.ScalarBoolAsync(ct)) return "coordination";}
         await using var active=Sql.Command("""
           SELECT EXISTS(SELECT 1 FROM execution_work w JOIN executions e ON e.id=w.execution_id
-            WHERE (w.worker_id=@id OR w.source_worker_id=@id) AND (w.lease_until>clock_timestamp() OR w.handoff_pending) AND e.state IN ('running','cancelling'))
-          OR EXISTS(SELECT 1 FROM library_scans WHERE worker_id=@id AND state='running' AND lease_until>clock_timestamp())
+            WHERE (w.worker_id=@id OR w.source_worker_id=@id) AND (w.lease_until>(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') OR w.handoff_pending) AND e.state IN ('running','cancelling'))
+          OR EXISTS(SELECT 1 FROM library_scans WHERE worker_id=@id AND state='running' AND lease_until>(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'))
           """,c,tx);
         active.Parameters.AddWithValue("id",id); if((await active.ScalarBoolAsync(ct))) return "busy";
-        await using(var queues=Sql.Command("SELECT EXISTS(SELECT 1 FROM executions WHERE state IN ('queued','running','cancelling')) AND EXISTS(SELECT 1 FROM workers WHERE id=@id AND 'server'=ANY(roles))",
+        await using(var queues=Sql.Command("SELECT EXISTS(SELECT 1 FROM executions WHERE state IN ('queued','running','cancelling')) AND EXISTS(SELECT 1 FROM workers WHERE id=@id AND EXISTS(SELECT 1 FROM json_each(roles) WHERE value = 'server'))",
             c,tx))
         {queues.Parameters.AddWithValue("id",id);if(await queues.ScalarBoolAsync(ct)) return "busy";}
         await using var remove=Sql.Command("""
-          UPDATE workers SET deleted_at=clock_timestamp(),worker_token_hash=NULL WHERE id=@id;
+          UPDATE workers SET deleted_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),worker_token_hash=NULL WHERE id=@id;
           DELETE FROM worker_group_members WHERE worker_id=@id;
           DELETE FROM library_worker_accesses WHERE worker_id=@id;
           UPDATE library_worker_accesses SET is_enabled=false WHERE transfer_source_worker_id=@id;
@@ -123,9 +123,9 @@ public sealed partial class WorkerRepository
     public async Task<IReadOnlyDictionary<Guid,int>> ActiveTaskCountsAsync(CancellationToken ct)
     {
         await using var cmd=dataSource.CreateCommand("""
-          SELECT w.worker_id, count(*)::integer
+          SELECT w.worker_id, count(*)
           FROM execution_work w JOIN executions e ON e.id=w.execution_id
-          WHERE w.worker_id IS NOT NULL AND w.lease_until>clock_timestamp() AND e.state IN ('running','cancelling')
+          WHERE w.worker_id IS NOT NULL AND w.lease_until>(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') AND e.state IN ('running','cancelling')
           GROUP BY w.worker_id
           """);
         await using var r=await cmd.ExecuteReaderAsync(ct);
@@ -138,12 +138,12 @@ public sealed partial class WorkerRepository
     {
         await using var cmd=dataSource.CreateCommand("""
           SELECT
-           (SELECT count(*)::integer FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.worker_id=@id AND w.lease_until>clock_timestamp() AND e.state IN ('running','cancelling')),
-           (SELECT count(*)::integer FROM executions WHERE worker_id=@id AND state='succeeded'),
-           (SELECT count(*)::integer FROM executions WHERE worker_id=@id AND state='failed'),
-           (SELECT count(*)::integer FROM executions WHERE worker_id=@id AND state='cancelled'),
+           (SELECT count(*) FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.worker_id=@id AND w.lease_until>(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') AND e.state IN ('running','cancelling')),
+           (SELECT count(*) FROM executions WHERE worker_id=@id AND state='succeeded'),
+           (SELECT count(*) FROM executions WHERE worker_id=@id AND state='failed'),
+           (SELECT count(*) FROM executions WHERE worker_id=@id AND state='cancelled'),
            (SELECT max(updated_at) FROM executions WHERE worker_id=@id),
-           (SELECT count(*)::integer FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.source_worker_id=@id AND w.lease_until>clock_timestamp() AND e.state IN ('running','cancelling'))
+           (SELECT count(*) FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.source_worker_id=@id AND w.lease_until>(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') AND e.state IN ('running','cancelling'))
           """);
         cmd.Parameters.AddWithValue("id",id); await using var r=await cmd.ExecuteReaderAsync(ct); await r.ReadAsync(ct);
         return new(r.GetInt32(0),r.GetInt32(1),r.GetInt32(2),r.GetInt32(3),r.IsDBNull(4)?(DateTimeOffset?)null:r.GetFieldValue<DateTimeOffset>(4),r.GetInt32(5));

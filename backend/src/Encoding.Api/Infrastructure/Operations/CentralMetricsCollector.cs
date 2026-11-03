@@ -56,7 +56,7 @@ public sealed class CentralMetricsCollector(DbDataSource dataSource, WorkerPrese
         writer.Gauge("encoding_database_up", "1 si la base locale répond.", 1);
 
         var nodes = await Rows(connection, """
-            SELECT CASE WHEN last_seen_at >= clock_timestamp() - make_interval(secs => @offline) THEN 'online' ELSE 'offline' END, count(*)
+            SELECT CASE WHEN last_seen_at >= (strftime('%Y-%m-%d %H:%M:%f', 'now', '-' || (@offline) || ' seconds') || '000Z') THEN 'online' ELSE 'offline' END, count(*)
             FROM workers WHERE deleted_at IS NULL GROUP BY 1
             """, ct, ("offline", presence.OfflineAfter.TotalSeconds));
         foreach (var status in new[] { "online", "offline" })
@@ -67,15 +67,15 @@ public sealed class CentralMetricsCollector(DbDataSource dataSource, WorkerPrese
             writer.Gauge("encoding_executions", "Exécutions par état.", executions.GetValueOrDefault(state), ("state", state));
 
         writer.Gauge("encoding_executions_oldest_queued_age_seconds", "Ancienneté de la plus ancienne exécution en file.",
-            await Scalar(connection, "SELECT COALESCE(EXTRACT(EPOCH FROM clock_timestamp() - min(queued_at)), 0) FROM executions WHERE state = 'queued'", ct));
+            await Scalar(connection, "SELECT COALESCE(((julianday('now') - julianday(min(queued_at))) * 86400.0), 0) FROM executions WHERE state = 'queued'", ct));
         writer.Gauge("encoding_execution_leases_expired", "Exécutions en cours dont le bail a expiré et attendent leur clôture en erreur.",
             await Scalar(connection,
-                "SELECT count(*) FROM execution_work w JOIN executions e ON e.id = w.execution_id WHERE e.state IN ('running','cancelling') AND (w.lease_until IS NULL OR w.lease_until <= clock_timestamp())",
+                "SELECT count(*) FROM execution_work w JOIN executions e ON e.id = w.execution_id WHERE e.state IN ('running','cancelling') AND (w.lease_until IS NULL OR w.lease_until <= (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'))",
                 ct));
         writer.Gauge("encoding_media_reservations_active", "Médias actuellement réservés par un bail valide.",
-            await Scalar(connection, "SELECT count(*) FROM media_reservations WHERE lease_until > clock_timestamp()", ct));
+            await Scalar(connection, "SELECT count(*) FROM media_reservations WHERE lease_until > (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')", ct));
         writer.Gauge("encoding_disk_locks_active", "Disques actuellement verrouillés par une exécution au bail valide.",
-            await Scalar(connection, "SELECT count(*) FROM disk_locks WHERE lease_until > clock_timestamp()", ct));
+            await Scalar(connection, "SELECT count(*) FROM disk_locks WHERE lease_until > (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')", ct));
         writer.Gauge("encoding_artifacts_pending_purge", "Exécutions terminées dont les artefacts n’ont pas été purgés.",
             await Scalar(connection,
                 "SELECT count(*) FROM execution_work w JOIN executions e ON e.id = w.execution_id WHERE w.artifacts_purged_at IS NULL AND e.state IN ('succeeded','failed','cancelled')", ct));
@@ -85,7 +85,7 @@ public sealed class CentralMetricsCollector(DbDataSource dataSource, WorkerPrese
             writer.Gauge("encoding_flow_backup_jobs", "Sauvegardes de versions de flow par statut.", backups.GetValueOrDefault(status), ("status", status));
         writer.Gauge("encoding_flow_backup_oldest_pending_age_seconds", "Ancienneté de la plus ancienne sauvegarde de flow en attente.",
             await Scalar(connection,
-                "SELECT COALESCE(EXTRACT(EPOCH FROM clock_timestamp() - min(next_attempt_at)), 0) FROM flow_backup_jobs WHERE status = 'pending' AND next_attempt_at <= clock_timestamp()", ct));
+                "SELECT COALESCE(((julianday('now') - julianday(min(next_attempt_at))) * 86400.0), 0) FROM flow_backup_jobs WHERE status = 'pending' AND next_attempt_at <= (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')", ct));
 
         var migrations = await DatabaseMigrator.StatusAsync(dataSource, environment.ContentRootPath, ct);
         writer.Gauge("encoding_schema_migrations_applied", "Migrations enregistrées en base.", migrations.Applied);

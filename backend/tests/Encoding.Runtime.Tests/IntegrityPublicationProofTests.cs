@@ -28,7 +28,7 @@ public sealed class IntegrityPublicationProofTests
         Assert.False(await RuntimeTransferRepository.HasIntegrityProofAsync(id,sha,c,tx,default));
         var context = new RuntimeContext(sha,".mkv",new Dictionary<string,JsonElement>(),null,null,[]);
         var checkpoint = new RuntimeCheckpoint("check",invocation,"valid",null,context,null);
-        await using (var insert = Sql.Command("INSERT INTO execution_steps(execution_id,flow_node_id,invocation_id,idempotent,completed_at,checkpoint) VALUES(@id,'check',@invocation,true,clock_timestamp(),@cp)",c,tx))
+        await using (var insert = Sql.Command("INSERT INTO execution_steps(execution_id,flow_node_id,invocation_id,idempotent,completed_at,checkpoint) VALUES(@id,'check',@invocation,true,(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),@cp)",c,tx))
         {
             insert.Parameters.AddWithValue("id",id); insert.Parameters.AddWithValue("invocation",invocation); insert.Parameters.AddWithValue("cp",SqlKind.Json,JsonSerializer.Serialize(checkpoint,json)); await insert.ExecuteNonQueryAsync();
         }

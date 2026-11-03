@@ -22,7 +22,7 @@ public sealed class SourceReplacementRepository(DbDataSource dataSource,SourceWr
         if(request.GracePeriodHours is <1 or >8760
             || request.ExpectedRevision is <0 or int.MaxValue) throw new ArgumentException("La période de grâce doit être comprise entre 1 heure et 8 760 heures.");
         await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
-        await using var locked=Sql.Command("SELECT id FROM libraries WHERE id=@id FOR UPDATE",c,tx); locked.Parameters.AddWithValue("id",library);
+        await using var locked=Sql.Command("SELECT id FROM libraries WHERE id=@id",c,tx); locked.Parameters.AddWithValue("id",library);
         if(await locked.ExecuteScalarAsync(ct) is null) return false;
         await using var current=Sql.Command("SELECT revision FROM library_replacement_policies WHERE library_id=@id",c,tx); current.Parameters.AddWithValue("id",library);
         if((await current.ScalarInt32Async(ct) ?? 0)!=request.ExpectedRevision) return false;
@@ -55,7 +55,7 @@ public sealed class SourceReplacementRepository(DbDataSource dataSource,SourceWr
         var replaced=report.Status=="replaced";
         await using var insert=Sql.Command("""
           INSERT INTO source_replacements(execution_id,library_id,source_worker_id,original_path,final_path,backup_path,source_sha,result_sha,state,detail,grace_until)
-          VALUES(@execution,@library,@node,@original,@final,@backup,@source,@result,@state,@detail,CASE WHEN @replaced THEN clock_timestamp()+@grace END)
+          VALUES(@execution,@library,@node,@original,@final,@backup,@source,@result,@state,@detail,CASE WHEN @replaced THEN (strftime('%Y-%m-%d %H:%M:%f', 'now', @grace) || '000Z') END)
           ON CONFLICT(execution_id) DO NOTHING
           """,c,tx);
         insert.Parameters.AddWithValue("execution",execution); insert.Parameters.AddWithValue("library",library); insert.Parameters.AddWithValue("node",sourceWorker);
@@ -89,8 +89,8 @@ public sealed class SourceReplacementRepository(DbDataSource dataSource,SourceWr
     {
         await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
         await using var read=Sql.Command("""
-          SELECT r.state,r.grace_until>clock_timestamp(),r.library_id,w.media_key FROM source_replacements r JOIN execution_work w ON w.execution_id=r.execution_id
-          WHERE r.execution_id=@id FOR UPDATE OF r
+          SELECT r.state,r.grace_until>(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),r.library_id,w.media_key FROM source_replacements r JOIN execution_work w ON w.execution_id=r.execution_id
+          WHERE r.execution_id=@id
           """,c,tx);
         read.Parameters.AddWithValue("id",execution); Guid library; string key;
         await using(var r=await read.ExecuteReaderAsync(ct))
@@ -100,8 +100,8 @@ public sealed class SourceReplacementRepository(DbDataSource dataSource,SourceWr
             library=r.GetGuid(2); key=r.GetString(3);
         }
         await using(var reserve=Sql.Command("""
-          DELETE FROM media_reservations WHERE library_id=@library AND media_key=@key AND lease_until<=clock_timestamp();
-          INSERT INTO media_reservations(library_id,media_key,execution_id,lease_epoch,lease_until) VALUES(@library,@key,@id,-1,clock_timestamp()+@lease) ON CONFLICT DO NOTHING
+          DELETE FROM media_reservations WHERE library_id=@library AND media_key=@key AND lease_until<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z');
+          INSERT INTO media_reservations(library_id,media_key,execution_id,lease_epoch,lease_until) VALUES(@library,@key,@id,-1,(strftime('%Y-%m-%d %H:%M:%f', 'now', @lease) || '000Z')) ON CONFLICT DO NOTHING
           """,c,tx))
         {
             reserve.Parameters.AddWithValue("library",library); reserve.Parameters.AddWithValue("key",key); reserve.Parameters.AddWithValue("id",execution);
@@ -125,7 +125,7 @@ public sealed class SourceReplacementRepository(DbDataSource dataSource,SourceWr
           FROM source_replacements r JOIN library_worker_accesses a ON a.library_id=r.library_id AND a.worker_id=r.source_worker_id
           JOIN workers n ON n.id=r.source_worker_id AND n.accepts_work AND n.deleted_at IS NULL
           WHERE r.source_worker_id=@node AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.can_write AND a.local_path IS NOT NULL
-          AND (r.state='rollback_requested' OR (r.state='replaced' AND r.grace_until<=clock_timestamp()))
+          AND (r.state='rollback_requested' OR (r.state='replaced' AND r.grace_until<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')))
           ORDER BY r.replaced_at LIMIT 20
           """);
         cmd.Parameters.AddWithValue("node",worker); await using var r=await cmd.ExecuteReaderAsync(ct); var tasks=new List<RuntimeReplacementTask>();
@@ -137,7 +137,7 @@ public sealed class SourceReplacementRepository(DbDataSource dataSource,SourceWr
     /// <summary>Enregistre le résultat d'une restauration ou d'une purge ; seul le worker d'accès à l'origine du remplacement peut le faire.</summary>
     public async Task<bool> AuthorizeAsync(Guid execution,Guid worker,string root,CancellationToken ct)
     {
-        await using var cmd=dataSource.CreateCommand($"SELECT EXISTS(SELECT 1 FROM source_replacements r JOIN library_worker_accesses a ON a.library_id=r.library_id AND a.worker_id=r.source_worker_id WHERE r.execution_id=@id AND r.source_worker_id=@node AND a.is_enabled AND a.can_write AND a.mode='direct' AND a.local_path=@root AND (r.state='rollback_requested' OR r.state='replaced' AND r.grace_until<=clock_timestamp()))");
+        await using var cmd=dataSource.CreateCommand($"SELECT EXISTS(SELECT 1 FROM source_replacements r JOIN library_worker_accesses a ON a.library_id=r.library_id AND a.worker_id=r.source_worker_id WHERE r.execution_id=@id AND r.source_worker_id=@node AND a.is_enabled AND a.can_write AND a.mode='direct' AND a.local_path=@root AND (r.state='rollback_requested' OR r.state='replaced' AND r.grace_until<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')))");
         cmd.Parameters.AddWithValue("id",execution);cmd.Parameters.AddWithValue("node",worker);cmd.Parameters.AddWithValue("root",root);if(!await cmd.ScalarBoolAsync(ct)) return false;
         if(sourceWrites is not null)
         {
@@ -152,8 +152,8 @@ public sealed class SourceReplacementRepository(DbDataSource dataSource,SourceWr
         if(request.Outcome is not("rolled_back" or "finalized" or "failed") || request.Detail?.Length>2000) return false;
         await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
         await using var read=Sql.Command("""
-          SELECT r.state,r.grace_until<=clock_timestamp(),r.library_id,r.original_path,w.media_key FROM source_replacements r JOIN execution_work w ON w.execution_id=r.execution_id
-          WHERE r.execution_id=@id AND r.source_worker_id=@node FOR UPDATE OF r
+          SELECT r.state,r.grace_until<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),r.library_id,r.original_path,w.media_key FROM source_replacements r JOIN execution_work w ON w.execution_id=r.execution_id
+          WHERE r.execution_id=@id AND r.source_worker_id=@node
           """,c,tx);
         read.Parameters.AddWithValue("id",execution); read.Parameters.AddWithValue("node",worker); string state; bool expired; Guid library; string original; string key;
         await using(var r=await read.ExecuteReaderAsync(ct))
@@ -171,7 +171,7 @@ public sealed class SourceReplacementRepository(DbDataSource dataSource,SourceWr
             if(request.ByteLength is not>0 || request.ModifiedAt is null) return false;
             await MarkAsync(library,original,request.ByteLength.Value,request.ModifiedAt.Value,execution,c,tx,ct);
         }
-        await using(var update=Sql.Command("UPDATE source_replacements SET state=@state,detail=@detail,finished_at=CASE WHEN @state IN ('rolled_back','finalized','retained') THEN clock_timestamp() END WHERE execution_id=@id",
+        await using(var update=Sql.Command("UPDATE source_replacements SET state=@state,detail=@detail,finished_at=CASE WHEN @state IN ('rolled_back','finalized','retained') THEN (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') END WHERE execution_id=@id",
             c,tx))
         {
             update.Parameters.AddWithValue("id",execution); update.Parameters.AddWithValue("state",next); update.Parameters.AddWithValue("detail",SqlKind.Text,

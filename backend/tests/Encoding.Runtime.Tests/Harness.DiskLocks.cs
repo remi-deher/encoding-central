@@ -44,7 +44,7 @@ internal static partial class Harness
             await Locks.ReleaseAsync(x, a, For(lx, "race"), token); await Locks.ReleaseAsync(y, a, For(ly, "race"), token);
 
             // Reprise d'un verrou expiré (exécution perdue), puis refus pour l'ancien détenteur.
-            await ScalarAsync<object>("UPDATE disk_locks SET lease_until=clock_timestamp()-interval '1 second' WHERE disk_key='nas-1' RETURNING 1");
+            await ScalarAsync<object>("UPDATE disk_locks SET lease_until=(strftime('%Y-%m-%d %H:%M:%f', 'now', '-1 seconds') || '000Z') WHERE disk_key='nas-1' RETURNING 1");
             Check((await Locks.TryAcquireAsync(y, a, For(ly, "nas-1"), token)) is { Acquired: true }, "An expired lock is taken over.");
             Check((await Locks.TryAcquireAsync(x, a, For(lx, "nas-1"), token)) is { Acquired: false }, "The previous holder is now told the disk is busy.");
 
@@ -53,9 +53,9 @@ internal static partial class Harness
             Check((await Locks.TryAcquireAsync(x, a, For(lx, "nas-1"), token)) is { Acquired: true }, "A released disk can be taken.");
 
             // Le renouvellement du bail d'exécution prolonge ses verrous.
-            await ScalarAsync<object>("UPDATE disk_locks SET lease_until=clock_timestamp()+interval '1 second' WHERE disk_key='nas-1' RETURNING 1");
+            await ScalarAsync<object>("UPDATE disk_locks SET lease_until=(strftime('%Y-%m-%d %H:%M:%f', 'now', '+1 seconds') || '000Z') WHERE disk_key='nas-1' RETURNING 1");
             Check(await runtime.RenewAsync(x, a, lx.Epoch, token) is not null, "The execution lease is renewed.");
-            Check(await ScalarAsync<long>("SELECT count(*) FROM disk_locks WHERE disk_key='nas-1' AND lease_until>clock_timestamp()+interval '30 seconds'") == 1, "Renewing the execution lease extends its disk locks.");
+            Check(await ScalarAsync<long>("SELECT count(*) FROM disk_locks WHERE disk_key='nas-1' AND lease_until>(strftime('%Y-%m-%d %H:%M:%f', 'now', '+30 seconds') || '000Z')") == 1, "Renewing the execution lease extends its disk locks.");
 
             // Route worker : succès, occupé, nom invalide.
             using var client = Client(a);

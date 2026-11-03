@@ -17,10 +17,10 @@ public sealed class DiskLockRepository(DbDataSource dataSource)
         await using var c = await dataSource.OpenConnectionAsync(ct); await using var tx = await c.BeginTransactionAsync(ct);
         if (!await RuntimeRepository.FenceAsync(execution, worker, request.Epoch, c, tx, ct)) return null;
         await using (var take = Sql.Command("""
-          INSERT INTO disk_locks(disk_key,execution_id,lease_epoch,lease_until) VALUES(@disk,@id,@epoch,clock_timestamp()+interval '180 seconds')
-          ON CONFLICT(disk_key) DO UPDATE SET execution_id=@id,lease_epoch=@epoch,lease_until=clock_timestamp()+interval '180 seconds',
-            acquired_at=CASE WHEN disk_locks.execution_id=@id THEN disk_locks.acquired_at ELSE clock_timestamp() END
-          WHERE disk_locks.execution_id=@id OR disk_locks.lease_until<=clock_timestamp() RETURNING execution_id
+          INSERT INTO disk_locks(disk_key,execution_id,lease_epoch,lease_until) VALUES(@disk,@id,@epoch,(strftime('%Y-%m-%d %H:%M:%f', 'now', '+180 seconds') || '000Z'))
+          ON CONFLICT(disk_key) DO UPDATE SET execution_id=@id,lease_epoch=@epoch,lease_until=(strftime('%Y-%m-%d %H:%M:%f', 'now', '+180 seconds') || '000Z'),
+            acquired_at=CASE WHEN disk_locks.execution_id=@id THEN disk_locks.acquired_at ELSE (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') END
+          WHERE disk_locks.execution_id=@id OR disk_locks.lease_until<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') RETURNING execution_id
           """, c, tx))
         {
             take.Parameters.AddWithValue("disk", disk); take.Parameters.AddWithValue("id", execution); take.Parameters.AddWithValue("epoch", request.Epoch);

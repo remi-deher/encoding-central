@@ -69,7 +69,7 @@ internal static partial class Harness
             await using(var shared=db.CreateCommand("UPDATE library_worker_accesses SET mode='direct',local_path=@root,transfer_source_worker_id=NULL WHERE worker_id IN (@b,@c) AND library_id=(SELECT library_id FROM execution_work WHERE execution_id=@id)"))
             { shared.Parameters.AddWithValue("root",directory); shared.Parameters.AddWithValue("b",b); shared.Parameters.AddWithValue("c",c); shared.Parameters.AddWithValue("id",id); await shared.ExecuteNonQueryAsync(); }
             await ExpireAsync(id);
-            await using(var gone=db.CreateCommand("UPDATE workers SET last_seen_at=clock_timestamp()-interval '2 hours' WHERE id=@a")){ gone.Parameters.AddWithValue("a",a); await gone.ExecuteNonQueryAsync(); }
+            await using(var gone=db.CreateCommand("UPDATE workers SET last_seen_at=(strftime('%Y-%m-%d %H:%M:%f', 'now', '-2 hours') || '000Z') WHERE id=@a")){ gone.Parameters.AddWithValue("a",a); await gone.ExecuteNonQueryAsync(); }
             var recovery=new RuntimeRecoveryService(db,NullLogger<RuntimeRecoveryService>.Instance,new WorkerGroupRepository(db),eligibility,new WorkerPresenceOptions(TimeSpan.FromMinutes(5)));
             await recovery.ProcessOnceAsync(CancellationToken.None);
             var state=await executions.GetAsync(id,CancellationToken.None);

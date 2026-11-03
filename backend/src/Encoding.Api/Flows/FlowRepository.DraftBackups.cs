@@ -34,7 +34,7 @@ public sealed partial class FlowRepository
     public async Task<FlowDefinition?> DraftBackupAsync(Guid id, int revision, CancellationToken ct)
     {
         await using var command = dataSource.CreateCommand("""
-            SELECT b.definition::text FROM flow_draft_backups b JOIN flows f ON f.id=b.flow_id
+            SELECT b.definition FROM flow_draft_backups b JOIN flows f ON f.id=b.flow_id
             WHERE f.id=@id AND f.deleted_at IS NULL AND b.revision=@revision
             """);
         command.Parameters.AddWithValue("id", id);

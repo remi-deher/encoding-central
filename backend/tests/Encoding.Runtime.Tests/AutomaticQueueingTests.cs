@@ -27,11 +27,11 @@ public sealed class AutomaticQueueingTests
         var flow = Harness.Chain(Harness.Node(registry, "entry", "base-input-file"), Harness.Node(registry, "end", "base-complete-flow")) with { Id = Guid.NewGuid(), Name = "Synthétique" };
         Assert.NotNull(await new FlowRepository(db.Db).SaveAsync(new(0, flow), default));
         var library = Guid.NewGuid(); var scan = Guid.NewGuid(); var local = Guid.NewGuid(); var other = Guid.NewGuid();
-        await Run("INSERT INTO libraries(id,name) VALUES(@library,'Synthétique'); INSERT INTO library_scans(id,library_id,media_type,state,completed_at) VALUES(@scan,@library,'video','completed',clock_timestamp());", ("library", library), ("scan", scan));
-        await Run("INSERT INTO library_media(id,library_id,relative_path,byte_length,modified_at,scan_id,stable_since) VALUES(@id,@library,'episode.mkv',10,clock_timestamp()-interval '1 hour',@scan,clock_timestamp()-interval '1 hour')", ("id", Guid.NewGuid()), ("library", library), ("scan", scan));
+        await Run("INSERT INTO libraries(id,name) VALUES(@library,'Synthétique'); INSERT INTO library_scans(id,library_id,media_type,state,completed_at) VALUES(@scan,@library,'video','completed',(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'));", ("library", library), ("scan", scan));
+        await Run("INSERT INTO library_media(id,library_id,relative_path,byte_length,modified_at,scan_id,stable_since) VALUES(@id,@library,'episode.mkv',10,(strftime('%Y-%m-%d %H:%M:%f', 'now', '-1 hours') || '000Z'),@scan,(strftime('%Y-%m-%d %H:%M:%f', 'now', '-1 hours') || '000Z'))", ("id", Guid.NewGuid()), ("library", library), ("scan", scan));
         // Deux workers : le worker de ce serveur (mode variable) et un autre worker qui monte la bibliothèque en direct.
         foreach (var (worker, name, roles) in new[] { (local, "local", "server,worker"), (other, "autre", otherRoles) })
-            await Run("INSERT INTO workers(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at) VALUES(@node,@name,@roles,1,'[]',clock_timestamp())", ("node", worker), ("name", name), ("roles", roles.Split(',')));
+            await Run("INSERT INTO workers(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at) VALUES(@node,@name,@roles,1,'[]',(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'))", ("node", worker), ("name", name), ("roles", roles.Split(',')));
         await Run("INSERT INTO library_worker_accesses(library_id,worker_id,mode,local_path,can_read,can_write) VALUES(@library,@node,'direct','/media/a',true,true)", ("library", library), ("node", other));
         if (localMode == "direct") await Run("INSERT INTO library_worker_accesses(library_id,worker_id,mode,local_path,can_read,can_write) VALUES(@library,@node,'direct','/media/b',true,true)", ("library", library), ("node", local));
         else await Run("INSERT INTO library_worker_accesses(library_id,worker_id,mode,can_read,can_write,transfer_source_worker_id) VALUES(@library,@node,'transfer',true,true,@source)", ("library", library), ("node", local), ("source", other));
@@ -67,9 +67,9 @@ public sealed class AutomaticQueueingTests
             foreach (var (name, value) in parameters) command.Parameters.AddWithValue(name, value);
             await command.ExecuteNonQueryAsync();
         }
-        await Run("INSERT INTO libraries(id,name) VALUES(@library,'Synthétique'); INSERT INTO library_scans(id,library_id,media_type,state,completed_at) VALUES(@scan,@library,'video','completed',clock_timestamp());", ("library", library), ("scan", scan));
-        await Run("INSERT INTO library_media(id,library_id,relative_path,byte_length,modified_at,scan_id,stable_since) VALUES(@id,@library,'episode.mkv',10,clock_timestamp()-interval '1 hour',@scan,clock_timestamp()-interval '1 hour')", ("id", Guid.NewGuid()), ("library", library), ("scan", scan));
-        await Run("INSERT INTO workers(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at) VALUES(@node,'local',ARRAY['server','worker'],1,'[]',clock_timestamp())", ("node", local));
+        await Run("INSERT INTO libraries(id,name) VALUES(@library,'Synthétique'); INSERT INTO library_scans(id,library_id,media_type,state,completed_at) VALUES(@scan,@library,'video','completed',(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'));", ("library", library), ("scan", scan));
+        await Run("INSERT INTO library_media(id,library_id,relative_path,byte_length,modified_at,scan_id,stable_since) VALUES(@id,@library,'episode.mkv',10,(strftime('%Y-%m-%d %H:%M:%f', 'now', '-1 hours') || '000Z'),@scan,(strftime('%Y-%m-%d %H:%M:%f', 'now', '-1 hours') || '000Z'))", ("id", Guid.NewGuid()), ("library", library), ("scan", scan));
+        await Run("INSERT INTO workers(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at) VALUES(@node,'local',json_array('server','worker'),1,'[]',(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'))", ("node", local));
         var localWorker = new LocalWorkerRegistry(new WorkerRepository(db.Db)); await localWorker.RegisterAsync(local, default);
         var workflow = new LibraryWorkflowRepository(db.Db, validator, new WorkerPresenceOptions(TimeSpan.FromHours(1)), localWorker: localWorker);
         Assert.True(await workflow.AssignAsync(library, new(flow.Id, 1, 0), default));

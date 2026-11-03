@@ -30,7 +30,7 @@ internal static partial class Harness
         }
         private async Task ResetNodesAsync()
         {
-            await using var command=db.CreateCommand("UPDATE workers SET last_seen_at=clock_timestamp(),max_concurrent_tasks=100,deleted_at=NULL; DELETE FROM worker_processing_settings;");
+            await using var command=db.CreateCommand("UPDATE workers SET last_seen_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),max_concurrent_tasks=100,deleted_at=NULL; DELETE FROM worker_processing_settings;");
             await command.ExecuteNonQueryAsync();
         }
 
@@ -117,7 +117,7 @@ internal static partial class Harness
             RuntimeLease? busyLease=null; for(var attempt=0;attempt<5 && busyLease?.ExecutionId!=queued;attempt++) busyLease=await runtime.ClaimAsync(a,CancellationToken.None);
             Check(busyLease?.ExecutionId==queued,"The second execution holds the media.");
             Check(await policies.RequestRollbackAsync(expired.Id,CancellationToken.None)=="busy","A media that is being processed cannot be restored concurrently.");
-            await using(var elapse=db.CreateCommand("UPDATE source_replacements SET grace_until=clock_timestamp()-interval '1 second',state='replaced' WHERE execution_id=@id")){ elapse.Parameters.AddWithValue("id",expired.Id); await elapse.ExecuteNonQueryAsync(); }
+            await using(var elapse=db.CreateCommand("UPDATE source_replacements SET grace_until=(strftime('%Y-%m-%d %H:%M:%f', 'now', '-1 seconds') || '000Z'),state='replaced' WHERE execution_id=@id")){ elapse.Parameters.AddWithValue("id",expired.Id); await elapse.ExecuteNonQueryAsync(); }
             Check(await policies.RequestRollbackAsync(expired.Id,CancellationToken.None)=="not-restorable","A rollback is refused once the grace period is over.");
             Check((await policies.TasksAsync(a,CancellationToken.None)).Single(task=>task.ExecutionId==expired.Id).Action=="finalize","The backup becomes due for purge after the grace period.");
             Check(await policies.ReportAsync(expired.Id,a,new("failed","Fichier remplaçant absent"),CancellationToken.None) && (await policies.GetAsync(expired.Id,CancellationToken.None))!.State=="retained","A refused purge keeps the backup and flags it for manual action.");
@@ -134,8 +134,8 @@ internal static partial class Harness
             var modified=new DateTimeOffset(2024,5,6,7,8,9,TimeSpan.Zero);
             var scan=Guid.NewGuid();
             await using(var file=db.CreateCommand("""
-                INSERT INTO library_scans(id,library_id,media_type,state,completed_at) VALUES(@scan,@library,'video','completed',clock_timestamp());
-                INSERT INTO library_media(id,library_id,relative_path,byte_length,modified_at,scan_id,stable_since) VALUES(gen_random_uuid(),@library,'source.mkv',21,@modified,@scan,clock_timestamp()-interval '1 hour')
+                INSERT INTO library_scans(id,library_id,media_type,state,completed_at) VALUES(@scan,@library,'video','completed',(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'));
+                INSERT INTO library_media(id,library_id,relative_path,byte_length,modified_at,scan_id,stable_since) VALUES(lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)), 2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(hex(randomblob(2)), 2) || '-' || hex(randomblob(6))),@library,'source.mkv',21,@modified,@scan,(strftime('%Y-%m-%d %H:%M:%f', 'now', '-1 hours') || '000Z'))
                 """))
             { file.Parameters.AddWithValue("scan",scan); file.Parameters.AddWithValue("library",library); file.Parameters.AddWithValue("modified",modified); await file.ExecuteNonQueryAsync(); }
             var before=await ScalarAsync<long>("SELECT count(*) FROM executions");
@@ -168,7 +168,7 @@ internal static partial class Harness
                     await command.ExecuteNonQueryAsync();
                 }
                 Check(await runtime.EnqueueAsync(new(id,library,"source.mkv",flow.Id,flow.Version),flow,CancellationToken.None),"Enqueue fixture.");
-                await using var aged=db.CreateCommand("UPDATE executions SET queued_at=clock_timestamp()-interval '10 minutes' WHERE id=@id");
+                await using var aged=db.CreateCommand("UPDATE executions SET queued_at=(strftime('%Y-%m-%d %H:%M:%f', 'now', '-10 minutes') || '000Z') WHERE id=@id");
                 aged.Parameters.AddWithValue("id",id); await aged.ExecuteNonQueryAsync();
                 return id;
             }
@@ -236,7 +236,7 @@ internal static partial class Harness
             await using(var gone=db.CreateCommand("UPDATE workers SET max_concurrent_tasks=0 WHERE id IN (@a,@b,@c)")){ gone.Parameters.AddWithValue("a",a); gone.Parameters.AddWithValue("b",b); gone.Parameters.AddWithValue("c",c); await gone.ExecuteNonQueryAsync(); }
             await recovery.ProcessOnceAsync(CancellationToken.None);
             Check((await executions.GetAsync(id,CancellationToken.None))!.State=="running","A restarting worker has a grace period before a resume is declared impossible.");
-            await using(var old=db.CreateCommand("UPDATE executions SET updated_at=clock_timestamp()-interval '10 minutes' WHERE id=@id")){ old.Parameters.AddWithValue("id",id); await old.ExecuteNonQueryAsync(); }
+            await using(var old=db.CreateCommand("UPDATE executions SET updated_at=(strftime('%Y-%m-%d %H:%M:%f', 'now', '-10 minutes') || '000Z') WHERE id=@id")){ old.Parameters.AddWithValue("id",id); await old.ExecuteNonQueryAsync(); }
             await recovery.ProcessOnceAsync(CancellationToken.None);
             var failed=await executions.GetAsync(id,CancellationToken.None);
             Check(failed!.State=="failed" && failed.Detail?.Contains("Aucun worker éligible",StringComparison.Ordinal)==true,"With no eligible worker left the resume fails with an explicit reason.");
@@ -297,7 +297,7 @@ internal static partial class Harness
             // Si ce worker est perdu à son tour, la reprise ne part pas ailleurs : elle échoue après le délai de grâce.
             await ExpireAsync(id);
             await recovery.ProcessOnceAsync(CancellationToken.None);
-            await using(var aged=db.CreateCommand("UPDATE executions SET updated_at=clock_timestamp()-interval '10 minutes' WHERE id=@id")){ aged.Parameters.AddWithValue("id",id); await aged.ExecuteNonQueryAsync(); }
+            await using(var aged=db.CreateCommand("UPDATE executions SET updated_at=(strftime('%Y-%m-%d %H:%M:%f', 'now', '-10 minutes') || '000Z') WHERE id=@id")){ aged.Parameters.AddWithValue("id",id); await aged.ExecuteNonQueryAsync(); }
             await using(var down=db.CreateCommand("UPDATE workers SET max_concurrent_tasks=0 WHERE id=@b")){ down.Parameters.AddWithValue("b",b); await down.ExecuteNonQueryAsync(); }
             await recovery.ProcessOnceAsync(CancellationToken.None);
             Check((await executions.GetAsync(id,CancellationToken.None))!.State=="failed","With the relay destination unavailable the resume fails instead of moving to another node.");

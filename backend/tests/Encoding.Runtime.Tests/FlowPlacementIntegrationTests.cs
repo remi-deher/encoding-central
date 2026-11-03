@@ -68,8 +68,8 @@ public sealed class FlowPlacementIntegrationTests
             await using var cmd = Sql.Command("""
                 INSERT INTO libraries(id, name, is_active) VALUES(@lib, 'TestLib', true);
                 INSERT INTO workers(id, name, roles, max_concurrent_tasks, capabilities, last_seen_at)
-                VALUES(@nodeA, 'Node-A-Direct', ARRAY['worker'], 4, @capsA, clock_timestamp()),
-                      (@nodeB, 'Node-B-Transfer', ARRAY['worker'], 4, @capsB, clock_timestamp());
+                VALUES(@nodeA, 'Node-A-Direct', json_array('worker'), 4, @capsA, (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')),
+                      (@nodeB, 'Node-B-Transfer', json_array('worker'), 4, @capsB, (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'));
                 INSERT INTO library_worker_accesses(library_id, worker_id, mode, local_path, can_read, can_write, is_enabled, transfer_source_worker_id)
                 VALUES(@lib, @nodeA, 'direct', '/media/library', true, true, true, NULL),
                       (@lib, @nodeB, 'transfer', NULL, true, true, true, @nodeA);
@@ -108,7 +108,7 @@ public sealed class FlowPlacementIntegrationTests
         Assert.NotNull(claimA);
         Assert.Equal(execId, claimA.ExecutionId);
         Assert.Equal(FlowPlacementPlan.StrategyDirectUnified,claimA.PlacementPlan?.Strategy);
-        await using(var beforePlan=database.Db.CreateCommand("SELECT placement_plan::text FROM execution_work WHERE execution_id=@id"))
+        await using(var beforePlan=database.Db.CreateCommand("SELECT placement_plan FROM execution_work WHERE execution_id=@id"))
         {beforePlan.Parameters.AddWithValue("id",execId);var value=await beforePlan.ExecuteScalarAsync();Assert.True(value is null or DBNull || string.IsNullOrWhiteSpace(value.ToString()),$"Claim persisted an unexpected placement plan: {value}");}
         Assert.Equal(FlowPlacementPlan.StrategyDirectUnified,(await runtime.PersistPlacementPlanAsync(execId,workerA,claimA.Epoch,CancellationToken.None))?.Strategy);
         await runtime.RecordSourceMetadataAsync(execId,workerA,claimA.Epoch,JsonSerializer.SerializeToElement(new { streams=Array.Empty<object>() },Json),CancellationToken.None);
@@ -116,7 +116,7 @@ public sealed class FlowPlacementIntegrationTests
         // Verify stored placement plan
         await using (var c = await database.Db.OpenConnectionAsync())
         {
-            await using var verifyCmd = Sql.Command("SELECT placement_plan::text FROM execution_work WHERE execution_id=@id", c);
+            await using var verifyCmd = Sql.Command("SELECT placement_plan FROM execution_work WHERE execution_id=@id", c);
             verifyCmd.Parameters.AddWithValue("id", execId);
             var jsonText = await verifyCmd.ExecuteScalarAsync() as string;
             Assert.NotNull(jsonText);
@@ -149,7 +149,7 @@ public sealed class FlowPlacementIntegrationTests
             await using var cmd = Sql.Command("""
                 INSERT INTO libraries(id, name, is_active) VALUES(@lib, 'TestLib', true);
                 INSERT INTO workers(id, name, roles, max_concurrent_tasks, capabilities, last_seen_at)
-                VALUES(@nodeA, 'Node-A', ARRAY['worker'], 4, @capsA, clock_timestamp());
+                VALUES(@nodeA, 'Node-A', json_array('worker'), 4, @capsA, (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'));
                 INSERT INTO library_worker_accesses(library_id, worker_id, mode, local_path, can_read, can_write, is_enabled)
                 VALUES(@lib, @nodeA, 'direct', '/media/library', true, true, true);
                 """, c, tx);
@@ -184,7 +184,7 @@ public sealed class FlowPlacementIntegrationTests
         // An impossible placement remains queued until the existing read-only placement grace expires.
         var claim = await runtime.ClaimAsync(workerA, CancellationToken.None);
         Assert.Null(claim);
-        await using(var age=database.Db.CreateCommand("UPDATE executions SET queued_at=clock_timestamp()-interval '3 minutes' WHERE id=@id"))
+        await using(var age=database.Db.CreateCommand("UPDATE executions SET queued_at=(strftime('%Y-%m-%d %H:%M:%f', 'now', '-3 minutes') || '000Z') WHERE id=@id"))
         { age.Parameters.AddWithValue("id",execId); await age.ExecuteNonQueryAsync(); }
         var recovery=new RuntimeRecoveryService(database.Db,Microsoft.Extensions.Logging.Abstractions.NullLogger<RuntimeRecoveryService>.Instance,groups,eligibility);
         await recovery.ProcessOnceAsync(CancellationToken.None);
@@ -224,8 +224,8 @@ public sealed class FlowPlacementIntegrationTests
             await using var cmd = Sql.Command("""
                 INSERT INTO libraries(id, name, is_active) VALUES(@lib, 'TestLib', true);
                 INSERT INTO workers(id, name, roles, max_concurrent_tasks, capabilities, last_seen_at)
-                VALUES(@nodeA, 'Node-A-Direct', ARRAY['worker'], 4, @capsA, clock_timestamp()),
-                      (@nodeB, 'Node-B-Transfer', ARRAY['worker'], 4, @capsB, clock_timestamp());
+                VALUES(@nodeA, 'Node-A-Direct', json_array('worker'), 4, @capsA, (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')),
+                      (@nodeB, 'Node-B-Transfer', json_array('worker'), 4, @capsB, (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'));
                 INSERT INTO library_worker_accesses(library_id, worker_id, mode, local_path, can_read, can_write, is_enabled, transfer_source_worker_id)
                 VALUES(@lib, @nodeA, 'direct', '/media/library', true, true, true, NULL),
                       (@lib, @nodeB, 'transfer', NULL, true, true, true, @nodeA);
@@ -304,7 +304,7 @@ public sealed class FlowPlacementIntegrationTests
         // Verify the plan is DirectUnified
         await using (var c = await database.Db.OpenConnectionAsync())
         {
-            await using var verifyCmd = Sql.Command("SELECT placement_plan::text FROM execution_work WHERE execution_id=@id", c);
+            await using var verifyCmd = Sql.Command("SELECT placement_plan FROM execution_work WHERE execution_id=@id", c);
             verifyCmd.Parameters.AddWithValue("id", execId);
             var jsonText = await verifyCmd.ExecuteScalarAsync() as string;
             Assert.NotNull(jsonText);
@@ -342,8 +342,8 @@ public sealed class FlowPlacementIntegrationTests
             await using var insert=Sql.Command("""
                 INSERT INTO libraries(id,name,is_active) VALUES(@library,'Synthetic',true);
                 INSERT INTO workers(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at)
-                VALUES(@direct,'Direct',ARRAY['worker'],4,@directCapabilities,clock_timestamp()),
-                      (@gpu,'GPU',ARRAY['worker'],4,@gpuCapabilities,clock_timestamp());
+                VALUES(@direct,'Direct',json_array('worker'),4,@directCapabilities,(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')),
+                      (@gpu,'GPU',json_array('worker'),4,@gpuCapabilities,(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'));
                 INSERT INTO library_worker_accesses(library_id,worker_id,mode,local_path,can_read,can_write,is_enabled,transfer_source_worker_id)
                 VALUES(@library,@direct,'direct','/synthetic',true,true,true,NULL),(@library,@gpu,'transfer',NULL,true,true,true,@direct);
                 """,c,tx);
