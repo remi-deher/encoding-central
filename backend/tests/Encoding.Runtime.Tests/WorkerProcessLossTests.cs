@@ -31,7 +31,7 @@ public sealed class WorkerProcessLossTests
     private sealed record Proc(Process Process, ConcurrentQueue<string> Output, string Name);
 
     [MultiProcessFact]
-    public async Task KillingTheEncodingWorkerMidFfmpegResumesOnTheOtherWorkerAndKeepsTheSource()
+    public async Task KillingTheEncodingWorkerMidFfmpegFailsTheAttemptKeepsTheSourceAndAllowsAnOperatorRetry()
     {
         var root = Path.Combine(Path.GetTempPath(), "encoding-kill-" + Guid.NewGuid().ToString("N"));
         var media = Path.Combine(root, "media");
@@ -129,26 +129,35 @@ public sealed class WorkerProcessLossTests
             await killed.Process.WaitForExitAsync();
             Assert.False(FfmpegRunningFor(executionId), "Le ffmpeg du worker tué doit avoir disparu.");
 
-            // Après expiration du bail (60 s), le serveur reprend l'exécution sur le worker survivant, sans doublon.
-            JsonElement final = default;
+            // Après expiration du bail, la tentative échoue (worker_perdu) : aucune reprise ni réattribution sous le même identifiant (ADR 0044).
+            JsonElement lost = default;
             await WaitAsync(async () =>
             {
                 var list = (await client.GetFromJsonAsync<JsonElement>("executions")).GetProperty("executions");
                 Assert.Equal(1, list.GetArrayLength());
-                final = list[0].Clone();
-                return final.GetProperty("state").GetString() is "succeeded" or "failed";
-            }, 360, "resume and completion", processes);
-
-            if (final.GetProperty("state").GetString() != "succeeded")
-            {
-                var history = (await client.GetFromJsonAsync<JsonElement>($"executions/{executionId}/events")).ToString();
-                var state = (await client.GetFromJsonAsync<JsonElement>("workers")).EnumerateArray().Select(node => $"{node.GetProperty("name")}={node.GetProperty("status")}");
-                Assert.Fail($"Exécution : {final.GetProperty("detail")}\nNœuds : {string.Join(", ", state)}\nHistorique : {history}");
-            }
-            Assert.Equal(executionId, final.GetProperty("id").GetGuid());
-            Assert.NotEqual(victim, final.GetProperty("worker").GetString());
+                lost = list[0].Clone();
+                return lost.GetProperty("state").GetString() is "succeeded" or "failed";
+            }, 360, "lease expiry", processes);
+            Assert.Equal("failed", lost.GetProperty("state").GetString());
+            Assert.Equal(executionId, lost.GetProperty("id").GetGuid());
+            Assert.Contains("worker_perdu", lost.GetProperty("detail").GetString(), StringComparison.Ordinal);
             var events = (await client.GetFromJsonAsync<JsonElement>($"executions/{executionId}/events")).ToString();
-            Assert.Contains("reprise", events, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("reprise", events, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(sourceSha, Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(source))));
+
+            // La reprise est une NOUVELLE exécution demandée par l'opérateur ; le worker survivant la traite.
+            var retried = await PostAsync(client, $"executions/{executionId}/retry", new { });
+            var retryId = retried.GetProperty("id").GetGuid();
+            Assert.NotEqual(executionId, retryId);
+            JsonElement final = default;
+            await WaitAsync(async () =>
+            {
+                final = await client.GetFromJsonAsync<JsonElement>($"executions/{retryId}");
+                return final.GetProperty("state").GetString() is "succeeded" or "failed";
+            }, 360, "operator retry and completion", processes);
+            if (final.GetProperty("state").GetString() != "succeeded")
+                Assert.Fail($"Relance : {final.GetProperty("detail")}");
+            Assert.NotEqual(victim, final.GetProperty("worker").GetString());
             Assert.Equal(sourceSha, Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(source))));
             Assert.DoesNotContain(Directory.GetFiles(media, "*", SearchOption.TopDirectoryOnly), path => path != source);
         }

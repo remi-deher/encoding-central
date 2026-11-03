@@ -1,12 +1,12 @@
 ---
 id: 0004
 title: Reprise au checkpoint après perte du worker, blocs rejouables
-status: implemented
+status: superseded
 domain: runtime
 date: 2026-10-22
 decided_by: Rémi (2026-10-22) pour le principe (flows idempotents, meilleur effort, contraintes d'encodage et d'accès respectées) ; bornes et délais : choix de l'implémentation ci-dessous
 supersedes: []
-superseded_by: []
+superseded_by: [0044]
 tags: [reprise, checkpoint, idempotence, perte-du-worker, relais, charge]
 ---
 
