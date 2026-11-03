@@ -75,6 +75,7 @@ builder.Services.AddHttpClient("release-updates", client =>
 });
 builder.Services.AddSingleton<ExecutionStreamBroadcaster>();
 builder.Services.AddSingleton<Encoding.Api.Infrastructure.InterfaceLiveBroadcaster>();
+builder.Services.AddSingleton<RuntimeWakeStreams>();
 builder.Services.AddSingleton<ExecutionRepository>();
 builder.Services.AddSingleton<FlowComponentRegistry>();
 builder.Services.AddSingleton<Encoding.Api.Plugins.CentralExtensionActivationState>();

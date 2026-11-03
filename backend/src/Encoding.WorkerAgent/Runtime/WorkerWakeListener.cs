@@ -11,11 +11,12 @@ public sealed class WorkerWakeListener(
     WorkerAgentOptions options,
     WorkerIdentityStore identities,
     WorkerWakeSignal signal,
-    ILogger<WorkerWakeListener> logger) : BackgroundService
+    TimeProvider time,
+    ILogger<WorkerWakeListener> logger, WakeReconnectPolicy? reconnectPolicy = null) : BackgroundService
 {
     /// <summary>Le central envoie un ping toutes les 15 s : au-delà, le flux est considéré comme mort.</summary>
     private static readonly TimeSpan Silence = TimeSpan.FromSeconds(45);
-    private static readonly TimeSpan Retry = TimeSpan.FromSeconds(5);
+    private readonly WakeReconnectPolicy reconnect = reconnectPolicy ?? new(time);
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
@@ -37,7 +38,7 @@ public sealed class WorkerWakeListener(
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
             catch (Exception exception) { logger.LogDebug("Écoute du central momentanément indisponible ({Type}).", exception.GetType().Name); }
-            try { await Task.Delay(Retry, ct); }
+            try { await Task.Delay(reconnect.NextDelay(), time, ct); }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
         }
     }
@@ -48,19 +49,33 @@ public sealed class WorkerWakeListener(
         using var response = await client.OpenWakeStreamAsync(ct);
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
         using var reader = new StreamReader(stream);
+        await ReadEventsAsync(reader, ct);
+    }
+
+    /// <summary>Lit les événements SSE jusqu'à la fin du flux ; un silence de plus de <see cref="Silence"/> coupe la lecture.</summary>
+    internal async Task ReadEventsAsync(TextReader reader, CancellationToken ct)
+    {
         string? eventType = null;
         while (!ct.IsCancellationRequested)
         {
-            using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            idle.CancelAfter(Silence);
+            using var silence = new CancellationTokenSource(Silence, time);
+            using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct, silence.Token);
             var line = await reader.ReadLineAsync(idle.Token);
             if (line is null) return;
             if (line.StartsWith("event:", StringComparison.Ordinal)) { eventType = line[6..].Trim(); continue; }
+            if (line.StartsWith("retry:", StringComparison.Ordinal)) { ApplyServerRetry(line[6..]); continue; }
             if (line.Length != 0) continue;
             // Une ligne vide termine l'événement : « ready » confirme la connexion, « wake » annonce du travail, « ping » n'annonce rien.
-            if (eventType == "ready") signal.SetConnected(true);
+            if (eventType == "ready") { signal.SetConnected(true); reconnect.MarkConnected(); }
             else if (eventType == "wake") signal.Pulse();
             eventType = null;
         }
+    }
+
+    private void ApplyServerRetry(string value)
+    {
+        if (long.TryParse(value.Trim(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var milliseconds)
+            && milliseconds <= TimeSpan.MaxValue.TotalMilliseconds)
+            reconnect.SetServerRetry(TimeSpan.FromMilliseconds(milliseconds));
     }
 }

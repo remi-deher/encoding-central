@@ -1,5 +1,3 @@
-using Encoding.Api.Infrastructure;
-
 namespace Encoding.Api.Executions;
 
 /// <summary>
@@ -9,24 +7,17 @@ namespace Encoding.Api.Executions;
 /// </summary>
 public static class RuntimeWakeEndpoint
 {
-    private static readonly TimeSpan Heartbeat = TimeSpan.FromSeconds(15);
-
     public static void MapRuntimeWakeEndpoint(this RouteGroupBuilder group)
     {
-        // Services résolus dans le handler : une route qui exige un service absent casserait la construction de tout le groupe.
         group.MapGet("/wake", async (HttpContext http, CancellationToken ct) =>
         {
-            var cursor = new WakeCursor(
-                http.RequestServices.GetRequiredService<ExecutionStreamBroadcaster>(),
-                http.RequestServices.GetRequiredService<InterfaceLiveBroadcaster>());
+            var worker = Guid.Parse((string)http.Request.RouteValues["workerId"]!);
+            var token = http.Request.Headers["X-Node-Token"].ToString();
+            var coordinator = http.RequestServices.GetRequiredService<RuntimeExecutionCoordinator>();
+            var streams = http.RequestServices.GetRequiredService<RuntimeWakeStreams>();
             ExecutionStreamBroadcaster.PrepareResponse(http.Response);
-            await Write(http, "ready", ct);
-            try
-            {
-                while (!ct.IsCancellationRequested)
-                    await Write(http, await cursor.WaitAsync(Heartbeat, ct) ? "wake" : "ping", ct);
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { /* le worker a fermé le flux */ }
+            await streams.RunAsync(worker, cancellation => coordinator.AuthenticateAsync(worker, token, cancellation),
+                (kind, cancellation) => Write(http, kind, cancellation), ct);
         }).WithName("StreamRuntimeWake");
     }
 
