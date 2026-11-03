@@ -38,13 +38,7 @@ public sealed record WorkerIdentityState(
             var normalized = uri.GetLeftPart(UriPartial.Path).TrimEnd('/') + "/";
             if (!urls.Contains(normalized, StringComparer.OrdinalIgnoreCase)) urls.Add(normalized);
         }
-        if (IsEnrolled && options.Roles.Contains(WorkerRole.Server) && options.CentralApiBaseUrl is { } localUrl && LocalEnrollment.IsLoopback(localUrl))
-            Add(localUrl);
         Add(ApiBaseUrl);
-        if (IsEnrolled && KnownServerUrls is not null)
-        {
-            foreach (var url in KnownServerUrls) Add(url);
-        }
         return urls;
     }
 }
@@ -229,24 +223,6 @@ public sealed class WorkerIdentityStore(WorkerAgentOptions options)
         {
             if (state is null) throw new InvalidOperationException("L’identité locale du worker est absente.");
             state = state with { Enrolled = true, PairingKey = null, PairingExpiresAt = null, PairingPublished = false, EnrollmentFailure = null };
-            await SaveAsync(state, cancellationToken);
-        }
-        finally
-        {
-            gate.Release();
-        }
-    }
-
-    public async Task UpdateMasterUrlAsync(string newMasterUrl, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(newMasterUrl) || !Uri.TryCreate(newMasterUrl, UriKind.Absolute, out var uri)) return;
-        var normalized = uri.GetLeftPart(UriPartial.Path).TrimEnd('/') + "/";
-        await gate.WaitAsync(cancellationToken);
-        try
-        {
-            var current = await LoadAsync(cancellationToken);
-            if (string.Equals(current.ApiBaseUrl?.TrimEnd('/') + "/", normalized, StringComparison.OrdinalIgnoreCase)) return;
-            state = current with { ApiBaseUrl = normalized };
             await SaveAsync(state, cancellationToken);
         }
         finally

@@ -143,13 +143,7 @@ public sealed class WorkerManagementService(
             if (isLocal && Get<LocalWorkerRegistry>() is { } localWorker)
                 await localWorker.RegisterAsync(worker.Id, ct);
 
-            var config = Get<IConfiguration>();
-            var masterUrl = config?["Central:AdvertisedApiBaseUrl"];
-
-            return new(HeartbeatOutcomeKind.Ok, null, worker with
-            {
-                MasterUrl = masterUrl
-            });
+            return new(HeartbeatOutcomeKind.Ok, null, worker);
         }
 
         if (await repository.IsRemovedAsync(workerId, ct))

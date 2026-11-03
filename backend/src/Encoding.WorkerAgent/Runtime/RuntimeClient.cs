@@ -8,7 +8,7 @@ namespace Encoding.WorkerAgent.Runtime;
 
 public sealed class RuntimeClient : IDisposable
 {
-    private readonly HttpClient http=new() { Timeout=Timeout.InfiniteTimeSpan };
+    private readonly HttpClient http=WorkerCentralHttp.Create(Timeout.InfiniteTimeSpan);
     private readonly WorkerIdentityState identity;
     public RuntimeClient(WorkerIdentityState identity, string? apiBaseUrl = null)
     {

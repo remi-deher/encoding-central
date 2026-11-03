@@ -93,8 +93,7 @@ public sealed record WorkerResponse(
     string? DisplayName = null,
     IReadOnlyDictionary<string, string?>? Labels = null,
     WorkerLifecycle? Lifecycle = null,
-    string? LifecycleReason = null,
-    string? MasterUrl = null);
+    string? LifecycleReason = null);
 
 /// <summary>Demande d'un administrateur : mode de fonctionnement voulu pour un worker, appliqué par le worker à son prochain signal de présence (architecture 0036).</summary>
 
