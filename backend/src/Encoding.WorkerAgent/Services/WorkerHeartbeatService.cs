@@ -92,7 +92,7 @@ public sealed class WorkerHeartbeatService(
                 logger.LogWarning(exception, "Le heartbeat a dépassé son délai ; nouvel essai au prochain cycle.");
             }
 
-            await Task.Delay(options.HeartbeatInterval, stoppingToken);
+            await Task.Delay(WorkerPacing.Jitter(options.HeartbeatInterval, WorkerPacing.HeartbeatJitter), stoppingToken);
         }
     }
 
