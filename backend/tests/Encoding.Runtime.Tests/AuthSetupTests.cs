@@ -13,7 +13,7 @@ using ApiAssembly = Encoding.Api.Auth.AuthOptions;
 
 namespace Encoding.Runtime.Tests;
 
-/// <summary>Initialisation du premier administrateur : jeton d'initialisation.</summary>
+/// <summary>Initialisation du premier administrateur : jeton d'initialisation et mot de passe généré.</summary>
 public sealed class AuthSetupTests
 {
     private const string Token = "jeton-d-initialisation-de-test";
@@ -107,6 +107,54 @@ public sealed class AuthSetupTests
         Assert.Null(Options(new() { ["Auth:SetupToken"] = "   " }).SetupToken);
         Assert.Equal(Token, Options(new() { ["Auth:SetupToken"] = $" {Token} " }).SetupToken);
     }
+
+    [Fact(Timeout = 60000)]
+    public Task GeneratedPasswordIsReturnedOnceToTheLegitimateCaller() => WithFactoryAsync("Development", new(), async factory =>
+    {
+        using var client = factory.CreateClient();
+        using var created = await PostSetup(client, new SetupRequest());
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var body = (await created.Content.ReadFromJsonAsync<SetupResponse>(Json))!;
+        Assert.False(string.IsNullOrEmpty(body.GeneratedPassword));
+
+        using var login = await client.PostAsJsonAsync("/api/v1/auth/login", new LoginRequest("admin", body.GeneratedPassword!));
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+
+        using var again = await PostSetup(client, new SetupRequest());
+        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
+        Assert.DoesNotContain(body.GeneratedPassword!, await again.Content.ReadAsStringAsync());
+    });
+
+    [Fact(Timeout = 60000)]
+    public Task ProvidedPasswordIsNeverEchoed() => WithFactoryAsync("Development", new(), async factory =>
+    {
+        using var client = factory.CreateClient();
+        using var created = await PostSetup(client, new SetupRequest("root", Password));
+        var body = (await created.Content.ReadFromJsonAsync<SetupResponse>(Json))!;
+        Assert.Null(body.GeneratedPassword);
+    });
+
+    [Fact(Timeout = 120000)]
+    public Task ConcurrentSetupsNeverShareAGeneratedPassword() => WithFactoryAsync("Development", new(), async factory =>
+    {
+        var results = await Task.WhenAll(Enumerable.Range(0, 6).Select(async index =>
+        {
+            using var client = factory.CreateClient();
+            using var response = await PostSetup(client, new SetupRequest());
+            return (response.StatusCode, Body: await response.Content.ReadAsStringAsync(), Index: index);
+        }));
+        var winners = results.Where(item => item.StatusCode == HttpStatusCode.Created).ToArray();
+        Assert.Single(winners);
+        Assert.All(results.Where(item => item.StatusCode != HttpStatusCode.Created), item => Assert.Equal(HttpStatusCode.Conflict, item.StatusCode));
+        var winner = winners[0];
+        var generated = JsonSerializer.Deserialize<SetupResponse>(winner.Body, Json)!;
+        Assert.Equal("admin", generated.Username);
+        foreach (var loser in results.Where(item => item.Index != winner.Index))
+            Assert.DoesNotContain(generated.GeneratedPassword!, loser.Body);
+        using var client = factory.CreateClient();
+        using var login = await client.PostAsJsonAsync("/api/v1/auth/login", new LoginRequest(generated.Username, generated.GeneratedPassword!));
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+    });
 
     private static AuthOptions Options(Dictionary<string, string?> values) =>
         AuthOptions.From(new ConfigurationBuilder().AddInMemoryCollection(values).Build());
