@@ -64,17 +64,43 @@ public sealed class PluginProcessHost(IProcessToolRunner processes,IConfiguratio
         }
         if(manifest.ContractVersion!=1 || manifest.Id!=plugin.Id || manifest.Version!=plugin.Version || !manifest.SupportedHostContractVersions.Contains(1))
             throw new IOException($"Handshake plugin incompatible : le processus annonce {manifest.Id} {manifest.Version} (contrat {manifest.ContractVersion}), le worker attend {plugin.Id} {plugin.Version} (contrat 1).");
+        VerifyCapabilities(plugin,manifest);
         described[key]=(fingerprint,manifest);
         return manifest;
     }
 
+    /// <summary>
+    /// Les privilèges d'un plugin viennent de son paquet vérifié (<c>plugin.json</c>, haché), pas de ce que le processus répond au
+    /// <c>describe</c> : une réponse qui en ajoute ou en retire est refusée, comme toute capacité inconnue. Un plugin déclaré à la main
+    /// dans la configuration du worker (sans <c>plugin.json</c>) est approuvé par l'opérateur : son <c>describe</c> fait foi.
+    /// </summary>
+    public static void VerifyCapabilities(PluginLaunch plugin,PluginManifest described)
+    {
+        var unknown=(described.Capabilities??[]).FirstOrDefault(capability=>!PluginCapabilities.Ids.Contains(capability));
+        if(unknown is not null) throw new IOException($"Le plugin {plugin.Id} déclare une capacité inconnue « {unknown} ».");
+        foreach(var root in plugin.ReadOnlyPaths)
+        {
+            var file=Path.Combine(root,PluginPackage.ManifestFile);
+            if(!File.Exists(file)) continue;
+            var packaged=JsonSerializer.Deserialize<PluginManifest>(File.ReadAllText(file),Json)??throw new IOException("Manifeste du paquet absent.");
+            var expected=(packaged.Capabilities??[]).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
+            if(!expected.SequenceEqual((described.Capabilities??[]).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal),StringComparer.Ordinal))
+                throw new IOException($"Le plugin {plugin.Id} annonce des capacités différentes de celles de son paquet vérifié.");
+            return;
+        }
+    }
+
     /// <summary>Échec d'un processus plugin : code de sortie et fin de stderr (bornée, sans retour à la ligne ni caractère de contrôle).</summary>
-    private static IOException Failure(PluginLaunch plugin,string message,ToolResult result)
+    private static IOException Failure(PluginLaunch plugin,string message,ToolResult result,bool network=false)
     {
         if(result.ExitCode==79) return new IOException($"{message} : le bac à sable Landlock n'a pas pu être appliqué (code 79).");
         var tail=new string((result.Error??"").Where(character=>!char.IsControl(character) || character==' ').ToArray()).Trim();
         if(tail.Length>MaxErrorLength) tail="…"+tail[^MaxErrorLength..];
-        return new IOException($"{message} (plugin {plugin.Id}, code {result.ExitCode}){(tail.Length>0?" : "+tail:"")}.");
+        // Sans capacité « network », toute socket TCP/IP/UDP échoue en EPERM/EACCES : le dire évite de chercher une panne réseau.
+        var hint=!network && (tail.Contains("Operation not permitted",StringComparison.OrdinalIgnoreCase) || tail.Contains("EPERM",StringComparison.Ordinal)
+            || tail.Contains("EACCES",StringComparison.Ordinal) || tail.Contains("Permission denied",StringComparison.OrdinalIgnoreCase))
+            ? $" Le plugin n'a pas la capacité « {PluginCapabilities.Network} » : sans elle le bac à sable refuse toute connexion réseau (voir l'ADR 0042)." : "";
+        return new IOException($"{message} (plugin {plugin.Id}, code {result.ExitCode}){(tail.Length>0?" : "+tail:"")}.{hint}");
     }
 
     private static string Fingerprint(PluginLaunch plugin)
@@ -124,13 +150,14 @@ public sealed class PluginProcessHost(IProcessToolRunner processes,IConfiguratio
         var timeout=invocation.Deadline-DateTimeOffset.UtcNow;
         if(component.TimeoutSeconds is { } declared && TimeSpan.FromSeconds(declared)<timeout) timeout=TimeSpan.FromSeconds(declared);
         ToolResult result;
+        var network=PluginCapabilities.AllowsNetwork(manifest);
         try { result=await processes.RunAsync(plugin.Executable,plugin.Arguments,workspace,timeout,ct,input,1048576,true,plugin.ReadOnlyPaths,
-            allowNetwork:PluginCapabilities.AllowsNetwork(manifest)); }
+            allowNetwork:network); }
         catch(OperationCanceledException) when(!ct.IsCancellationRequested)
         {
             throw new IOException($"Le plugin {plugin.Id} a dépassé son délai ({(int)timeout.TotalSeconds} s) ; son effet doit être considéré comme incertain.");
         }
-        if(result.ExitCode!=0) throw Failure(plugin,"Le processus du plugin a échoué ; son effet doit être considéré comme incertain",result);
+        if(result.ExitCode!=0) throw Failure(plugin,"Le processus du plugin a échoué ; son effet doit être considéré comme incertain",result,network);
         FlowStepResult response;
         try { response=JsonSerializer.Deserialize<FlowStepResult>(result.Output,Json)??throw new IOException("Réponse plugin absente."); }
         catch(JsonException exception) { throw new IOException($"Le plugin {plugin.Id} a répondu un résultat illisible ({exception.Message}) ; son effet doit être considéré comme incertain.",

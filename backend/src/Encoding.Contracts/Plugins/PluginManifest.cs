@@ -147,6 +147,9 @@ public static class PluginManifestFingerprint
             foreach (var capability in (dependency.RequiredCapabilities ?? []).Order(StringComparer.Ordinal))
                 builder.Append("  capability:").Append(capability).Append('\n');
         }
+        // Keep legacy fingerprints unchanged: only a declared privilege is part of the contract.
+        foreach (var capability in (manifest.Capabilities ?? []).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+            builder.Append("plugin-capability:").Append(capability).Append('\n');
         foreach (var field in (manifest.ConfigurationSchema?.Fields ?? []).OrderBy(field => field.Id, StringComparer.Ordinal))
             builder.Append("cfg:").Append(field.Id).Append(':').Append(field.Type).Append('\n');
         foreach (var component in manifest.Components.OrderBy(component => component.Id, StringComparer.Ordinal))
