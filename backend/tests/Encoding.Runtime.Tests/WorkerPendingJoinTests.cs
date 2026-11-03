@@ -141,6 +141,25 @@ public sealed class WorkerPendingJoinTests
     }
 
     [Fact]
+    public async Task IdentityFileWrittenWithTheOldVocabularyKeepsTheEnrollment()
+    {
+        var directory = NewDirectory();
+        Directory.CreateDirectory(directory);
+        var id = Guid.NewGuid(); var central = Guid.NewGuid();
+        await File.WriteAllTextAsync(Path.Combine(directory, "node-identity.json"),
+            $"{{\"id\":\"{id}\",\"clusterId\":\"{central}\",\"clusterName\":\"Maison\",\"apiBaseUrl\":\"http://127.0.0.1:1/\",\"nodeToken\":\"{new string('a', 43)}\",\"enrolled\":true}}");
+        var (_, store, _) = Build(directory);
+
+        var identity = await store.GetAsync(CancellationToken.None);
+
+        Assert.True(identity.IsEnrolled);
+        Assert.Equal(id, identity.Id);
+        Assert.Equal(central.ToString(), identity.CentralId);
+        Assert.Equal("Maison", identity.CentralName);
+        Assert.Equal(new string('a', 43), identity.WorkerToken);
+    }
+
+    [Fact]
     public async Task ForgettingAManualAddressRemovesItForGood()
     {
         var directory = NewDirectory();

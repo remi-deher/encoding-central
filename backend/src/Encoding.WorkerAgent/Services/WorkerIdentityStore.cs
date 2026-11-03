@@ -68,8 +68,7 @@ public sealed class WorkerIdentityStore(WorkerAgentOptions options)
             Directory.CreateDirectory(options.DataDirectory);
             if (File.Exists(filePath))
             {
-                await using var stream = File.OpenRead(filePath);
-                state = await JsonSerializer.DeserializeAsync<WorkerIdentityState>(stream, JsonOptions, cancellationToken);
+                state = await ReadFileAsync(cancellationToken);
             }
             state ??= new WorkerIdentityState(Guid.NewGuid(), null, null, null, null, false);
             if (!File.Exists(filePath)) await SaveAsync(state, cancellationToken);
@@ -94,8 +93,7 @@ public sealed class WorkerIdentityStore(WorkerAgentOptions options)
             Directory.CreateDirectory(options.DataDirectory);
             if (state is null && File.Exists(filePath))
             {
-                await using var stream = File.OpenRead(filePath);
-                state = await JsonSerializer.DeserializeAsync<WorkerIdentityState>(stream, JsonOptions, cancellationToken);
+                state = await ReadFileAsync(cancellationToken);
             }
             var token = state?.WorkerToken ?? Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
             var effectiveDisplayName = displayName ?? state?.DisplayName;
@@ -123,8 +121,7 @@ public sealed class WorkerIdentityStore(WorkerAgentOptions options)
             Directory.CreateDirectory(options.DataDirectory);
             if (state is null && File.Exists(filePath))
             {
-                await using var stream = File.OpenRead(filePath);
-                state = await JsonSerializer.DeserializeAsync<WorkerIdentityState>(stream, JsonOptions, cancellationToken);
+                state = await ReadFileAsync(cancellationToken);
             }
             if (state?.IsEnrolled == true)
                 throw new InvalidOperationException("Ce worker est déjà rattaché à un central.");
@@ -201,14 +198,26 @@ public sealed class WorkerIdentityStore(WorkerAgentOptions options)
         }
     }
 
+    /// <summary>
+    /// Lit le fichier d'identité. Un fichier écrit avant le vocabulaire central/worker (nodeToken, clusterId, clusterName…) est relu
+    /// sous ses nouvelles clés, pour que le worker garde son rattachement.
+    /// </summary>
+    private async Task<WorkerIdentityState?> ReadFileAsync(CancellationToken cancellationToken)
+    {
+        var text = await File.ReadAllTextAsync(filePath, cancellationToken);
+        text = text.Replace("\"nodeToken\"", "\"workerToken\"", StringComparison.Ordinal)
+            .Replace("\"clusterId\"", "\"centralId\"", StringComparison.Ordinal)
+            .Replace("\"clusterName\"", "\"centralName\"", StringComparison.Ordinal);
+        return JsonSerializer.Deserialize<WorkerIdentityState>(text, JsonOptions);
+    }
+
     private async Task<WorkerIdentityState> LoadAsync(CancellationToken cancellationToken)
     {
         if (state is not null) return state;
         Directory.CreateDirectory(options.DataDirectory);
         if (File.Exists(filePath))
         {
-            await using var stream = File.OpenRead(filePath);
-            state = await JsonSerializer.DeserializeAsync<WorkerIdentityState>(stream, JsonOptions, cancellationToken);
+            state = await ReadFileAsync(cancellationToken);
         }
         return state ??= new WorkerIdentityState(Guid.NewGuid(), null, null, null, null, false);
     }
