@@ -70,6 +70,8 @@ public static class SourceReplacer
             if (File.Exists(backup) && await SafeMediaPaths.DigestAsync(backup, ct) == sourceSha && await SafeMediaPaths.DigestAsync(final, ct) == resultSha)
             {
                 if (!await stillAuthorized(ct)) return Failed("Le bail ou l'exécution n'est plus valide ; la source est conservée.");
+                // Les empreintes ci-dessus peuvent durer : la source est revérifiée juste avant de supprimer l'ancien nom.
+                if (await SafeMediaPaths.DigestAsync(original, ct) != sourceSha) return Failed("La source a changé avant le remplacement ; elle est conservée.");
                 File.Delete(original); AtomicFilePublication.Confirm(final);
                 return Replaced(finalRelative, backupRelative, final);
             }
@@ -100,7 +102,11 @@ public static class SourceReplacer
                 // Ce fichier n'est alors pas le nôtre : rien n'est modifié ni restauré (donc jamais supprimé).
                 try { AtomicFilePublication.Publish(stagedResult, final); }
                 catch (Exception) when (!File.Exists(stagedResult)) { mutated = true; throw; } // déplacé, mais synchronisation disque échouée : le final est le nôtre
-                catch (IOException) when (File.Exists(stagedResult)) { return Failed("Un autre fichier occupe déjà le nom du résultat ; la source est conservée."); }
+                catch (IOException) when (File.Exists(stagedResult))
+                {
+                    return Failed(File.Exists(final) ? "Un autre fichier occupe déjà le nom du résultat ; la source est conservée."
+                        : "La publication du résultat a échoué ; la source est conservée.");
+                }
                 mutated = true; File.Delete(original); AtomicFilePublication.Confirm(final);
             }
             if (await SafeMediaPaths.DigestAsync(final, ct) != resultSha) throw new IOException("Le fichier remplaçant ne correspond pas au résultat validé.");

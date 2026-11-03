@@ -172,6 +172,39 @@ public sealed class SourceReplacerTests : IDisposable
     }
 
     [Fact]
+    public async Task SourceChangedWhileVerifyingAResumedPublicationIsNeverDeleted()
+    {
+        var media = Create("Cut.avi");
+        var backup = Full(SourceReplacer.BackupPath(execution, media.Source));
+        Directory.CreateDirectory(Path.GetDirectoryName(backup)!); File.Copy(Full(media.Source), backup);
+        File.WriteAllBytes(Full("show/Cut.mkv"), media.ResultBytes);
+
+        // Le callback d'autorisation s'exécute après les empreintes : la source est modifiée dans cette fenêtre.
+        var report = await ReplaceAsync(media, ".mkv", _ => { File.AppendAllText(Full(media.Source), "edited meanwhile"); return Task.FromResult(true); });
+
+        Assert.Equal("failed", report.Status);
+        Assert.True(File.Exists(Full(media.Source)));
+        Assert.EndsWith("edited meanwhile", File.ReadAllText(Full(media.Source)));
+    }
+
+    [Fact]
+    public async Task RollbackAndFinalizeStopOnAnOrphanLockAndTouchNothing()
+    {
+        var media = Create("Old.avi");
+        var report = await ReplaceAsync(media, ".mkv");
+        var task = RollbackTask(media.Source, report, media.SourceBytes, media.ResultBytes);
+        var lockPath = SharedSourceWriteLock.LockPath(Full(media.Source));
+        File.WriteAllText(lockPath, JsonSerializer.Serialize(new SourceWriteLockInfo("dead", Environment.MachineName, int.MaxValue, 1, execution, DateTimeOffset.UtcNow)));
+
+        await Assert.ThrowsAsync<OrphanSourceWriteLockException>(() => SourceReplacer.RollbackAsync(root, task, CancellationToken.None));
+        Assert.Throws<OrphanSourceWriteLockException>(() => SourceReplacer.Finalize(root, task with { Action = "finalize" }, out _));
+
+        Assert.True(File.Exists(lockPath));
+        Assert.True(File.Exists(Full("show/Old.mkv")));
+        Assert.True(File.Exists(Full(report.BackupPath!)));
+    }
+
+    [Fact]
     public async Task UnrelatedFileAtTheFinalNameIsNotTakenForAPublishedResult()
     {
         var media = Create("Cut.avi");
