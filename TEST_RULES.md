@@ -1,6 +1,6 @@
 # Règles de tests et d’intégration continue
 
-Ces règles sont obligatoires pour les changements du projet. Les tests doivent protéger les comportements métier et les garanties du cluster, tout en restant rapides à exécuter pendant le développement.
+Ces règles sont obligatoires pour les changements du projet. Les tests doivent protéger les comportements métier et les garanties du central, tout en restant rapides à exécuter pendant le développement.
 
 ## 1. CI GitHub Actions
 
@@ -18,11 +18,11 @@ Ces règles sont obligatoires pour les changements du projet. Les tests doivent 
 - Ajouter des tests d’intégration pour les interactions importantes avec le stockage, la file de tâches, le système de fichiers, les outils média et les plugins.
 - Pour un changement d’API ou de contrat, vérifier la compatibilité entre les composants concernés.
 
-## 3. Tests propres au cluster et aux médias
+## 3. Tests propres au central et aux médias
 
-- Couvrir l’éligibilité des nœuds selon leurs capacités et leurs accès configurés aux bibliothèques.
+- Couvrir l’éligibilité des workers selon leurs capacités et leurs accès configurés aux bibliothèques.
 - Couvrir le mode d’accès direct, le mode non pris en charge et le transfert WebDAV vers un worker lorsque ces capacités sont implémentées.
-- Couvrir les baux de tâches expirés, la reprise après perte d’un nœud, les doublons et l’exécution concurrente.
+- Couvrir les baux de tâches expirés, la reprise après perte d’un worker, les doublons et l’exécution concurrente.
 - Vérifier qu’un seul traitement modifie un média donné à la fois et qu’une sortie invalide ne remplace jamais la source.
 - Utiliser des médias de test petits, reproductibles et distribuables légalement ; préférer des fichiers synthétiques lorsque c’est pertinent.
 - Ne jamais utiliser une bibliothèque personnelle ou un média utilisateur comme dépendance d’un test automatisé.
@@ -30,7 +30,7 @@ Ces règles sont obligatoires pour les changements du projet. Les tests doivent 
 ## 4. E2E
 
 - Prévoir un parcours E2E léger, déterministe et exécutable localement pour vérifier le chemin critique de l’application.
-- Réserver les E2E lourds, les scénarios multi-nœuds complets et les traitements longs aux workflows GitHub Actions adaptés.
+- Réserver les E2E lourds, les scénarios multi-workers complets et les traitements longs aux workflows GitHub Actions adaptés.
 - Garder les E2E indépendants des services personnels, des secrets locaux et des médias non versionnés.
 - En cas d’échec, fournir des journaux et des artefacts de diagnostic suffisants pour reproduire le problème.
 

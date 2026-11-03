@@ -9,19 +9,19 @@ Application auto-hébergée pour gérer et distribuer le traitement de biblioth�
 ## Stack technique (validée)
 
 - Backend : **C# ASP.NET Core sur .NET 10 LTS**. Interface : **Angular** (TypeScript, Angular Material/CDK). Déploiement : **Docker**.
-- Base de données : **SQLite, une seule, celle du central**. Ne jamais partager un fichier SQLite entre hôtes. Voir [replication-storage](docs/architecture/domains/replication-storage.md).
+- Base de données : **SQLite, une seule, celle du central**. Ne jamais partager un fichier SQLite entre hôtes. Voir [replication-storage](docs/architecture/domains/storage.md).
 - Ne pas remplacer ces choix sans décision explicite du propriétaire du projet.
 
 ## Modèle central / workers
 
-- Deux images distinctes. Le **central** embarque l'API, l'interface web, la base et un worker intégré ; il est autonome et reste l'**unique autorité** du cluster : il pilote les workers. Le **worker** embarque seulement l'agent et une interface web, sans base de données ; il n'est jamais autonome, alimenté par l'API et le SSE du central, enrôlé à son setup avec un compte administrateur du central. **Aucune passation** de la fonction serveur pour l'instant ([ADR 0036](docs/architecture/adr/0036-separation-stricte-central-worker.md)).
-- Il n'y a plus de notion de cluster ni de nœud : un **central** et des **workers** (le central embarque son propre worker). « Worker » est le terme unique pour toute machine qui traite ; le rôle est fixé par l'image. Un worker doit avoir **exactement la version du central** ([ADR 0039](docs/architecture/adr/0039-version-exacte-worker-central.md)). Un central seul est **autonome** ; un worker rejoint un central, avec un compte administrateur de celui-ci. Détails : [cluster](docs/architecture/domains/cluster.md).
+- Deux images distinctes. Le **central** embarque l'API, l'interface web, la base et un worker intégré ; il fonctionne seul et reste l'**unique autorité** : il pilote les workers. Le **worker** embarque seulement l'agent et une interface web, sans base de données ; il n'est jamais autonome, alimenté par l'API et le SSE du central, enrôlé à son setup avec un compte administrateur du central. **Aucune passation** de la fonction serveur pour l'instant ([ADR 0036](docs/architecture/adr/0036-separation-stricte-central-worker.md)).
+- Il n'y a plus de notion de central ni de worker : un **central** et des **workers** (le central embarque son propre worker). « Worker » est le terme unique pour toute machine qui traite ; le rôle est fixé par l'image. Un worker doit avoir **exactement la version du central** ([ADR 0039](docs/architecture/adr/0039-version-exacte-worker-central.md)). Le central fonctionne seul avec son worker intégré ; un worker rejoint le central avec un compte administrateur de celui-ci. Détails : [workers](docs/architecture/domains/workers.md).
 - Le central est l'unique détenteur de la base et l'unique serveur : **pas de maillage, pas de réplication entre serveurs** ([ADR 0036](docs/architecture/adr/0036-separation-stricte-central-worker.md)). Les baux et réservations sont locaux au central qui attribue.
 
 ## Bibliothèques et accès aux médias
 
-- Une bibliothèque est une définition logique commune au central (règles, profils, paramètres). Les flows sont créés indépendamment puis attribués à une bibliothèque via une **version publiée précise** ; la découverte des fichiers est faite par un nœud en accès direct, sans saisie de chemin média par l'utilisateur.
-- Chaque worker déclare son accès à chaque bibliothèque : **accès direct** (chemin local ou montage), **non pris en charge**, ou **transfert** (un worker à accès direct transfère la source par WebDAV au worker, qui traite une copie locale puis renvoie le résultat). Les outils travaillent sur des fichiers locaux, jamais directement sur un média distant. Aucune tâche n'est attribuée à un nœud sans accès adapté.
+- Une bibliothèque est une définition logique commune au central (règles, profils, paramètres). Les flows sont créés indépendamment puis attribués à une bibliothèque via une **version publiée précise** ; la découverte des fichiers est faite par un worker en accès direct, sans saisie de chemin média par l'utilisateur.
+- Chaque worker déclare son accès à chaque bibliothèque : **accès direct** (chemin local ou montage), **non pris en charge**, ou **transfert** (un worker à accès direct transfère la source par WebDAV au worker, qui traite une copie locale puis renvoie le résultat). Les outils travaillent sur des fichiers locaux, jamais directement sur un média distant. Aucune tâche n'est attribuée à un worker sans accès adapté.
 
 ## Tâches et intégrité des fichiers
 
@@ -59,6 +59,6 @@ Toute route de gestion exige une session ou un jeton API Bearer ; rôles `admin`
 ## Consignes de travail
 
 - Avant une décision structurante, consulter ce fichier, la fiche du domaine et les instructions plus proches des fichiers concernés.
-- Les changements sont poussés directement sur `dev`, sans lancer la CI. La CI de validation s'exécute sur la PR de promotion `dev` vers `main` (et ses mises à jour) ; `main` n'est fusionnée qu'après réussite du contrôle `promotion-ci`, qui vérifie le commit exact et les domaines non modifiés. Vérifier compatibilité de cluster, scénarios d'échec et effets sur les modules existants.
+- Les changements sont poussés directement sur `dev`, sans lancer la CI. La CI de validation s'exécute sur la PR de promotion `dev` vers `main` (et ses mises à jour) ; `main` n'est fusionnée qu'après réussite du contrôle `promotion-ci`, qui vérifie le commit exact et les domaines non modifiés. Vérifier compatibilité de central, scénarios d'échec et effets sur les modules existants.
 - Décision structurante : ADR court dans `docs/architecture/adr/`. Changement de comportement : mettre à jour la fiche du domaine dans la même PR.
 - Distinguer clairement vérifié, échoué et non exécuté ; ne jamais présenter une implémentation comme validée en conditions réelles sans l'avoir exercée (voir la liste « non vérifié » de `open-questions.md`).

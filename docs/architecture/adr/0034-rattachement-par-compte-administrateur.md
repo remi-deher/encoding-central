@@ -2,7 +2,7 @@
 id: 0034
 title: Rattachement du worker par compte administrateur
 status: implemented
-domain: cluster
+domain: workers
 date: 2026-11-01
 decided_by: Rémi (2026-11-01)
 supersedes: []

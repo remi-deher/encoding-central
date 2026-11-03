@@ -2,7 +2,7 @@
 id: 0040
 title: Vocabulaire central / worker, fin des notions de cluster et de nœud
 status: accepted
-domain: cluster
+domain: workers
 date: 2026-11-02
 decided_by: Rémi (2026-11-02)
 supersedes: []

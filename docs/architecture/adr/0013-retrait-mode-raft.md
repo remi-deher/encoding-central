@@ -2,7 +2,7 @@
 id: 0013
 title: Retrait du mode de consensus SQL
 status: implemented
-domain: replication-storage
+domain: storage
 date: 2026-10-25
 decided_by: Rémi (2026-10-25)
 supersedes: []

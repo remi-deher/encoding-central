@@ -2,7 +2,7 @@
 id: 0032
 title: Serveur central fixe et workers qui ne deviennent pas serveurs
 status: superseded
-domain: cluster
+domain: workers
 date: 2026-11-01
 decided_by: Rémi (2026-11-01)
 supersedes: []

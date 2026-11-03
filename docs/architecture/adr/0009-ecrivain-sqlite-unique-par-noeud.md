@@ -2,7 +2,7 @@
 id: 0009
 title: Écrivain SQLite unique par nœud
 status: implemented
-domain: replication-storage
+domain: storage
 date: 2026-10-23
 decided_by: Rémi, demande explicite de mise en place le 2026-10-23
 supersedes: []
@@ -13,7 +13,7 @@ tags: [sqlite, écritures, concurrence, maillage, disponibilité]
 # 0009 — Écrivain SQLite unique par nœud
 
 ## Contexte
-Chaque serveur conserve sa base SQLite locale ; le maillage réconcilie les données par convergence éventuelle, sans coordinateur permanent ([replication-storage.md](../domains/replication-storage.md)). SQLite ne permet qu'un écrivain à la fois. Les transactions actuelles commencent en écriture immédiate et certaines tâches de fond ouvrent périodiquement une transaction même sans travail à effectuer. En production, des requêtes de présence et d'attribution ont attendu le délai de verrouillage puis échoué. La fiche runtime confirme que les baux et réservations restent locaux et transactionnels.
+Chaque serveur conserve sa base SQLite locale ; le maillage réconcilie les données par convergence éventuelle, sans coordinateur permanent ([storage.md](../domains/storage.md)). SQLite ne permet qu'un écrivain à la fois. Les transactions actuelles commencent en écriture immédiate et certaines tâches de fond ouvrent périodiquement une transaction même sans travail à effectuer. En production, des requêtes de présence et d'attribution ont attendu le délai de verrouillage puis échoué. La fiche runtime confirme que les baux et réservations restent locaux et transactionnels.
 
 ## Décision
 Décision mise en place à la demande de Rémi le 2026-10-23 :

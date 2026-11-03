@@ -2,7 +2,7 @@
 id: 0039
 title: Un worker doit avoir la version exacte du central
 status: implemented
-domain: cluster
+domain: workers
 date: 2026-11-02
 decided_by: Rémi (2026-11-02)
 supersedes: []

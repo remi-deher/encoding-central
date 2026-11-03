@@ -2,7 +2,7 @@
 id: 0033
 title: Image centrale autonome et image worker sans base
 status: superseded
-domain: cluster
+domain: workers
 date: 2026-11-02
 decided_by: Rémi (2026-11-02)
 supersedes: []

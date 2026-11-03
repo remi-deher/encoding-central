@@ -11,7 +11,7 @@ La policy sérialise les événements d’une même PR et annule les exécutions
 
 Le workflow `.github/workflows/release.yml` s'exécute à chaque push sur `main`. Il confirme qu'une PR `dev` vers `main` a été fusionnée et revérifie que les contrôles CI du commit (Backend, Frontend, Image et Release scripts) sont terminés et verts, puis publie sur Docker Hub. Ce workflow est la publication déclenchée par le merge, pas un lancement de la CI de validation :
 
-- `<utilisateur>/encoding` (`backend/Dockerfile`, contexte racine) : image unique contenant le serveur, l'interface web, le worker et le lanceur qui les démarre selon le mode du nœud (voir [cluster](../architecture/domains/cluster.md)).
+- `<utilisateur>/encoding-central` et `<utilisateur>/encoding-worker` (`backend/Dockerfile`, cibles `central` et `worker`, contexte racine) : le central embarque l'API, l'interface, la base, un worker intégré et le lanceur ; le worker n'embarque que l'agent et son interface (voir [workers](../architecture/domains/workers.md)). Les deux images d'une même release portent la même version (`APP_VERSION`) : un worker n'est accepté que s'il a la version du central.
 
 L'image reçoit les tags `X.Y.Z` et `latest`, et le commit reçoit le tag git `vX.Y.Z`.
 
@@ -44,9 +44,9 @@ docker run -d --name encoding-worker -p 8081:8081 \
   <utilisateur>/encoding-worker:latest
 ```
 
-Le central est autonome ; sa base est `/var/lib/encoding-node/cluster.db`. Il n'y a ni réplication ni maillage entre serveurs : la reprise après sinistre repose sur la sauvegarde du central. Le worker ne démarre jamais seul : son assistant `/setup` demande l'adresse du central et un compte administrateur de celui-ci ([ADR 0034](../architecture/adr/0034-rattachement-par-compte-administrateur.md)). Les volumes de données doivent être conservés pour garder l'identité des nœuds et les clés (`PluginSettings:KeyDirectory`).
+Le central fonctionne seul ; sa base est `/var/lib/encoding-node/cluster.db`. Il n'y a ni réplication ni maillage entre serveurs : la reprise après sinistre repose sur la sauvegarde du central. Le worker ne démarre jamais seul : son assistant `/setup` demande l'adresse du central et un compte administrateur de celui-ci ([ADR 0034](../architecture/adr/0034-rattachement-par-compte-administrateur.md)). Les volumes de données doivent être conservés pour garder l'identité des workers et les clés (`PluginSettings:KeyDirectory`).
 
-Sur le central, la page **Nœuds** gère le worker intégré (adresse du central, départ) ; l'agent du même conteneur écoute en boucle locale (`LocalAgent__BaseUrl`, `http://127.0.0.1:8081/`) et exige le secret local créé par le lanceur. Le worker distant se pilote depuis le central.
+Sur le central, la page **Workers** gère le worker intégré (adresse du central, départ) ; l'agent du même conteneur écoute en boucle locale (`LocalAgent__BaseUrl`, `http://127.0.0.1:8081/`) et exige le secret local créé par le lanceur. Le worker distant se pilote depuis le central.
 
 ## Notes de version et recherche de mises à jour
 
@@ -81,5 +81,5 @@ Contrats accessibles avec session ou jeton API Bearer :
 `updateAvailable` vaut `null` quand aucune comparaison fiable n’est possible.
 `status` vaut `development`, `unconfigured`, `unavailable`, `current` ou `available`.
 Ces données décrivent l’installation du processus serveur qui exécute la requête,
-pas une version commune réconciliée du cluster ; dans le mode Raft optionnel, le
-routage habituel des POST MCP vers le leader reste applicable.
+pas une version commune : chaque worker doit avoir la même version que le central
+([ADR 0039](../architecture/adr/0039-version-exacte-worker-central.md)).

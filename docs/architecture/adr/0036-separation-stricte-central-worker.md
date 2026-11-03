@@ -2,7 +2,7 @@
 id: 0036
 title: Séparation stricte du central et du worker
 status: implemented
-domain: cluster
+domain: workers
 date: 2026-11-02
 decided_by: Rémi (2026-11-02)
 supersedes: [0032, 0033]

@@ -11,7 +11,7 @@ encoding_plugin_sdk.py       SDK copié dans l'archive, aucune dépendance insta
 ## Modèle d’exécution
 
 - Un plugin est un programme lancé **à chaque appel** par le worker, qui lui transmet une requête JSON d’une ligne sur stdin et lit une réponse JSON d’une ligne sur stdout.
-- Il s’exécute sous Linux Landlock : écriture seulement dans son espace temporaire, lecture des exécutables et dépendances déclarés, pas d’accès au jeton du nœud ni aux montages média. Le réseau reste disponible (HTTP/HTTPS, DNS).
+- Il s’exécute sous Linux Landlock : écriture seulement dans son espace temporaire, lecture des exécutables et dépendances déclarés, pas d’accès au jeton du worker ni aux montages média. Le réseau reste disponible (HTTP/HTTPS, DNS).
 - **Langages** : Python 3 (bibliothèque standard) et Node.js sont installés dans l'image et ont un SDK. Un exécutable .NET n'a pas été essayé depuis que `/proc` est lisible dans le bac à sable (voir 0032) : à valider sur un hôte Landlock avant de le promettre. Le protocole est du JSON d'une ligne, n'importe quel langage qui sait lire stdin peut l'implémenter.
 - **Environnement** : le processus ne reçoit pas l'environnement du worker, seulement `PATH`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ`, plus `HOME` et `TMPDIR` pointant vers son espace de travail. Toute configuration passe par la configuration du plugin (champs `secret` compris), jamais par des variables d'environnement.
 - **Limites** : requête de 1 Mo au plus ; réponse de 1 Mo au plus ; 64 variables au plus (nom de 128 caractères, 256 Ko au total) ; `detail` tronqué à 4 096 caractères ; échéance de l'invocation 6 h au plus, que le composant peut raccourcir avec `timeoutSeconds` (1 à 21 600) dans son descripteur. Au-delà, le processus est arrêté avec son arbre et l'effet est considéré incertain.
@@ -20,7 +20,7 @@ encoding_plugin_sdk.py       SDK copié dans l'archive, aucune dépendance insta
 
 ## Écrire un plugin
 
-Outils d'auteur, sans cluster ni Landlock :
+Outils d'auteur, sans central ni Landlock :
 
 ```
 python3 sdk/encoding_plugin_sdk.py validate manifest.json          # mêmes règles que le serveur
@@ -107,7 +107,7 @@ Les binaires sont publiés comme paquets indépendants, jamais copiés dans chaq
 ]
 ```
 
-Le dépôt doit inclure une version compatible pour la plateforme du serveur. Le Store installe aussi les variantes compatibles publiées pour les autres plateformes ; chaque nœud ne télécharge que son architecture. L'administrateur peut installer un autre paquet fournisseur global pour le rôle après avoir retiré celui en conflit. Il n'y a qu'un fournisseur d'un rôle par plateforme, donc deux plugins qui demandent `ffmpeg` utilisent le même binaire installé.
+Le dépôt doit inclure une version compatible pour la plateforme du serveur. Le Store installe aussi les variantes compatibles publiées pour les autres plateformes ; chaque worker ne télécharge que son architecture. L'administrateur peut installer un autre paquet fournisseur global pour le rôle après avoir retiré celui en conflit. Il n'y a qu'un fournisseur d'un rôle par plateforme, donc deux plugins qui demandent `ffmpeg` utilisent le même binaire installé.
 
 Chaque archive outil contient `tool.json` à sa racine. Exemple de manifeste :
 
@@ -133,7 +133,7 @@ Le même index peut ajouter `resources[]` et `flows[]`. Une ressource donne `id`
 **À la main** (plugin fourni avec l'image, ou besoin d'un lancement particulier) :
 
 - **Serveur** : copier le manifeste dans le dossier `FlowPlugins:ManifestDirectory` (variable `FlowPlugins__ManifestDirectory`) et redémarrer. Le catalogue valide le manifeste ; les composants apparaissent dans l’éditeur.
-- **Chaque worker** qui doit exécuter le plugin : installer les fichiers hors du dossier de données du nœud (par exemple `/opt/encoding/plugins/mon-plugin`) et déclarer :
+- **Chaque worker** qui doit exécuter le plugin : installer les fichiers hors du dossier de données du worker (par exemple `/opt/encoding/plugins/mon-plugin`) et déclarer :
 
 ```
 Runtime__Plugins__0__Id=mon-plugin

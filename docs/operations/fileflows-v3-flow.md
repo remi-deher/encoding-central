@@ -7,7 +7,7 @@ Ce guide décrit comment reconstruire dans l'application le flow FileFlows « V3
 1. Page **Flows** : créer le flow dans l'éditeur avec les blocs du déroulé ci-dessous (voir [flows](../architecture/domains/flows.md)).
 2. Ouvrir le flow dans l'éditeur : régler le nom du disque du bloc **Verrou de disque** (`disque-1` par défaut ; le même nom pour toutes les bibliothèques d'un même disque physique), le jeu de polices et les contrôles de sortie. Cet exemple choisit QSV et active le repli CPU; le même réglage fonctionne aussi avec NVENC et VAAPI. Si une branche conserve des sources HDR/10-bit dans leur codec d'origine, choisir **HEVC ou codec source conservé** dans le validateur. Publier.
 3. Attribuer la version publiée à une bibliothèque. Si besoin, créer un modèle depuis cette version ([flows](../architecture/domains/flows.md)) pour en dériver d'autres flows.
-4. Prérequis sur les nœuds : FFmpeg, MKVToolNix, plugin `base` 1.9.0 ou plus, plugin `plex` 1.1.0, et le dossier de polices du nœud (`ENCODING_FONT_DIR/Crunchyroll/…`). Un nœud qui ne satisfait pas ces conditions ne reçoit pas le flow.
+4. Prérequis sur les workers : FFmpeg, MKVToolNix, plugin `base` 1.9.0 ou plus, plugin `plex` 1.1.0, et le dossier de polices du worker (`ENCODING_FONT_DIR/Crunchyroll/…`). Un worker qui ne satisfait pas ces conditions ne reçoit pas le flow.
 5. Plex : renseigner l'adresse, le jeton et la correspondance de chemins du plugin ([plugins](../architecture/domains/plugins.md)). Pour protéger le remplacement de la source, activer la politique de remplacement de la bibliothèque ([runtime](../architecture/domains/runtime.md), désactivée par défaut) ; la garde de Plex s'applique alors ([runtime](../architecture/domains/runtime.md)).
 
 ## Déroulement
@@ -40,10 +40,10 @@ N'importe quelle étape en erreur → Échec (la source reste intacte)
 | Déjà HEVC / HDR / 10 bits protégés | `conditions-video-codec`, `conditions-video-hdr`, `conditions-video-bitdepth` | 0067, 0068 | Blocs déjà disponibles : les relier à une branche qui copie la vidéo et saute `video-transcode` selon les règles du flow |
 | 2. Audio : stéréo→AAC, 2.1+→AC3 | `base-audio-rules` (ajouté au plan) | 0055 | Disposition ambiguë : sortie « Erreur » |
 | 1. Sous-titres | `base-assemble-media` (gestion des sous-titres activée) | 0057 | Profil Crunchyroll ou style personnalisé versionné |
-| Polices | `base-assemble-media` (ajout des polices activé) | 0057 | Jeu déclaré par le nœud |
+| Polices | `base-assemble-media` (ajout des polices activé) | 0057 | Jeu déclaré par le worker |
 | 4. Assemblage mkvmerge en une écriture | `base-ffmpeg-builder-execute` puis `base-assemble-media` | 0015, 0055–0057 | FFmpeg vidéo/audio en une commande ; assemblage MKV distinct, validation et checkpoint après chaque résultat adopté |
 | 4b. Noms de pistes | `base-assemble-media` (noms activés) | 0056 | Modèle de nom modifiable |
-| 29, 13. Garde Plex puis remplacement atomique | politique de remplacement de la bibliothèque + garde Plex | 0030, 0059 | Remplacement désactivé par défaut ; garde pour tous les remplacements du cluster |
+| 29, 13. Garde Plex puis remplacement atomique | politique de remplacement de la bibliothèque + garde Plex | 0030, 0059 | Remplacement désactivé par défaut ; garde pour tous les remplacements du central |
 | Contrôles post-assemblage | `probe-validate-output` | 0075 | Vérifie au choix HEVC, pistes vidéo/audio, codecs audio et sous-titres, canaux/disposition/LFE, chapitres, pièces jointes, durée et événements ASS |
 | 14–15, 26–27. Actualisation Plex / Radarr / Sonarr | `base-publish-result` puis `plex-refresh-library`, `radarr-refresh-movie`, `sonarr-refresh-series` | 0003 | Le bloc de publication fait passer le fichier en place pendant le flow ; les actualisations le suivent. |
 | Scripts avec `Flow.Execute` | `base-script` avec l'aide `tools` | 0054 | Bac à sable Landlock conservé |
@@ -56,9 +56,9 @@ N'importe quelle étape en erreur → Échec (la source reste intacte)
 | Disque occupé par un autre traitement | Reportée de 2 min ; le verrou de l'autre exécution est intact |
 | Plex injoignable pendant la vérification | Le flow continue ; la garde de publication refuse le remplacement de la source (le résultat distinct est publié) |
 | Disposition audio ambiguë | Sortie « Erreur » → Échec, source intacte |
-| Outil ou plugin absent sur le nœud | Le nœud ne reçoit pas le flow |
+| Outil ou plugin absent sur le worker | Le worker ne reçoit pas le flow |
 | Perte du worker en cours de traitement | Le bail expire ; l’exécution est reprise au dernier checkpoint par un autre worker éligible (2 reprises au plus, ADR 0004). Un bloc à effet incertain (script, modification sur place, recherche Sonarr/Radarr) échoue et se relance explicitement ; un encodage interrompu est refait depuis le début du bloc |
-| Perte du nœud d'accès pendant la publication | La publication est reprise sans double bascule ([runtime](../architecture/domains/runtime.md)) |
+| Perte du worker d'accès pendant la publication | La publication est reprise sans double bascule ([runtime](../architecture/domains/runtime.md)) |
 
 ## Limites connues
 
