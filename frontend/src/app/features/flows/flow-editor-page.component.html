@@ -2,35 +2,35 @@
   <!-- Zone 1 : Command Bar -->
   <app-flow-command-bar
     flow-workspace-toolbar
-    [canUndo]="canUndoEdit()"
-    [canRedo]="canRedoEdit()"
-    (undoRequested)="undoEdit()"
-    (redoRequested)="undoEdit(true)"
-    [title]="flowTitle()"
-    [mediaType]="flowMediaType()"
-    [storedVersion]="storedVersion()"
-    [hasDraft]="hasDraft()"
+    [canUndo]="graph.canUndoEdit()"
+    [canRedo]="graph.canRedoEdit()"
+    (undoRequested)="graph.undoEdit()"
+    (redoRequested)="graph.undoEdit(true)"
+    [title]="persistence.flowTitle()"
+    [mediaType]="components.flowMediaType()"
+    [storedVersion]="persistence.storedVersion()"
+    [hasDraft]="persistence.hasDraft()"
     [hasUnsavedChanges]="hasUnsavedChanges()"
-    [backupStatus]="backupStatus()"
-    [editorStatus]="editorStatus()"
-    [nodeCount]="nodes().length"
-    [saving]="saving()"
-    [validating]="validating()"
-    [canSave]="hasUnsavedChanges() || hasDraft()"
-    [disabled]="loadState() !== 'ready'"
+    [backupStatus]="persistence.backupStatus()"
+    [editorStatus]="persistence.editorStatus()"
+    [nodeCount]="graph.nodes().length"
+    [saving]="persistence.saving()"
+    [validating]="persistence.validating()"
+    [canSave]="hasUnsavedChanges() || persistence.hasDraft()"
+    [disabled]="persistence.loadState() !== 'ready'"
     [simulatorBusy]="simulator.busy()"
-    [canCreatePack]="storedVersion() >= 1"
-    [canRestoreAiProposal]="aiProposalRollback() !== null"
+    [canCreatePack]="persistence.storedVersion() >= 1"
+    [canRestoreAiProposal]="graph.aiProposalRollback() !== null"
     [paletteOpen]="paletteOpen()"
     [trayOpen]="trayOpen()"
     [showConnections]="showFlowConnections()"
-    (titleChange)="onTitleChange($event)"
-    (saveRequested)="saveFlow()"
+    (titleChange)="persistence.onTitleChange($event)"
+    (saveRequested)="persistence.saveFlow()"
     (validateRequested)="validateGraph()"
     (simulateRequested)="openSimulator()"
     (simulationSettingsRequested)="openSimulator(true)"
-    (packCreationRequested)="openPackCreation()"
-    (restoreAiProposalRequested)="restoreAiProposal()"
+    (packCreationRequested)="persistence.openPackCreation()"
+    (restoreAiProposalRequested)="persistence.restoreAiProposal()"
     (togglePalette)="togglePalette()"
     (toggleTray)="trayOpen.set(!trayOpen())"
     (toggleConnections)="toggleFlowConnections()"
@@ -45,27 +45,27 @@
     [fill]="true"
     mode="side"
     size="standard"
-    [opened]="configuringNode() !== undefined"
-    [title]="configuringNode()?.name || configuringNode()?.component?.name || 'Réglages du bloc'"
-    [eyebrow]="configuringNode()?.component?.pluginName ?? ''"
-    [description]="configuringNode()?.component?.description ?? ''"
+    [opened]="inspector.configuringNode() !== undefined"
+    [title]="inspector.configuringNode()?.name || inspector.configuringNode()?.component?.name || 'Réglages du bloc'"
+    [eyebrow]="inspector.configuringNode()?.component?.pluginName ?? ''"
+    [description]="inspector.configuringNode()?.component?.description ?? ''"
     [content]="inspectorContent"
-    (closed)="closeComponentEditor()"
+    (closed)="inspector.closeComponentEditor()"
   >
     <div drawer-main class="workbench-body">
       <!-- Zone 2 : Left Palette Dock -->
       <app-flow-palette-dock
         [opened]="paletteOpen()"
         [(pinned)]="palettePinned"
-        [components]="components()"
-        [otherMediaComponents]="otherMediaComponents()"
-        [flowMediaType]="flowMediaType()"
-        [packCatalog]="packCatalog()"
-        [insertionPending]="componentDestination() !== null"
-        [destinationLabel]="destinationDescription()"
+        [components]="components.components()"
+        [otherMediaComponents]="components.otherMediaComponents()"
+        [flowMediaType]="components.flowMediaType()"
+        [packCatalog]="persistence.packCatalog()"
+        [insertionPending]="graph.componentDestination() !== null"
+        [destinationLabel]="graph.destinationDescription()"
         (openedChange)="paletteOpen.set($event)"
         (componentSelected)="onPaletteComponentSelected($event)"
-        (packSelected)="onPalettePackSelected($event)"
+        (packSelected)="packInsertion.onPalettePackSelected($event)"
         (cancelInsertion)="cancelInsertion()"
       />
 
@@ -77,11 +77,11 @@
         role="main"
         aria-label="Canevas d'édition du flow"
       >
-        @if (loadState() !== 'ready') {
+        @if (persistence.loadState() !== 'ready') {
           <div class="canvas-state-message" role="status">
             <p>
               {{
-                loadState() === 'loading'
+                persistence.loadState() === 'loading'
                   ? 'Chargement du flow…'
                   : 'Le flow n’a pas pu être chargé.'
               }}
@@ -90,23 +90,23 @@
         } @else {
           <app-flow-graph-editor
             (componentDropped)="onPaletteComponentDropped($event)"
-            [layoutKey]="validationFlowId"
+            [layoutKey]="persistence.validationFlowId"
             [simulationResult]="simulator.result()"
             (simulationDetailsRequested)="trayTab.set('simulation'); trayOpen.set(true)"
             (paletteRequested)="openPalette()"
-            (duplicateRequested)="duplicateNode($event)"
+            (duplicateRequested)="editing.duplicateNode($event)"
             (aiRequested)="openAiAssistant($event)"
-            [nodes]="nodes()"
-            [componentPacks]="componentPacks()"
-            [mediaType]="flowMediaType()"
-            [connections]="connections()"
+            [nodes]="graph.nodes()"
+            [componentPacks]="graph.componentPacks()"
+            [mediaType]="components.flowMediaType()"
+            [connections]="graph.connections()"
             [showConnections]="showFlowConnections()"
             [autoLayoutRequest]="autoLayoutRequest()"
             (configurationRequested)="onConfigurationRequested($event)"
             (branchComponentRequested)="onBranchComponentRequested($event)"
-            (connectionRequested)="onConnectionRequested($event)"
-            (nodeRemoved)="removeNode($event)"
-            (connectionRemoved)="removeConnection($event)"
+            (connectionRequested)="editing.onConnectionRequested($event)"
+            (nodeRemoved)="editing.removeNode($event)"
+            (connectionRemoved)="editing.removeConnection($event)"
           />
         }
       </main>
@@ -117,14 +117,14 @@
     flow-workspace-tray
     [opened]="trayOpen()"
     [(activeTab)]="trayTab"
-    [nodes]="nodes()"
+    [nodes]="graph.nodes()"
     [profile]="simulator.profile()"
     [result]="simulator.result()"
     [busy]="simulator.busy()"
     [error]="simulator.error()"
-    [validationIssues]="validationIssues()"
-    [validating]="validating()"
-    [isValid]="validationSuccess()"
+    [validationIssues]="persistence.validationIssues()"
+    [validating]="persistence.validating()"
+    [isValid]="persistence.validationSuccess()"
     (openedChange)="trayOpen.set($event)"
     (runRequested)="runSimulation($event)"
     (continueRequested)="runSimulation($event, true)"
@@ -133,17 +133,17 @@
   />
 
   <ng-template #inspectorContent>
-    @if (configuringNode(); as current) {
+    @if (inspector.configuringNode(); as current) {
       <app-component-configuration-form
-        [schema]="configuringSchema()"
-        [referenceOptions]="configurationReferences()"
-        [values]="configuringValues()"
+        [schema]="inspector.configuringSchema()"
+        [referenceOptions]="inspector.configurationReferences()"
+        [values]="inspector.configuringValues()"
         [instanceName]="current.name ?? ''"
         [progressiveDisclosure]="true"
         submitLabel="Appliquer les réglages"
-        (instanceNameChange)="renameNode($event)"
-        (saved)="saveNodeConfiguration($event)"
-        (cancelled)="closeComponentEditor()"
+        (instanceNameChange)="inspector.renameNode($event)"
+        (saved)="inspector.saveNodeConfiguration($event)"
+        (cancelled)="inspector.closeComponentEditor()"
       >
         @if (current.component.kind !== 'input') {
           <button
@@ -151,7 +151,7 @@
             class="component-editor-delete"
             form-secondary-actions
             type="button"
-            (click)="deleteConfiguredNode(current.id)"
+            (click)="inspector.deleteConfiguredNode(current.id, (id) => editing.removeNode(id))"
           >
             Supprimer ce bloc
           </button>
@@ -160,20 +160,20 @@
     }
   </ng-template>
   <!-- Modal Dialog : Création de Pack -->
-  @if (packCreationOpen()) {
+  @if (persistence.packCreationOpen()) {
     <div
       flow-workspace-overlay
       class="modal-backdrop"
-      (click)="packCreationOpen.set(false)"
+      (click)="persistence.packCreationOpen.set(false)"
       role="dialog"
       aria-modal="true"
       aria-label="Créer un pack depuis la version publiée"
     >
       <div class="modal-card" (click)="$event.stopPropagation()">
         <app-record-form
-          [data]="packCreationForm()"
-          (submitted)="createPackFromPublishedFlow($event)"
-          (cancelled)="packCreationOpen.set(false)"
+          [data]="persistence.packCreationForm()"
+          (submitted)="persistence.createPackFromPublishedFlow($event)"
+          (cancelled)="persistence.packCreationOpen.set(false)"
         />
       </div>
     </div>

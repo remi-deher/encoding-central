@@ -1,0 +1,87 @@
+.node-detail-tabs {
+  display: block;
+}
+
+.node-libraries {
+  padding: 18px 4px 4px;
+  display: grid;
+  gap: 16px;
+}
+.node-libraries-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.node-libraries-heading h3 {
+  margin: 0 0 5px;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+.node-libraries-heading p {
+  margin: 0;
+  max-width: 560px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.add-library-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.add-library-row mat-form-field {
+  flex: 1;
+}
+.node-libraries-empty {
+  padding: 16px;
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-muted);
+}
+.node-libraries-empty strong {
+  color: var(--text-primary);
+}
+.node-libraries-empty p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .node-libraries-heading,
+  .add-library-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+.node-processing-tab {
+  display: grid;
+  gap: 16px;
+  padding-top: 14px;
+}
+.node-tab-note {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.node-tab-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* En-tête des onglets collé en haut du tiroir pendant le défilement. */
+.node-detail-tabs ::ng-deep .mat-mdc-tab-header {
+  position: sticky;
+  top: calc(-1 * var(--space-5));
+  z-index: 2;
+  background: var(--surface);
+}
+
+.node-logs-tab {
+  padding-top: var(--space-3);
+}

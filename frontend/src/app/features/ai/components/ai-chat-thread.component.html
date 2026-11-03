@@ -1,0 +1,111 @@
+<div
+  #messageThread
+  class="message-list"
+  role="log"
+  aria-label="Messages"
+  aria-live="polite"
+  tabindex="0"
+  (scroll)="onThreadScroll()"
+>
+  @if (conversations.detail(); as current) {
+    @for (turn of current.turns; track turn.requestId; let turnIndex = $index) {
+      <article
+        class="message user-message"
+        [class.search-match]="
+          conversations.highlightedTurn()?.turnIndex === turnIndex &&
+          conversations.highlightedTurn()?.role === 'user'
+        "
+        [attr.data-turn-index]="turnIndex"
+        data-message-role="user"
+      >
+        <h3>Vous</h3>
+        <p>{{ turn.userPrompt }}</p>
+      </article>
+      <article
+        class="message assistant-message"
+        [class.search-match]="
+          conversations.highlightedTurn()?.turnIndex === turnIndex &&
+          conversations.highlightedTurn()?.role === 'assistant'
+        "
+        [attr.data-turn-index]="turnIndex"
+        data-message-role="assistant"
+      >
+        <h3>Assistant</h3>
+        <p>{{ turn.content }}</p>
+        <details class="response-details">
+          <summary>Modèle et raisonnement</summary>
+          @if (turn.actualModel) {
+            <p class="muted">Modèle utilisé : {{ turn.actualModel }}</p>
+          } @else if (turn.selection?.model) {
+            <p class="muted">
+              Modèle demandé : {{ turn.selection?.model }} · Modèle effectif non communiqué
+            </p>
+          } @else {
+            <p class="muted">Modèle non communiqué</p>
+          }
+          @if (turn.selection?.reasoningEffort; as effort) {
+            <p class="muted">Raisonnement demandé : {{ models.effortLabel(effort) }}</p>
+          }
+        </details>
+        @for (
+          source of turn.sources ?? [current.conversation.source];
+          track source.kind + source.resourceId
+        ) {
+          <div class="message-source">
+            <a [routerLink]="source.href">Source : {{ source.label }}</a>
+            @if (source.kind === 'flow' && source.version) {
+              <button matButton="text" type="button" (click)="context.previewSource(source)">
+                Aperçu
+              </button>
+            }
+          </div>
+        }
+      </article>
+    }
+    @if (conversations.pendingActionProposal(); as proposal) {
+      <section class="assistant-action-confirmation" aria-label="Action à confirmer">
+        <h3>Action proposée</h3>
+        <p>{{ proposal.summary }}</p>
+        <p class="muted">
+          Cette action n’aura lieu qu’après votre confirmation. Le lien expire dans cinq
+          minutes.
+        </p>
+        <div class="assistant-action-confirmation__buttons">
+          <button
+            matButton="filled"
+            type="button"
+            [disabled]="conversations.confirmingAiAction()"
+            (click)="onConfirmAction()"
+          >
+            {{ conversations.confirmingAiAction() ? 'Application…' : 'Confirmer l’action' }}
+          </button>
+          <button
+            matButton="text"
+            type="button"
+            [disabled]="conversations.confirmingAiAction()"
+            (click)="conversations.dismissAiAction()"
+          >
+            Ignorer
+          </button>
+        </div>
+      </section>
+    }
+  } @else if (!conversations.pendingPrompt()) {
+    <div class="welcome">
+      <span aria-hidden="true">✦</span>
+      <h2>{{ panelMode() ? 'Comment puis-je vous aider ?' : 'Que souhaitez-vous faire ?' }}</h2>
+    </div>
+  }
+  @if (conversations.pendingPrompt(); as pending) {
+    <article class="message user-message">
+      <h3>Vous</h3>
+      <p>{{ pending }}</p>
+    </article>
+  }
+  @if (conversations.sending()) {
+    <div class="thinking" role="status">
+      <mat-spinner diameter="20" />
+      <span>{{ conversations.requestProgressDetail() ?? 'Réponse en cours…' }}</span>
+    </div>
+  }
+</div>
