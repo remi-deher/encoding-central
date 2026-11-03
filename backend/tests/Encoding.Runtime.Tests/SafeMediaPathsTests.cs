@@ -27,7 +27,7 @@ public sealed class SafeMediaPathsTests : IDisposable
     public void ResolveRejectsTraversalAndAbsolutePaths(string relative) =>
         Assert.Throws<ArgumentException>(() => SafeMediaPaths.Resolve(root, relative));
 
-    [Fact]
+    [LinuxFact]
     public void ResolveRejectsSymbolicLinksInThePathAndAsRoot()
     {
         var outside = Directory.CreateTempSubdirectory("encoding-safe-outside-").FullName;
@@ -36,14 +36,13 @@ public sealed class SafeMediaPathsTests : IDisposable
             File.WriteAllText(Path.Combine(outside, "x.mkv"), "synthetic");
             Directory.CreateSymbolicLink(Path.Combine(root, "link"), outside);
             File.CreateSymbolicLink(Path.Combine(root, "file-link.mkv"), Path.Combine(outside, "x.mkv"));
-            Assert.Throws<IOException>(() => SafeMediaPaths.Resolve(root, "link/ep.mkv"));
-            Assert.Throws<IOException>(() => SafeMediaPaths.Resolve(root, "file-link.mkv"));
-
             var rootLink = Path.Combine(outside, "root-link");
             Directory.CreateSymbolicLink(rootLink, root);
+
+            Assert.Throws<IOException>(() => SafeMediaPaths.Resolve(root, "link/ep.mkv"));
+            Assert.Throws<IOException>(() => SafeMediaPaths.Resolve(root, "file-link.mkv"));
             Assert.Throws<IOException>(() => SafeMediaPaths.Resolve(rootLink, "ep.mkv"));
         }
-        catch (Exception exception) when (exception is UnauthorizedAccessException or PlatformNotSupportedException) { /* liens non disponibles sur ce système */ }
         finally { Directory.Delete(outside, true); }
     }
 

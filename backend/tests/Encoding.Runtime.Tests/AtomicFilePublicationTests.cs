@@ -58,9 +58,8 @@ public sealed class AtomicFilePublicationTests : IDisposable
         File.WriteAllText(temporary, "result");
         File.WriteAllText(target, "third party created just before publication");
 
-        var failure = Assert.Throws<IOException>(() => AtomicFilePublication.Publish(temporary, target));
+        Assert.Throws<IOException>(() => AtomicFilePublication.Publish(temporary, target));
 
-        Assert.NotNull(failure);
         Assert.Equal("third party created just before publication", File.ReadAllText(target));
         Assert.True(File.Exists(temporary), "Le temporaire reste présent : l'appelant sait qu'il n'a rien publié.");
     }
@@ -76,10 +75,9 @@ public sealed class AtomicFilePublicationTests : IDisposable
         Assert.Equal("result", File.ReadAllText(target));
     }
 
-    [Fact]
+    [LinuxFact]
     public void ConfirmFailsWhenTheDirectoryCannotBeSynchronized()
     {
-        if (!OperatingSystem.IsLinux()) return;
         var target = Path.Combine(root, "missing-directory", "out.mkv");
 
         Assert.Throws<IOException>(() => AtomicFilePublication.Confirm(target));
@@ -99,4 +97,9 @@ public sealed class AtomicFilePublicationTests : IDisposable
         }
         finally { Directory.Delete(sibling, true); }
     }
+}
+
+public sealed class LinuxFactAttribute : FactAttribute
+{
+    public LinuxFactAttribute() { if (!OperatingSystem.IsLinux()) Skip = "Nécessite Linux (synchronisation de répertoire et liens symboliques)."; }
 }
