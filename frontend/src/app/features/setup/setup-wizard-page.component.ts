@@ -168,7 +168,7 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
             <section class="card" aria-labelledby="step-identity-heading">
               <div class="heading">
                 <h2 id="step-identity-heading">Nommer le central</h2>
-                <p>Ces noms s’affichent dans l’interface et chez les workers.</p>
+                <p>Ce nom s’affiche dans l’interface et chez les workers.</p>
               </div>
 
               <label for="node-name-input">Nom du central</label>
@@ -179,17 +179,6 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
                 [placeholder]="defaultNodeName()"
                 [ngModel]="nodeName()"
                 (ngModelChange)="nodeName.set($event)"
-                maxlength="128"
-                autocomplete="off"
-              />
-
-              <label for="cluster-name-input">Nom du central</label>
-              <input
-                id="cluster-name-input"
-                type="text"
-                [placeholder]="defaultClusterName()"
-                [ngModel]="clusterName()"
-                (ngModelChange)="clusterName.set($event)"
                 maxlength="128"
                 autocomplete="off"
               />
@@ -216,10 +205,6 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
                 <div>
                   <dt>Central</dt>
                   <dd>{{ effectiveNodeName() }}</dd>
-                </div>
-                <div>
-                  <dt>Central</dt>
-                  <dd>{{ clusterName().trim() || defaultClusterName() }}</dd>
                 </div>
                 <div>
                   <dt>Administrateur</dt>
@@ -266,7 +251,6 @@ export class SetupWizardPageComponent {
   protected readonly errorMessage = signal('');
 
   protected readonly nodeName = signal('');
-  protected readonly clusterName = signal('');
   protected readonly adminUsername = signal('admin');
   protected readonly adminPassword = signal('');
   protected readonly adminConfirm = signal('');
@@ -383,10 +367,6 @@ export class SetupWizardPageComponent {
     return urls.length ? urls : [this.document.location.origin];
   });
 
-  protected readonly defaultClusterName = computed(() => {
-    return 'Central ' + this.effectiveNodeName();
-  });
-
   protected readonly cpuInfo = computed(() => {
     const inv = this.resolvedInventory();
     if (!inv) return 'Détection en cours…';
@@ -463,11 +443,8 @@ export class SetupWizardPageComponent {
   }
 
   protected async submitCreateCluster(): Promise<void> {
-    const name = this.clusterName().trim() || this.defaultClusterName();
-    await this.completeSetup({
-      workerDisplayName: this.effectiveNodeName(),
-      centralName: name,
-    });
+    const name = this.effectiveNodeName();
+    await this.completeSetup({ workerDisplayName: name, centralName: name });
   }
 
   private async completeSetup(
