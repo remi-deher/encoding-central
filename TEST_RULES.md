@@ -30,7 +30,7 @@ Ces règles sont obligatoires pour les changements du projet. Les tests doivent 
 ## 4. E2E
 
 - Prévoir un parcours E2E léger, déterministe et exécutable localement pour vérifier le chemin critique de l’application.
-- Réserver les E2E lourds, les scénarios multi-workers complets et les traitements longs aux workflows GitHub Actions adaptés.
+- Réserver les E2E lourds, les scénarios multi-workers complets et les traitements longs aux workflows GitHub Actions adaptés (voir section 8 pour la liste complète des charges lourdes réservées à la CI).
 - Garder les E2E indépendants des services personnels, des secrets locaux et des médias non versionnés.
 - En cas d’échec, fournir des journaux et des artefacts de diagnostic suffisants pour reproduire le problème.
 
@@ -55,3 +55,26 @@ Ces règles sont obligatoires pour les changements du projet. Les tests doivent 
 - Ne pas ignorer durablement un test instable : identifier sa cause, le corriger ou suivre explicitement sa mise en quarantaine avec une action de résolution.
 - Ne pas abaisser une vérification ou masquer un échec pour faire passer la CI ; documenter toute exception temporaire et sa portée.
 - Mesurer la couverture comme un indicateur, pas comme un objectif isolé : protéger d’abord les comportements et invariants à risque.
+
+## 8. Vérifications locales légères ; charges lourdes réservées à la CI
+
+**Règle absolue : en local, aucun test de charge ni test lourd.** La suite backend complète, les tests de stress, les clusters multi-processus ou multi-conteneurs (Docker), les E2E lourds et les mesures de performance sont exécutés **uniquement par la CI GitHub Actions**. En local, on se limite à des vérifications légères et rapides.
+
+**Léger — autorisé en local :**
+
+- Lint et format : `npm run lint`, `npm run format:flows`, `npm run format:settings` (frontend).
+- Compilation / typecheck : `dotnet build backend/Encoding.sln --configuration Release` (avec `-warnaserror` et le `.editorconfig` racine), `npm run build`.
+- Tests unitaires ciblés et rapides : `npm test` et `node --test tests/*.test.mjs` (frontend) ; côté backend, des filtres ciblés, par exemple `dotnet test backend/tests/Encoding.Runtime.Tests -c Release --filter "Category!=Stress&FullyQualifiedName!~WorkerProcessLossTests&FullyQualifiedName!~DockerCentralTests"`, ou des classes de tests précises liées au changement.
+- E2E léger : `npm run test:e2e` (parcours Playwright smoke, API simulée, sans backend ni média réel).
+
+**Lourd — CI uniquement, ne jamais lancer en local :**
+
+- Suite backend complète non filtrée (outils média exigés via `ENCODING_TEST_REQUIRE_MEDIA_TOOLS=1`, collecte de couverture, artefacts `.trx`) : job `backend-runtime-tests` de `.github/workflows/backend.yml`.
+- Tests de stress `Category=Stress` (`LoadStressTests`, variables `ENCODING_STRESS_EXECUTIONS` / `ENCODING_STRESS_NODES` / `ENCODING_STRESS_SECONDS`) : workflow `.github/workflows/stress.yml` (nightly + manuel), exclu des PR par le filtre `Category!=Stress`.
+- Tests multi-processus réels (`WorkerProcessLossTests`, `ENCODING_TEST_MULTIPROCESS=1` : vrai serveur, vrais workers, SIGKILL en plein encodage, plusieurs minutes) : job `backend-multiprocess-tests`.
+- Tests cluster Docker (`DockerCentralTests`, `ENCODING_TEST_DOCKER=1` + `ENCODING_TEST_CENTRAL_IMAGE` / `ENCODING_TEST_WORKER_IMAGE` construites) : job `backend-docker-cluster-tests`.
+- Mesures de charge et de coordination (`MeasuresTwoServerOwnershipLoad`, `ENCODING_TEST_LARGE_COORDINATION_MEASUREMENTS=1`, 7 000 exécutions en file) et toute mesure de performance / benchmark : job `cluster-two-server-measurements` et workflows dédiés.
+- Tests natifs des CLI IA (`AiCliNativeCompatibilityTests`, `ENCODING_TEST_AI_CLI_NATIVE=1`) : job `ai-cli-native`.
+- E2E lourds, scénarios multi-workers complets et traitements longs : workflows GitHub Actions adaptés.
+
+Ces tests lourds sont ignorés par défaut (xUnit `Skip`) tant que leurs variables `ENCODING_TEST_*` ne sont pas définies : **ne pas définir ces variables en local**. Lorsque c’est possible, les commandes locales et la CI utilisent les mêmes filtres ; la CI reste l’autorité pour la couverture complète.

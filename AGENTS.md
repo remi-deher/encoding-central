@@ -53,7 +53,7 @@ Toute route de gestion exige une session ou un jeton API Bearer ; rôles `admin`
 
 - **Interface** : [UI_RULES.md](UI_RULES.md) obligatoire, composants communs Angular Material/CDK, jetons de design, aucun contournement propre à une page ; en cas de doute métier, demander. Fiche : [ui](docs/architecture/domains/ui.md).
 - **Backend** : [BACKEND_RULES.md](BACKEND_RULES.md) obligatoire ; réutiliser les capacités communes, pas d'implémentation parallèle ; toute évolution d'un contrat ou composant commun examine ses usages.
-- **Tests et CI** : [TEST_RULES.md](TEST_RULES.md) obligatoire ; lint local et GitHub Actions ; E2E légers en local, scénarios lourds en CI.
+- **Tests et CI** : [TEST_RULES.md](TEST_RULES.md) obligatoire ; lint local et GitHub Actions. **En local, vérifications légères uniquement** (lint, format, compilation/typecheck, tests unitaires ciblés et rapides, E2E légers) : aucun test de charge ni test lourd (suite backend complète, stress `Category=Stress`, multi-processus/Docker, E2E lourds, mesures de performance), laissé à la CI GitHub Actions — détail et listes dans TEST_RULES.md, section 8.
 - Toute nouvelle table est locale au central ; les migrations sont additives, à numéro unique, jamais modifiées une fois appliquées.
 
 ## Consignes de travail
