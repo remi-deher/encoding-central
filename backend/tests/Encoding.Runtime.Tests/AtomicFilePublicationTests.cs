@@ -49,4 +49,54 @@ public sealed class AtomicFilePublicationTests : IDisposable
         Assert.True(File.Exists(temporary));
         Assert.False(File.Exists(target));
     }
+
+    [Fact]
+    public void PublishKeepsTheTargetPathExistingFileUntouchedEvenWhenCreatedConcurrently()
+    {
+        var temporary = Path.Combine(root, "out.tmp");
+        var target = Path.Combine(root, "out.mkv");
+        File.WriteAllText(temporary, "result");
+        File.WriteAllText(target, "third party created just before publication");
+
+        var failure = Assert.Throws<IOException>(() => AtomicFilePublication.Publish(temporary, target));
+
+        Assert.NotNull(failure);
+        Assert.Equal("third party created just before publication", File.ReadAllText(target));
+        Assert.True(File.Exists(temporary), "Le temporaire reste présent : l'appelant sait qu'il n'a rien publié.");
+    }
+
+    [Fact]
+    public void ConfirmSucceedsOnAnExistingPublishedFile()
+    {
+        var target = Path.Combine(root, "out.mkv");
+        File.WriteAllText(target, "result");
+
+        AtomicFilePublication.Confirm(target);
+
+        Assert.Equal("result", File.ReadAllText(target));
+    }
+
+    [Fact]
+    public void ConfirmFailsWhenTheDirectoryCannotBeSynchronized()
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        var target = Path.Combine(root, "missing-directory", "out.mkv");
+
+        Assert.Throws<IOException>(() => AtomicFilePublication.Confirm(target));
+    }
+
+    [Fact]
+    public void PublishRejectsTargetInAnotherDirectoryEvenWithSamePrefix()
+    {
+        var sibling = Directory.CreateDirectory(root + "-sibling").FullName;
+        try
+        {
+            var temporary = Path.Combine(root, "out.tmp");
+            File.WriteAllText(temporary, "result");
+
+            Assert.Throws<IOException>(() => AtomicFilePublication.Publish(temporary, Path.Combine(sibling, "out.mkv")));
+            Assert.True(File.Exists(temporary));
+        }
+        finally { Directory.Delete(sibling, true); }
+    }
 }
