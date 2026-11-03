@@ -87,7 +87,7 @@ public sealed class WorkerProcessLossTests
             var library = (await PostAsync(client, "libraries", new { name = "Kill" })).GetProperty("id").GetGuid();
             using (var access = await client.PutAsJsonAsync($"libraries/{library}/worker-access", new
             {
-                nodes = nodes.EnumerateArray().Select(node => new { workerId = node.GetProperty("id").GetGuid(), mode = "direct", localPath = media, canRead = true, canWrite = true, transferSourceWorkerId = (Guid?)null, isEnabled = true })
+                workers = nodes.EnumerateArray().Select(node => new { workerId = node.GetProperty("id").GetGuid(), mode = "direct", localPath = media, canRead = true, canWrite = true, transferSourceWorkerId = (Guid?)null, isEnabled = true })
             })) Assert.True(access.IsSuccessStatusCode, await access.Content.ReadAsStringAsync());
             var flow = (await PostAsync(client, "flows", new
             {
