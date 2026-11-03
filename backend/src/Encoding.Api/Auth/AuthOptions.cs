@@ -28,11 +28,15 @@ public sealed record AuthOptions(
         if (maxPending <= 0) throw new InvalidOperationException("Auth:MaxPendingPairingRequests doit être supérieur à zéro.");
         var secure = configuration["Auth:CookieSecure"];
         var enabled = configuration.GetValue("Auth:Enabled", true);
+        // Jeton d'initialisation : Auth:SetupToken (Auth__SetupToken) ou la variable documentée AUTH_SETUP_TOKEN. Vide = non exigé.
+        var setupToken = configuration["Auth:SetupToken"];
+        if (string.IsNullOrWhiteSpace(setupToken)) setupToken = configuration["AUTH_SETUP_TOKEN"];
+        setupToken = string.IsNullOrWhiteSpace(setupToken) ? null : setupToken.Trim();
         return new AuthOptions(
             TimeSpan.FromMinutes(idle),
             TimeSpan.FromHours(absolute),
             string.IsNullOrWhiteSpace(secure) || secure.Equals("auto", StringComparison.OrdinalIgnoreCase) ? null : bool.Parse(secure),
-            null,
+            setupToken,
             maxFailures,
             maxPending,
             perMinute,

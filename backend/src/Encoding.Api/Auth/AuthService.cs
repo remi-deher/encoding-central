@@ -4,7 +4,7 @@ using Encoding.Contracts.Auth;
 
 namespace Encoding.Api.Auth;
 
-public enum SetupOutcome { Created, AlreadyConfigured }
+public enum SetupOutcome { Created, AlreadyConfigured, InvalidToken }
 
 public sealed record LoginResult(CurrentUserResponse User, string SessionToken);
 
@@ -47,8 +47,18 @@ public sealed partial class AuthService(
 
     public async Task<bool> SetupRequiredAsync(CancellationToken ct) => !await users.AnyAsync(ct);
 
+    /// <summary>Comparaison en temps constant (empreintes SHA-256 de longueur fixe : ni contenu ni longueur du jeton ne fuient).</summary>
+    public bool IsSetupTokenAccepted(string? provided)
+    {
+        if (options.SetupToken is not { } expected) return true;
+        var expectedHash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(expected));
+        var providedHash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(provided?.Trim() ?? string.Empty));
+        return CryptographicOperations.FixedTimeEquals(expectedHash, providedHash);
+    }
+
     public async Task<(SetupOutcome Outcome, UserResponse? User)> SetupAsync(SetupRequest request, CancellationToken ct)
     {
+        if (!IsSetupTokenAccepted(request.SetupToken)) return (SetupOutcome.InvalidToken, null);
         var username = string.IsNullOrWhiteSpace(request.Username) ? "admin" : request.Username.Trim();
         var password = string.IsNullOrWhiteSpace(request.Password) ? Convert.ToHexString(RandomNumberGenerator.GetBytes(16)) : request.Password;
         LastCreatedPassword = password;

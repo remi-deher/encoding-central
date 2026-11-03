@@ -23,6 +23,9 @@ public static class AuthEndpoints
 
         auth.MapPost("/setup", async (SetupRequest request, HttpContext http, AuthService service, AuthOptions options, Encoding.Api.Workers.LocalWorkerRegistry localWorker, CancellationToken ct) =>
         {
+            // Jeton vérifié avant toute validation : réponse identique quel que soit l'état du central, sans détail sur le jeton attendu.
+            if (!service.IsSetupTokenAccepted(request.SetupToken))
+                return RefuseSetupToken(http);
             var errors = new Dictionary<string, string[]>();
             if (!string.IsNullOrWhiteSpace(request.Username) || !string.IsNullOrWhiteSpace(request.Password))
             {
@@ -36,6 +39,7 @@ public static class AuthEndpoints
             if (errors.Count > 0) return (IResult)Results.ValidationProblem(errors);
 
             var (outcome, _) = await service.SetupAsync(request, ct);
+            if (outcome == SetupOutcome.InvalidToken) return RefuseSetupToken(http);
             if (outcome == SetupOutcome.AlreadyConfigured)
                 return Results.Conflict(new { title = "Le central possède déjà un administrateur." });
             await localWorker.RequestNameAsync(request.WorkerDisplayName, ct);
@@ -103,6 +107,13 @@ public static class AuthEndpoints
             var changed = await service.ChangePasswordAsync(Current(http.User)!.Id, request.CurrentPassword ?? string.Empty, request.NewPassword, token, ct);
             return changed ? Results.NoContent() : Results.ValidationProblem(new Dictionary<string, string[]> { ["currentPassword"] = ["Le mot de passe actuel est incorrect."] });
         }).AllowViewer().WithName("ChangeOwnPassword");
+    }
+
+    private static IResult RefuseSetupToken(HttpContext http)
+    {
+        http.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Encoding.Api.Auth.Setup")
+            .LogWarning("Initialisation refusée : jeton d'initialisation absent ou invalide.");
+        return Results.Json(new { title = "Jeton d’initialisation absent ou invalide." }, statusCode: StatusCodes.Status403Forbidden);
     }
 
     private static void MapUserManagementRoutes(this WebApplication app)
