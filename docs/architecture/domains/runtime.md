@@ -131,3 +131,11 @@ Une sonde d’accès effectif précède les traitements nécessitant une publica
 `probe-check-integrity` active la politique de l’[ADR 0027](../adr/0027-controle-integrite-optionnel.md). Un résultat modifié exige un contrôle réussi pour son empreinte ; le serveur vérifie un checkpoint durable du bloc de contrôle. Une modification après contrôle invalide la preuve. Les reprises et relais conservent cette preuve et le worker d’accès source. Sans ce bloc, les scans structurels et empreintes restent obligatoires, mais aucun décodage complet ne se lance. Le GPU obligatoire reste testé sur le fichier exact, sans secours CPU silencieux.
 
 Les renouvellements de bail acceptent des commandes en cours bornées par invocation/identité ; ils ne réécrivent pas une étape achevée. Les logs FFmpeg exposent la progression, la commande et les horodatages. `ExecutionResponse.failure` distingue les causes reconnues ; `publicationConfirmed=true` exige un chemin durablement confirmé, `null` signifie qu’aucune confirmation durable n’est disponible sur ce serveur. Les doublons en quarantaine gardent leur historique et leur compteur séparé. La mise en file refuse une nouvelle demande pour un média déjà en file ou en cours.
+
+### Expiration locale du bail worker
+Le worker conserve l'expiration renvoyée dans le claim puis chaque renouvellement réussi.
+Un minuteur monotone annule les opérations deux secondes avant cette échéance, même
+si une requête est bloquée ; cinq échecs réseau ne suffisent plus à abandonner un bail
+encore valide. Une réponse tardive ne réactive jamais un bail expiré. Les refus HTTP 409
+interrompent immédiatement le travail. Les horloges du central et du worker doivent être
+synchronisées pour interpréter l'expiration absolue du contrat.
