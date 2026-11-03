@@ -204,6 +204,12 @@ const DETECTED_STYLES = `
               <h2 id="worker-enrollment-heading">Rattacher le worker</h2>
               <p>Votre compte administrateur du central autorise ce rattachement : aucune validation n’est à faire ailleurs.</p>
             </div>
+            @if (signedInAs(); as account) {
+              <div class="notice" role="status">
+                Session déjà ouverte sur ce central en tant que <strong>{{ account }}</strong> :
+                elle sera utilisée pour le rattachement, sans nouvelle saisie d’identifiants.
+              </div>
+            }
             @if (local.status()?.isEnrolled) {
               <div class="notice" role="status">
                 Ce worker est rattaché à <strong>{{ local.status()?.centralName }}</strong>.
@@ -251,6 +257,8 @@ export class WorkerSetupPageComponent {
   protected centralAddress = '';
   protected readonly detected = signal<readonly DiscoveredCentral[]>([]);
   protected readonly discovering = signal(false);
+  /** Compte administrateur déjà connecté au central choisi (session relayée) : l'étape de connexion est alors inutile. */
+  protected readonly signedInAs = signal<string | null>(null);
   protected username = '';
   protected password = '';
   protected readonly step = signal(0);
@@ -350,6 +358,18 @@ export class WorkerSetupPageComponent {
         this.errorMessage.set('Le central doit être initialisé directement depuis son interface.');
         return;
       }
+      this.signedInAs.set(null);
+      if (status.user?.role === 'admin') {
+        this.signedInAs.set(status.user.username);
+        this.local.refresh();
+        this.step.set(2);
+        return;
+      }
+      if (status.user) {
+        this.errorMessage.set(
+          `La session ouverte sur ce central (${status.user.username}) n’est pas administratrice : connectez-vous avec un compte administrateur.`,
+        );
+      }
       this.step.set(1);
     } catch (error) {
       this.errorMessage.set(AuthService.errorMessage(error, 'Le central est inaccessible.'));
@@ -395,7 +415,7 @@ export class WorkerSetupPageComponent {
       this.welcome.set(true);
       return;
     }
-    this.step.update((step) => step - 1);
+    this.step.update((step) => (step === 2 && this.signedInAs() ? 0 : step - 1));
   }
 
   protected openNodes(): void {

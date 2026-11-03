@@ -12,12 +12,14 @@ describe('WorkerSetupPageComponent', () => {
   let refresh: ReturnType<typeof vi.fn>;
   let verifyAddress: ReturnType<typeof vi.fn>;
   let enroll: ReturnType<typeof vi.fn>;
+  let ensureLoaded: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     login = vi.fn().mockResolvedValue(undefined);
     refresh = vi.fn();
     verifyAddress = vi.fn().mockResolvedValue(undefined);
     enroll = vi.fn().mockResolvedValue(undefined);
+    ensureLoaded = vi.fn().mockResolvedValue({ setupRequired: false, user: null });
 
     TestBed.configureTestingModule({
       imports: [WorkerSetupPageComponent],
@@ -26,7 +28,7 @@ describe('WorkerSetupPageComponent', () => {
         provideHttpClientTesting(),
         {
           provide: AuthService,
-          useValue: { login, ensureLoaded: vi.fn().mockResolvedValue({ setupRequired: false }) },
+          useValue: { login, ensureLoaded },
         },
         { provide: Router, useValue: { navigate: vi.fn().mockResolvedValue(true) } },
       ],
@@ -137,6 +139,46 @@ describe('WorkerSetupPageComponent', () => {
 
     expect(component['detected']()).toEqual([]);
     expect(component['discovering']()).toBe(false);
+  });
+
+  it('goes straight to the enrollment step when an administrator session is already open', async () => {
+    ensureLoaded.mockResolvedValue({
+      setupRequired: false,
+      user: { id: 'u1', username: 'admin', role: 'admin' },
+    });
+    const fixture = TestBed.createComponent(WorkerSetupPageComponent);
+    const component = fixture.componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    component['centralAddress'] = 'http://server:8080/';
+
+    const connecting = component['connect']();
+    http.expectOne((request) => request.method === 'POST').flush({});
+    await connecting;
+
+    expect(component['step']()).toBe(2);
+    expect(component['signedInAs']()).toBe('admin');
+    expect(refresh).toHaveBeenCalled();
+    component['back']();
+    expect(component['step']()).toBe(0);
+  });
+
+  it('asks for an administrator when the open session is not one', async () => {
+    ensureLoaded.mockResolvedValue({
+      setupRequired: false,
+      user: { id: 'u2', username: 'lecteur', role: 'viewer' },
+    });
+    const fixture = TestBed.createComponent(WorkerSetupPageComponent);
+    const component = fixture.componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    component['centralAddress'] = 'http://server:8080/';
+
+    const connecting = component['connect']();
+    http.expectOne((request) => request.method === 'POST').flush({});
+    await connecting;
+
+    expect(component['step']()).toBe(1);
+    expect(component['signedInAs']()).toBeNull();
+    expect(component['errorMessage']()).toContain('lecteur');
   });
 
   it('shows login failures without advancing', async () => {
