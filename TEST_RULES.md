@@ -86,6 +86,7 @@ Ces règles sont obligatoires pour les changements du projet. Les tests doivent 
 - Tests cluster Docker (`DockerCentralTests`, `ENCODING_TEST_DOCKER=1` + `ENCODING_TEST_CENTRAL_IMAGE` / `ENCODING_TEST_WORKER_IMAGE` construites) : job `backend-docker-cluster-tests`.
 - Mesures de charge et de coordination (`MeasuresTwoServerOwnershipLoad`, `ENCODING_TEST_LARGE_COORDINATION_MEASUREMENTS=1`, 7 000 exécutions en file) et toute mesure de performance / benchmark : job `cluster-two-server-measurements` et workflows dédiés.
 - Tests natifs des CLI IA (`AiCliNativeCompatibilityTests`, `ENCODING_TEST_AI_CLI_NATIVE=1`) : job `ai-cli-native`.
+- Confinement réel du bac à sable (`ProcessSandboxNativeTests` : Landlock, seccomp, réseau TCP/UDP en bouclage, `/proc`) : job `ai-cli-native` avec `ENCODING_TEST_LANDLOCK=1`, qui rend l'indisponibilité du noyau bloquante. Sans cette variable le test s'exécute quand le poste le permet (léger, aucun accès réseau public) et s'ignore sinon ; les règles pures (`ProcessSandboxRulesTests`) tournent partout.
 - E2E lourds, scénarios multi-workers complets et traitements longs : workflows GitHub Actions adaptés.
 
 Ces tests lourds sont ignorés par défaut (xUnit `Skip`) tant que leurs variables `ENCODING_TEST_*` ne sont pas définies : **ne pas définir ces variables en local**. Lorsque c’est possible, les commandes locales et la CI utilisent les mêmes filtres ; la CI reste l’autorité pour la couverture complète.
