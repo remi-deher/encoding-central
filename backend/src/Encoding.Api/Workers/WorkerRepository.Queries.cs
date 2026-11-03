@@ -23,13 +23,13 @@ public sealed partial class WorkerRepository
         await using var command = Sql.Command(sql, connection);
         command.Parameters.AddWithValue("offline_after", offlineAfter);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        var nodes = new List<WorkerResponse>();
-        while (await reader.ReadAsync(cancellationToken)) nodes.Add(ReadResponse(reader, reader.GetBoolean(6)));
+        var workers = new List<WorkerResponse>();
+        while (await reader.ReadAsync(cancellationToken)) workers.Add(ReadResponse(reader, reader.GetBoolean(6)));
         await reader.DisposeAsync();
-        return await WithLifecycleAsync(nodes, cancellationToken);
+        return await WithLifecycleAsync(workers, cancellationToken);
     }
 
-    public async Task<WorkerResponse?> GetAsync(Guid nodeId, TimeSpan offlineAfter, CancellationToken cancellationToken)
+    public async Task<WorkerResponse?> GetAsync(Guid workerId, TimeSpan offlineAfter, CancellationToken cancellationToken)
     {
         const string sql = """
             SELECT id, name, roles, max_concurrent_tasks, capabilities, last_seen_at,
@@ -38,24 +38,24 @@ public sealed partial class WorkerRepository
             """;
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var command = Sql.Command(sql, connection);
-        command.Parameters.AddWithValue("id", nodeId);
+        command.Parameters.AddWithValue("id", workerId);
         command.Parameters.AddWithValue("offline_after", offlineAfter);
-        WorkerResponse? node;
+        WorkerResponse? worker;
         await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
-            node = await reader.ReadAsync(cancellationToken) ? ReadResponse(reader, reader.GetBoolean(6)) : null;
-        return node is null ? null : (await WithLifecycleAsync([node], cancellationToken))[0];
+            worker = await reader.ReadAsync(cancellationToken) ? ReadResponse(reader, reader.GetBoolean(6)) : null;
+        return worker is null ? null : (await WithLifecycleAsync([worker], cancellationToken))[0];
     }
 
-    public Task<WorkerResponse?> FindByIdAsync(Guid nodeId, CancellationToken cancellationToken) =>
-        GetAsync(nodeId, TimeSpan.FromDays(365), cancellationToken);
+    public Task<WorkerResponse?> FindByIdAsync(Guid workerId, CancellationToken cancellationToken) =>
+        GetAsync(workerId, TimeSpan.FromDays(365), cancellationToken);
 
 
 
     /// <summary>Donne un nom convivial à un worker qui n'en a pas encore ; ne remplace jamais un nom choisi par un administrateur.</summary>
-    public async Task SetDisplayNameIfUnsetAsync(Guid nodeId, string displayName, CancellationToken ct)
+    public async Task SetDisplayNameIfUnsetAsync(Guid workerId, string displayName, CancellationToken ct)
     {
         await using var command = dataSource.CreateCommand("UPDATE workers SET display_name = @name WHERE id = @id AND deleted_at IS NULL AND (display_name IS NULL OR trim(display_name) = '')");
-        command.Parameters.AddWithValue("id", nodeId);
+        command.Parameters.AddWithValue("id", workerId);
         command.Parameters.AddWithValue("name", displayName);
         await command.ExecuteNonQueryAsync(ct);
     }
@@ -162,14 +162,14 @@ public sealed partial class WorkerRepository
         return result is string { Length: > 0 } s ? s : null;
     }
 
-    private static void AddNodeParameters(DbCommand command, WorkerEnrollmentRequest request)
+    private static void AddWorkerParameters(DbCommand command, WorkerEnrollmentRequest request)
     {
-        AddNodeParameters(command, request.Id, new WorkerHeartbeatRequest(request.Name, request.Roles, request.MaxConcurrentTasks, request.Capabilities, request.Inventory));
+        AddWorkerParameters(command, request.Id, new WorkerHeartbeatRequest(request.Name, request.Roles, request.MaxConcurrentTasks, request.Capabilities, request.Inventory));
     }
 
-    private static void AddNodeParameters(DbCommand command, Guid nodeId, WorkerHeartbeatRequest request)
+    private static void AddWorkerParameters(DbCommand command, Guid workerId, WorkerHeartbeatRequest request)
     {
-        command.Parameters.AddWithValue("id", nodeId);
+        command.Parameters.AddWithValue("id", workerId);
         command.Parameters.AddWithValue("name", request.Name.Trim());
         command.Parameters.AddWithValue("roles", request.Roles.Select(role => role.ToString().ToLowerInvariant()).ToArray());
         command.Parameters.AddWithValue("max_concurrent_tasks", request.MaxConcurrentTasks);
@@ -180,7 +180,7 @@ public sealed partial class WorkerRepository
     internal static WorkerResponse ReadResponse(DbDataReader reader, bool isOnline)
     {
         var lastSeenAt = new DateTimeOffset(DateTime.SpecifyKind(reader.GetDateTime(5), DateTimeKind.Utc));
-        var roles = reader.GetStringArray(2).Select(role => Enum.Parse<NodeRole>(role, true)).ToArray();
+        var roles = reader.GetStringArray(2).Select(role => Enum.Parse<WorkerRole>(role, true)).ToArray();
         var capabilities = JsonSerializer.Deserialize<IReadOnlyList<WorkerToolCapability>>(reader.GetString(4), JsonOptions) ?? [];
         var inventoryOrdinal = reader.FieldCount >= 10 ? 7 : 6;
         var inventory = ReadInventory(reader.GetString(inventoryOrdinal));

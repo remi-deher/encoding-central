@@ -34,8 +34,8 @@ public sealed class WorkerAutoEnrollmentService(
                     await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
                     continue;
                 }
-                var clusters = discovery.List();
-                var local = clusters.FirstOrDefault(enrollment.IsLocalCluster);
+                var centrals = discovery.List();
+                var local = centrals.FirstOrDefault(enrollment.IsLocalCentral);
                 // Un worker qui a déjà choisi un autre central (jumelage en cours ou enrôlé) n'est pas ramené au serveur local.
                 var choseElsewhere = identity.HasCredentials && local is not null && identity.CentralId != local.Id.ToString("D");
                 if (!identity.IsEnrolled && local is not null && !choseElsewhere)
@@ -44,7 +44,7 @@ public sealed class WorkerAutoEnrollmentService(
                     logger.LogInformation("Le worker local a rejoint le central {ClusterId}.", local.Id);
                 }
                 else if (options.AutomaticEnrollmentEnabled && !identity.IsEnrolled
-                    && GetAutomaticEnrollmentTarget(clusters, options.CentralApiBaseUrl is not null) is { } automaticTarget)
+                    && GetAutomaticEnrollmentTarget(centrals, options.CentralApiBaseUrl is not null) is { } automaticTarget)
                 {
                     await enrollment.EnrollAsync(automaticTarget.Id, stoppingToken);
                     logger.LogInformation("L’enrôlement automatique auprès du central {ClusterId} est terminé.", automaticTarget.Id);
@@ -63,7 +63,7 @@ public sealed class WorkerAutoEnrollmentService(
         }
     }
 
-    internal static DiscoveredCentral? GetAutomaticEnrollmentTarget(IReadOnlyList<DiscoveredCentral> clusters, bool hasConfiguredApiBaseUrl) =>
-        clusters.FirstOrDefault(cluster => cluster.Source == "configured")
-        ?? (hasConfiguredApiBaseUrl || clusters.Count != 1 ? null : clusters[0]);
+    internal static DiscoveredCentral? GetAutomaticEnrollmentTarget(IReadOnlyList<DiscoveredCentral> centrals, bool hasConfiguredApiBaseUrl) =>
+        centrals.FirstOrDefault(central => central.Source == "configured")
+        ?? (hasConfiguredApiBaseUrl || centrals.Count != 1 ? null : centrals[0]);
 }

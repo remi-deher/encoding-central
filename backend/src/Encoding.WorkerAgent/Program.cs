@@ -88,7 +88,7 @@ CentralUiProxy.Use(
             return options.CentralApiBaseUrl;
         return context.RequestServices.GetRequiredService<WorkerCentralDiscovery>()
             .List()
-            .FirstOrDefault(cluster => cluster.Source == "manual" && cluster.Reachable)
+            .FirstOrDefault(central => central.Source == "manual" && central.Reachable)
             ?.ApiBaseUrl;
     },
     options.LocalApiPort,
@@ -124,8 +124,8 @@ app.MapPost("/api/v1/worker/centrals", async (WorkerCentralAddress request, Work
         return Results.Problem(statusCode: StatusCodes.Status502BadGateway, title: exception.Message);
     }
 }).WithName("AddWorkerClusterByAddress");
-app.MapDelete("/api/v1/worker/centrals/{clusterId:guid}", (Guid clusterId, WorkerCentralDiscovery discovery) =>
-    discovery.Forget(clusterId)
+app.MapDelete("/api/v1/worker/centrals/{centralId:guid}", (Guid centralId, WorkerCentralDiscovery discovery) =>
+    discovery.Forget(centralId)
         ? Results.NoContent()
         : Results.NotFound(new { title = "Seule une adresse ajoutée à la main peut être oubliée ; ce central est détecté automatiquement." })).WithName("ForgetWorkerCluster");
 app.MapGet("/api/v1/worker/status", async (WorkerAgentOptions agentOptions, WorkerIdentityStore identityStore, IToolCapabilityProbe capabilityProbe,

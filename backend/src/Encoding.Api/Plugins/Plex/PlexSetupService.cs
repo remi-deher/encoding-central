@@ -19,7 +19,7 @@ public sealed class PlexSetupService(
     FlowComponentRegistry catalog,
     PluginConfigurationRepository configurations,
     LibraryRepository libraries,
-    LibraryWorkerAccessRepository nodeAccess,
+    LibraryWorkerAccessRepository workerAccess,
     PlexSetupSession sessions)
 {
     public const string PluginId = "plex";
@@ -74,7 +74,7 @@ public sealed class PlexSetupService(
         var local = new List<LocalLibrary>();
         foreach (var library in (await libraries.ListAsync(ct)).OrderBy(item => item.Name, StringComparer.CurrentCulture))
         {
-            var paths = (await nodeAccess.ListAsync(library.Id, ct) ?? [])
+            var paths = (await workerAccess.ListAsync(library.Id, ct) ?? [])
                 .Where(access => access.Mode == LibraryWorkerAccessMode.Direct && !string.IsNullOrWhiteSpace(access.LocalPath))
                 .Select(access => access.LocalPath!).Distinct(StringComparer.Ordinal).ToList();
             local.Add(new(library.Id, library.Name, paths));

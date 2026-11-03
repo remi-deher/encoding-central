@@ -12,7 +12,7 @@ using Encoding.Contracts.Workers;
 namespace Encoding.Api.Executions;
 
 public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEligibility eligibility,FlowComponentRegistry components,
-    WorkerPresenceOptions presence,PluginConfigurationRepository pluginConfigurations,WorkerGroupRepository nodeGroups,SourceWriteGuard? sourceWrites=null,
+    WorkerPresenceOptions presence,PluginConfigurationRepository pluginConfigurations,WorkerGroupRepository workerGroups,SourceWriteGuard? sourceWrites=null,
     FlowPlacementPlanner? placementPlanner=null,ILogger<RuntimeRepository>? logger=null)
 {
     private readonly FlowPlacementPlanner planner = placementPlanner ?? new FlowPlacementPlanner(components);
@@ -28,11 +28,11 @@ public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEli
         while(await reader.ReadAsync(ct)) states.Add(new(reader.GetGuid(0),reader.GetString(1)));
         return states;
     }
-    public async Task<bool> AuthenticateAsync(Guid node,string token,CancellationToken ct)
+    public async Task<bool> AuthenticateAsync(Guid worker,string token,CancellationToken ct)
     {
         if(string.IsNullOrWhiteSpace(token) || token.Length>256) return false;
         await using var cmd=dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM workers WHERE id=@node AND deleted_at IS NULL AND worker_token_hash=@hash)");
-        cmd.Parameters.AddWithValue("node",node); cmd.Parameters.AddWithValue("hash",SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
+        cmd.Parameters.AddWithValue("node",worker); cmd.Parameters.AddWithValue("hash",SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
         return (await cmd.ScalarBoolAsync(ct));
     }
 

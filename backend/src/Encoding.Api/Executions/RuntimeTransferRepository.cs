@@ -7,7 +7,7 @@ namespace Encoding.Api.Executions;
 public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionStreamBroadcaster? broadcaster=null,
     Encoding.Api.Flows.FlowComponentRegistry? components=null)
 {
-    public async Task<IReadOnlyList<RuntimeTransfer>> ListAsync(Guid node,CancellationToken ct)
+    public async Task<IReadOnlyList<RuntimeTransfer>> ListAsync(Guid worker,CancellationToken ct)
     {
         await using var cmd=dataSource.CreateCommand("""
           SELECT w.execution_id,w.lease_epoch,a.local_path,w.media_path,w.source_sha,w.result_sha,w.result_extension,w.publication_requested,e.flow_definition::text,a.can_write,w.replacement_grace_hours,w.library_id,
@@ -22,7 +22,7 @@ public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionS
           AND (w.source_sha IS NULL AND w.source_preparation_requested OR (w.publication_requested AND w.published_path IS NULL AND a.can_write))
           ORDER BY e.queued_at LIMIT 20
           """);
-        cmd.Parameters.AddWithValue("node",node); await using var r=await cmd.ExecuteReaderAsync(ct); var result=new List<RuntimeTransfer>();
+        cmd.Parameters.AddWithValue("node",worker); await using var r=await cmd.ExecuteReaderAsync(ct); var result=new List<RuntimeTransfer>();
         var json = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
         while (await r.ReadAsync(ct))
         {

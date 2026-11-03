@@ -36,7 +36,7 @@ internal static class MembershipTests
             var secretFile = Path.Combine(data, "secret");
             File.WriteAllText(secretFile, "secret");
             var localUrl = "http://127.0.0.1:18080/";
-            var options = new WorkerAgentOptions("membership", [Encoding.Contracts.Workers.NodeRole.Server, Encoding.Contracts.Workers.NodeRole.Worker], 1, data,
+            var options = new WorkerAgentOptions("membership", [Encoding.Contracts.Workers.WorkerRole.Server, Encoding.Contracts.Workers.WorkerRole.Worker], 1, data,
                 localUrl, false, TimeSpan.FromSeconds(10), 8081, secretFile);
             var store = new WorkerIdentityStore(options);
             var enrollment = new WorkerEnrollmentService(options, store, new WorkerCentralDiscovery(options, NullLogger<WorkerCentralDiscovery>.Instance),

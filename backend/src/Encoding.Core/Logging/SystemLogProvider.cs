@@ -14,7 +14,7 @@ public sealed class SystemLogProvider : ILoggerProvider
 {
     private readonly SystemLogRingBuffer _ringBuffer;
     private readonly SystemLogStreamBroadcaster _broadcaster;
-    private readonly Func<ISystemLogWorkerContext?>? _nodeContextAccessor;
+    private readonly Func<ISystemLogWorkerContext?>? _workerContextAccessor;
     private readonly Func<ISystemLogSink?>? _sinkAccessor;
     private readonly SystemLogOptions _options;
     private readonly ConcurrentDictionary<string, SystemLogger> _loggers = new(StringComparer.OrdinalIgnoreCase);
@@ -22,23 +22,23 @@ public sealed class SystemLogProvider : ILoggerProvider
     public SystemLogProvider(
         SystemLogRingBuffer ringBuffer,
         SystemLogStreamBroadcaster broadcaster,
-        ISystemLogWorkerContext? nodeContext = null,
+        ISystemLogWorkerContext? workerContext = null,
         ISystemLogSink? sink = null,
         SystemLogOptions? options = null)
-        : this(ringBuffer, broadcaster, () => nodeContext, () => sink, options)
+        : this(ringBuffer, broadcaster, () => workerContext, () => sink, options)
     {
     }
 
     public SystemLogProvider(
         SystemLogRingBuffer ringBuffer,
         SystemLogStreamBroadcaster broadcaster,
-        Func<ISystemLogWorkerContext?>? nodeContextAccessor,
+        Func<ISystemLogWorkerContext?>? workerContextAccessor,
         Func<ISystemLogSink?>? sinkAccessor,
         SystemLogOptions? options = null)
     {
         _ringBuffer = ringBuffer ?? throw new ArgumentNullException(nameof(ringBuffer));
         _broadcaster = broadcaster ?? throw new ArgumentNullException(nameof(broadcaster));
-        _nodeContextAccessor = nodeContextAccessor;
+        _workerContextAccessor = workerContextAccessor;
         _sinkAccessor = sinkAccessor;
         _options = options ?? new SystemLogOptions();
     }
@@ -52,7 +52,7 @@ public sealed class SystemLogProvider : ILoggerProvider
             category,
             _ringBuffer,
             _broadcaster,
-            _nodeContextAccessor,
+            _workerContextAccessor,
             _sinkAccessor,
             _options));
     }
@@ -71,7 +71,7 @@ public sealed class SystemLogger : ILogger
     private readonly string _category;
     private readonly SystemLogRingBuffer _ringBuffer;
     private readonly SystemLogStreamBroadcaster _broadcaster;
-    private readonly Func<ISystemLogWorkerContext?>? _nodeContextAccessor;
+    private readonly Func<ISystemLogWorkerContext?>? _workerContextAccessor;
     private readonly Func<ISystemLogSink?>? _sinkAccessor;
     private readonly SystemLogOptions _options;
 
@@ -79,10 +79,10 @@ public sealed class SystemLogger : ILogger
         string category,
         SystemLogRingBuffer ringBuffer,
         SystemLogStreamBroadcaster broadcaster,
-        ISystemLogWorkerContext? nodeContext,
+        ISystemLogWorkerContext? workerContext,
         ISystemLogSink? sink,
         SystemLogOptions options)
-        : this(category, ringBuffer, broadcaster, () => nodeContext, () => sink, options)
+        : this(category, ringBuffer, broadcaster, () => workerContext, () => sink, options)
     {
     }
 
@@ -90,14 +90,14 @@ public sealed class SystemLogger : ILogger
         string category,
         SystemLogRingBuffer ringBuffer,
         SystemLogStreamBroadcaster broadcaster,
-        Func<ISystemLogWorkerContext?>? nodeContextAccessor,
+        Func<ISystemLogWorkerContext?>? workerContextAccessor,
         Func<ISystemLogSink?>? sinkAccessor,
         SystemLogOptions options)
     {
         _category = category;
         _ringBuffer = ringBuffer;
         _broadcaster = broadcaster;
-        _nodeContextAccessor = nodeContextAccessor;
+        _workerContextAccessor = workerContextAccessor;
         _sinkAccessor = sinkAccessor;
         _options = options;
     }
@@ -137,7 +137,7 @@ public sealed class SystemLogger : ILogger
             var sanitizedException = SystemLogSanitizer.SanitizeException(exception);
             var systemLevel = MapLogLevel(logLevel);
 
-            var nodeContext = _nodeContextAccessor?.Invoke();
+            var workerContext = _workerContextAccessor?.Invoke();
             var entry = new SystemLogEntry(
                 Id: Guid.NewGuid().ToString("N"),
                 Timestamp: DateTimeOffset.UtcNow,
@@ -145,8 +145,8 @@ public sealed class SystemLogger : ILogger
                 Category: _category,
                 Message: sanitizedMessage,
                 Exception: sanitizedException,
-                WorkerId: nodeContext?.WorkerId,
-                WorkerName: nodeContext?.WorkerName,
+                WorkerId: workerContext?.WorkerId,
+                WorkerName: workerContext?.WorkerName,
                 EventId: eventId.Id != 0 ? eventId.Id : null);
 
             _ringBuffer.Add(entry);

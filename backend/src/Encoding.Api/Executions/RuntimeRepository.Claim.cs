@@ -109,7 +109,7 @@ public sealed partial class RuntimeRepository
                     null);
             }
 
-            var identity = await nodeGroups.GetNodeIdentityAsync(id, ct);
+            var identity = await workerGroups.GetWorkerIdentityAsync(id, ct);
 
             list.Add(new WorkerPlacementCandidate(
                 WorkerId: id,
@@ -142,8 +142,8 @@ public sealed partial class RuntimeRepository
         await using(var active=Sql.Command("SELECT count(*) FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.worker_id=@worker AND w.lease_until>clock_timestamp() AND e.state IN ('running','cancelling')",
             c,tx))
         { active.Parameters.AddWithValue("worker",worker); if((long)(await active.ExecuteScalarAsync(ct))!>=capacity) return new(null); }
-        var nodeIdentity=await nodeGroups.GetNodeIdentityAsync(worker,ct);
-        if(nodeIdentity is null) return new(null);
+        var workerIdentity=await workerGroups.GetWorkerIdentityAsync(worker,ct);
+        if(workerIdentity is null) return new(null);
         var candidates=new List<(Guid Id,Guid Library,string Path,string Key,FlowDefinition Flow,int Attempt,int Revision,long Epoch,
             RuntimeCheckpoint? Checkpoint,RuntimeHandoffSelector? Selector,Guid? PreviousWorker,Guid? Source,byte[]? Settings,RuntimeWaitProbe? Probe,
                 DateTimeOffset QueuedAt,FlowPlacementPlan? PlacementPlan,JsonElement? BeforeMetadata)>();
@@ -197,9 +197,9 @@ public sealed partial class RuntimeRepository
                 var key=(item.Library,item.Flow.Id,item.Flow.Version,metadataKey);
                 if(!placementPlans.TryGetValue(key,out plan))
                 {
-                    if(!placementCandidatesByLibrary.TryGetValue(item.Library,out var nodeCandidates))
-                        placementCandidatesByLibrary[item.Library]=nodeCandidates=await LoadPlacementCandidatesAsync(item.Library,c,tx,ct);
-                    plan=planner.Plan(item.Flow,item.BeforeMetadata,nodeCandidates,DateTimeOffset.UtcNow);
+                    if(!placementCandidatesByLibrary.TryGetValue(item.Library,out var workerCandidates))
+                        placementCandidatesByLibrary[item.Library]=workerCandidates=await LoadPlacementCandidatesAsync(item.Library,c,tx,ct);
+                    plan=planner.Plan(item.Flow,item.BeforeMetadata,workerCandidates,DateTimeOffset.UtcNow);
                     if(plan.Strategy==FlowPlacementPlan.StrategyImpossible)
                         logger?.LogWarning("Placement impossible pour l’exécution {ExecutionId} : {Reason}",item.Id,plan.Reason);
                     placementPlans[key]=plan;
@@ -220,7 +220,7 @@ public sealed partial class RuntimeRepository
                     && item.Selector?.Mode == "eligible"
                     && plan.AssignedWorkerId == worker;
 
-                if(!directUnifiedStayOnWorker && item.Selector is {} selector && (!item.PreviousWorker.HasValue || !selector.Accepts(worker,item.PreviousWorker.Value,nodeIdentity)))
+                if(!directUnifiedStayOnWorker && item.Selector is {} selector && (!item.PreviousWorker.HasValue || !selector.Accepts(worker,item.PreviousWorker.Value,workerIdentity)))
                     continue;
 
                 if(item.Selector is null)
@@ -247,13 +247,13 @@ public sealed partial class RuntimeRepository
                 }
             }
             else if(item.Probe is null && item.Selector is {} selector
-                && (!item.PreviousWorker.HasValue || !selector.Accepts(worker,item.PreviousWorker.Value,nodeIdentity))) continue;
+                && (!item.PreviousWorker.HasValue || !selector.Accepts(worker,item.PreviousWorker.Value,workerIdentity))) continue;
             var planValidatesWorker = (placementIsPersisted || item.Checkpoint is null) && plan is not null
                 && (plan.Strategy == FlowPlacementPlan.StrategyDirectUnified && plan.AssignedWorkerId == worker
                     || plan.Strategy == FlowPlacementPlan.StrategyTransferWorker && plan.AssignedWorkerId == worker);
 
             if(item.Probe is null && !planValidatesWorker
-                && !eligibility.CanRun(item.Flow,capabilities,worker,item.Checkpoint?.NextNodeId,item.Checkpoint is not null,item.Checkpoint?.Context,nodeIdentity,inventory,
+                && !eligibility.CanRun(item.Flow,capabilities,worker,item.Checkpoint?.NextNodeId,item.Checkpoint is not null,item.Checkpoint?.Context,workerIdentity,inventory,
                 placementIsPersisted || item.Checkpoint is null ? plan?.WorkerAssignments : null)) continue;
             var sourceEditResume=false;
             await using(var waiting=Sql.Command("SELECT EXISTS(SELECT 1 FROM runtime_source_write_waits WHERE execution_id=@id)",c,tx))

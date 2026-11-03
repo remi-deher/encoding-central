@@ -24,11 +24,11 @@ public sealed class LocalAgentAccessTests
     public async Task RelayCanAddAClusterWithoutDependingOnBrowserOrigin(string? origin)
     {
         using var fixture = new SecretFile();
-        var clusterId = Guid.NewGuid();
+        var centralId = Guid.NewGuid();
         var clusterBuilder = WebApplication.CreateBuilder();
         clusterBuilder.WebHost.UseUrls("http://127.0.0.1:0");
         await using var cluster = clusterBuilder.Build();
-        cluster.MapGet("/api/v1/central", () => Results.Ok(new { id = clusterId, name = "Maison" }));
+        cluster.MapGet("/api/v1/central", () => Results.Ok(new { id = centralId, name = "Maison" }));
         await cluster.StartAsync();
         await using var agent = Agent(fixture.Path);
         using var relay = new HttpClient(new LocalAgentAuthenticationHandler(fixture.Configuration)
@@ -43,10 +43,10 @@ public sealed class LocalAgentAccessTests
         if (origin is not null) request.Headers.Add("Origin", origin);
         using var response = await relay.SendAsync(request);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains(clusterId.ToString("D"), await response.Content.ReadAsStringAsync());
+        Assert.Contains(centralId.ToString("D"), await response.Content.ReadAsStringAsync());
         using var clusters = await relay.GetAsync("api/v1/worker/centrals");
         Assert.Equal(HttpStatusCode.OK, clusters.StatusCode);
-        Assert.Contains(clusterId.ToString("D"), await clusters.Content.ReadAsStringAsync());
+        Assert.Contains(centralId.ToString("D"), await clusters.Content.ReadAsStringAsync());
     }
 
     [Theory]
@@ -160,7 +160,7 @@ public sealed class LocalAgentAccessTests
         try
         {
             var dbPath = Path.Combine(root, "cluster.db");
-            var localNodeId = Guid.NewGuid();
+            var localWorkerId = Guid.NewGuid();
             var localNodeToken = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(48));
 
             WebApplicationFactory<Encoding.Api.Auth.AuthOptions> CreateServer() =>
@@ -194,9 +194,9 @@ public sealed class LocalAgentAccessTests
                 using var enrollMessage = new HttpRequestMessage(HttpMethod.Post, "/api/v1/workers/enroll")
                 {
                     Content = JsonContent.Create(new Encoding.Contracts.Workers.WorkerEnrollmentRequest(
-                        localNodeId,
+                        localWorkerId,
                         "encoding-host",
-                        [NodeRole.Server, NodeRole.Worker],
+                        [WorkerRole.Server, WorkerRole.Worker],
                         1,
                         [],
                         localNodeToken,
@@ -223,7 +223,7 @@ public sealed class LocalAgentAccessTests
 
                 // Display name is saved on the already-enrolled local node in workers:
                 var nodesJson = await secondClient.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/v1/workers");
-                var updatedNode = Assert.Single(nodesJson.EnumerateArray(), n => n.GetProperty("id").GetGuid() == localNodeId);
+                var updatedNode = Assert.Single(nodesJson.EnumerateArray(), n => n.GetProperty("id").GetGuid() == localWorkerId);
                 Assert.Equal("Serveur Principal", updatedNode.GetProperty("displayName").GetString());
 
                 // And /api/v1/local-worker/status also enriches displayName with the saved name:
@@ -231,8 +231,8 @@ public sealed class LocalAgentAccessTests
                 Assert.Equal("Serveur Principal", statusJson.GetProperty("displayName").GetString());
 
                 // And creating the cluster during setup names it:
-                var clusterIdentity = await secondBoot.Services.GetRequiredService<Encoding.Api.Infrastructure.CentralIdentityRepository>().GetAsync(CancellationToken.None);
-                Assert.Equal("Cluster Salon", clusterIdentity.Name);
+                var centralIdentity = await secondBoot.Services.GetRequiredService<Encoding.Api.Infrastructure.CentralIdentityRepository>().GetAsync(CancellationToken.None);
+                Assert.Equal("Cluster Salon", centralIdentity.Name);
             }
         }
         finally

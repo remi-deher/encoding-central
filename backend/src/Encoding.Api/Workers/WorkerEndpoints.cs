@@ -7,31 +7,31 @@ namespace Encoding.Api.Workers;
 
 public static class WorkerEndpoints
 {
-    public static void MapNodeEndpoints(this WebApplication app)
+    public static void MapWorkerEndpoints(this WebApplication app)
     {
-        var nodes = app.MapGroup("/api/v1/workers").WithTags("Nodes");
-        nodes.MapNodeDirectoryBrowseEndpoints();
-        nodes.MapNodeEnrollmentEndpoints();
-        nodes.MapNodeHeartbeatEndpoints();
-        nodes.MapNodeLifecycleEndpoints();
-        nodes.MapNodeProcessingEndpoints();
+        var nodes = app.MapGroup("/api/v1/workers").WithTags("Workers");
+        nodes.MapWorkerDirectoryBrowseEndpoints();
+        nodes.MapWorkerEnrollmentEndpoints();
+        nodes.MapWorkerHeartbeatEndpoints();
+        nodes.MapWorkerLifecycleEndpoints();
+        nodes.MapWorkerProcessingEndpoints();
     }
 
-    private static void MapNodeDirectoryBrowseEndpoints(this RouteGroupBuilder nodes)
+    private static void MapWorkerDirectoryBrowseEndpoints(this RouteGroupBuilder nodes)
     {
-        nodes.MapPost("/{nodeId:guid}/directory-browse", async (
-            Guid nodeId, WorkerDirectoryBrowserRequest request, WorkerManagementService service, CancellationToken ct) =>
+        nodes.MapPost("/{workerId:guid}/directory-browse", async (
+            Guid workerId, WorkerDirectoryBrowserRequest request, WorkerManagementService service, CancellationToken ct) =>
         {
-            if (await service.CreateDirectoryBrowseAsync(nodeId, request.Path, ct) is not { } id) return Results.NotFound();
-            return Results.Accepted($"/api/v1/workers/{nodeId:D}/directory-browse/{id:D}", new { id });
+            if (await service.CreateDirectoryBrowseAsync(workerId, request.Path, ct) is not { } id) return Results.NotFound();
+            return Results.Accepted($"/api/v1/workers/{workerId:D}/directory-browse/{id:D}", new { id });
         }).RequireAuthorization(AuthExtensions.AdministratorPolicy)
           .RequireRateLimiting(AuthExtensions.HeavyOperationsPolicy)
           .WithName("RequestNodeDirectoryBrowse");
 
-        nodes.MapGet("/{nodeId:guid}/directory-browse/{requestId:guid}", async (
-            Guid nodeId, Guid requestId, WorkerManagementService service, CancellationToken ct) =>
+        nodes.MapGet("/{workerId:guid}/directory-browse/{requestId:guid}", async (
+            Guid workerId, Guid requestId, WorkerManagementService service, CancellationToken ct) =>
         {
-            var result = await service.GetDirectoryBrowseAsync(requestId, nodeId, ct);
+            var result = await service.GetDirectoryBrowseAsync(requestId, workerId, ct);
             return result is null ? Results.NotFound() : Results.Ok(result);
         }).RequireAuthorization(AuthExtensions.AdministratorPolicy).WithName("GetNodeDirectoryBrowse");
     }
@@ -43,7 +43,7 @@ public static class WorkerEndpoints
         && http.User.FindFirst("auth_type")?.Value == "session"
         && http.Request.Headers[ManagementAccessHandler.CsrfHeader] == "1";
 
-    private static void MapNodeEnrollmentEndpoints(this RouteGroupBuilder nodes)
+    private static void MapWorkerEnrollmentEndpoints(this RouteGroupBuilder nodes)
     {
         nodes.MapPost("/enroll", async (
             WorkerEnrollmentRequest request,
@@ -94,15 +94,15 @@ public static class WorkerEndpoints
             Results.Ok(await service.ListPendingPairingRequestsAsync(cancellationToken)))
             .WithName("ListPendingNodeEnrollmentRequests");
 
-        nodes.MapPost("/enrollment-requests/{nodeId:guid}/approve", async (
-            Guid nodeId,
+        nodes.MapPost("/enrollment-requests/{workerId:guid}/approve", async (
+            Guid workerId,
             WorkerManagementService service,
             CancellationToken cancellationToken) =>
         {
-            var node = await service.ApprovePairingRequestAsync(nodeId, cancellationToken);
-            return node is null
+            var worker = await service.ApprovePairingRequestAsync(workerId, cancellationToken);
+            return worker is null
                 ? (IResult)Results.NotFound(new { title = "Cette demande est expirée ou n’existe plus." })
-                : Results.Ok(node);
+                : Results.Ok(worker);
         }).WithName("ApprovePendingNodeEnrollmentRequest");
 
         nodes.MapPost("/enrollment-requests/approve", async (
@@ -112,17 +112,17 @@ public static class WorkerEndpoints
         {
             var errors = WorkerHeartbeatValidator.Validate(request);
             if (errors.Count > 0) return (IResult)Results.ValidationProblem(errors);
-            var node = await service.ApprovePairingRequestAsync(request.PairingKey, cancellationToken);
-            return node is null
+            var worker = await service.ApprovePairingRequestAsync(request.PairingKey, cancellationToken);
+            return worker is null
                 ? Results.NotFound(new { title = "Cette clé de jumelage est invalide, expirée ou déjà utilisée." })
-                : Results.Ok(node);
+                : Results.Ok(worker);
         }).WithName("ApproveWorkerEnrollmentRequest");
     }
 
-    private static void MapNodeHeartbeatEndpoints(this RouteGroupBuilder nodes)
+    private static void MapWorkerHeartbeatEndpoints(this RouteGroupBuilder nodes)
     {
-        nodes.MapPut("/{nodeId:guid}/heartbeat", async (
-            Guid nodeId,
+        nodes.MapPut("/{workerId:guid}/heartbeat", async (
+            Guid workerId,
             WorkerHeartbeatRequest request,
             WorkerManagementService service,
             IConfiguration configuration,
@@ -132,7 +132,7 @@ public static class WorkerEndpoints
             var providedToken = httpContext.Request.Headers["X-Node-Token"].ToString();
             var isLocal = LocalEnrollment.Matches(configuration[LocalEnrollment.SecretFileSetting],
                 httpContext.Request.Headers[LocalEnrollment.HeaderName].ToString());
-            var outcome = await service.RecordHeartbeatAsync(nodeId, providedToken, request, isLocal, cancellationToken);
+            var outcome = await service.RecordHeartbeatAsync(workerId, providedToken, request, isLocal, cancellationToken);
 
             return outcome.Kind switch
             {
@@ -145,15 +145,15 @@ public static class WorkerEndpoints
             };
         }).AllowAnonymous().WithName("RecordNodeHeartbeat");
 
-        nodes.MapPost("/{nodeId:guid}/leave", async (
-            Guid nodeId,
+        nodes.MapPost("/{workerId:guid}/leave", async (
+            Guid workerId,
             WorkerManagementService service,
             HttpContext httpContext,
             CancellationToken ct) =>
         {
             var token = httpContext.Request.Headers["X-Node-Token"].ToString();
             if (string.IsNullOrWhiteSpace(token)) return (IResult)Results.Unauthorized();
-            return await service.LeaveAsync(nodeId, token, ct) switch
+            return await service.LeaveAsync(workerId, token, ct) switch
             {
                 "deleted" => Results.NoContent(),
                 "coordination" => Results.Conflict(new
@@ -169,33 +169,33 @@ public static class WorkerEndpoints
         }).AllowAnonymous().RequireRateLimiting(AuthExtensions.AnonymousPolicy).WithName("LeaveCluster");
     }
 
-    private static void MapNodeLifecycleEndpoints(this RouteGroupBuilder nodes)
+    private static void MapWorkerLifecycleEndpoints(this RouteGroupBuilder nodes)
     {
         nodes.MapGet("", async (WorkerManagementService service, WorkerPresenceOptions options, CancellationToken cancellationToken) =>
             Results.Ok(await service.ListAsync(options.OfflineAfter, cancellationToken)))
             .WithName("ListNodes");
 
-        nodes.MapGet("/{nodeId:guid}", async (
-            Guid nodeId, WorkerManagementService service, WorkerPresenceOptions options, CancellationToken cancellationToken) =>
+        nodes.MapGet("/{workerId:guid}", async (
+            Guid workerId, WorkerManagementService service, WorkerPresenceOptions options, CancellationToken cancellationToken) =>
         {
-            var node = await service.GetAsync(nodeId, options.OfflineAfter, cancellationToken);
-            return node is null ? (IResult)Results.NotFound() : Results.Ok(node);
+            var worker = await service.GetAsync(workerId, options.OfflineAfter, cancellationToken);
+            return worker is null ? (IResult)Results.NotFound() : Results.Ok(worker);
         }).WithName("GetNode");
 
-        nodes.MapPut("/{nodeId:guid}/draining", async (
-            Guid nodeId, DrainWorkerRequest request, WorkerManagementService service, CancellationToken ct) =>
-            await service.SetDrainingAsync(nodeId, request.Draining, ct) ? Results.Accepted() : Results.NotFound())
+        nodes.MapPut("/{workerId:guid}/draining", async (
+            Guid workerId, DrainWorkerRequest request, WorkerManagementService service, CancellationToken ct) =>
+            await service.SetDrainingAsync(workerId, request.Draining, ct) ? Results.Accepted() : Results.NotFound())
             .WithName("SetNodeDraining");
 
-        nodes.MapPost("/{nodeId:guid}/quarantine/clear", async (Guid nodeId, WorkerManagementService service, CancellationToken ct) =>
-            await service.ClearQuarantineAsync(nodeId, ct)
+        nodes.MapPost("/{workerId:guid}/quarantine/clear", async (Guid workerId, WorkerManagementService service, CancellationToken ct) =>
+            await service.ClearQuarantineAsync(workerId, ct)
                 ? Results.Accepted()
                 : Results.NotFound(new { title = "Ce worker n'est pas en quarantaine." }))
             .WithName("ClearNodeQuarantine");
 
-        nodes.MapDelete("/{nodeId:guid}", async (Guid nodeId, WorkerManagementService service, CancellationToken ct) =>
+        nodes.MapDelete("/{workerId:guid}", async (Guid workerId, WorkerManagementService service, CancellationToken ct) =>
         {
-            return await service.DeleteAsync(nodeId, ct) switch
+            return await service.DeleteAsync(workerId, ct) switch
             {
                 "deleted" => (IResult)Results.NoContent(),
                 "coordination" => Results.Conflict(new { title = "Le central ne peut pas être retiré : il est l'unique serveur du central." }),
@@ -211,21 +211,21 @@ public static class WorkerEndpoints
             Results.Ok((await service.ActiveTaskCountsAsync(ct)).ToDictionary(item => item.Key.ToString("D"), item => item.Value)))
             .WithName("ListNodesActiveTasks");
 
-        nodes.MapGet("/{nodeId:guid}/activity", async (Guid nodeId, WorkerManagementService service, CancellationToken ct) =>
-            Results.Ok(await service.ActivityAsync(nodeId, ct)));
+        nodes.MapGet("/{workerId:guid}/activity", async (Guid workerId, WorkerManagementService service, CancellationToken ct) =>
+            Results.Ok(await service.ActivityAsync(workerId, ct)));
     }
 
-    private static void MapNodeProcessingEndpoints(this RouteGroupBuilder nodes)
+    private static void MapWorkerProcessingEndpoints(this RouteGroupBuilder nodes)
     {
-        nodes.MapGet("/{nodeId:guid}/processing", async (Guid nodeId, WorkerManagementService service, CancellationToken ct) =>
-            await service.GetProcessingSettingsAsync(nodeId, ct) is { } settings ? (IResult)Results.Ok(settings) : Results.NotFound());
+        nodes.MapGet("/{workerId:guid}/processing", async (Guid workerId, WorkerManagementService service, CancellationToken ct) =>
+            await service.GetProcessingSettingsAsync(workerId, ct) is { } settings ? (IResult)Results.Ok(settings) : Results.NotFound());
 
-        nodes.MapPut("/{nodeId:guid}/processing", async (
-            Guid nodeId, SaveWorkerProcessingSettings request, WorkerManagementService service, CancellationToken ct) =>
+        nodes.MapPut("/{workerId:guid}/processing", async (
+            Guid workerId, SaveWorkerProcessingSettings request, WorkerManagementService service, CancellationToken ct) =>
         {
             try
             {
-                return await service.SaveProcessingSettingsAsync(nodeId, request, ct)
+                return await service.SaveProcessingSettingsAsync(workerId, request, ct)
                     ? (IResult)Results.NoContent()
                     : Results.Conflict(new { title = "La configuration du worker a changé." });
             }

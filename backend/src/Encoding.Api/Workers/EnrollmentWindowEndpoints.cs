@@ -6,7 +6,7 @@ public static class EnrollmentWindowEndpoints
 {
     public static void MapEnrollmentWindowEndpoints(this WebApplication app)
     {
-        var window = app.MapGroup("/api/v1/workers/enrollment-window").WithTags("Nodes");
+        var window = app.MapGroup("/api/v1/workers/enrollment-window").WithTags("Workers");
         window.MapGet("", async (WorkerManagementService service, CancellationToken ct) =>
             Results.Ok(await service.GetEnrollmentWindowAsync(ct))).WithName("GetEnrollmentWindow");
         window.MapPut("", async (OpenEnrollmentWindowRequest request, WorkerManagementService service, CancellationToken ct) =>
@@ -25,7 +25,7 @@ public static class EnrollmentWindowEndpoints
         }).WithName("CloseEnrollmentWindow");
 
         // Première liaison implicite (0040) : réservée aux administrateurs, comme toute écriture de gestion.
-        var firstLink = app.MapGroup("/api/v1/workers/first-link").WithTags("Nodes");
+        var firstLink = app.MapGroup("/api/v1/workers/first-link").WithTags("Workers");
         firstLink.MapGet("", async (WorkerManagementService service, CancellationToken ct) =>
             Results.Ok(await service.GetFirstLinkAcceptanceAsync(ct))).WithName("GetFirstLinkAcceptance");
         firstLink.MapPut("", async (OpenEnrollmentWindowRequest request, WorkerManagementService service, HttpContext http, CancellationToken ct) =>

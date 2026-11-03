@@ -221,12 +221,12 @@ public sealed partial class FlowPlacementPlanner
 
             if (node.Component.PluginId == "nodes" && node.Component.ComponentId == "nodes-run-on-node")
             {
-                Guid? tNode = null;
-                if (node.Configuration.TryGetValue("targetNodeId", out var tn) && Guid.TryParse(tn.GetString(), out var tid)) tNode = tid;
+                Guid? tWorker = null;
+                if (node.Configuration.TryGetValue("targetNodeId", out var tn) && Guid.TryParse(tn.GetString(), out var tid)) tWorker = tid;
                 Guid? tGroup = null;
                 if (node.Configuration.TryGetValue("targetGroupId", out var tg) && Guid.TryParse(tg.GetString(), out var gid)) tGroup = gid;
                 var reqLabels = node.Configuration.TryGetValue("requiredLabels", out var rl) ? rl.GetString() : null;
-                runConstraints.Add(new(tNode, tGroup, reqLabels));
+                runConstraints.Add(new(tWorker, tGroup, reqLabels));
             }
 
             if (node.Component.PluginId == "nodes" && node.Component.ComponentId == "nodes-require-capability")
@@ -255,29 +255,29 @@ public sealed partial class FlowPlacementPlanner
             capabilityConstraints);
     }
 
-    public bool NodeSatisfiesPath(WorkerPlacementCandidate node, FlowPathRequirements path, out List<string> missing)
+    public bool WorkerSatisfiesPath(WorkerPlacementCandidate worker, FlowPathRequirements path, out List<string> missing)
     {
         missing = [];
 
-        if (path.RequiresDirectAccess && node.Access is not { Mode: "direct", CanRead: true, LocalPath: not null })
+        if (path.RequiresDirectAccess && worker.Access is not { Mode: "direct", CanRead: true, LocalPath: not null })
             missing.Add("accès direct local requis");
 
-        if (path.RequiresWriteAccess && node.Access is not { CanWrite: true })
+        if (path.RequiresWriteAccess && worker.Access is not { CanWrite: true })
             missing.Add("accès en écriture requis");
 
         foreach (var tool in path.RequiredTools)
         {
-            if (!node.Capabilities.Any(c => c.ToolId == tool))
+            if (!worker.Capabilities.Any(c => c.ToolId == tool))
                 missing.Add($"outil manquant : {tool}");
         }
 
         bool HasPlugin(string pluginReq)
         {
-            if (node.Capabilities.Any(c => c.ToolId == pluginReq)) return true;
+            if (worker.Capabilities.Any(c => c.ToolId == pluginReq)) return true;
             var rawId = pluginReq.StartsWith("plugin/", StringComparison.Ordinal) ? pluginReq["plugin/".Length..] : pluginReq;
             if (rawId is "video" or "audio" or "subtitles" or "mkv" or "images" or "probe")
             {
-                var baseCap = node.Capabilities.FirstOrDefault(c => c.ToolId == "plugin/base");
+                var baseCap = worker.Capabilities.FirstOrDefault(c => c.ToolId == "plugin/base");
                 if (baseCap is not null && Version.TryParse(baseCap.Version, out var bv) && bv >= new Version(1, 6, 0))
                     return true;
             }
@@ -290,10 +290,10 @@ public sealed partial class FlowPlacementPlanner
                 missing.Add($"plugin manquant : {plugin}");
         }
 
-        if (!NodeSatisfiesTranscodeRequirements(node, path))
+        if (!WorkerSatisfiesTranscodeRequirements(worker, path))
             missing.Add("encodeurs vidéo incompatibles");
 
-        var ffmpeg = node.Capabilities.FirstOrDefault(c => c.ToolId == "ffmpeg");
+        var ffmpeg = worker.Capabilities.FirstOrDefault(c => c.ToolId == "ffmpeg");
         var availableEncoders = ffmpeg?.Encoders ?? [];
         foreach (var audio in path.AudioEncoders)
         {
@@ -303,23 +303,23 @@ public sealed partial class FlowPlacementPlanner
 
         foreach (var fontSet in path.FontSets)
         {
-            if (node.Inventory?.FontSets?.Contains(fontSet, StringComparer.Ordinal) != true)
+            if (worker.Inventory?.FontSets?.Contains(fontSet, StringComparer.Ordinal) != true)
                 missing.Add($"jeu de polices manquant : {fontSet}");
         }
 
         foreach (var constraint in path.RunConstraints)
         {
-            if (constraint.TargetWorkerId.HasValue && constraint.TargetWorkerId.Value != node.WorkerId)
+            if (constraint.TargetWorkerId.HasValue && constraint.TargetWorkerId.Value != worker.WorkerId)
                 missing.Add($"worker cible imposé {constraint.TargetWorkerId.Value:D}");
-            if (constraint.TargetGroupId.HasValue && (node.Identity is null || !node.Identity.GroupIds.Contains(constraint.TargetGroupId.Value)))
+            if (constraint.TargetGroupId.HasValue && (worker.Identity is null || !worker.Identity.GroupIds.Contains(constraint.TargetGroupId.Value)))
                 missing.Add($"groupe imposé {constraint.TargetGroupId.Value:D}");
-            if (!string.IsNullOrWhiteSpace(constraint.RequiredLabels) && !WorkerLabelSelector.Matches(constraint.RequiredLabels, node.Identity?.EffectiveLabels))
+            if (!string.IsNullOrWhiteSpace(constraint.RequiredLabels) && !WorkerLabelSelector.Matches(constraint.RequiredLabels, worker.Identity?.EffectiveLabels))
                 missing.Add($"étiquettes imposées {constraint.RequiredLabels}");
         }
 
         foreach (var cap in path.CapabilityConstraints)
         {
-            var matching = node.Capabilities.FirstOrDefault(c => c.ToolId == cap.ToolId);
+            var matching = worker.Capabilities.FirstOrDefault(c => c.ToolId == cap.ToolId);
             if (matching is null)
             {
                 missing.Add($"capacité d'outil absente : {cap.ToolId}");
@@ -332,7 +332,7 @@ public sealed partial class FlowPlacementPlanner
                 missing.Add($"accélération requise absente : {cap.RequiredCapability}");
             if(!string.IsNullOrWhiteSpace(cap.RequiredEncoder) || cap.EncoderKind is "hardware" or "cpu")
             {
-                var encoderTool=node.Capabilities.FirstOrDefault(capability=>capability.ToolId=="ffmpeg");
+                var encoderTool=worker.Capabilities.FirstOrDefault(capability=>capability.ToolId=="ffmpeg");
                 var sought=cap.RequiredEncoder?.Trim();
                 var encoderOptions=VideoEncoderCatalog.All.Where(encoder=>(string.IsNullOrWhiteSpace(sought)
                     || encoder.Codec.Equals(sought,StringComparison.OrdinalIgnoreCase) || encoder.Id.Equals(sought,StringComparison.OrdinalIgnoreCase))
@@ -347,10 +347,10 @@ public sealed partial class FlowPlacementPlanner
         return missing.Count == 0;
     }
 
-    private static bool NodeSatisfiesTranscodeRequirements(WorkerPlacementCandidate node, FlowPathRequirements path)
+    private static bool WorkerSatisfiesTranscodeRequirements(WorkerPlacementCandidate worker, FlowPathRequirements path)
     {
         if (path.VideoTranscodes.Count == 0) return true;
-        var ffmpeg = node.Capabilities.FirstOrDefault(c => c.ToolId == "ffmpeg");
+        var ffmpeg = worker.Capabilities.FirstOrDefault(c => c.ToolId == "ffmpeg");
         if (ffmpeg is null) return false;
 
         var availableEncoders = ffmpeg.Encoders ?? [];

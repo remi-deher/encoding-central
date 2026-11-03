@@ -9,7 +9,7 @@ using Encoding.Contracts.Workers;
 namespace Encoding.Api.Executions;
 
 public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<RuntimeRecoveryService> logger,
-    WorkerGroupRepository? nodeGroups = null, RuntimeEligibility? eligibility = null, WorkerPresenceOptions? presence = null) : BackgroundService
+    WorkerGroupRepository? workerGroups = null, RuntimeEligibility? eligibility = null, WorkerPresenceOptions? presence = null) : BackgroundService
 {
     private static readonly JsonSerializerOptions Json=new(JsonSerializerDefaults.Web);
     private readonly TimeSpan offlineAfter=presence?.OfflineAfter??TimeSpan.FromSeconds(30);
@@ -149,7 +149,7 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
 
     private async Task<int> FailUnavailableTargetsAsync(CancellationToken ct)
     {
-        if(nodeGroups is null || eligibility is null) return 0;
+        if(workerGroups is null || eligibility is null) return 0;
         var targets=new List<(Guid Id,Guid? Actor,int Revision,string State,string Flow,string Selector,Guid? Previous,
             Guid Library,Guid? Source,string? Checkpoint,DateTimeOffset Updated,FlowPlacementPlan? Plan)>();
         await using(var c=await dataSource.OpenConnectionAsync(ct))
@@ -232,10 +232,10 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
         var needsWrite=eligibility!.RequiresWriteAccess(flow,entry,checkpoint is not null);
         foreach(var candidate in candidates)
         {
-            var plannedTarget=item.Plan?.WorkerAssignments?.TryGetValue(entry,out var nodeTarget)==true?nodeTarget:item.Plan?.AssignedWorkerId;
+            var plannedTarget=item.Plan?.WorkerAssignments?.TryGetValue(entry,out var workerTarget)==true?workerTarget:item.Plan?.AssignedWorkerId;
             if(plannedTarget is not null && candidate.Id!=plannedTarget.Value) continue;
             if(candidate.Id==item.Previous && !selector.IsResume || candidate.Capacity<=0) continue;
-            var identity=await nodeGroups!.GetNodeIdentityAsync(candidate.Id,ct);
+            var identity=await workerGroups!.GetWorkerIdentityAsync(candidate.Id,ct);
             if(!selector.Accepts(candidate.Id,item.Previous??Guid.Empty,identity)) continue;
             if(!fresh && candidate.ScheduleEnabled && candidate.Timezone is not null && candidate.Slots is not null
                 && !new WorkerSchedule(true,candidate.Timezone,candidate.Slots).IsOpen(DateTimeOffset.UtcNow)) continue;

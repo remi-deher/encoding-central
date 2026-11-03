@@ -21,7 +21,7 @@ public static class AuthEndpoints
             return Results.Ok(new AuthStatusResponse(setupRequired, setupRequired ? null : Current(http.User)));
         }).AllowAnonymous().WithName("GetAuthStatus");
 
-        auth.MapPost("/setup", async (SetupRequest request, HttpContext http, AuthService service, AuthOptions options, Encoding.Api.Workers.LocalWorkerRegistry localNode, CancellationToken ct) =>
+        auth.MapPost("/setup", async (SetupRequest request, HttpContext http, AuthService service, AuthOptions options, Encoding.Api.Workers.LocalWorkerRegistry localWorker, CancellationToken ct) =>
         {
             var errors = new Dictionary<string, string[]>();
             if (!string.IsNullOrWhiteSpace(request.Username) || !string.IsNullOrWhiteSpace(request.Password))
@@ -38,11 +38,11 @@ public static class AuthEndpoints
             var (outcome, _) = await service.SetupAsync(request, ct);
             if (outcome == SetupOutcome.AlreadyConfigured)
                 return Results.Conflict(new { title = "Le central possède déjà un administrateur." });
-            await localNode.RequestNameAsync(request.WorkerDisplayName, ct);
+            await localWorker.RequestNameAsync(request.WorkerDisplayName, ct);
             if (!string.IsNullOrWhiteSpace(request.CentralName))
             {
-                var clusterRepo = http.RequestServices.GetRequiredService<Encoding.Api.Infrastructure.CentralIdentityRepository>();
-                if (Encoding.Api.Infrastructure.CentralIdentityRepository.IsValidName(request.CentralName)) await clusterRepo.RenameAsync(request.CentralName, ct);
+                var centralRepo = http.RequestServices.GetRequiredService<Encoding.Api.Infrastructure.CentralIdentityRepository>();
+                if (Encoding.Api.Infrastructure.CentralIdentityRepository.IsValidName(request.CentralName)) await centralRepo.RenameAsync(request.CentralName, ct);
             }
             var effectiveUsername = string.IsNullOrWhiteSpace(request.Username) ? "admin" : request.Username.Trim();
             var effectivePassword = service.LastCreatedPassword ?? request.Password ?? "admin";

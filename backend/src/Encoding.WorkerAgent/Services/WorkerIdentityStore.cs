@@ -38,7 +38,7 @@ public sealed record WorkerIdentityState(
             var normalized = uri.GetLeftPart(UriPartial.Path).TrimEnd('/') + "/";
             if (!urls.Contains(normalized, StringComparer.OrdinalIgnoreCase)) urls.Add(normalized);
         }
-        if (IsEnrolled && options.Roles.Contains(NodeRole.Server) && options.CentralApiBaseUrl is { } localUrl && LocalEnrollment.IsLoopback(localUrl))
+        if (IsEnrolled && options.Roles.Contains(WorkerRole.Server) && options.CentralApiBaseUrl is { } localUrl && LocalEnrollment.IsLoopback(localUrl))
             Add(localUrl);
         Add(ApiBaseUrl);
         if (IsEnrolled && KnownServerUrls is not null)

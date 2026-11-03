@@ -13,7 +13,7 @@ using Encoding.Contracts.Libraries;
 namespace Encoding.Api.Libraries;
 
 public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefinitionValidator validator,WorkerPresenceOptions presence,
-    ExecutionStreamBroadcaster? broadcaster = null,LocalWorkerRegistry? localNode=null)
+    ExecutionStreamBroadcaster? broadcaster = null,LocalWorkerRegistry? localWorker=null)
 {
     private static readonly JsonSerializerOptions Json=new(JsonSerializerDefaults.Web);
     public Task<LibraryWorkflowResponse> GetAsync(Guid library,CancellationToken ct)=>GetAsync(library,null,null,null,ct);
@@ -127,7 +127,7 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
         cmd.Parameters.AddWithValue("id",id); cmd.Parameters.AddWithValue("library",library); cmd.Parameters.AddWithValue("type",mediaType);
         await cmd.ExecuteNonQueryAsync(ct); await tx.CommitAsync(ct); return id;
     }
-    public async Task<LibraryScanLease?> ClaimScanAsync(Guid node,CancellationToken ct)
+    public async Task<LibraryScanLease?> ClaimScanAsync(Guid worker,CancellationToken ct)
     {
         await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
         await using var cmd=Sql.Command("""
@@ -138,26 +138,26 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
           WHERE s.state IN ('queued','running') AND (s.lease_until IS NULL OR s.lease_until<=clock_timestamp())
           ORDER BY s.created_at LIMIT 1 FOR UPDATE OF s SKIP LOCKED
           """,c,tx);
-        cmd.Parameters.AddWithValue("node",node); cmd.Parameters.AddWithValue("offline",presence.OfflineAfter);
+        cmd.Parameters.AddWithValue("node",worker); cmd.Parameters.AddWithValue("offline",presence.OfflineAfter);
         await using var r=await cmd.ExecuteReaderAsync(ct); if(!await r.ReadAsync(ct)) return null;
         var lease=new LibraryScanLease(r.GetGuid(0),r.GetGuid(1),checked(r.GetInt64(2)+1),r.GetString(3),r.GetString(4)); await r.DisposeAsync();
         await using var update=Sql.Command("UPDATE library_scans SET worker_id=@node,source_root=@root,epoch=@epoch,state='running',lease_until=clock_timestamp()+interval '180 seconds',detail='Découverte des fichiers en cours.' WHERE id=@id",
             c,tx);
-        update.Parameters.AddWithValue("root",lease.Root); update.Parameters.AddWithValue("id",lease.Id); update.Parameters.AddWithValue("node",node);
+        update.Parameters.AddWithValue("root",lease.Root); update.Parameters.AddWithValue("id",lease.Id); update.Parameters.AddWithValue("node",worker);
             update.Parameters.AddWithValue("epoch",lease.Epoch);
         await update.ExecuteNonQueryAsync(ct); await tx.CommitAsync(ct); return lease;
     }
-    public async Task<bool> RenewScanAsync(Guid id,Guid node,long epoch,CancellationToken ct)
+    public async Task<bool> RenewScanAsync(Guid id,Guid worker,long epoch,CancellationToken ct)
     {
         await using var cmd=dataSource.CreateCommand("""
           UPDATE library_scans s SET lease_until=clock_timestamp()+interval '180 seconds'
           WHERE s.id=@id AND s.worker_id=@node AND s.epoch=@epoch AND s.state='running' AND s.lease_until>clock_timestamp()
           AND EXISTS(SELECT 1 FROM library_worker_accesses a JOIN libraries l ON l.id=a.library_id WHERE a.library_id=s.library_id AND a.worker_id=@node AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.local_path=s.source_root AND l.is_active)
           """);
-        cmd.Parameters.AddWithValue("id",id); cmd.Parameters.AddWithValue("node",node); cmd.Parameters.AddWithValue("epoch",epoch);
+        cmd.Parameters.AddWithValue("id",id); cmd.Parameters.AddWithValue("node",worker); cmd.Parameters.AddWithValue("epoch",epoch);
         return await cmd.ExecuteNonQueryAsync(ct)==1;
     }
-    public async Task<bool> CompleteScanAsync(Guid id,Guid node,CompleteLibraryScan request,CancellationToken ct)
+    public async Task<bool> CompleteScanAsync(Guid id,Guid worker,CompleteLibraryScan request,CancellationToken ct)
     {
         if(request.Files is null || request.Files.Count>10000 || request.Error?.Length>512) return false;
         var files=request.Files.Select(file=>file with {RelativePath=MediaPathRules.Normalize(file.RelativePath)}).ToArray();
@@ -170,7 +170,7 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
           WHERE s.id=@id AND s.worker_id=@node AND s.epoch=@epoch AND s.state='running' AND s.lease_until>clock_timestamp()
           FOR UPDATE OF s
           """,c,tx);
-        cmd.Parameters.AddWithValue("id",id); cmd.Parameters.AddWithValue("node",node); cmd.Parameters.AddWithValue("epoch",request.Epoch);
+        cmd.Parameters.AddWithValue("id",id); cmd.Parameters.AddWithValue("node",worker); cmd.Parameters.AddWithValue("epoch",request.Epoch);
         await using var r=await cmd.ExecuteReaderAsync(ct); if(!await r.ReadAsync(ct)) return false;
         var library=r.GetGuid(0); var type=r.GetString(1); await r.DisposeAsync();
         if(files.Any(file=>!LibraryMediaTypes.Matches(file.RelativePath,type))) return false;
@@ -272,15 +272,15 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
     /// </summary>
     private async Task<bool> ServesLibraryAutomaticallyAsync(Guid library,DbConnection c,DbTransaction tx,CancellationToken ct)
     {
-        var node=localNode?.WorkerId;
-        if(node is not {} resolvedNode) return true;
-        if(localNode?.WorkerId is null) await localNode!.RegisterAsync(resolvedNode,ct);
+        var worker=localWorker?.WorkerId;
+        if(worker is not {} resolvedWorker) return true;
+        if(localWorker?.WorkerId is null) await localWorker!.RegisterAsync(resolvedWorker,ct);
         await using var access=Sql.Command("""
           SELECT EXISTS(SELECT 1 FROM library_worker_accesses a JOIN workers n ON n.id=a.worker_id AND n.deleted_at IS NULL AND 'server'=ANY(n.roles)
                         WHERE a.library_id=@library AND a.mode='direct' AND a.is_enabled AND a.can_read),
                  EXISTS(SELECT 1 FROM library_worker_accesses a WHERE a.library_id=@library AND a.worker_id=@node AND a.mode='direct' AND a.is_enabled AND a.can_read)
           """,c,tx);
-        access.Parameters.AddWithValue("library",library);access.Parameters.AddWithValue("node",resolvedNode);
+        access.Parameters.AddWithValue("library",library);access.Parameters.AddWithValue("node",resolvedWorker);
         await using var r=await access.ExecuteReaderAsync(ct);
         if(!await r.ReadAsync(ct)) return true;
         var anyDirect=Convert.ToInt64(r.GetValue(0))!=0;var localDirect=Convert.ToInt64(r.GetValue(1))!=0;

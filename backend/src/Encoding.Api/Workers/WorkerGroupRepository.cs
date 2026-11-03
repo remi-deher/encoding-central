@@ -24,15 +24,15 @@ public sealed class WorkerGroupRepository(DbDataSource dataSource)
                 if (!manualMembers.TryGetValue(r.GetGuid(0), out var ids)) manualMembers[r.GetGuid(0)] = ids = [];
                 ids.Add(r.GetGuid(1));
             }
-        var nodes = new List<WorkerResponse>();
+        var workers = new List<WorkerResponse>();
         const string nodeSql = "SELECT id,name,roles,max_concurrent_tasks,capabilities,last_seen_at,true,inventory,display_name,labels FROM workers WHERE deleted_at IS NULL";
         await using (var cmd = Sql.Command(nodeSql, c))
         await using (var r = await cmd.ExecuteReaderAsync(ct))
-            while (await r.ReadAsync(ct)) nodes.Add(WorkerRepository.ReadResponse(r, true));
+            while (await r.ReadAsync(ct)) workers.Add(WorkerRepository.ReadResponse(r, true));
         return groups.Select(g => new WorkerGroupResponse(g.Id, g.Name, g.Description, g.Mode, g.Criteria, g.Labels,
             g.Mode == WorkerGroupMode.Manual
                 ? manualMembers.GetValueOrDefault(g.Id, [])
-                : nodes.Where(n => Matches(g.Criteria, n)).Select(n => n.Id).ToArray(), g.CreatedAt, g.UpdatedAt)).ToArray();
+                : workers.Where(n => Matches(g.Criteria, n)).Select(n => n.Id).ToArray(), g.CreatedAt, g.UpdatedAt)).ToArray();
     }
 
     public async Task<WorkerGroupResponse?> GetAsync(Guid id, CancellationToken ct) =>
@@ -65,11 +65,11 @@ public sealed class WorkerGroupRepository(DbDataSource dataSource)
         {
             await using (var clear = Sql.Command("DELETE FROM worker_group_members WHERE group_id=@id", c, tx))
             { clear.Parameters.AddWithValue("id", groupId); await clear.ExecuteNonQueryAsync(ct); }
-            foreach (var nodeId in request.WorkerIds.Distinct())
+            foreach (var workerId in request.WorkerIds.Distinct())
             {
                 await using var add = Sql.Command("INSERT INTO worker_group_members(group_id,worker_id) SELECT @group,@node WHERE EXISTS(SELECT 1 FROM workers WHERE id=@node AND deleted_at IS NULL)",
                     c, tx);
-                add.Parameters.AddWithValue("group", groupId); add.Parameters.AddWithValue("node", nodeId);
+                add.Parameters.AddWithValue("group", groupId); add.Parameters.AddWithValue("node", workerId);
                 if (await add.ExecuteNonQueryAsync(ct) == 0) return false;
             }
         }
@@ -108,7 +108,7 @@ public sealed class WorkerGroupRepository(DbDataSource dataSource)
         return "deleted";
     }
 
-    public async Task<WorkerIdentityResponse?> GetNodeIdentityAsync(Guid id, CancellationToken ct)
+    public async Task<WorkerIdentityResponse?> GetWorkerIdentityAsync(Guid id, CancellationToken ct)
     {
         await using var c = await dataSource.OpenConnectionAsync(ct);
         string? displayName; IReadOnlyDictionary<string, string?> local;
@@ -145,7 +145,7 @@ public sealed class WorkerGroupRepository(DbDataSource dataSource)
         return new(id, displayName, local, inherited, ids.Distinct().ToArray());
     }
 
-    public async Task<bool> SaveNodeIdentityAsync(Guid id, SaveWorkerIdentityRequest request, CancellationToken ct)
+    public async Task<bool> SaveWorkerIdentityAsync(Guid id, SaveWorkerIdentityRequest request, CancellationToken ct)
     {
         await using var cmd = dataSource.CreateCommand("UPDATE workers SET display_name=@name,labels=@labels WHERE id=@id AND deleted_at IS NULL");
         cmd.Parameters.AddWithValue("id", id);
@@ -164,10 +164,10 @@ public sealed class WorkerGroupRepository(DbDataSource dataSource)
             && (c.MinimumProcessorCount is null || inv?.ProcessorCount >= c.MinimumProcessorCount)
             && (c.MinimumConcurrentTasks is null || n.MaxConcurrentTasks >= c.MinimumConcurrentTasks)
             && (c.RequiredToolIds is null || c.RequiredToolIds.All(tool => n.Capabilities.Any(x => string.Equals(x.ToolId, tool, StringComparison.OrdinalIgnoreCase))))
-            && (c.RequiredEncoders is null || c.RequiredEncoders.All(req => NodeSupportsEncoder(n, req)));
+            && (c.RequiredEncoders is null || c.RequiredEncoders.All(req => WorkerSupportsEncoder(n, req)));
     }
 
-    public static bool NodeSupportsEncoder(WorkerResponse n, string req)
+    public static bool WorkerSupportsEncoder(WorkerResponse n, string req)
     {
         var ffmpeg = n.Capabilities.FirstOrDefault(x => string.Equals(x.ToolId, "ffmpeg", StringComparison.OrdinalIgnoreCase));
         if (ffmpeg is null) return false;

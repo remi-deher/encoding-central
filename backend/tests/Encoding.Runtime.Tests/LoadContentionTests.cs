@@ -20,25 +20,25 @@ public sealed class LoadContentionTests
 {
     private const string Token = "load-token";
 
-    private sealed record Cluster(TestDatabase Database, Guid[] Nodes, Guid Library);
+    private sealed record Central(TestDatabase Database, Guid[] Nodes, Guid Library);
 
-    private static async Task<Cluster> SeedAsync(string prefix, int nodeCount, int queued)
+    private static async Task<Central> SeedAsync(string prefix, int nodeCount, int queued)
     {
         var database = await TestDatabase.CreateSqliteAsync(prefix);
         await DatabaseMigrator.ApplyAsync(database.Db, Harness.RepositoryRoot(), CancellationToken.None);
         var repository = new WorkerRepository(database.Db);
-        var nodes = new Guid[nodeCount];
+        var workers = new Guid[nodeCount];
         for (var i = 0; i < nodeCount; i++)
         {
-            nodes[i] = Guid.NewGuid();
-            Assert.NotNull(await repository.EnrollAsync(new(nodes[i], "node-" + i, [NodeRole.Server, NodeRole.Worker], 1, [], Token), true, CancellationToken.None));
+            workers[i] = Guid.NewGuid();
+            Assert.NotNull(await repository.EnrollAsync(new(workers[i], "node-" + i, [WorkerRole.Server, WorkerRole.Worker], 1, [], Token), true, CancellationToken.None));
         }
         var library = Guid.NewGuid();
         await using var connection = await database.Db.OpenConnectionAsync(CancellationToken.None);
         await using var transaction = await connection.BeginTransactionAsync(CancellationToken.None);
         await Run(connection, transaction, "INSERT INTO libraries(id, name) VALUES (@id, 'load')", ("id", library.ToString("D")));
         await Run(connection, transaction, "INSERT INTO library_worker_accesses(library_id, worker_id, mode, local_path, can_read, can_write) VALUES (@l, @n, 'direct', '/media/load', 1, 1)",
-            ("l", library.ToString("D")), ("n", nodes[0].ToString("D")));
+            ("l", library.ToString("D")), ("n", workers[0].ToString("D")));
         for (var i = 0; i < queued; i++)
         {
             var id = Guid.NewGuid().ToString("D");
@@ -49,7 +49,7 @@ public sealed class LoadContentionTests
                 ("id", id), ("l", library.ToString("D")), ("media", $"film-{i}.mkv"), ("key", $"FILM-{i}.MKV"));
         }
         await transaction.CommitAsync(CancellationToken.None);
-        return new(database, nodes, library);
+        return new(database, workers, library);
     }
 
     private static async Task Run(DbConnection connection, DbTransaction transaction, string sql, params (string Name, object Value)[] parameters)
@@ -72,7 +72,7 @@ public sealed class LoadContentionTests
         var cluster = await SeedAsync("load-mixed", nodeCount, queued);
         await using var _ = cluster.Database;
         var db = cluster.Database.Db;
-        var nodes = new WorkerRepository(db);
+        var workers = new WorkerRepository(db);
         var executions = new ExecutionRepository(db);
         var recovery = new RuntimeRecoveryService(db, NullLogger<RuntimeRecoveryService>.Instance, presence: new WorkerPresenceOptions(TimeSpan.FromSeconds(30)));
         var failures = new ConcurrentQueue<string>();
@@ -94,12 +94,12 @@ public sealed class LoadContentionTests
         var work = new List<Task>();
         for (var i = 0; i < cluster.Nodes.Length; i++)
         {
-            var node = cluster.Nodes[i];
-            var request = new WorkerHeartbeatRequest("node-" + i, [NodeRole.Server, NodeRole.Worker], 1, [], Version: AppVersion.Current, SessionNonce: "session-" + i);
+            var worker = cluster.Nodes[i];
+            var request = new WorkerHeartbeatRequest("node-" + i, [WorkerRole.Server, WorkerRole.Worker], 1, [], Version: AppVersion.Current, SessionNonce: "session-" + i);
             work.Add(Loop("heartbeat", async () =>
             {
                 var clock = Stopwatch.StartNew();
-                Assert.NotNull(await nodes.RecordHeartbeatAsync(node, Token, request, CancellationToken.None));
+                Assert.NotNull(await workers.RecordHeartbeatAsync(worker, Token, request, CancellationToken.None));
                 Max(ref slowestHeartbeat, clock.ElapsedMilliseconds); Interlocked.Increment(ref heartbeats);
             }, 50));
         }

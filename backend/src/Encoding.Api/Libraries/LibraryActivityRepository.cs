@@ -48,7 +48,7 @@ public sealed class LibraryActivityRepository(DbDataSource dataSource, Execution
         string? status,
         Guid? libraryId,
         string? flow,
-        Guid? nodeId,
+        Guid? workerId,
         string? search,
         int? limit,
         int? offset,
@@ -63,7 +63,7 @@ public sealed class LibraryActivityRepository(DbDataSource dataSource, Execution
         var filters = new List<string>();
         if (libraryId is not null) filters.Add("library_id=@libraryId");
         if (normalizedFlow is not null) filters.Add("flow=@flow");
-        if (nodeId is not null) filters.Add("worker_id=@nodeId");
+        if (workerId is not null) filters.Add("worker_id=@nodeId");
         if (normalizedSearch is not null)
             filters.Add("(lower(relative_path) LIKE @search OR lower(library) LIKE @search OR lower(COALESCE(flow,'')) LIKE @search OR lower(COALESCE(node,'')) LIKE @search)");
         var filterSql = filters.Count > 0 ? " WHERE " + string.Join(" AND ", filters) : string.Empty;
@@ -155,7 +155,7 @@ public sealed class LibraryActivityRepository(DbDataSource dataSource, Execution
         {
             if (libraryId is not null) command.Parameters.AddWithValue("libraryId", libraryId.Value);
             if (normalizedFlow is not null) command.Parameters.AddWithValue("flow", normalizedFlow);
-            if (nodeId is not null) command.Parameters.AddWithValue("nodeId", nodeId.Value);
+            if (workerId is not null) command.Parameters.AddWithValue("nodeId", workerId.Value);
             if (normalizedSearch is not null) command.Parameters.AddWithValue("search", $"%{normalizedSearch}%");
         }
     }

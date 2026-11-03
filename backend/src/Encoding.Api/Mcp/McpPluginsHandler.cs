@@ -549,14 +549,14 @@ public sealed class McpPluginsHandler(
             ? Math.Clamp(l, 1, 200)
             : 50;
 
-        Guid? nodeId = null;
+        Guid? workerId = null;
         if (arguments.ValueKind == JsonValueKind.Object && arguments.TryGetProperty("worker_id", out var nProp) &&
-            Guid.TryParse(nProp.GetString(), out var parsedNodeId))
+            Guid.TryParse(nProp.GetString(), out var parsedWorkerId))
         {
-            nodeId = parsedNodeId;
+            workerId = parsedWorkerId;
         }
 
-        var filter = new SystemLogFilterQuery(minLevel, category, search, nodeId, limit);
+        var filter = new SystemLogFilterQuery(minLevel, category, search, workerId, limit);
         var inMemory = ringBuffer.Query(filter);
 
         if (filter.MinLevel >= SystemLogLevel.Warning || inMemory.Count < filter.Limit)

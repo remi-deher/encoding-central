@@ -30,7 +30,7 @@ public sealed class ManagementAccessRequirement : IAuthorizationRequirement;
 /// Règle unique d’accès à l’API de gestion : toute route exige une session ; lecture pour tout rôle,
 /// modification réservée aux administrateurs et protégée contre les requêtes inter-sites.
 /// </summary>
-public sealed class ManagementAccessHandler(WorkerRepository nodes) : AuthorizationHandler<ManagementAccessRequirement>
+public sealed class ManagementAccessHandler(WorkerRepository workers) : AuthorizationHandler<ManagementAccessRequirement>
 {
     public const string CsrfHeader = "X-Encoding-Csrf";
 
@@ -42,7 +42,7 @@ public sealed class ManagementAccessHandler(WorkerRepository nodes) : Authorizat
 
         if (safe && endpoint?.Metadata.GetMetadata<WorkerCredentialAccessMetadata>() is not null
             && http.Request.Headers["X-Node-Token"].ToString() is { Length: > 0 } token
-            && await nodes.AuthenticateTokenAsync(token, http.RequestAborted))
+            && await workers.AuthenticateTokenAsync(token, http.RequestAborted))
         {
             context.Succeed(requirement);
             return;

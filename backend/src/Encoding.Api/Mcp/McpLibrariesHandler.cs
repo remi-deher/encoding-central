@@ -22,10 +22,10 @@ namespace Encoding.Api.Mcp;
 public sealed class McpLibrariesHandler(
     LibraryRepository libraries,
     LibraryWorkflowRepository libraryWorkflows,
-    LibraryWorkerAccessRepository libraryNodeAccess,
+    LibraryWorkerAccessRepository libraryWorkerAccess,
     LibraryProcessingRepository libraryProcessing,
-    WorkerRepository nodes,
-    WorkerGroupRepository nodeGroups)
+    WorkerRepository workers,
+    WorkerGroupRepository workerGroups)
     : IMcpDomainHandler
 {
     private static JsonSerializerOptions JsonOptions => McpToolHelpers.JsonOptions;
@@ -138,7 +138,7 @@ public sealed class McpLibrariesHandler(
     public async Task<McpCallToolResult> ToolGetLibraryNodeAccessAsync(JsonElement args, CancellationToken ct)
     {
         if (!TryGuid(args, "libraryId", out var id)) return Invalid("Paramètre 'libraryId' (UUID) requis.");
-        var access = await libraryNodeAccess.ListAsync(id, ct);
+        var access = await libraryWorkerAccess.ListAsync(id, ct);
         return access is null ? Invalid("Bibliothèque introuvable.") : McpCallToolResult.Text(JsonSerializer.Serialize(access, JsonOptions));
     }
 
@@ -181,7 +181,7 @@ public sealed class McpLibrariesHandler(
             return Invalid("Paramètres 'libraryId' et 'nodes' invalides.");
         try
         {
-            var result = await libraryNodeAccess.ConfigureAsync(id, request, ct);
+            var result = await libraryWorkerAccess.ConfigureAsync(id, request, ct);
             return result is null ? Invalid("Bibliothèque introuvable.") : McpCallToolResult.Text(JsonSerializer.Serialize(result, JsonOptions));
         }
         catch (LibraryWorkerAccessValidationException exception)
@@ -232,12 +232,12 @@ public sealed class McpLibrariesHandler(
     }
 
     public async Task<McpCallToolResult> ToolListNodeGroupsAsync(CancellationToken ct) =>
-        McpCallToolResult.Text(JsonSerializer.Serialize(await nodeGroups.ListAsync(ct), JsonOptions));
+        McpCallToolResult.Text(JsonSerializer.Serialize(await workerGroups.ListAsync(ct), JsonOptions));
 
     public async Task<McpCallToolResult> ToolGetNodeGroupAsync(JsonElement args, CancellationToken ct)
     {
         if (!TryGuid(args, "id", out var id)) return Invalid("Paramètre 'id' (UUID) requis.");
-        var group = await nodeGroups.GetAsync(id, ct);
+        var group = await workerGroups.GetAsync(id, ct);
         return group is null ? Invalid("Groupe de workers introuvable.") : McpCallToolResult.Text(JsonSerializer.Serialize(group, JsonOptions));
     }
 
@@ -260,11 +260,11 @@ public sealed class McpLibrariesHandler(
         }
         try
         {
-            var saved = await nodeGroups.SaveAsync(id, request, ct);
+            var saved = await workerGroups.SaveAsync(id, request, ct);
             if (!saved) return Invalid("Groupe introuvable ou paramètres invalides.");
             var group = id is { } groupId
-                ? await nodeGroups.GetAsync(groupId, ct)
-                : (await nodeGroups.ListAsync(ct)).FirstOrDefault(item => item.Name == request.Name.Trim());
+                ? await workerGroups.GetAsync(groupId, ct)
+                : (await workerGroups.ListAsync(ct)).FirstOrDefault(item => item.Name == request.Name.Trim());
             return McpCallToolResult.Text(JsonSerializer.Serialize(group, JsonOptions));
         }
         catch (System.Data.Common.DbException ex) when (Encoding.Api.Infrastructure.Data.Sql.IsUniqueViolation(ex))
@@ -277,7 +277,7 @@ public sealed class McpLibrariesHandler(
     {
         if (!isAdmin) return Denied("La suppression des groupes exige le rôle administrateur.");
         if (!TryGuid(args, "id", out var id)) return Invalid("Paramètre 'id' (UUID) requis.");
-        return await nodeGroups.DeleteAsync(id, ct) switch
+        return await workerGroups.DeleteAsync(id, ct) switch
         {
             "deleted" => McpCallToolResult.Text("Groupe supprimé."),
             "in-use" => Invalid("Le groupe est référencé par un flow et ne peut pas être supprimé."),
@@ -288,14 +288,14 @@ public sealed class McpLibrariesHandler(
     public async Task<McpCallToolResult> ToolGetNodeActivityAsync(JsonElement args, CancellationToken ct)
     {
         if (!TryGuid(args, "workerId", out var id)) return Invalid("Paramètre 'workerId' (UUID) requis.");
-        var activity = await nodes.ActivityAsync(id, ct);
+        var activity = await workers.ActivityAsync(id, ct);
         return McpCallToolResult.Text(JsonSerializer.Serialize(activity, JsonOptions));
     }
 
     public async Task<McpCallToolResult> ToolGetNodeIdentityAsync(JsonElement args, CancellationToken ct)
     {
         if (!TryGuid(args, "workerId", out var id)) return Invalid("Paramètre 'workerId' (UUID) requis.");
-        var identity = await nodeGroups.GetNodeIdentityAsync(id, ct);
+        var identity = await workerGroups.GetWorkerIdentityAsync(id, ct);
         return identity is null ? Invalid("Worker introuvable.") : McpCallToolResult.Text(JsonSerializer.Serialize(identity, JsonOptions));
     }
 
@@ -307,8 +307,8 @@ public sealed class McpLibrariesHandler(
         if (request.Labels is null || request.Labels.Count > 128 || request.DisplayName?.Length > 128
             || request.Labels.Any(pair => !System.Text.RegularExpressions.Regex.IsMatch(pair.Key, "^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$") || pair.Value?.Length > 256))
             return Invalid("Le nom ou les étiquettes du worker sont invalides.");
-        var saved = await nodeGroups.SaveNodeIdentityAsync(id, request, ct);
-        return saved ? McpCallToolResult.Text(JsonSerializer.Serialize(await nodeGroups.GetNodeIdentityAsync(id, ct), JsonOptions)) : Invalid("Worker introuvable.");
+        var saved = await workerGroups.SaveWorkerIdentityAsync(id, request, ct);
+        return saved ? McpCallToolResult.Text(JsonSerializer.Serialize(await workerGroups.GetWorkerIdentityAsync(id, ct), JsonOptions)) : Invalid("Worker introuvable.");
     }
 
     public async Task<McpCallToolResult> ToolSetNodeDrainingAsync(JsonElement args, bool isAdmin, CancellationToken ct)
@@ -316,13 +316,13 @@ public sealed class McpLibrariesHandler(
         if (!isAdmin) return Denied("La vidange d’un worker exige le rôle administrateur.");
         if (!TryGuid(args, "workerId", out var id) || !args.TryGetProperty("draining", out var value)
             || value.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return Invalid("Paramètres 'workerId' et 'draining' invalides.");
-        return await nodes.SetDrainingAsync(id, value.GetBoolean(), ct) ? McpCallToolResult.Text("État de vidange mis à jour.") : Invalid("Worker introuvable.");
+        return await workers.SetDrainingAsync(id, value.GetBoolean(), ct) ? McpCallToolResult.Text("État de vidange mis à jour.") : Invalid("Worker introuvable.");
     }
 
     public async Task<McpCallToolResult> ToolGetNodeProcessingAsync(JsonElement args, CancellationToken ct)
     {
         if (!TryGuid(args, "workerId", out var id)) return Invalid("Paramètre 'workerId' (UUID) requis.");
-        var settings = await libraryProcessing.NodeAsync(id, ct);
+        var settings = await libraryProcessing.WorkerAsync(id, ct);
         return settings is null ? Invalid("Worker introuvable.") : McpCallToolResult.Text(JsonSerializer.Serialize(settings, JsonOptions));
     }
 
@@ -334,7 +334,7 @@ public sealed class McpLibrariesHandler(
         try
         {
             var saved = await libraryProcessing.SaveNodeAsync(id, request, ct);
-            return saved ? McpCallToolResult.Text(JsonSerializer.Serialize(await libraryProcessing.NodeAsync(id, ct), JsonOptions)) : Invalid("Le worker ou sa révision de configuration a changé.");
+            return saved ? McpCallToolResult.Text(JsonSerializer.Serialize(await libraryProcessing.WorkerAsync(id, ct), JsonOptions)) : Invalid("Le worker ou sa révision de configuration a changé.");
         }
         catch (ArgumentException exception) { return Invalid(exception.Message); }
     }

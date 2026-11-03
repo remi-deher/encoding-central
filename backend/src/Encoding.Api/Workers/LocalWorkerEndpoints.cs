@@ -18,9 +18,9 @@ public static class LocalWorkerEndpoints
             ? configured
             : $"http://127.0.0.1:{configuration.GetValue("WorkerUi:Port", 8081)}/";
 
-    public static void MapLocalNodeEndpoints(this WebApplication app)
+    public static void MapLocalWorkerEndpoints(this WebApplication app)
     {
-        var local = app.MapGroup("/api/v1/local-worker").WithTags("Local node");
+        var local = app.MapGroup("/api/v1/local-worker").WithTags("Local worker");
         // Lecture : le rôle lecture voit l'état, mais ni la clé de jumelage ni le code de vérification.
         local.MapGet("/status", (HttpContext http, IHttpClientFactory clients, LocalWorkerRegistry registry, CancellationToken ct) =>
             RelayAsync(http, clients, HttpMethod.Get, "status", ct, hideSecrets: !http.User.IsInRole("admin"), registry)).WithName("GetLocalNodeStatus");
@@ -28,8 +28,8 @@ public static class LocalWorkerEndpoints
             RelayAsync(http, clients, HttpMethod.Get, "clusters", ct)).WithName("ListLocalNodeClusters");
         local.MapPost("/centrals", (HttpContext http, IHttpClientFactory clients, CancellationToken ct) =>
             RelayAsync(http, clients, HttpMethod.Post, "clusters", ct)).WithName("AddLocalNodeCluster");
-        local.MapDelete("/centrals/{clusterId:guid}", (Guid clusterId, HttpContext http, IHttpClientFactory clients, CancellationToken ct) =>
-            RelayAsync(http, clients, HttpMethod.Delete, "clusters/" + clusterId.ToString("D"), ct)).WithName("ForgetLocalNodeCluster");
+        local.MapDelete("/centrals/{centralId:guid}", (Guid centralId, HttpContext http, IHttpClientFactory clients, CancellationToken ct) =>
+            RelayAsync(http, clients, HttpMethod.Delete, "clusters/" + centralId.ToString("D"), ct)).WithName("ForgetLocalNodeCluster");
         local.MapPost("/enroll", (HttpContext http, IHttpClientFactory clients, LocalWorkerRegistry registry, CancellationToken ct) =>
             RelayWithDisplayNameAsync(http, clients, "enroll", registry, ct)).WithName("EnrollLocalNode");
         local.MapPost("/pairing-key", (HttpContext http, IHttpClientFactory clients, LocalWorkerRegistry registry, CancellationToken ct) =>
@@ -55,8 +55,8 @@ public static class LocalWorkerEndpoints
         if (JsonNode.Parse(statusJson) is not JsonObject status) return statusJson;
         if (registry is not null)
         {
-            if (Guid.TryParse(status["workerId"]?.GetValue<string>(), out var nodeId) && nodeId != Guid.Empty)
-                await registry.RegisterAsync(nodeId, cancellationToken);
+            if (Guid.TryParse(status["workerId"]?.GetValue<string>(), out var workerId) && workerId != Guid.Empty)
+                await registry.RegisterAsync(workerId, cancellationToken);
             if (string.IsNullOrWhiteSpace(status["displayName"]?.GetValue<string>()))
             {
                 var resolved = await registry.ResolveDisplayNameAsync(cancellationToken);

@@ -24,7 +24,7 @@ public sealed class McpExecutionsHandler(
     FlowRepository flows,
     FlowComponentRegistry components,
     FlowDefinitionValidator validator,
-    WorkerRepository nodes,
+    WorkerRepository workers,
     WorkerPresenceOptions presenceOptions)
     : IMcpDomainHandler
 {
@@ -283,7 +283,7 @@ public sealed class McpExecutionsHandler(
 
     public async Task<McpCallToolResult> ToolListNodesAsync(CancellationToken ct)
     {
-        var list = await nodes.ListAsync(presenceOptions.OfflineAfter, ct);
+        var list = await workers.ListAsync(presenceOptions.OfflineAfter, ct);
         return McpCallToolResult.Text(JsonSerializer.Serialize(list, JsonOptions));
     }
 

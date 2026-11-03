@@ -18,7 +18,7 @@ public sealed class RuntimeWorkerService(WorkerAgentOptions options,WorkerIdenti
                 try
                 {
                     var identity=await identities.GetAsync(ct);
-                    if(identity.IsEnrolled && options.Roles.Contains(NodeRole.Worker))
+                    if(identity.IsEnrolled && options.Roles.Contains(WorkerRole.Worker))
                     {
                         foreach(var serverUrl in identity.GetCandidateServerUrls(options))
                         {

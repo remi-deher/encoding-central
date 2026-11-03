@@ -15,9 +15,9 @@ public static class LibraryEndpoints
         libraries.MapGet("/overview", async (LibraryRepository repository, CancellationToken cancellationToken) =>
             Results.Ok(await repository.OverviewAsync(cancellationToken)))
             .WithName("GetLibrariesOverview");
-        libraries.MapGet("/export", async (LibraryRepository repository, Infrastructure.CentralIdentityRepository cluster, HttpContext http, CancellationToken cancellationToken) =>
+        libraries.MapGet("/export", async (LibraryRepository repository, Infrastructure.CentralIdentityRepository central, HttpContext http, CancellationToken cancellationToken) =>
         {
-            var identity = await cluster.GetAsync(cancellationToken);
+            var identity = await central.GetAsync(cancellationToken);
             http.Response.Headers.ContentDisposition = "attachment; filename=\"bibliotheques.json\"";
             return Results.Ok(new LibraryExport(1, DateTimeOffset.UtcNow, identity.Name, await repository.ListAsync(cancellationToken)));
         }).WithName("ExportLibraries");
@@ -92,14 +92,14 @@ public static class LibraryEndpoints
             }
         }).WithName("ConfigureLibraryNodeAccesses");
 
-        libraries.MapPut("/{libraryId:guid}/worker-access/{nodeId:guid}/activation", async (
+        libraries.MapPut("/{libraryId:guid}/worker-access/{workerId:guid}/activation", async (
             Guid libraryId,
-            Guid nodeId,
+            Guid workerId,
             SetLibraryWorkerAccessActivationRequest request,
             LibraryWorkerAccessRepository repository,
             CancellationToken cancellationToken) =>
         {
-            var access = await repository.SetEnabledAsync(libraryId, nodeId, request.IsEnabled, cancellationToken);
+            var access = await repository.SetEnabledAsync(libraryId, workerId, request.IsEnabled, cancellationToken);
             return access is null ? ApiProblem.NotFound() : Results.Ok(access);
         }).WithName("SetLibraryNodeAccessActivation");
     }

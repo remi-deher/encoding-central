@@ -193,14 +193,14 @@ public sealed class SystemLogRingBufferTests
     public void RingBuffer_Filters_By_MinLevel_Category_Search_And_Node()
     {
         var buffer = new SystemLogRingBuffer(capacity: 100);
-        var node1 = Guid.NewGuid();
-        var node2 = Guid.NewGuid();
+        var worker1 = Guid.NewGuid();
+        var worker2 = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
 
-        buffer.Add(new SystemLogEntry("1", now.AddMinutes(1), SystemLogLevel.Information, "Encoding.Probe", "Probe GPU started", WorkerId: node1));
-        buffer.Add(new SystemLogEntry("2", now.AddMinutes(2), SystemLogLevel.Warning, "Encoding.Probe", "GPU NVENC throttled", WorkerId: node1));
-        buffer.Add(new SystemLogEntry("3", now.AddMinutes(3), SystemLogLevel.Error, "Encoding.Plugins", "Plugin Python crashed", WorkerId: node2));
-        buffer.Add(new SystemLogEntry("4", now.AddMinutes(4), SystemLogLevel.Information, "Encoding.Plugins", "Plugin loaded successfully", WorkerId: node2));
+        buffer.Add(new SystemLogEntry("1", now.AddMinutes(1), SystemLogLevel.Information, "Encoding.Probe", "Probe GPU started", WorkerId: worker1));
+        buffer.Add(new SystemLogEntry("2", now.AddMinutes(2), SystemLogLevel.Warning, "Encoding.Probe", "GPU NVENC throttled", WorkerId: worker1));
+        buffer.Add(new SystemLogEntry("3", now.AddMinutes(3), SystemLogLevel.Error, "Encoding.Plugins", "Plugin Python crashed", WorkerId: worker2));
+        buffer.Add(new SystemLogEntry("4", now.AddMinutes(4), SystemLogLevel.Information, "Encoding.Plugins", "Plugin loaded successfully", WorkerId: worker2));
 
         // Filter by MinLevel Warning
         var warnEntries = buffer.Query(new SystemLogFilterQuery { MinLevel = SystemLogLevel.Warning });
@@ -219,9 +219,9 @@ public sealed class SystemLogRingBufferTests
         Assert.Equal("3", searchEntries[0].Id);
 
         // Filter by Node
-        var node1Entries = buffer.Query(new SystemLogFilterQuery { WorkerId = node1 });
+        var node1Entries = buffer.Query(new SystemLogFilterQuery { WorkerId = worker1 });
         Assert.Equal(2, node1Entries.Count);
-        Assert.All(node1Entries, e => Assert.Equal(node1, e.WorkerId));
+        Assert.All(node1Entries, e => Assert.Equal(worker1, e.WorkerId));
 
         // Categories
         var categories = buffer.GetCategories();
@@ -259,10 +259,10 @@ public sealed class SystemLogProviderTests
     {
         var ringBuffer = new SystemLogRingBuffer(capacity: 100);
         var broadcaster = new SystemLogStreamBroadcaster();
-        var nodeId = Guid.NewGuid();
-        var nodeContext = new DefaultSystemLogWorkerContext(nodeId, "Worker-01");
+        var workerId = Guid.NewGuid();
+        var workerContext = new DefaultSystemLogWorkerContext(workerId, "Worker-01");
 
-        using var provider = new SystemLogProvider(ringBuffer, broadcaster, nodeContext);
+        using var provider = new SystemLogProvider(ringBuffer, broadcaster, workerContext);
         var logger = provider.CreateLogger("Encoding.WorkerAgent.Services.ToolCapabilityProbe");
 
         logger.LogInformation("Sonde GPU terminée avec token enc_pat_1122334455667788");
@@ -274,7 +274,7 @@ public sealed class SystemLogProviderTests
         Assert.Equal(SystemLogLevel.Information, entry.Level);
         Assert.Contains("***REDACTED***", entry.Message);
         Assert.DoesNotContain("enc_pat_1122334455667788", entry.Message);
-        Assert.Equal(nodeId, entry.WorkerId);
+        Assert.Equal(workerId, entry.WorkerId);
         Assert.Equal("Worker-01", entry.WorkerName);
     }
 }

@@ -347,13 +347,13 @@ public sealed partial class RuntimeRepository
             {
                 await using var owner=Sql.Command("SELECT completed_worker_id FROM execution_steps WHERE execution_id=@id AND flow_node_id=@node AND completed_at IS NOT NULL",c,tx);
                 owner.Parameters.AddWithValue("id",executionId); owner.Parameters.AddWithValue("node",resolution.FlowNodeId);
-                executionWorker=await owner.ScalarGuidAsync(ct) is {} nodeId?nodeId:null;
+                executionWorker=await owner.ScalarGuidAsync(ct) is {} workerId?workerId:null;
                 if(executionWorker!=resolution.WorkerId)
                 {
                     await using var plannedOwner=Sql.Command("SELECT completed_worker_id FROM execution_steps WHERE execution_id=@id AND completed_at IS NOT NULL AND EXISTS(SELECT 1 FROM json_each(checkpoint->'context'->'videoEncodings') stored, json_each(@resolution) wanted WHERE json(stored.value)=json(wanted.value)) ORDER BY completed_revision DESC LIMIT 1",
                         c,tx);
                     plannedOwner.Parameters.AddWithValue("id",executionId); plannedOwner.Parameters.AddWithValue("resolution",SqlKind.Json,JsonSerializer.Serialize(new[]{resolution},Json));
-                    executionWorker=await plannedOwner.ScalarGuidAsync(ct) is {} plannedNodeId?plannedNodeId:null;
+                    executionWorker=await plannedOwner.ScalarGuidAsync(ct) is {} plannedWorkerId?plannedWorkerId:null;
                 }
             }
             if(executionWorker!=resolution.WorkerId || string.IsNullOrWhiteSpace(resolution.FfmpegVersion)
@@ -406,7 +406,7 @@ public sealed partial class RuntimeRepository
         }
         foreach(var node in direct)
         {
-            var identity=await nodeGroups.GetNodeIdentityAsync(node.Id,ct);
+            var identity=await workerGroups.GetWorkerIdentityAsync(node.Id,ct);
             if(identity is not null
                 && eligibility.CanRun(item.Flow,node.Capabilities,node.Id,item.Checkpoint?.NextNodeId,item.Checkpoint is not null,item.Checkpoint?.Context,
                     identity,node.Inventory,item.PlacementPlan?.WorkerAssignments)) return true;

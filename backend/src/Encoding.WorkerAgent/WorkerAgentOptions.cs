@@ -2,7 +2,7 @@ namespace Encoding.WorkerAgent;
 
 public sealed record WorkerAgentOptions(
     string Name,
-    IReadOnlyList<Encoding.Contracts.Workers.NodeRole> Roles,
+    IReadOnlyList<Encoding.Contracts.Workers.WorkerRole> Roles,
     int MaxConcurrentTasks,
     string DataDirectory,
     string? CentralApiBaseUrl,
@@ -23,13 +23,13 @@ public sealed record WorkerAgentOptions(
         var workerImage = configuration.GetValue("Worker:WorkerImage", false);
         var configuredRoles = (configuration["Worker:Roles"] ?? "worker")
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(value => Enum.TryParse<Encoding.Contracts.Workers.NodeRole>(value, true, out var role)
+            .Select(value => Enum.TryParse<Encoding.Contracts.Workers.WorkerRole>(value, true, out var role)
                 ? role
                 : throw new InvalidOperationException($"Rôle de worker inconnu : {value}."))
             .Distinct()
             .ToArray();
         var roles = workerImage
-            ? [Encoding.Contracts.Workers.NodeRole.Worker]
+            ? [Encoding.Contracts.Workers.WorkerRole.Worker]
             : configuredRoles;
         if (roles.Length == 0) throw new InvalidOperationException("Worker:Roles doit déclarer au moins un rôle.");
 

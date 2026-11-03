@@ -3,7 +3,7 @@ namespace Encoding.Contracts.Workers;
 public enum WorkerGroupMode { Manual, Automatic }
 
 public sealed record WorkerGroupCriteria(
-    IReadOnlyList<NodeRole>? Roles = null,
+    IReadOnlyList<WorkerRole>? Roles = null,
     string? OperatingSystem = null,
     string? Architecture = null,
     int? MinimumMemoryMb = null,

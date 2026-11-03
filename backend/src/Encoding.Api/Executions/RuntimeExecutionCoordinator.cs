@@ -65,18 +65,18 @@ public sealed class RuntimeExecutionCoordinator(
 {
     private T? Get<T>() where T : class => services.GetService(typeof(T)) as T;
 
-    public Task<bool> AuthenticateAsync(Guid nodeId, string? token, CancellationToken ct) =>
-        runtime.AuthenticateAsync(nodeId, token ?? string.Empty, ct);
+    public Task<bool> AuthenticateAsync(Guid workerId, string? token, CancellationToken ct) =>
+        runtime.AuthenticateAsync(workerId, token ?? string.Empty, ct);
 
-    public Task<WorkerDirectoryBrowseClaim?> ClaimDirectoryBrowseAsync(Guid nodeId, CancellationToken ct) =>
-        browser.ClaimAsync(nodeId, ct);
+    public Task<WorkerDirectoryBrowseClaim?> ClaimDirectoryBrowseAsync(Guid workerId, CancellationToken ct) =>
+        browser.ClaimAsync(workerId, ct);
 
     public Task<bool> CompleteDirectoryBrowseAsync(
-        Guid requestId, Guid nodeId, WorkerDirectoryBrowseCompletion request, CancellationToken ct) =>
-        browser.CompleteAsync(requestId, nodeId, request, ct);
+        Guid requestId, Guid workerId, WorkerDirectoryBrowseCompletion request, CancellationToken ct) =>
+        browser.CompleteAsync(requestId, workerId, request, ct);
 
     public async Task<RuntimeAiSubtitleTranslationOutcome> TranslateSubtitlesAsync(
-        Guid nodeId,
+        Guid workerId,
         Guid id,
         RuntimeAiSubtitleTranslationRequest request,
         CancellationToken ct)
@@ -91,7 +91,7 @@ public sealed class RuntimeExecutionCoordinator(
             return RuntimeAiSubtitleTranslationOutcome.BadRequest("Lot de sous-titres invalide ou trop volumineux.");
         }
 
-        var configuration = await runtime.AiSubtitleTranslationConfigurationAsync(id, nodeId, request, ct);
+        var configuration = await runtime.AiSubtitleTranslationConfigurationAsync(id, workerId, request, ct);
         if (configuration is null)
             return RuntimeAiSubtitleTranslationOutcome.Conflict("Le bail ou l’étape IA a expiré; le lot est refusé.");
 
@@ -172,7 +172,7 @@ public sealed class RuntimeExecutionCoordinator(
     }
 
     public async Task<RuntimeAiMetadataEnrichmentOutcome> EnrichMetadataAsync(
-        Guid nodeId,
+        Guid workerId,
         Guid id,
         RuntimeAiMetadataEnrichmentRequest request,
         CancellationToken ct)
@@ -185,7 +185,7 @@ public sealed class RuntimeExecutionCoordinator(
             return RuntimeAiMetadataEnrichmentOutcome.BadRequest("Les métadonnées média sont invalides ou trop volumineuses.");
         }
 
-        var block = await runtime.AiMetadataConfigurationAsync(id, nodeId, request, ct);
+        var block = await runtime.AiMetadataConfigurationAsync(id, workerId, request, ct);
         if (block is null)
             return RuntimeAiMetadataEnrichmentOutcome.Conflict("Le bail ou l’étape IA a expiré; la requête est refusée.");
 
@@ -206,59 +206,59 @@ public sealed class RuntimeExecutionCoordinator(
     public Task<IReadOnlyList<RuntimeExecutionState>> GetExecutionStatesAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
         runtime.StatesAsync(ids.Distinct().ToArray(), ct);
 
-    public Task<WorkerProcessingSettings?> GetNodeCapacityAsync(Guid nodeId, CancellationToken ct) =>
-        libraryProcessing.NodeAsync(nodeId, ct);
+    public Task<WorkerProcessingSettings?> GetWorkerCapacityAsync(Guid workerId, CancellationToken ct) =>
+        libraryProcessing.WorkerAsync(workerId, ct);
 
-    public Task<LibraryScanLease?> ClaimScanAsync(Guid nodeId, CancellationToken ct) =>
-        libraryWorkflow.ClaimScanAsync(nodeId, ct);
+    public Task<LibraryScanLease?> ClaimScanAsync(Guid workerId, CancellationToken ct) =>
+        libraryWorkflow.ClaimScanAsync(workerId, ct);
 
-    public Task<bool> RenewScanAsync(Guid scanId, Guid nodeId, long epoch, CancellationToken ct) =>
-        libraryWorkflow.RenewScanAsync(scanId, nodeId, epoch, ct);
+    public Task<bool> RenewScanAsync(Guid scanId, Guid workerId, long epoch, CancellationToken ct) =>
+        libraryWorkflow.RenewScanAsync(scanId, workerId, epoch, ct);
 
-    public Task<bool> CompleteScanAsync(Guid scanId, Guid nodeId, CompleteLibraryScan request, CancellationToken ct) =>
-        libraryWorkflow.CompleteScanAsync(scanId, nodeId, request, ct);
+    public Task<bool> CompleteScanAsync(Guid scanId, Guid workerId, CompleteLibraryScan request, CancellationToken ct) =>
+        libraryWorkflow.CompleteScanAsync(scanId, workerId, request, ct);
 
-    public async Task<RuntimeLease?> ClaimExecutionAsync(Guid nodeId, CancellationToken ct)
+    public async Task<RuntimeLease?> ClaimExecutionAsync(Guid workerId, CancellationToken ct)
     {
-        if (await runtime.ClaimAsync(nodeId, ct) is not { } lease) return null;
+        if (await runtime.ClaimAsync(workerId, ct) is not { } lease) return null;
         var guarded = lease.Flow.Nodes.Any(node => node.Component.ComponentId is "mkv-edit-in-place" or "base-publish-result");
         return guarded ? lease with { Guards = await publicationGuards.ListAsync(ct) } : lease;
     }
 
     public Task<RuntimeLeaseStatus?> RenewExecutionAsync(
-        Guid executionId, Guid nodeId, long epoch, IReadOnlyList<RuntimeStepCommand>? commands, CancellationToken ct) =>
-        runtime.RenewAsync(executionId, nodeId, epoch, ct, commands);
+        Guid executionId, Guid workerId, long epoch, IReadOnlyList<RuntimeStepCommand>? commands, CancellationToken ct) =>
+        runtime.RenewAsync(executionId, workerId, epoch, ct, commands);
 
-    public Task<bool> ReportSourceOperationsAsync(Guid executionId, Guid nodeId, RuntimeFence request, CancellationToken ct) =>
-        runtime.ReportSourceOperationsAsync(executionId, nodeId, request, ct);
+    public Task<bool> ReportSourceOperationsAsync(Guid executionId, Guid workerId, RuntimeFence request, CancellationToken ct) =>
+        runtime.ReportSourceOperationsAsync(executionId, workerId, request, ct);
 
-    public Task<FlowPlacementPlan?> PersistPlacementPlanAsync(Guid executionId, Guid nodeId, long epoch, CancellationToken ct) =>
-        runtime.PersistPlacementPlanAsync(executionId, nodeId, epoch, ct);
+    public Task<FlowPlacementPlan?> PersistPlacementPlanAsync(Guid executionId, Guid workerId, long epoch, CancellationToken ct) =>
+        runtime.PersistPlacementPlanAsync(executionId, workerId, epoch, ct);
 
     public Task<FlowPlacementPlan?> RecordSourceMetadataAsync(
-        Guid executionId, Guid nodeId, long epoch, JsonElement metadata, CancellationToken ct) =>
-        runtime.RecordSourceMetadataAsync(executionId, nodeId, epoch, metadata, ct);
+        Guid executionId, Guid workerId, long epoch, JsonElement metadata, CancellationToken ct) =>
+        runtime.RecordSourceMetadataAsync(executionId, workerId, epoch, metadata, ct);
 
     public Task<DiskLockResponse?> TryAcquireDiskLockAsync(
-        Guid executionId, Guid nodeId, DiskLockRequest request, CancellationToken ct) =>
-        diskLocks.TryAcquireAsync(executionId, nodeId, request, ct);
+        Guid executionId, Guid workerId, DiskLockRequest request, CancellationToken ct) =>
+        diskLocks.TryAcquireAsync(executionId, workerId, request, ct);
 
     public Task<bool?> ReleaseDiskLockAsync(
-        Guid executionId, Guid nodeId, DiskLockRequest request, CancellationToken ct) =>
-        diskLocks.ReleaseAsync(executionId, nodeId, request, ct);
+        Guid executionId, Guid workerId, DiskLockRequest request, CancellationToken ct) =>
+        diskLocks.ReleaseAsync(executionId, workerId, request, ct);
 
-    public Task<bool> AuthorizeSourceWriteAsync(Guid executionId, Guid nodeId, long epoch, string root, CancellationToken ct) =>
-        runtime.AuthorizeSourceWriteAsync(executionId, nodeId, epoch, root, ct);
+    public Task<bool> AuthorizeSourceWriteAsync(Guid executionId, Guid workerId, long epoch, string root, CancellationToken ct) =>
+        runtime.AuthorizeSourceWriteAsync(executionId, workerId, epoch, root, ct);
 
-    public Task<bool> AuthorizeReplacementAsync(Guid executionId, Guid nodeId, string root, CancellationToken ct) =>
-        sourceReplacements.AuthorizeAsync(executionId, nodeId, root, ct);
+    public Task<bool> AuthorizeReplacementAsync(Guid executionId, Guid workerId, string root, CancellationToken ct) =>
+        sourceReplacements.AuthorizeAsync(executionId, workerId, root, ct);
 
-    public Task<StartedRuntimeStep?> StartStepAsync(Guid executionId, Guid nodeId, StartRuntimeStep request, CancellationToken ct) =>
-        runtime.StartStepAsync(executionId, nodeId, request, ct);
+    public Task<StartedRuntimeStep?> StartStepAsync(Guid executionId, Guid workerId, StartRuntimeStep request, CancellationToken ct) =>
+        runtime.StartStepAsync(executionId, workerId, request, ct);
 
-    public async Task<bool> CompleteStepAsync(Guid executionId, Guid nodeId, CompleteRuntimeStep request, CancellationToken ct)
+    public async Task<bool> CompleteStepAsync(Guid executionId, Guid workerId, CompleteRuntimeStep request, CancellationToken ct)
     {
-        if (!await runtime.CompleteStepAsync(executionId, nodeId, request, ct))
+        if (!await runtime.CompleteStepAsync(executionId, workerId, request, ct))
             return false;
 
         if (request.CleanupAiSessions)
@@ -267,22 +267,22 @@ public sealed class RuntimeExecutionCoordinator(
         return true;
     }
 
-    public Task<bool> ReportWaitProbeAsync(Guid executionId, Guid nodeId, ReportWaitProbe request, CancellationToken ct) =>
-        executionWaits.ReportProbeAsync(executionId, nodeId, request, ct);
+    public Task<bool> ReportWaitProbeAsync(Guid executionId, Guid workerId, ReportWaitProbe request, CancellationToken ct) =>
+        executionWaits.ReportProbeAsync(executionId, workerId, request, ct);
 
     public async Task<bool> FinishExecutionAsync(
-        Guid executionId, Guid nodeId, FinishRuntimeExecution request, bool isFailure, CancellationToken ct)
+        Guid executionId, Guid workerId, FinishRuntimeExecution request, bool isFailure, CancellationToken ct)
     {
-        if (!await transfers.FinishAsync(executionId, nodeId, request, ct, isFailure))
+        if (!await transfers.FinishAsync(executionId, workerId, request, ct, isFailure))
             return false;
 
         await CleanupAiSubtitleSessionsAsync(executionId, null, ct);
         return true;
     }
 
-    public async Task<IReadOnlyList<RuntimeTransfer>> ListTransfersAsync(Guid nodeId, CancellationToken ct)
+    public async Task<IReadOnlyList<RuntimeTransfer>> ListTransfersAsync(Guid workerId, CancellationToken ct)
     {
-        var list = await transfers.ListAsync(nodeId, ct);
+        var list = await transfers.ListAsync(workerId, ct);
         static bool Replaces(RuntimeTransfer item) => item.Publish && item.ReplacementGraceHours is not null;
         if (!list.Any(Replaces)) return list;
         var active = await publicationGuards.ListAsync(ct);
@@ -292,20 +292,20 @@ public sealed class RuntimeExecutionCoordinator(
     public Task<RuntimeSourceState> GetSourceAsync(Guid executionId, CancellationToken ct) =>
         runtime.SourceAsync(executionId, ct);
 
-    public Task<bool> PrepareSourceAsync(Guid executionId, Guid nodeId, long epoch, CancellationToken ct) =>
-        runtime.PrepareSourceAsync(executionId, nodeId, epoch, ct);
+    public Task<bool> PrepareSourceAsync(Guid executionId, Guid workerId, long epoch, CancellationToken ct) =>
+        runtime.PrepareSourceAsync(executionId, workerId, epoch, ct);
 
     public Task<RuntimePublicationState?> GetPublicationStateAsync(Guid executionId, CancellationToken ct) =>
         transfers.PublicationStateAsync(executionId, ct);
 
-    public Task<bool> ConfirmPublicationAsync(Guid executionId, Guid nodeId, ConfirmRuntimePublication request, CancellationToken ct) =>
-        transfers.ConfirmAsync(executionId, nodeId, request, ct);
+    public Task<bool> ConfirmPublicationAsync(Guid executionId, Guid workerId, ConfirmRuntimePublication request, CancellationToken ct) =>
+        transfers.ConfirmAsync(executionId, workerId, request, ct);
 
-    public Task<IReadOnlyList<RuntimeReplacementTask>> GetReplacementTasksAsync(Guid nodeId, CancellationToken ct) =>
-        sourceReplacements.TasksAsync(nodeId, ct);
+    public Task<IReadOnlyList<RuntimeReplacementTask>> GetReplacementTasksAsync(Guid workerId, CancellationToken ct) =>
+        sourceReplacements.TasksAsync(workerId, ct);
 
-    public Task<bool> ReportReplacementTaskAsync(Guid executionId, Guid nodeId, ReportReplacementTask request, CancellationToken ct) =>
-        sourceReplacements.ReportAsync(executionId, nodeId, request, ct);
+    public Task<bool> ReportReplacementTaskAsync(Guid executionId, Guid workerId, ReportReplacementTask request, CancellationToken ct) =>
+        sourceReplacements.ReportAsync(executionId, workerId, request, ct);
 
 
     public Task<LibraryReplacementPolicy?> GetReplacementPolicyAsync(Guid library, CancellationToken ct) =>

@@ -86,8 +86,8 @@ public sealed class ExecutionRepository(DbDataSource dataSource, FlowComponentRe
                 cmd.Parameters.AddWithValue("state", query.State.Trim().ToLowerInvariant());
             if (query.LibraryId is { } libraryId)
                 cmd.Parameters.AddWithValue("libraryId", libraryId);
-            if (query.WorkerId is { } nodeId)
-                cmd.Parameters.AddWithValue("nodeId", nodeId);
+            if (query.WorkerId is { } workerId)
+                cmd.Parameters.AddWithValue("nodeId", workerId);
             if (query.Since is { } since)
                 cmd.Parameters.AddWithValue("since", since);
         }

@@ -10,10 +10,10 @@ public sealed class LocalWorkerRegistry(WorkerRepository repository, LocalWorker
 {
     public const int MaximumNameLength = 128;
     private readonly object gate = new();
-    private Guid? nodeId;
+    private Guid? workerId;
     private string? pendingName;
 
-    public Guid? WorkerId { get { lock (gate) return nodeId; } }
+    public Guid? WorkerId { get { lock (gate) return workerId; } }
 
     public static string? NormalizeName(string? value)
     {
@@ -29,7 +29,7 @@ public sealed class LocalWorkerRegistry(WorkerRepository repository, LocalWorker
         string? name;
         lock (gate)
         {
-            nodeId = id;
+            workerId = id;
             if (logContext is not null) logContext.WorkerId = id;
             name = pendingName;
             pendingName = null;
@@ -45,7 +45,7 @@ public sealed class LocalWorkerRegistry(WorkerRepository repository, LocalWorker
         Guid? id;
         lock (gate)
         {
-            id = nodeId;
+            id = workerId;
             if (id is null) pendingName = name;
         }
         if (id is not null)
@@ -65,13 +65,13 @@ public sealed class LocalWorkerRegistry(WorkerRepository repository, LocalWorker
         lock (gate)
         {
             name = pendingName;
-            id = nodeId;
+            id = workerId;
         }
         if (!string.IsNullOrWhiteSpace(name)) return name;
         if (id.HasValue)
         {
-            var node = await repository.FindByIdAsync(id.Value, ct);
-            if (!string.IsNullOrWhiteSpace(node?.DisplayName)) return node.DisplayName;
+            var worker = await repository.FindByIdAsync(id.Value, ct);
+            if (!string.IsNullOrWhiteSpace(worker?.DisplayName)) return worker.DisplayName;
         }
         return await repository.GetActiveDisplayNameAsync(ct);
     }

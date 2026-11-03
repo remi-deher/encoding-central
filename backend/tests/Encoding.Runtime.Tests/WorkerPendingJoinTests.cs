@@ -32,7 +32,7 @@ public sealed class WorkerPendingJoinTests
     }
 
     /// <summary>Serveur de central minimal : répond à l'identité, puis à tout autre appel avec le statut demandé.</summary>
-    private static (HttpListener Listener, string Url, Guid Id, Task Serving) Cluster(HttpStatusCode otherStatus)
+    private static (HttpListener Listener, string Url, Guid Id, Task Serving) Central(HttpStatusCode otherStatus)
     {
         var socket = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
         socket.Start();
@@ -60,10 +60,10 @@ public sealed class WorkerPendingJoinTests
     }
 
     [Fact]
-    public async Task RefusedDirectEnrollmentLeavesTheNodeStandalone()
+    public async Task RefusedDirectEnrollmentLeavesTheWorkerStandalone()
     {
         var (enrollment, store, discovery) = Build(NewDirectory());
-        var (listener, url, id, _) = Cluster(HttpStatusCode.Forbidden);
+        var (listener, url, id, _) = Central(HttpStatusCode.Forbidden);
         using var _ = listener;
         await discovery.AddByAddressAsync(url, CancellationToken.None);
 
@@ -76,10 +76,10 @@ public sealed class WorkerPendingJoinTests
     }
 
     [Fact]
-    public async Task ConflictingIdentityIsReplacedSoTheNodeCanEnrollAgain()
+    public async Task ConflictingIdentityIsReplacedSoTheWorkerCanEnrollAgain()
     {
         var (enrollment, store, discovery) = Build(NewDirectory());
-        var (listener, url, id, _) = Cluster(HttpStatusCode.Conflict);
+        var (listener, url, id, _) = Central(HttpStatusCode.Conflict);
         using var _ = listener;
         await discovery.AddByAddressAsync(url, CancellationToken.None);
         var before = (await store.GetAsync(CancellationToken.None)).Id;
@@ -106,10 +106,10 @@ public sealed class WorkerPendingJoinTests
     }
 
     [Fact]
-    public async Task UnreachableClusterLeavesTheNodeStandaloneInsteadOfPending()
+    public async Task UnreachableCentralLeavesTheWorkerStandaloneInsteadOfPending()
     {
         var (enrollment, store, discovery) = Build(NewDirectory());
-        var (listener, url, id, _) = Cluster(HttpStatusCode.OK);
+        var (listener, url, id, _) = Central(HttpStatusCode.OK);
         await discovery.AddByAddressAsync(url, CancellationToken.None);
         listener.Stop();
 
@@ -119,7 +119,7 @@ public sealed class WorkerPendingJoinTests
     }
 
     [Fact]
-    public async Task ExpiredPairingKeyReturnsTheNodeToStandalone()
+    public async Task ExpiredPairingKeyReturnsTheWorkerToStandalone()
     {
         var directory = NewDirectory();
         var (_, store, _) = Build(directory);
@@ -164,7 +164,7 @@ public sealed class WorkerPendingJoinTests
     {
         var directory = NewDirectory();
         var (_, _, discovery) = Build(directory);
-        var (listener, url, id, _) = Cluster(HttpStatusCode.OK);
+        var (listener, url, id, _) = Central(HttpStatusCode.OK);
         using var _ = listener;
         await discovery.AddByAddressAsync(url, CancellationToken.None);
 
@@ -196,7 +196,7 @@ public sealed class WorkerPendingJoinTests
         // Une identité locale avec un nom d'affichage, pas encore rattachée à un central
         await store.SaveEnrollmentAsync(Guid.NewGuid().ToString("D"), "Maison", "http://127.0.0.1:1/", CancellationToken.None, displayName: "Mon Worker 50");
 
-        var (listener, url, id, _) = Cluster(HttpStatusCode.Accepted);
+        var (listener, url, id, _) = Central(HttpStatusCode.Accepted);
         using var _ = listener;
         await discovery.AddByAddressAsync(url, CancellationToken.None);
 

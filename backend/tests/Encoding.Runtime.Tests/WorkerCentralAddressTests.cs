@@ -24,7 +24,7 @@ public sealed class WorkerCentralAddressTests
         await Assert.ThrowsAsync<ArgumentException>(() => Discovery().AddByAddressAsync(address, CancellationToken.None));
 
     [Fact]
-    public async Task AddressOfAClusterIsListed()
+    public async Task AddressOfACentralIsListed()
     {
         var port = FreePort();
         using var listener = new HttpListener();
@@ -41,11 +41,11 @@ public sealed class WorkerCentralAddressTests
         });
 
         var discovery = Discovery();
-        var cluster = await discovery.AddByAddressAsync($"http://127.0.0.1:{port}/chemin/ignore", CancellationToken.None);
+        var central = await discovery.AddByAddressAsync($"http://127.0.0.1:{port}/chemin/ignore", CancellationToken.None);
         await serving;
 
-        Assert.Equal(id, cluster.Id);
-        Assert.Equal($"http://127.0.0.1:{port}/", cluster.ApiBaseUrl);
+        Assert.Equal(id, central.Id);
+        Assert.Equal($"http://127.0.0.1:{port}/", central.ApiBaseUrl);
         Assert.Contains(discovery.List(), found => found.Id == id && found.Name == "Maison");
     }
 
@@ -103,7 +103,7 @@ public sealed class WorkerCentralAddressTests
             }).Build());
 
         Assert.True(options.WorkerImage);
-        Assert.Equal([Encoding.Contracts.Workers.NodeRole.Worker], options.Roles);
+        Assert.Equal([Encoding.Contracts.Workers.WorkerRole.Worker], options.Roles);
     }
 
     [Fact]
@@ -120,7 +120,7 @@ public sealed class WorkerCentralAddressTests
     }
 
     [Fact]
-    public void ANodeWithoutWorkerImageHasNoLocalSecretUnlessConfigured()
+    public void AWorkerWithoutWorkerImageHasNoLocalSecretUnlessConfigured()
     {
         var options = WorkerAgentOptions.FromConfiguration(new ConfigurationBuilder().AddInMemoryCollection(
             new Dictionary<string, string?> { ["Worker:DataDirectory"] = "/var/lib/encoding-node" }).Build());

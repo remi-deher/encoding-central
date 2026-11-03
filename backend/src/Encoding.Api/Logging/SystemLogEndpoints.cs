@@ -25,7 +25,7 @@ public static class SystemLogEndpoints
             [FromQuery] SystemLogLevel? minLevel,
             [FromQuery] string? category,
             [FromQuery] string? search,
-            [FromQuery] Guid? nodeId,
+            [FromQuery] Guid? workerId,
             [FromQuery] int? limit,
             [FromQuery] DateTimeOffset? since,
             SystemLogRingBuffer ringBuffer,
@@ -36,7 +36,7 @@ public static class SystemLogEndpoints
                 MinLevel: minLevel ?? SystemLogLevel.Information,
                 Category: category,
                 Search: search,
-                WorkerId: nodeId,
+                WorkerId: workerId,
                 Limit: limit.GetValueOrDefault(100),
                 Since: since);
 
@@ -94,7 +94,7 @@ public static class SystemLogEndpoints
             [FromQuery] SystemLogLevel? minLevel,
             [FromQuery] string? category,
             [FromQuery] string? search,
-            [FromQuery] Guid? nodeId,
+            [FromQuery] Guid? workerId,
             SystemLogRingBuffer ringBuffer,
             SystemLogStreamBroadcaster broadcaster,
             CancellationToken ct) =>
@@ -103,7 +103,7 @@ public static class SystemLogEndpoints
                 MinLevel: minLevel ?? SystemLogLevel.Information,
                 Category: category,
                 Search: search,
-                WorkerId: nodeId,
+                WorkerId: workerId,
                 Limit: 50);
 
             context.Response.Headers.ContentType = "text/event-stream; charset=utf-8";

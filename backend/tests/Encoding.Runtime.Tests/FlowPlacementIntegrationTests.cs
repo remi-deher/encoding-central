@@ -59,8 +59,8 @@ public sealed class FlowPlacementIntegrationTests
         var runtime = new RuntimeRepository(database.Db, eligibility, registry, presence, configs, groups, placementPlanner: planner);
 
         var libId = Guid.NewGuid();
-        var nodeA = Guid.NewGuid(); // Direct node
-        var nodeB = Guid.NewGuid(); // Transfer node
+        var workerA = Guid.NewGuid(); // Direct node
+        var workerB = Guid.NewGuid(); // Transfer node
 
         await using (var c = await database.Db.OpenConnectionAsync())
         await using (var tx = await c.BeginTransactionAsync())
@@ -75,8 +75,8 @@ public sealed class FlowPlacementIntegrationTests
                       (@lib, @nodeB, 'transfer', NULL, true, true, true, @nodeA);
                 """, c, tx);
             cmd.Parameters.AddWithValue("lib", libId);
-            cmd.Parameters.AddWithValue("nodeA", nodeA);
-            cmd.Parameters.AddWithValue("nodeB", nodeB);
+            cmd.Parameters.AddWithValue("nodeA", workerA);
+            cmd.Parameters.AddWithValue("nodeB", workerB);
             cmd.Parameters.AddWithValue("capsA", SqlKind.Json, JsonSerializer.Serialize(StandardCapabilities("libx264", "aac"), Json));
             cmd.Parameters.AddWithValue("capsB", SqlKind.Json, JsonSerializer.Serialize(StandardCapabilities("libx264", "aac"), Json));
             await cmd.ExecuteNonQueryAsync();
@@ -100,18 +100,18 @@ public sealed class FlowPlacementIntegrationTests
         }
 
         // Node B (transfer) tries to claim -> must be skipped because Node A covers everything directly
-        var claimB = await runtime.ClaimAsync(nodeB, CancellationToken.None);
+        var claimB = await runtime.ClaimAsync(workerB, CancellationToken.None);
         Assert.Null(claimB);
 
         // Node A (direct) tries to claim -> must succeed
-        var claimA = await runtime.ClaimAsync(nodeA, CancellationToken.None);
+        var claimA = await runtime.ClaimAsync(workerA, CancellationToken.None);
         Assert.NotNull(claimA);
         Assert.Equal(execId, claimA.ExecutionId);
         Assert.Equal(FlowPlacementPlan.StrategyDirectUnified,claimA.PlacementPlan?.Strategy);
         await using(var beforePlan=database.Db.CreateCommand("SELECT placement_plan::text FROM execution_work WHERE execution_id=@id"))
         {beforePlan.Parameters.AddWithValue("id",execId);var value=await beforePlan.ExecuteScalarAsync();Assert.True(value is null or DBNull || string.IsNullOrWhiteSpace(value.ToString()),$"Claim persisted an unexpected placement plan: {value}");}
-        Assert.Equal(FlowPlacementPlan.StrategyDirectUnified,(await runtime.PersistPlacementPlanAsync(execId,nodeA,claimA.Epoch,CancellationToken.None))?.Strategy);
-        await runtime.RecordSourceMetadataAsync(execId,nodeA,claimA.Epoch,JsonSerializer.SerializeToElement(new { streams=Array.Empty<object>() },Json),CancellationToken.None);
+        Assert.Equal(FlowPlacementPlan.StrategyDirectUnified,(await runtime.PersistPlacementPlanAsync(execId,workerA,claimA.Epoch,CancellationToken.None))?.Strategy);
+        await runtime.RecordSourceMetadataAsync(execId,workerA,claimA.Epoch,JsonSerializer.SerializeToElement(new { streams=Array.Empty<object>() },Json),CancellationToken.None);
 
         // Verify stored placement plan
         await using (var c = await database.Db.OpenConnectionAsync())
@@ -123,7 +123,7 @@ public sealed class FlowPlacementIntegrationTests
             var plan = JsonSerializer.Deserialize<FlowPlacementPlan>(jsonText, Json);
             Assert.NotNull(plan);
             Assert.Equal(FlowPlacementPlan.StrategyDirectUnified, plan.Strategy);
-            Assert.Equal(nodeA, plan.AssignedWorkerId);
+            Assert.Equal(workerA, plan.AssignedWorkerId);
         }
     }
 
@@ -141,7 +141,7 @@ public sealed class FlowPlacementIntegrationTests
         var runtime = new RuntimeRepository(database.Db, eligibility, registry, presence, configs, groups, placementPlanner: planner);
 
         var libId = Guid.NewGuid();
-        var nodeA = Guid.NewGuid();
+        var workerA = Guid.NewGuid();
 
         await using (var c = await database.Db.OpenConnectionAsync())
         await using (var tx = await c.BeginTransactionAsync())
@@ -154,7 +154,7 @@ public sealed class FlowPlacementIntegrationTests
                 VALUES(@lib, @nodeA, 'direct', '/media/library', true, true, true);
                 """, c, tx);
             cmd.Parameters.AddWithValue("lib", libId);
-            cmd.Parameters.AddWithValue("nodeA", nodeA);
+            cmd.Parameters.AddWithValue("nodeA", workerA);
             cmd.Parameters.AddWithValue("capsA", SqlKind.Json, JsonSerializer.Serialize(StandardCapabilities("libx264"), Json));
             await cmd.ExecuteNonQueryAsync();
             await tx.CommitAsync();
@@ -182,7 +182,7 @@ public sealed class FlowPlacementIntegrationTests
         }
 
         // An impossible placement remains queued until the existing read-only placement grace expires.
-        var claim = await runtime.ClaimAsync(nodeA, CancellationToken.None);
+        var claim = await runtime.ClaimAsync(workerA, CancellationToken.None);
         Assert.Null(claim);
         await using(var age=database.Db.CreateCommand("UPDATE executions SET queued_at=clock_timestamp()-interval '3 minutes' WHERE id=@id"))
         { age.Parameters.AddWithValue("id",execId); await age.ExecuteNonQueryAsync(); }
@@ -215,8 +215,8 @@ public sealed class FlowPlacementIntegrationTests
         var runtime = new RuntimeRepository(database.Db, eligibility, registry, presence, configs, groups, placementPlanner: planner);
 
         var libId = Guid.NewGuid();
-        var nodeA = Guid.NewGuid(); // Direct node (CPU only)
-        var nodeB = Guid.NewGuid(); // Transfer node (has hevc_nvenc)
+        var workerA = Guid.NewGuid(); // Direct node (CPU only)
+        var workerB = Guid.NewGuid(); // Transfer node (has hevc_nvenc)
 
         await using (var c = await database.Db.OpenConnectionAsync())
         await using (var tx = await c.BeginTransactionAsync())
@@ -231,8 +231,8 @@ public sealed class FlowPlacementIntegrationTests
                       (@lib, @nodeB, 'transfer', NULL, true, true, true, @nodeA);
                 """, c, tx);
             cmd.Parameters.AddWithValue("lib", libId);
-            cmd.Parameters.AddWithValue("nodeA", nodeA);
-            cmd.Parameters.AddWithValue("nodeB", nodeB);
+            cmd.Parameters.AddWithValue("nodeA", workerA);
+            cmd.Parameters.AddWithValue("nodeB", workerB);
             cmd.Parameters.AddWithValue("capsA", SqlKind.Json, JsonSerializer.Serialize(StandardCapabilities("libx264", "aac"), Json));
             cmd.Parameters.AddWithValue("capsB", SqlKind.Json, JsonSerializer.Serialize(StandardCapabilities("libx264", "hevc_nvenc", "aac"), Json));
             await cmd.ExecuteNonQueryAsync();
@@ -292,14 +292,14 @@ public sealed class FlowPlacementIntegrationTests
 
         // Because the media is already HEVC, the transcode branch is pruned!
         // Node B (transfer) must skip:
-        var claimB = await runtime.ClaimAsync(nodeB, CancellationToken.None);
+        var claimB = await runtime.ClaimAsync(workerB, CancellationToken.None);
         Assert.Null(claimB);
 
         // Node A (direct access) claims and executes locally:
-        var claimA = await runtime.ClaimAsync(nodeA, CancellationToken.None);
+        var claimA = await runtime.ClaimAsync(workerA, CancellationToken.None);
         Assert.NotNull(claimA);
         Assert.Equal(execId, claimA.ExecutionId);
-        await runtime.RecordSourceMetadataAsync(execId,nodeA,claimA.Epoch,beforeMeta,CancellationToken.None);
+        await runtime.RecordSourceMetadataAsync(execId,workerA,claimA.Epoch,beforeMeta,CancellationToken.None);
 
         // Verify the plan is DirectUnified
         await using (var c = await database.Db.OpenConnectionAsync())
@@ -311,7 +311,7 @@ public sealed class FlowPlacementIntegrationTests
             var plan = JsonSerializer.Deserialize<FlowPlacementPlan>(jsonText, Json);
             Assert.NotNull(plan);
             Assert.Equal(FlowPlacementPlan.StrategyDirectUnified, plan.Strategy);
-            Assert.Equal(nodeA, plan.AssignedWorkerId);
+            Assert.Equal(workerA, plan.AssignedWorkerId);
         }
     }
 

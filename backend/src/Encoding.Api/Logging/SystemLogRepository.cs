@@ -136,7 +136,7 @@ public sealed class SystemLogRepository
             var category = reader.GetString(3);
             var message = reader.GetString(4);
             var exception = reader.IsDBNull(5) ? null : reader.GetString(5);
-            var nodeId = reader.IsDBNull(6) ? null : (Guid.TryParse(reader.GetString(6), out var nid) ? nid : (Guid?)null);
+            var workerId = reader.IsDBNull(6) ? null : (Guid.TryParse(reader.GetString(6), out var nid) ? nid : (Guid?)null);
             var nodeName = reader.IsDBNull(7) ? null : reader.GetString(7);
             var eventId = reader.IsDBNull(8) ? null : (int?)reader.GetInt32(8);
 
@@ -147,7 +147,7 @@ public sealed class SystemLogRepository
                 Category: category,
                 Message: message,
                 Exception: exception,
-                WorkerId: nodeId,
+                WorkerId: workerId,
                 WorkerName: nodeName,
                 EventId: eventId));
         }

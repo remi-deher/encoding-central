@@ -318,7 +318,7 @@ internal static partial class Harness
             app.MapGet("/api/v1/executions/{id:guid}",async(Guid id)=>await executions.GetAsync(id,CancellationToken.None));
             await app.StartAsync();
         }
-        private RuntimeClient Client(Guid node) => new(new WorkerIdentityState(node,"fixture","fixture",app.Urls.Single()+"/",Token,true));
+        private RuntimeClient Client(Guid worker) => new(new WorkerIdentityState(worker,"fixture","fixture",app.Urls.Single()+"/",Token,true));
         public async Task FlowSavingAsync()
         {
             var repository = new FlowRepository(db);
@@ -362,16 +362,16 @@ internal static partial class Harness
                 new Dictionary<string,string?> { ["zone"]="group", ["gpu"]="nvidia" }, [a,b]);
             Check(await groups.SaveAsync(null, manual, CancellationToken.None), "A manual group is saved.");
             var automatic = new SaveWorkerGroupRequest("Workers RAM", "Au moins 8 Go", WorkerGroupMode.Automatic,
-                new WorkerGroupCriteria([NodeRole.Worker], MinimumMemoryMb: 8192), new Dictionary<string,string?> { ["zone"]="auto", ["memory"]="large" }, []);
+                new WorkerGroupCriteria([WorkerRole.Worker], MinimumMemoryMb: 8192), new Dictionary<string,string?> { ["zone"]="auto", ["memory"]="large" }, []);
             Check(await groups.SaveAsync(null, automatic, CancellationToken.None), "An automatic group is saved.");
             var identityRepository = new WorkerGroupRepository(db);
-            Check(await identityRepository.SaveNodeIdentityAsync(a, new("Transcode A", new Dictionary<string,string?> { ["zone"]="local" }), CancellationToken.None), "Node labels are saved.");
-            var identity = await identityRepository.GetNodeIdentityAsync(a, CancellationToken.None);
+            Check(await identityRepository.SaveWorkerIdentityAsync(a, new("Transcode A", new Dictionary<string,string?> { ["zone"]="local" }), CancellationToken.None), "Node labels are saved.");
+            var identity = await identityRepository.GetWorkerIdentityAsync(a, CancellationToken.None);
             Check(identity is not null && identity.GroupIds.Count == 2, "Manual and automatic membership are both resolved.");
             Check(identity!.EffectiveLabels["zone"] == "local" && identity.EffectiveLabels["gpu"] == "nvidia" && identity.EffectiveLabels["memory"] == "large", "Node labels override group labels and inherit the remaining group labels.");
             Check(Encoding.Contracts.Workers.WorkerLabelSelector.Matches("gpu=nvidia,memory=large", identity.EffectiveLabels), "Combined group and label selectors match effective labels.");
-            var node = await new WorkerRepository(db).GetAsync(a, TimeSpan.FromHours(1), CancellationToken.None);
-            Check(node?.DisplayName == "Transcode A", "The friendly name stays separate from the heartbeat name.");
+            var worker = await new WorkerRepository(db).GetAsync(a, TimeSpan.FromHours(1), CancellationToken.None);
+            Check(worker?.DisplayName == "Transcode A", "The friendly name stays separate from the heartbeat name.");
 
             var production = (await groups.ListAsync(CancellationToken.None)).Single(g => g.Name == "Production");
             Check(production.WorkerIds.Contains(b), "A manual group lists its active members.");

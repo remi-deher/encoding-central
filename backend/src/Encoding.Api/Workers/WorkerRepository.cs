@@ -39,7 +39,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
             """;
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var command = Sql.Command(sql, connection);
-        AddNodeParameters(command, request);
+        AddWorkerParameters(command, request);
         command.Parameters.AddWithValue("display_name", (object?)request.DisplayName ?? DBNull.Value);
         command.Parameters.AddWithValue("worker_token_hash", SqlKind.Bytes, tokenHash);
         command.Parameters.AddWithValue("allow_new", allowNewNode);
@@ -47,10 +47,10 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         return await reader.ReadAsync(cancellationToken) ? ReadResponse(reader, true) : null;
     }
 
-    public async Task DeletePairingRequestAsync(Guid nodeId, CancellationToken cancellationToken)
+    public async Task DeletePairingRequestAsync(Guid workerId, CancellationToken cancellationToken)
     {
         await using var command = dataSource.CreateCommand("DELETE FROM worker_enrollment_requests WHERE worker_id = @id");
-        command.Parameters.AddWithValue("id", nodeId);
+        command.Parameters.AddWithValue("id", workerId);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -62,10 +62,10 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         return (await command.ScalarBoolAsync(cancellationToken));
     }
 
-    public async Task<bool> AuthenticateTokenAsync(Guid nodeId, string token, CancellationToken cancellationToken)
+    public async Task<bool> AuthenticateTokenAsync(Guid workerId, string token, CancellationToken cancellationToken)
     {
         await using var command = dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM workers WHERE id = @id AND worker_token_hash = @hash AND deleted_at IS NULL)");
-        command.Parameters.AddWithValue("id", nodeId);
+        command.Parameters.AddWithValue("id", workerId);
         command.Parameters.AddWithValue("hash", SqlKind.Bytes, HashSecret(token));
         return await command.ScalarBoolAsync(cancellationToken);
     }
@@ -118,7 +118,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         await using var command = Sql.Command(sql, connection, transaction);
-        AddNodeParameters(command, request.Worker.Id, new WorkerHeartbeatRequest(
+        AddWorkerParameters(command, request.Worker.Id, new WorkerHeartbeatRequest(
             request.Worker.Name,
             request.Worker.Roles,
             request.Worker.MaxConcurrentTasks,
@@ -146,7 +146,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         var requests = new List<PendingWorkerEnrollmentResponse>();
         while (await reader.ReadAsync(cancellationToken))
         {
-            var roles = reader.GetStringArray(2).Select(role => Enum.Parse<NodeRole>(role, true)).ToArray();
+            var roles = reader.GetStringArray(2).Select(role => Enum.Parse<WorkerRole>(role, true)).ToArray();
             var capabilities = JsonSerializer.Deserialize<IReadOnlyList<WorkerToolCapability>>(reader.GetString(4), JsonOptions) ?? [];
             var displayName = reader.IsDBNull(9) ? null : reader.GetString(9);
             requests.Add(new PendingWorkerEnrollmentResponse(
@@ -165,29 +165,29 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         return await ApprovePairingRequestAsync(HashSecret(pairingKey), null, cancellationToken);
     }
 
-    public async Task<WorkerResponse?> ApprovePairingRequestAsync(Guid nodeId, CancellationToken cancellationToken)
+    public async Task<WorkerResponse?> ApprovePairingRequestAsync(Guid workerId, CancellationToken cancellationToken)
     {
-        return await ApprovePairingRequestAsync(null, nodeId, cancellationToken);
+        return await ApprovePairingRequestAsync(null, workerId, cancellationToken);
     }
 
-    private async Task<WorkerResponse?> ApprovePairingRequestAsync(byte[]? pairingKeyHash, Guid? requestedNodeId, CancellationToken cancellationToken)
+    private async Task<WorkerResponse?> ApprovePairingRequestAsync(byte[]? pairingKeyHash, Guid? requestedWorkerId, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-        var requestPredicate = requestedNodeId.HasValue ? "worker_id = @worker_id" : "pairing_key_hash = @pairing_key_hash";
+        var requestPredicate = requestedWorkerId.HasValue ? "worker_id = @worker_id" : "pairing_key_hash = @pairing_key_hash";
         var selectSql = $"""
             SELECT worker_id, worker_token_hash, name, roles, max_concurrent_tasks, capabilities, inventory, display_name
             FROM worker_enrollment_requests
             WHERE {requestPredicate} AND expires_at > clock_timestamp()
             FOR UPDATE
             """;
-        Guid nodeId;
+        Guid workerId;
         byte[] nodeTokenHash;
         string? displayName;
         WorkerHeartbeatRequest heartbeat;
         await using (var selectCommand = Sql.Command(selectSql, connection, transaction))
         {
-            if (requestedNodeId.HasValue) selectCommand.Parameters.AddWithValue("worker_id", requestedNodeId.Value);
+            if (requestedWorkerId.HasValue) selectCommand.Parameters.AddWithValue("worker_id", requestedWorkerId.Value);
             else selectCommand.Parameters.AddWithValue("pairing_key_hash", SqlKind.Bytes, pairingKeyHash!);
             await using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken);
             if (!await reader.ReadAsync(cancellationToken))
@@ -195,11 +195,11 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
                 await transaction.RollbackAsync(cancellationToken);
                 return null;
             }
-            nodeId = reader.GetGuid(0);
+            workerId = reader.GetGuid(0);
             nodeTokenHash = reader.GetFieldValue<byte[]>(1);
             heartbeat = new WorkerHeartbeatRequest(
                 reader.GetString(2),
-                reader.GetStringArray(3).Select(role => Enum.Parse<NodeRole>(role, true)).ToArray(),
+                reader.GetStringArray(3).Select(role => Enum.Parse<WorkerRole>(role, true)).ToArray(),
                 reader.GetInt32(4),
                 JsonSerializer.Deserialize<IReadOnlyList<WorkerToolCapability>>(reader.GetString(5), JsonOptions) ?? [],
                 ReadInventory(reader.GetString(6)));
@@ -220,16 +220,16 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
             WHERE workers.deleted_at IS NULL AND (workers.worker_token_hash IS NULL OR workers.worker_token_hash = EXCLUDED.worker_token_hash)
             RETURNING id, name, roles, max_concurrent_tasks, capabilities, last_seen_at, inventory, display_name, labels
             """;
-        WorkerResponse? node;
+        WorkerResponse? worker;
         await using (var enrollCommand = Sql.Command(enrollSql, connection, transaction))
         {
-            AddNodeParameters(enrollCommand, nodeId, heartbeat);
+            AddWorkerParameters(enrollCommand, workerId, heartbeat);
             enrollCommand.Parameters.AddWithValue("display_name", (object?)displayName ?? DBNull.Value);
             enrollCommand.Parameters.AddWithValue("worker_token_hash", SqlKind.Bytes, nodeTokenHash);
             await using var reader = await enrollCommand.ExecuteReaderAsync(cancellationToken);
-            node = await reader.ReadAsync(cancellationToken) ? ReadResponse(reader, true) : null;
+            worker = await reader.ReadAsync(cancellationToken) ? ReadResponse(reader, true) : null;
         }
-        if (node is null)
+        if (worker is null)
         {
             await transaction.RollbackAsync(cancellationToken);
             return null;
@@ -238,14 +238,14 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         await using (var deleteCommand = Sql.Command(
             "DELETE FROM worker_enrollment_requests WHERE worker_id = @id", connection, transaction))
         {
-            deleteCommand.Parameters.AddWithValue("id", nodeId);
+            deleteCommand.Parameters.AddWithValue("id", workerId);
             await deleteCommand.ExecuteNonQueryAsync(cancellationToken);
         }
         await transaction.CommitAsync(cancellationToken);
-        return node;
+        return worker;
     }
 
-    public async Task<WorkerResponse?> RecordHeartbeatAsync(Guid nodeId, string token, WorkerHeartbeatRequest request, CancellationToken cancellationToken)
+    public async Task<WorkerResponse?> RecordHeartbeatAsync(Guid workerId, string token, WorkerHeartbeatRequest request, CancellationToken cancellationToken)
     {
         using var priority = Encoding.Api.Infrastructure.Data.Sqlite.SqliteWriter.Prioritize();
         var tokenHash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token));
@@ -273,7 +273,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         async Task<(WorkerResponse? Node, bool TrackSession)> UpdateAsync(string sql)
         {
             await using var command = Sql.Command(sql, connection);
-            AddNodeParameters(command, nodeId, request);
+            AddWorkerParameters(command, workerId, request);
             command.Parameters.AddWithValue("worker_token_hash", SqlKind.Bytes, tokenHash);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             if (!await reader.ReadAsync(cancellationToken)) return (null, false);
@@ -286,17 +286,17 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         }
         var result = await UpdateAsync(unchanged);
         if (result.Node is null) result = await UpdateAsync(changed);
-        var node = result.Node;
-        if (node is null) return null;
-        if (result.TrackSession) await TrackSessionAsync(connection, nodeId, request, cancellationToken);
-        return (await WithLifecycleAsync([node], cancellationToken))[0];
+        var worker = result.Node;
+        if (worker is null) return null;
+        if (result.TrackSession) await TrackSessionAsync(connection, workerId, request, cancellationToken);
+        return (await WithLifecycleAsync([worker], cancellationToken))[0];
     }
 
     /// <summary>
     /// Version de l'application et détection d'une identité utilisée par deux processus (0041). Un redémarrage change le nonce une fois ;
     /// deux processus qui partagent l'identité se relaient (a, b, a…) : le retour d'un nonce précédent récent met le worker en quarantaine.
     /// </summary>
-    private static async Task TrackSessionAsync(DbConnection connection, Guid nodeId, WorkerHeartbeatRequest request, CancellationToken ct)
+    private static async Task TrackSessionAsync(DbConnection connection, Guid workerId, WorkerHeartbeatRequest request, CancellationToken ct)
     {
         const string sql = """
             UPDATE workers SET
@@ -310,7 +310,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
             WHERE id = @id
             """;
         await using var command = Sql.Command(sql, connection);
-        command.Parameters.AddWithValue("id", nodeId);
+        command.Parameters.AddWithValue("id", workerId);
         command.Parameters.AddWithValue("version", SqlKind.Text, (object?)request.Version ?? DBNull.Value);
         command.Parameters.AddWithValue("reason", SqlKind.Text, (object?)AppVersion.MismatchReason(request.Version) ?? DBNull.Value);
         command.Parameters.AddWithValue("nonce", SqlKind.Text, (object?)request.SessionNonce ?? DBNull.Value);
@@ -318,43 +318,43 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
     }
 
     /// <summary>Ajoute l'état de cycle de vie (0041) aux workers lus : le plus restrictif l'emporte sur la présence.</summary>
-    private async Task<IReadOnlyList<WorkerResponse>> WithLifecycleAsync(IReadOnlyList<WorkerResponse> nodes, CancellationToken ct)
+    private async Task<IReadOnlyList<WorkerResponse>> WithLifecycleAsync(IReadOnlyList<WorkerResponse> workers, CancellationToken ct)
     {
-        if (nodes.Count == 0) return nodes;
+        if (workers.Count == 0) return workers;
         await using var command = dataSource.CreateCommand("SELECT id, draining, quarantined, incompatible_reason FROM workers WHERE id = ANY(@ids)");
-        command.Parameters.AddWithValue("ids", nodes.Select(node => node.Id).ToArray());
+        command.Parameters.AddWithValue("ids", workers.Select(worker => worker.Id).ToArray());
         var states = new Dictionary<Guid, (bool Draining, bool Quarantined, string? Incompatible)>();
         await using (var reader = await command.ExecuteReaderAsync(ct))
             while (await reader.ReadAsync(ct))
                 states[reader.GetGuid(0)] = (reader.GetBoolean(1), reader.GetBoolean(2), reader.IsDBNull(3) ? null : reader.GetString(3));
-        return nodes.Select(node =>
+        return workers.Select(worker =>
         {
-            if (!states.TryGetValue(node.Id, out var state)) return node;
+            if (!states.TryGetValue(worker.Id, out var state)) return worker;
             var (lifecycle, reason) =
                 state.Quarantined ? (WorkerLifecycle.Quarantined, "Identité utilisée par deux processus à la fois : réinitialisez l'un des deux workers puis levez la quarantaine.")
                 : state.Incompatible is not null ? (WorkerLifecycle.Incompatible, state.Incompatible)
                 : state.Draining ? (WorkerLifecycle.Draining, "Vidange demandée : aucune nouvelle tâche, les tâches en cours se terminent.")
-                : node.Status == WorkerPresenceStatus.Online ? (WorkerLifecycle.Online, (string?)null)
+                : worker.Status == WorkerPresenceStatus.Online ? (WorkerLifecycle.Online, (string?)null)
                 : (WorkerLifecycle.Offline, "Aucun signal de présence récent.");
-            return node with { Lifecycle = lifecycle, LifecycleReason = reason };
+            return worker with { Lifecycle = lifecycle, LifecycleReason = reason };
         }).ToArray();
     }
 
     /// <summary>Vidange : aucune nouvelle tâche pour ce worker, les baux en cours se terminent normalement.</summary>
-    public async Task<bool> SetDrainingAsync(Guid nodeId, bool draining, CancellationToken ct)
+    public async Task<bool> SetDrainingAsync(Guid workerId, bool draining, CancellationToken ct)
     {
         await using var command = dataSource.CreateCommand("UPDATE workers SET draining = @draining WHERE id = @id AND deleted_at IS NULL");
-        command.Parameters.AddWithValue("id", nodeId);
+        command.Parameters.AddWithValue("id", workerId);
         command.Parameters.AddWithValue("draining", draining);
         return await command.ExecuteNonQueryAsync(ct) == 1;
     }
 
     /// <summary>Lève la quarantaine après que l'administrateur a tranché ; la détection repart de zéro.</summary>
-    public async Task<bool> ClearQuarantineAsync(Guid nodeId, CancellationToken ct)
+    public async Task<bool> ClearQuarantineAsync(Guid workerId, CancellationToken ct)
     {
         await using var command = dataSource.CreateCommand(
             "UPDATE workers SET quarantined = false, session_nonce = NULL, previous_nonce = NULL, nonce_changed_at = NULL WHERE id = @id AND deleted_at IS NULL AND quarantined");
-        command.Parameters.AddWithValue("id", nodeId);
+        command.Parameters.AddWithValue("id", workerId);
         return await command.ExecuteNonQueryAsync(ct) == 1;
     }
 }

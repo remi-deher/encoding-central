@@ -10,9 +10,9 @@ public static partial class WorkerGroupEndpoints
     [GeneratedRegex("^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$", RegexOptions.CultureInvariant)]
     private static partial Regex LabelKeyPattern();
 
-    public static void MapNodeGroupEndpoints(this WebApplication app)
+    public static void MapWorkerGroupEndpoints(this WebApplication app)
     {
-        var groups = app.MapGroup("/api/v1/worker-groups").WithTags("Node groups");
+        var groups = app.MapGroup("/api/v1/worker-groups").WithTags("Worker groups");
         groups.MapGet("", async (WorkerGroupRepository repository, CancellationToken ct) => Results.Ok(await repository.ListAsync(ct)))
             .WithName("ListNodeGroups");
         groups.MapGet("/{id:guid}", async (Guid id, WorkerGroupRepository repository, CancellationToken ct) =>
@@ -44,7 +44,7 @@ public static partial class WorkerGroupEndpoints
             })
             .WithName("DeleteNodeGroup");
         app.MapGet("/api/v1/workers/{id:guid}/identity", async (Guid id, WorkerGroupRepository repository, CancellationToken ct) =>
-            await repository.GetNodeIdentityAsync(id, ct) is { } identity ? Results.Ok(identity) : Results.NotFound())
+            await repository.GetWorkerIdentityAsync(id, ct) is { } identity ? Results.Ok(identity) : Results.NotFound())
             .WithName("GetNodeIdentity");
         app.MapPut("/api/v1/workers/{id:guid}/identity", async (Guid id, SaveWorkerIdentityRequest request, WorkerGroupRepository repository, CancellationToken ct) =>
         {
@@ -52,7 +52,7 @@ public static partial class WorkerGroupEndpoints
             var errors = ValidateLabels(request.Labels);
             if (request.DisplayName?.Length > 128) errors["displayName"] = ["Le nom d’affichage est limité à 128 caractères."];
             if (errors.Count > 0) return (IResult)Results.ValidationProblem(errors);
-            return await repository.SaveNodeIdentityAsync(id, request, ct) ? Results.NoContent() : Results.NotFound();
+            return await repository.SaveWorkerIdentityAsync(id, request, ct) ? Results.NoContent() : Results.NotFound();
         }).WithName("SaveNodeIdentity");
     }
 

@@ -1,7 +1,7 @@
 
 namespace Encoding.Contracts.Workers;
 
-public enum NodeRole
+public enum WorkerRole
 {
     Server,
     Worker
@@ -9,7 +9,7 @@ public enum NodeRole
 
 public sealed record WorkerHeartbeatRequest(
     string Name,
-    IReadOnlyList<NodeRole> Roles,
+    IReadOnlyList<WorkerRole> Roles,
     int MaxConcurrentTasks,
     IReadOnlyList<WorkerToolCapability> Capabilities,
     WorkerInventory? Inventory = null,
@@ -84,7 +84,7 @@ public sealed record DrainWorkerRequest(bool Draining);
 public sealed record WorkerResponse(
     Guid Id,
     string Name,
-    IReadOnlyList<NodeRole> Roles,
+    IReadOnlyList<WorkerRole> Roles,
     int MaxConcurrentTasks,
     IReadOnlyList<WorkerToolCapability> Capabilities,
     WorkerPresenceStatus Status,
@@ -101,7 +101,7 @@ public sealed record WorkerResponse(
 public sealed record WorkerEnrollmentRequest(
     Guid Id,
     string Name,
-    IReadOnlyList<NodeRole> Roles,
+    IReadOnlyList<WorkerRole> Roles,
     int MaxConcurrentTasks,
     IReadOnlyList<WorkerToolCapability> Capabilities,
     string WorkerToken,
@@ -116,7 +116,7 @@ public sealed record ApproveWorkerEnrollmentRequest(string PairingKey);
 public sealed record PendingWorkerEnrollmentResponse(
     Guid Id,
     string Name,
-    IReadOnlyList<NodeRole> Roles,
+    IReadOnlyList<WorkerRole> Roles,
     int MaxConcurrentTasks,
     IReadOnlyList<WorkerToolCapability> Capabilities,
     DateTimeOffset CreatedAt,

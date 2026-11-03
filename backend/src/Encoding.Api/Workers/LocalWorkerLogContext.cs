@@ -9,9 +9,9 @@ namespace Encoding.Api.Workers;
 public sealed class LocalWorkerLogContext : ISystemLogWorkerContext
 {
     private readonly object gate = new();
-    private Guid? nodeId;
+    private Guid? workerId;
 
-    public Guid? WorkerId { get { lock (gate) return nodeId; } set { lock (gate) nodeId = value; } }
+    public Guid? WorkerId { get { lock (gate) return workerId; } set { lock (gate) workerId = value; } }
 
     public string? WorkerName => "Server";
 }

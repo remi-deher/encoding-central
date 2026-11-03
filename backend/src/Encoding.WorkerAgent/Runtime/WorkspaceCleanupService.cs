@@ -62,7 +62,7 @@ public sealed class WorkspaceCleanupService(WorkerAgentOptions options, WorkerId
         if (!identity.IsEnrolled) return 0;
         var candidates = new Dictionary<Guid, List<string>>();
         // Avec la fonction serveur, ArtifactRetention (qui connaît publications, quarantaines et réservations) reste seul responsable de runtime-artifacts.
-        var roots = options.Roles.Contains(Encoding.Contracts.Workers.NodeRole.Server) ? Roots : [.. Roots, ArtifactsRoot];
+        var roots = options.Roles.Contains(Encoding.Contracts.Workers.WorkerRole.Server) ? Roots : [.. Roots, ArtifactsRoot];
         foreach (var root in roots)
         {
             var path = Path.Combine(options.DataDirectory, root);

@@ -24,17 +24,17 @@ public sealed class WorkerDirectoryBrowserTests
     }
 
     [Fact]
-    public async Task BrowseRequestIsClaimedByTargetNodeAndReturnsDirectories()
+    public async Task BrowseRequestIsClaimedByTargetWorkerAndReturnsDirectories()
     {
         await using var database = await TestDatabase.CreateSqliteAsync("node-directory-browser");
         await DatabaseMigrator.ApplyAsync(database.Db, Harness.RepositoryRoot(), CancellationToken.None);
-        var nodeId = Guid.NewGuid();
+        var workerId = Guid.NewGuid();
         await using (var insert = database.Db.CreateCommand())
         {
             insert.CommandText = "INSERT INTO workers(id,name,roles,max_concurrent_tasks,last_seen_at) VALUES(@id,'worker','worker',1,@seen)";
             var id = insert.CreateParameter();
             id.ParameterName = "@id";
-            id.Value = nodeId;
+            id.Value = workerId;
             insert.Parameters.Add(id);
             var seen = insert.CreateParameter();
             seen.ParameterName = "@seen";
@@ -44,19 +44,19 @@ public sealed class WorkerDirectoryBrowserTests
         }
 
         var repository = new WorkerDirectoryBrowserRepository(database.Db);
-        var requestId = Assert.IsType<Guid>(await repository.CreateAsync(nodeId, "/media", CancellationToken.None));
-        Assert.Equal("queued", (await repository.GetAsync(requestId, nodeId, CancellationToken.None))?.State);
+        var requestId = Assert.IsType<Guid>(await repository.CreateAsync(workerId, "/media", CancellationToken.None));
+        Assert.Equal("queued", (await repository.GetAsync(requestId, workerId, CancellationToken.None))?.State);
         Assert.Null(await repository.ClaimAsync(Guid.NewGuid(), CancellationToken.None));
-        var claim = await repository.ClaimAsync(nodeId, CancellationToken.None);
+        var claim = await repository.ClaimAsync(workerId, CancellationToken.None);
         Assert.Equal(new WorkerDirectoryBrowseClaim(requestId, "/media"), claim);
 
         var result = new WorkerDirectoryBrowseCompletion([new("Films", "/media/Films")], true, null);
-        Assert.True(await repository.CompleteAsync(requestId, nodeId, result, CancellationToken.None));
-        var response = await repository.GetAsync(requestId, nodeId, CancellationToken.None);
+        Assert.True(await repository.CompleteAsync(requestId, workerId, result, CancellationToken.None));
+        var response = await repository.GetAsync(requestId, workerId, CancellationToken.None);
         Assert.Equal("completed", response?.State);
         Assert.Equal(result.Entries, response?.Entries);
         Assert.True(response?.HasMore);
-        Assert.Null(await repository.ClaimAsync(nodeId, CancellationToken.None));
+        Assert.Null(await repository.ClaimAsync(workerId, CancellationToken.None));
     }
 
     [Fact]

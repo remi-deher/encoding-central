@@ -14,7 +14,7 @@ public sealed class LibraryWorkerAccessRepository(DbDataSource dataSource)
 {
     public async Task<LibraryWorkerAccessResponse?> SetEnabledAsync(
         Guid libraryId,
-        Guid nodeId,
+        Guid workerId,
         bool isEnabled,
         CancellationToken cancellationToken)
     {
@@ -26,12 +26,12 @@ public sealed class LibraryWorkerAccessRepository(DbDataSource dataSource)
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var command = Sql.Command(sql, connection);
         command.Parameters.AddWithValue("library_id", libraryId);
-        command.Parameters.AddWithValue("worker_id", nodeId);
+        command.Parameters.AddWithValue("worker_id", workerId);
         command.Parameters.AddWithValue("is_enabled", isEnabled);
         if (await command.ExecuteNonQueryAsync(cancellationToken) == 0) return null;
 
         var accesses = await ListAsync(libraryId, cancellationToken);
-        return accesses?.SingleOrDefault(item => item.WorkerId == nodeId);
+        return accesses?.SingleOrDefault(item => item.WorkerId == workerId);
     }
 
     public async Task<IReadOnlyList<LibraryWorkerAccessResponse>?> ListAsync(Guid libraryId, CancellationToken cancellationToken)
@@ -65,7 +65,7 @@ public sealed class LibraryWorkerAccessRepository(DbDataSource dataSource)
         ConfigureLibraryWorkerAccessRequest request,
         CancellationToken cancellationToken)
     {
-        var nodes = request.Workers ?? [];
+        var workers = request.Workers ?? [];
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
@@ -80,15 +80,15 @@ public sealed class LibraryWorkerAccessRepository(DbDataSource dataSource)
         }
 
         var nodeRoles = new Dictionary<Guid, string[]>();
-        if (nodes.Count > 0)
+        if (workers.Count > 0)
         {
             await using var nodeCommand = Sql.Command("SELECT id, roles FROM workers WHERE id = ANY(@ids) AND deleted_at IS NULL", connection, transaction);
-            nodeCommand.Parameters.AddWithValue("ids", nodes.Select(item => item.WorkerId).Distinct().ToArray());
+            nodeCommand.Parameters.AddWithValue("ids", workers.Select(item => item.WorkerId).Distinct().ToArray());
             await using var nodeReader = await nodeCommand.ExecuteReaderAsync(cancellationToken);
             while (await nodeReader.ReadAsync(cancellationToken)) nodeRoles[nodeReader.GetGuid(0)] = nodeReader.GetStringArray(1);
         }
 
-        var errors = Validate(nodes, nodeRoles);
+        var errors = Validate(workers, nodeRoles);
         if (errors.Count > 0)
         {
             await transaction.RollbackAsync(cancellationToken);
@@ -107,7 +107,7 @@ public sealed class LibraryWorkerAccessRepository(DbDataSource dataSource)
             VALUES
                 (@library_id, @worker_id, @mode, @is_enabled, @local_path, @can_read, @can_write, @transfer_source_worker_id)
             """;
-        foreach (var item in nodes)
+        foreach (var item in workers)
         {
             await using var insert = Sql.Command(insertSql, connection, transaction);
             insert.Parameters.AddWithValue("library_id", libraryId);
@@ -126,17 +126,17 @@ public sealed class LibraryWorkerAccessRepository(DbDataSource dataSource)
     }
 
     private static Dictionary<string, string[]> Validate(
-        IReadOnlyList<LibraryWorkerAccessRequest> nodes,
+        IReadOnlyList<LibraryWorkerAccessRequest> workers,
         IReadOnlyDictionary<Guid, string[]> registeredNodes)
     {
         var errors = new Dictionary<string, string[]>();
-        if (nodes.Select(item => item.WorkerId).Distinct().Count() != nodes.Count)
+        if (workers.Select(item => item.WorkerId).Distinct().Count() != workers.Count)
             errors["nodes"] = ["Chaque worker ne peut apparaître qu’une fois."];
 
-        var configured = nodes.GroupBy(item => item.WorkerId).ToDictionary(group => group.Key, group => group.First());
-        for (var index = 0; index < nodes.Count; index++)
+        var configured = workers.GroupBy(item => item.WorkerId).ToDictionary(group => group.Key, group => group.First());
+        for (var index = 0; index < workers.Count; index++)
         {
-            var item = nodes[index];
+            var item = workers[index];
             var key = $"nodes[{index}]";
             if (item.WorkerId == Guid.Empty || !registeredNodes.ContainsKey(item.WorkerId))
                 errors[$"{key}.nodeId"] = ["Ce worker n’existe pas dans le central."];

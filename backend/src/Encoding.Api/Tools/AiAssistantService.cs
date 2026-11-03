@@ -36,14 +36,14 @@ public sealed class AiAssistantService(
         ExecutionRepository executions,
         LibraryWorkflowRepository libraryWorkflows,
         LibraryRepository libraries,
-        WorkerRepository nodes,
-        WorkerPresenceOptions nodePresence,
+        WorkerRepository workers,
+        WorkerPresenceOptions workerPresence,
         McpService mcp,
         IDataProtectionProvider protection,
         FlowTemplateRepository? flowTemplates = null)
     {
         var support = new AiAssistantSupportService(store, cluster, centralId, flows, executions, libraryWorkflows,
-            libraries, nodes, nodePresence, mcp, protection, flowTemplates);
+            libraries, workers, workerPresence, mcp, protection, flowTemplates);
         var conversations = new AiAssistantConversationsService(support);
         var actions = new AiAssistantActionsService(support, conversations);
         var send = new AiAssistantSendService(support, actions);

@@ -10,7 +10,7 @@ namespace Encoding.Api.Tools;
 
 /// <summary>Sessions IA du central : l'historique et les secrets restent sur le central, l'inférence s'exécute sur ce même central.</summary>
 public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralId centralId, AiCentralStore store, DeviceCodeAuthService auth,
-    AiSettingsService settings, AiClientFactory factory, IConfiguration configuration, LocalWorkerRegistry localNode, AiQuotaService? quotaService = null,
+    AiSettingsService settings, AiClientFactory factory, IConfiguration configuration, LocalWorkerRegistry localWorker, AiQuotaService? quotaService = null,
         AiModelCatalogService? modelCatalog = null, IServiceProvider? services = null)
 {
     private readonly ConcurrentDictionary<string, SemaphoreSlim> gates = new();
@@ -47,7 +47,7 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralId centr
                 providers.Add("anthropic");
                 models["anthropic"] = local.AnthropicModel;
             }
-            name = await localNode.ResolveDisplayNameAsync(token);
+            name = await localWorker.ResolveDisplayNameAsync(token);
             if (modelCatalog is not null)
             {
                 catalogs = providers.Select(provider => modelCatalog.ReadCachedOrRefresh(provider,
@@ -93,17 +93,17 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralId centr
         await store.SaveAsync(key, update, ct);
         return await ModelPolicyAsync(ct);
     }
-    public static bool Supports(AiWorkerAvailability node, string provider, AiPrompt prompt)
+    public static bool Supports(AiWorkerAvailability worker, string provider, AiPrompt prompt)
     {
-        if (!node.Reachable || !node.Providers.Contains(provider) || prompt.WorkerId is { } id && node.WorkerId != id) return false;
+        if (!worker.Reachable || !worker.Providers.Contains(provider) || prompt.WorkerId is { } id && worker.WorkerId != id) return false;
         if (prompt.Model is null) return true;
-        if (node.Catalogs is null) return node.Models?.GetValueOrDefault(provider) == prompt.Model && prompt.ReasoningEffort is null;
-        return node.Catalogs.Any(c => c.Provider == provider && c.State == "available"
+        if (worker.Catalogs is null) return worker.Models?.GetValueOrDefault(provider) == prompt.Model && prompt.ReasoningEffort is null;
+        return worker.Catalogs.Any(c => c.Provider == provider && c.State == "available"
             && c.Models.Any(m => m.Id == prompt.Model && (prompt.ReasoningEffort is null || m.ReasoningEfforts.Contains(prompt.ReasoningEffort))));
     }
     public async Task<AiWorkerQuotas> LocalQuotasAsync(CancellationToken ct)
     {
-        var displayName = await localNode.ResolveDisplayNameAsync(ct) ?? configuration["Worker:Name"] ?? Environment.MachineName;
+        var displayName = await localWorker.ResolveDisplayNameAsync(ct) ?? configuration["Worker:Name"] ?? Environment.MachineName;
         var id = await centralId.GetAsync(ct);
         if (quotaService is null) return new(id, displayName, []);
         var quotas = await Task.WhenAll(new[] { "codex-cli", "claude-cli" }.Select(provider => quotaService.ReadAsync(provider, ct)));
@@ -148,7 +148,7 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralId centr
         if (days is < 1 or > 365) throw new ArgumentException("Période invalide.");
         const int pageSize = 200, maxSessions = 5000;
         var since = DateTimeOffset.UtcNow.AddDays(-days);
-        var names = (await CachedViewAsync(ct)).Workers.ToDictionary(node => node.WorkerId, node => node.Name);
+        var names = (await CachedViewAsync(ct)).Workers.ToDictionary(worker => worker.WorkerId, worker => worker.Name);
         var cells = new Dictionary<(Guid, string), long[]>();
         var costs = new Dictionary<(Guid, string), decimal?>();
         var scanned = 0;
@@ -173,7 +173,7 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralId centr
             if (scanned >= maxSessions) { truncated = true; break; }
         }
         static AiUsageTotals Totals(long[] c, decimal? cost) => new(c[0], c[1], c[2], c[3], cost, c[4]);
-        var nodes = cells.GroupBy(entry => entry.Key.Item1).Select(group =>
+        var workers = cells.GroupBy(entry => entry.Key.Item1).Select(group =>
         {
             var providers = group.OrderBy(entry => entry.Key.Item2, StringComparer.Ordinal)
                 .Select(entry => new AiProviderUsage(entry.Key.Item2, Totals(entry.Value, costs.GetValueOrDefault(entry.Key)))).ToArray();
@@ -183,12 +183,12 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralId centr
             var id = group.Key == Guid.Empty ? (Guid?)null : group.Key;
             return new AiWorkerUsage(id, id is { } known && names.TryGetValue(known, out var name) ? name : id is null ? "Worker non enregistré" : "Worker retiré",
                 providers, Totals(total, nodeCosts.Length == 0 ? null : nodeCosts.Sum()));
-        }).OrderByDescending(node => node.Total.InputTokens + node.Total.OutputTokens).ThenBy(node => node.Name, StringComparer.Ordinal).ToArray();
+        }).OrderByDescending(worker => worker.Total.InputTokens + worker.Total.OutputTokens).ThenBy(worker => worker.Name, StringComparer.Ordinal).ToArray();
         var grand = new long[5];
-        foreach (var node in nodes) { grand[0] += node.Total.Turns; grand[1] += node.Total.InputTokens; grand[2] += node.Total.OutputTokens;
-            grand[3] += node.Total.CachedInputTokens; grand[4] += node.Total.TurnsWithoutUsage; }
-        var allCosts = nodes.Select(node => node.Total.CostUsd).Where(c => c is not null).ToArray();
-        return new(days, since, nodes, Totals(grand, allCosts.Length == 0 ? null : allCosts.Sum()), truncated);
+        foreach (var worker in workers) { grand[0] += worker.Total.Turns; grand[1] += worker.Total.InputTokens; grand[2] += worker.Total.OutputTokens;
+            grand[3] += worker.Total.CachedInputTokens; grand[4] += worker.Total.TurnsWithoutUsage; }
+        var allCosts = workers.Select(worker => worker.Total.CostUsd).Where(c => c is not null).ToArray();
+        return new(days, since, workers, Totals(grand, allCosts.Length == 0 ? null : allCosts.Sum()), truncated);
     }
     private static AiUsage? SumUsage(IReadOnlyList<AiSessionTurn> turns)
     {
@@ -247,7 +247,7 @@ public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralId centr
             await store.SaveAsync("session/" + id, session, ct);
             var candidates = new List<AiWorkerAvailability> { await LocalAsync(ct) };
             AiCompletionResult result = new(false, "", "Aucun worker connecté à ce fournisseur. La demande reste en attente.");
-            foreach (var candidate in candidates.Where(node => Supports(node, provider, prompt)).Take(localOnly ? 1 : 3))
+            foreach (var candidate in candidates.Where(worker => Supports(worker, provider, prompt)).Take(localOnly ? 1 : 3))
             {
                 var seconds = Math.Clamp((await GetSettingsAsync(ct)).TimeoutSeconds, 10, 600);
                 var deadline = DateTimeOffset.UtcNow.AddSeconds(seconds);

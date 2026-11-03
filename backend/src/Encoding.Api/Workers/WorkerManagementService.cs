@@ -44,16 +44,16 @@ public sealed class WorkerManagementService(
 {
     private T? Get<T>() where T : class => services.GetService(typeof(T)) as T;
 
-    public async Task<Guid?> CreateDirectoryBrowseAsync(Guid nodeId, string? path, CancellationToken ct)
+    public async Task<Guid?> CreateDirectoryBrowseAsync(Guid workerId, string? path, CancellationToken ct)
     {
         var browser = Get<WorkerDirectoryBrowserRepository>();
-        return browser is not null ? await browser.CreateAsync(nodeId, path, ct) : null;
+        return browser is not null ? await browser.CreateAsync(workerId, path, ct) : null;
     }
 
-    public async Task<WorkerDirectoryBrowserResponse?> GetDirectoryBrowseAsync(Guid requestId, Guid nodeId, CancellationToken ct)
+    public async Task<WorkerDirectoryBrowserResponse?> GetDirectoryBrowseAsync(Guid requestId, Guid workerId, CancellationToken ct)
     {
         var browser = Get<WorkerDirectoryBrowserRepository>();
-        return browser is not null ? await browser.GetAsync(requestId, nodeId, ct) : null;
+        return browser is not null ? await browser.GetAsync(requestId, workerId, ct) : null;
     }
 
     public async Task<WorkerEnrollmentOutcome> EnrollAsync(
@@ -67,16 +67,16 @@ public sealed class WorkerManagementService(
 
         var window = Get<EnrollmentWindowRepository>();
         var windowOpen = isLocal || byAdministrator || (window is null || (await window.GetAsync(ct)).IsOpen);
-        var node = await repository.EnrollAsync(request, windowOpen, ct);
+        var worker = await repository.EnrollAsync(request, windowOpen, ct);
         // Une demande de jumelage déjà publiée pour ce worker n'a plus d'objet une fois le worker admis.
-        if (node is not null) await repository.DeletePairingRequestAsync(request.Id, ct);
+        if (worker is not null) await repository.DeletePairingRequestAsync(request.Id, ct);
 
-        if (node is not null && isLocal && Get<LocalWorkerRegistry>() is { } localNode)
-            await localNode.RegisterAsync(node.Id, ct);
+        if (worker is not null && isLocal && Get<LocalWorkerRegistry>() is { } localWorker)
+            await localWorker.RegisterAsync(worker.Id, ct);
 
-        if (node is not null)
+        if (worker is not null)
         {
-            return new(false, null, windowOpen, node);
+            return new(false, null, windowOpen, worker);
         }
 
         return new(false, null, windowOpen, null);
@@ -114,17 +114,17 @@ public sealed class WorkerManagementService(
     public Task<IReadOnlyList<PendingWorkerEnrollmentResponse>> ListPendingPairingRequestsAsync(CancellationToken ct) =>
         repository.ListPendingPairingRequestsAsync(ct);
 
-    public async Task<bool> AuthenticateTokenAsync(Guid nodeId, string token, CancellationToken ct) =>
-        !string.IsNullOrWhiteSpace(token) && await repository.AuthenticateTokenAsync(nodeId, token, ct);
+    public async Task<bool> AuthenticateTokenAsync(Guid workerId, string token, CancellationToken ct) =>
+        !string.IsNullOrWhiteSpace(token) && await repository.AuthenticateTokenAsync(workerId, token, ct);
 
-    public Task<WorkerResponse?> ApprovePairingRequestAsync(Guid nodeId, CancellationToken ct) =>
-        repository.ApprovePairingRequestAsync(nodeId, ct);
+    public Task<WorkerResponse?> ApprovePairingRequestAsync(Guid workerId, CancellationToken ct) =>
+        repository.ApprovePairingRequestAsync(workerId, ct);
 
     public Task<WorkerResponse?> ApprovePairingRequestAsync(string pairingKey, CancellationToken ct) =>
         repository.ApprovePairingRequestAsync(pairingKey, ct);
 
     public async Task<HeartbeatResult> RecordHeartbeatAsync(
-        Guid nodeId,
+        Guid workerId,
         string? providedToken,
         WorkerHeartbeatRequest request,
         bool isLocal,
@@ -137,56 +137,56 @@ public sealed class WorkerManagementService(
         if (errors.Count > 0)
             return new(HeartbeatOutcomeKind.ValidationProblem, errors, null);
 
-        var node = await repository.RecordHeartbeatAsync(nodeId, providedToken, request, ct);
-        if (node is not null)
+        var worker = await repository.RecordHeartbeatAsync(workerId, providedToken, request, ct);
+        if (worker is not null)
         {
-            if (isLocal && Get<LocalWorkerRegistry>() is { } localNode)
-                await localNode.RegisterAsync(node.Id, ct);
+            if (isLocal && Get<LocalWorkerRegistry>() is { } localWorker)
+                await localWorker.RegisterAsync(worker.Id, ct);
 
             var config = Get<IConfiguration>();
             var masterUrl = config?["Central:AdvertisedApiBaseUrl"];
 
-            return new(HeartbeatOutcomeKind.Ok, null, node with
+            return new(HeartbeatOutcomeKind.Ok, null, worker with
             {
                 MasterUrl = masterUrl
             });
         }
 
-        if (await repository.IsRemovedAsync(nodeId, ct))
+        if (await repository.IsRemovedAsync(workerId, ct))
             return new(HeartbeatOutcomeKind.Gone, null, null);
 
         return new(HeartbeatOutcomeKind.Unauthorized, null, null);
     }
 
-    public Task<string> LeaveAsync(Guid nodeId, string token, CancellationToken ct) =>
-        repository.LeaveAsync(nodeId, token, ct);
+    public Task<string> LeaveAsync(Guid workerId, string token, CancellationToken ct) =>
+        repository.LeaveAsync(workerId, token, ct);
 
     public Task<IReadOnlyList<WorkerResponse>> ListAsync(TimeSpan offlineAfter, CancellationToken ct) =>
         repository.ListAsync(offlineAfter, ct);
 
-    public Task<WorkerResponse?> GetAsync(Guid nodeId, TimeSpan offlineAfter, CancellationToken ct) =>
-        repository.GetAsync(nodeId, offlineAfter, ct);
+    public Task<WorkerResponse?> GetAsync(Guid workerId, TimeSpan offlineAfter, CancellationToken ct) =>
+        repository.GetAsync(workerId, offlineAfter, ct);
 
-    public Task<bool> SetDrainingAsync(Guid nodeId, bool draining, CancellationToken ct) =>
-        repository.SetDrainingAsync(nodeId, draining, ct);
+    public Task<bool> SetDrainingAsync(Guid workerId, bool draining, CancellationToken ct) =>
+        repository.SetDrainingAsync(workerId, draining, ct);
 
-    public Task<bool> ClearQuarantineAsync(Guid nodeId, CancellationToken ct) =>
-        repository.ClearQuarantineAsync(nodeId, ct);
+    public Task<bool> ClearQuarantineAsync(Guid workerId, CancellationToken ct) =>
+        repository.ClearQuarantineAsync(workerId, ct);
 
-    public Task<string> DeleteAsync(Guid nodeId, CancellationToken ct) =>
-        repository.DeleteAsync(nodeId, ct);
+    public Task<string> DeleteAsync(Guid workerId, CancellationToken ct) =>
+        repository.DeleteAsync(workerId, ct);
 
     public Task<IReadOnlyDictionary<Guid, int>> ActiveTaskCountsAsync(CancellationToken ct) =>
         repository.ActiveTaskCountsAsync(ct);
 
-    public Task<WorkerActivityResponse> ActivityAsync(Guid nodeId, CancellationToken ct) =>
-        repository.ActivityAsync(nodeId, ct);
+    public Task<WorkerActivityResponse> ActivityAsync(Guid workerId, CancellationToken ct) =>
+        repository.ActivityAsync(workerId, ct);
 
-    public Task<WorkerProcessingSettings?> GetProcessingSettingsAsync(Guid nodeId, CancellationToken ct) =>
-        Get<LibraryProcessingRepository>() is { } p ? p.NodeAsync(nodeId, ct) : Task.FromResult<WorkerProcessingSettings?>(null);
+    public Task<WorkerProcessingSettings?> GetProcessingSettingsAsync(Guid workerId, CancellationToken ct) =>
+        Get<LibraryProcessingRepository>() is { } p ? p.WorkerAsync(workerId, ct) : Task.FromResult<WorkerProcessingSettings?>(null);
 
-    public Task<bool> SaveProcessingSettingsAsync(Guid nodeId, SaveWorkerProcessingSettings request, CancellationToken ct) =>
-        Get<LibraryProcessingRepository>() is { } p ? p.SaveNodeAsync(nodeId, request, ct) : Task.FromResult(false);
+    public Task<bool> SaveProcessingSettingsAsync(Guid workerId, SaveWorkerProcessingSettings request, CancellationToken ct) =>
+        Get<LibraryProcessingRepository>() is { } p ? p.SaveNodeAsync(workerId, request, ct) : Task.FromResult(false);
 
     public const int MaximumEnrollmentWindowMinutes = EnrollmentWindowRepository.MaximumMinutes;
     public const int MaximumFirstLinkMinutes = FirstLinkRepository.MaximumMinutes;

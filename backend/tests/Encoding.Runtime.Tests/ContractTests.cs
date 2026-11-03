@@ -103,12 +103,12 @@ public sealed class ContractTests
     [Fact]
     public void AutomaticNodeGroupsMatchAllDeclaredCharacteristics()
     {
-        var node = new Encoding.Contracts.Workers.WorkerResponse(Guid.NewGuid(), "worker", [Encoding.Contracts.Workers.NodeRole.Worker], 4, [],
+        var worker = new Encoding.Contracts.Workers.WorkerResponse(Guid.NewGuid(), "worker", [Encoding.Contracts.Workers.WorkerRole.Worker], 4, [],
             Encoding.Contracts.Workers.WorkerPresenceStatus.Online, DateTimeOffset.UtcNow,
             new Encoding.Contracts.Workers.WorkerInventory("Linux", "X64", 8, 32768));
-        var criteria = new Encoding.Contracts.Workers.WorkerGroupCriteria([Encoding.Contracts.Workers.NodeRole.Worker], "Linux", "X64", 16384, ["ffmpeg"], 2);
-        Assert.False(Encoding.Api.Workers.WorkerGroupRepository.Matches(criteria, node));
-        var equipped = node with { Capabilities = [new Encoding.Contracts.Workers.WorkerToolCapability("ffmpeg", "7.0", ["video"], [])] };
+        var criteria = new Encoding.Contracts.Workers.WorkerGroupCriteria([Encoding.Contracts.Workers.WorkerRole.Worker], "Linux", "X64", 16384, ["ffmpeg"], 2);
+        Assert.False(Encoding.Api.Workers.WorkerGroupRepository.Matches(criteria, worker));
+        var equipped = worker with { Capabilities = [new Encoding.Contracts.Workers.WorkerToolCapability("ffmpeg", "7.0", ["video"], [])] };
         Assert.True(Encoding.Api.Workers.WorkerGroupRepository.Matches(criteria, equipped));
     }
 

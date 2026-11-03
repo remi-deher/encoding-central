@@ -32,7 +32,7 @@ public sealed class DockerCentralTests
     private static string WorkerImage => Environment.GetEnvironmentVariable("ENCODING_TEST_WORKER_IMAGE") ?? "encoding-worker:test";
 
     /// <summary>Un central éphémère : réseau Docker dédié, un dossier média partagé, un serveur joignable depuis l'hôte.</summary>
-    private sealed class Cluster : IAsyncDisposable
+    private sealed class Central : IAsyncDisposable
     {
         private readonly string id = Guid.NewGuid().ToString("N")[..8];
         private readonly List<string> containers = [];
@@ -250,7 +250,7 @@ public sealed class DockerCentralTests
     [DockerFact]
     public async Task KillingTheEncodingWorkerContainerResumesOnTheOtherWorkerAndKeepsTheSource()
     {
-        await using var cluster = new Cluster();
+        await using var cluster = new Central();
         await cluster.StartServerAsync();
         var source = Path.Combine(cluster.Media, "film.mkv");
         await EncodeFixtureAsync(source, seconds: 12, size: "640x360");
@@ -296,7 +296,7 @@ public sealed class DockerCentralTests
     public async Task AWorkerFromTheLastPublishedImageJoinsTheNewCentralAndCompletesAFlow()
     {
         var previous = Environment.GetEnvironmentVariable("ENCODING_TEST_PREVIOUS_WORKER_IMAGE")!;
-        await using var cluster = new Cluster();
+        await using var cluster = new Central();
         await cluster.StartServerAsync();
         var source = Path.Combine(cluster.Media, "film.mkv");
         await EncodeFixtureAsync(source, seconds: 6, size: "640x360");
@@ -318,7 +318,7 @@ public sealed class DockerCentralTests
         Assert.Equal(sourceSha, Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(source))));
     }
 
-    private static async Task<JsonElement> WaitForWorkersAsync(Cluster cluster, int workers, IReadOnlyCollection<string>? requiredCapabilities = null)
+    private static async Task<JsonElement> WaitForWorkersAsync(Central cluster, int workers, IReadOnlyCollection<string>? requiredCapabilities = null)
     {
         JsonElement workersNow = default;
         string? nodeDiagnostic = null;
@@ -340,13 +340,13 @@ public sealed class DockerCentralTests
         return workersNow;
     }
 
-    private static async Task<Guid> QueueEncodingAsync(Cluster cluster, JsonElement workers, bool encodeVideo = true)
+    private static async Task<Guid> QueueEncodingAsync(Central cluster, JsonElement workers, bool encodeVideo = true)
     {
         var client = cluster.Client;
         var library = (await PostAsync(client, "api/v1/libraries", new { name = "Docker" })).GetProperty("id").GetGuid();
         using (var access = await client.PutAsJsonAsync($"api/v1/libraries/{library}/worker-access", new
         {
-            nodes = workers.EnumerateArray().Select(node => new { nodeId = node.GetProperty("id").GetGuid(), mode = "direct", localPath = "/media/lib", canRead = true, canWrite = true, transferSourceNodeId = (Guid?)null, isEnabled = true })
+            nodes = workers.EnumerateArray().Select(node => new { workerId = node.GetProperty("id").GetGuid(), mode = "direct", localPath = "/media/lib", canRead = true, canWrite = true, transferSourceWorkerId = (Guid?)null, isEnabled = true })
         })) Assert.True(access.IsSuccessStatusCode, await access.Content.ReadAsStringAsync());
         var flowNodes = encodeVideo
             ? new object[]
@@ -405,7 +405,7 @@ public sealed class DockerCentralTests
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.OtherRead | UnixFileMode.OtherWrite);
     }
 
-    private static async Task WaitAsync(Func<Task<bool>> condition, int seconds, string description, Cluster? cluster = null, Func<string?>? diagnostic = null)
+    private static async Task WaitAsync(Func<Task<bool>> condition, int seconds, string description, Central? cluster = null, Func<string?>? diagnostic = null)
     {
         var timer = Stopwatch.StartNew();
         while (timer.Elapsed < TimeSpan.FromSeconds(seconds))

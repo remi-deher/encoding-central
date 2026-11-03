@@ -19,7 +19,7 @@ public sealed class PluginSyncService(WorkerAgentOptions options, WorkerIdentity
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!options.Roles.Contains(Encoding.Contracts.Workers.NodeRole.Worker)) return;
+        if (!options.Roles.Contains(Encoding.Contracts.Workers.WorkerRole.Worker)) return;
         await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
         while (!stoppingToken.IsCancellationRequested)
         {

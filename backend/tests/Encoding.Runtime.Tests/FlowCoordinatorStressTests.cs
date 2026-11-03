@@ -92,12 +92,12 @@ public sealed class FlowCoordinatorStressTests
         await DatabaseMigrator.ApplyAsync(database.Db, Harness.RepositoryRoot(), CancellationToken.None);
 
         var flows = new FlowRepository(database.Db);
-        var nodes = new WorkerRepository(database.Db);
+        var workers = new WorkerRepository(database.Db);
         var blobStore = new ResourceBlobStore(new ConfigurationBuilder().Build());
         var resources = new ResourceRepository(database.Db, blobStore);
         var templates = new FlowTemplateRepository(database.Db, registry);
 
-        var coordinator = new FlowCoordinatorService(flows, nodes, resources, templates, validator, eligibility);
+        var coordinator = new FlowCoordinatorService(flows, workers, resources, templates, validator, eligibility);
 
         using var doc = JsonDocument.Parse(json);
         var outcome = await coordinator.CreateFlowAsync(doc.RootElement, null, registry, CancellationToken.None);
@@ -125,12 +125,12 @@ public sealed class FlowCoordinatorStressTests
         await DatabaseMigrator.ApplyAsync(database.Db, Harness.RepositoryRoot(), CancellationToken.None);
 
         var flows = new FlowRepository(database.Db);
-        var nodes = new WorkerRepository(database.Db);
+        var workers = new WorkerRepository(database.Db);
         var blobStore = new ResourceBlobStore(new ConfigurationBuilder().Build());
         var resources = new ResourceRepository(database.Db, blobStore);
         var templates = new FlowTemplateRepository(database.Db, registry);
 
-        var coordinator = new FlowCoordinatorService(flows, nodes, resources, templates, validator, eligibility);
+        var coordinator = new FlowCoordinatorService(flows, workers, resources, templates, validator, eligibility);
 
         using var doc = JsonDocument.Parse(json);
         var outcome = await coordinator.CreateFlowAsync(doc.RootElement, false, registry, CancellationToken.None);

@@ -20,7 +20,7 @@ public sealed class CentralMetricsCollector(DbDataSource dataSource, WorkerPrese
     {
         var writer = new PrometheusWriter();
         writer.Gauge("encoding_up", "1 si ce serveur répond.", 1);
-        try { await WriteClusterAsync(writer, cancellationToken); }
+        try { await WriteCentralAsync(writer, cancellationToken); }
         catch (DbException)
         {
             writer.Gauge("encoding_database_up", "1 si la base locale répond.", 0);
@@ -50,7 +50,7 @@ public sealed class CentralMetricsCollector(DbDataSource dataSource, WorkerPrese
         writer.Counter("encoding_sqlite_writer_hold_seconds_total", "Temps cumulé de détention de l’écrivain.", state.HoldSeconds);
     }
 
-    private async Task WriteClusterAsync(PrometheusWriter writer, CancellationToken ct)
+    private async Task WriteCentralAsync(PrometheusWriter writer, CancellationToken ct)
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         writer.Gauge("encoding_database_up", "1 si la base locale répond.", 1);

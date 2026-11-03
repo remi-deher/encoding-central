@@ -15,9 +15,9 @@ public sealed class AgentJsonTests
     [Fact]
     public void AgentClientsReadAndWriteRolesAsStrings()
     {
-        var node = JsonSerializer.Deserialize<WorkerResponse>(Json, AgentJson.Options)!;
-        Assert.Equal([NodeRole.Server, NodeRole.Worker], node.Roles);
-        Assert.Contains("\"worker\"", JsonSerializer.Serialize(node, AgentJson.Options));
+        var worker = JsonSerializer.Deserialize<WorkerResponse>(Json, AgentJson.Options)!;
+        Assert.Equal([WorkerRole.Server, WorkerRole.Worker], worker.Roles);
+        Assert.Contains("\"worker\"", JsonSerializer.Serialize(worker, AgentJson.Options));
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<WorkerResponse>(Json, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
     }
 }

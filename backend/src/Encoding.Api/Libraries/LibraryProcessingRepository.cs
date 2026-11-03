@@ -58,24 +58,24 @@ public sealed class LibraryProcessingRepository(DbDataSource dataSource)
         }
         await tx.CommitAsync(ct);return true;
     }
-    public async Task<WorkerProcessingSettings?> NodeAsync(Guid node,CancellationToken ct)
+    public async Task<WorkerProcessingSettings?> WorkerAsync(Guid worker,CancellationToken ct)
     {
         await using var cmd=dataSource.CreateCommand("SELECT p.max_concurrent_tasks,COALESCE(p.max_concurrent_tasks,n.max_concurrent_tasks),COALESCE(p.revision,0),COALESCE(p.schedule_enabled,false),COALESCE(p.schedule_timezone,'UTC'),COALESCE(p.schedule_slots,repeat('1',672)) FROM workers n LEFT JOIN worker_processing_settings p ON p.worker_id=n.id WHERE n.id=@id AND n.deleted_at IS NULL");
-        cmd.Parameters.AddWithValue("id",node);await using var r=await cmd.ExecuteReaderAsync(ct);
+        cmd.Parameters.AddWithValue("id",worker);await using var r=await cmd.ExecuteReaderAsync(ct);
         return await r.ReadAsync(ct)?new(r.IsDBNull(0)?null:r.GetInt32(0),r.GetInt32(1),r.GetInt32(2),new WorkerSchedule(r.GetBoolean(3),r.GetString(4),r.GetString(5))):null;
     }
-    public async Task<bool> SaveNodeAsync(Guid node,SaveWorkerProcessingSettings request,CancellationToken ct)
+    public async Task<bool> SaveNodeAsync(Guid worker,SaveWorkerProcessingSettings request,CancellationToken ct)
     {
         if(request.MaxConcurrentTasks is <1 or >1000 || request.ExpectedRevision is <0 or int.MaxValue)throw new ArgumentException("La limite doit être comprise entre 1 et 1 000, ou laissée vide.");
         var schedule=request.Schedule??WorkerSchedule.AlwaysOpen; if(schedule.Validate() is {} scheduleError)throw new ArgumentException(scheduleError);
         await using var c=await dataSource.OpenConnectionAsync(ct);await using var tx=await c.BeginTransactionAsync(ct);
         await using var locked=Sql.Command("SELECT id FROM workers WHERE id=@id AND deleted_at IS NULL FOR UPDATE",c,tx);
-        locked.Parameters.AddWithValue("id",node);if(await locked.ExecuteScalarAsync(ct) is null)return false;
-        await using var current=Sql.Command("SELECT revision FROM worker_processing_settings WHERE worker_id=@id",c,tx);current.Parameters.AddWithValue("id",node);
+        locked.Parameters.AddWithValue("id",worker);if(await locked.ExecuteScalarAsync(ct) is null)return false;
+        await using var current=Sql.Command("SELECT revision FROM worker_processing_settings WHERE worker_id=@id",c,tx);current.Parameters.AddWithValue("id",worker);
         if((await current.ScalarInt32Async(ct) ?? 0)!=request.ExpectedRevision)return false;
         await using var save=Sql.Command("INSERT INTO worker_processing_settings(worker_id,max_concurrent_tasks,revision,schedule_enabled,schedule_timezone,schedule_slots) VALUES(@id,@max,@revision,@enabled,@zone,@slots) ON CONFLICT(worker_id) DO UPDATE SET max_concurrent_tasks=@max,revision=@revision,schedule_enabled=@enabled,schedule_timezone=@zone,schedule_slots=@slots",
             c,tx);
-        save.Parameters.AddWithValue("id",node);save.Parameters.AddWithValue("max",SqlKind.Integer,(object?)request.MaxConcurrentTasks??DBNull.Value);
+        save.Parameters.AddWithValue("id",worker);save.Parameters.AddWithValue("max",SqlKind.Integer,(object?)request.MaxConcurrentTasks??DBNull.Value);
             save.Parameters.AddWithValue("revision",request.ExpectedRevision+1);save.Parameters.AddWithValue("enabled",schedule.Enabled);
             save.Parameters.AddWithValue("zone",schedule.TimeZone);save.Parameters.AddWithValue("slots",schedule.Slots);
         await save.ExecuteNonQueryAsync(ct);await tx.CommitAsync(ct);return true;

@@ -14,7 +14,7 @@ public sealed class WorkerCentralDiscovery(
     WorkerAgentOptions options,
     ILogger<WorkerCentralDiscovery> logger) : BackgroundService
 {
-    private readonly ConcurrentDictionary<Guid, DiscoveredCentral> clusters = new();
+    private readonly ConcurrentDictionary<Guid, DiscoveredCentral> centrals = new();
     private readonly object knownAddressesLock = new();
     private MdnsBrowser? browser;
 
@@ -29,9 +29,9 @@ public sealed class WorkerCentralDiscovery(
             || !string.IsNullOrEmpty(uri.UserInfo))
             throw new ArgumentException("L'adresse doit être une URL HTTP ou HTTPS absolue, par exemple http://192.168.1.51:8090.");
         var baseUrl = new Uri(uri.GetLeftPart(UriPartial.Authority) + "/");
-        var cluster = await ProbeAsync(baseUrl, cancellationToken);
+        var central = await ProbeAsync(baseUrl, cancellationToken);
         RememberAddress(baseUrl.AbsoluteUri);
-        return cluster;
+        return central;
     }
 
     private async Task<DiscoveredCentral> ProbeAsync(Uri baseUrl, CancellationToken cancellationToken)
@@ -43,10 +43,10 @@ public sealed class WorkerCentralDiscovery(
         { throw new HttpRequestException($"Aucun central Encoding ne répond à {baseUrl} : {exception.Message}", exception); }
         if (identity is null || identity.Id == Guid.Empty)
             throw new HttpRequestException($"{baseUrl} ne répond pas comme un central Encoding.");
-        var cluster = new DiscoveredCentral(identity.Id, identity.Name, baseUrl.AbsoluteUri, DateTimeOffset.UtcNow, "manual");
-        clusters[identity.Id] = cluster;
-        logger.LogInformation("Cluster ajouté par adresse : {ClusterName} ({ClusterId}) à {ApiBaseUrl}.", cluster.Name, cluster.Id, cluster.ApiBaseUrl);
-        return cluster;
+        var central = new DiscoveredCentral(identity.Id, identity.Name, baseUrl.AbsoluteUri, DateTimeOffset.UtcNow, "manual");
+        centrals[identity.Id] = central;
+        logger.LogInformation("Cluster ajouté par adresse : {ClusterName} ({ClusterId}) à {ApiBaseUrl}.", central.Name, central.Id, central.ApiBaseUrl);
+        return central;
     }
 
     private string KnownAddressesPath => Path.Combine(options.DataDirectory, "known-clusters.json");
@@ -104,35 +104,35 @@ public sealed class WorkerCentralDiscovery(
 
     private void MarkUnreachable(string baseUrl)
     {
-        foreach (var (id, cluster) in clusters)
-            if (cluster.Source == "manual" && string.Equals(cluster.ApiBaseUrl, baseUrl, StringComparison.OrdinalIgnoreCase))
-                clusters[id] = cluster with { Reachable = false };
+        foreach (var (id, central) in centrals)
+            if (central.Source == "manual" && string.Equals(central.ApiBaseUrl, baseUrl, StringComparison.OrdinalIgnoreCase))
+                centrals[id] = central with { Reachable = false };
     }
 
     /// <summary>
     /// Oublie un central ajouté par adresse : il disparaît de la liste et n'est plus sondé. Retourne faux si aucune adresse mémorisée ne correspond
     /// (un central détecté sur le réseau ou le serveur du conteneur ne s'oublie pas : ils reviendraient aussitôt).
     /// </summary>
-    public bool Forget(Guid clusterId)
+    public bool Forget(Guid centralId)
     {
-        if (!clusters.TryGetValue(clusterId, out var cluster)) return false;
+        if (!centrals.TryGetValue(centralId, out var central)) return false;
         lock (knownAddressesLock)
         {
             var known = LoadKnownAddresses();
-            var remaining = known.Where(address => !string.Equals(address, cluster.ApiBaseUrl, StringComparison.OrdinalIgnoreCase)).ToArray();
+            var remaining = known.Where(address => !string.Equals(address, central.ApiBaseUrl, StringComparison.OrdinalIgnoreCase)).ToArray();
             if (remaining.Length == known.Length) return false;
             try { File.WriteAllText(KnownAddressesPath, System.Text.Json.JsonSerializer.Serialize(remaining)); }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                logger.LogWarning(exception, "L'adresse du central {ApiBaseUrl} n'a pas pu être oubliée.", cluster.ApiBaseUrl);
+                logger.LogWarning(exception, "L'adresse du central {ApiBaseUrl} n'a pas pu être oubliée.", central.ApiBaseUrl);
                 return false;
             }
         }
-        clusters.TryRemove(clusterId, out _);
+        centrals.TryRemove(centralId, out _);
         return true;
     }
 
-    public IReadOnlyList<DiscoveredCentral> List() => clusters.Values.OrderBy(cluster => cluster.Name).ToArray();
+    public IReadOnlyList<DiscoveredCentral> List() => centrals.Values.OrderBy(central => central.Name).ToArray();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -153,7 +153,7 @@ public sealed class WorkerCentralDiscovery(
             using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
             while (!stoppingToken.IsCancellationRequested)
             {
-                await AddConfiguredClusterAsync(client, stoppingToken);
+                await AddConfiguredCentralAsync(client, stoppingToken);
                 await RefreshKnownAddressesAsync(stoppingToken);
                 await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
             }
@@ -167,7 +167,7 @@ public sealed class WorkerCentralDiscovery(
         }
     }
 
-    private async Task AddConfiguredClusterAsync(HttpClient client, CancellationToken cancellationToken)
+    private async Task AddConfiguredCentralAsync(HttpClient client, CancellationToken cancellationToken)
     {
         if (options.CentralApiBaseUrl is null) return;
         try
@@ -175,7 +175,7 @@ public sealed class WorkerCentralDiscovery(
             var identity = await client.GetFromJsonAsync<CentralIdentity>(
                 new Uri(new Uri(options.CentralApiBaseUrl), "api/v1/central"), cancellationToken);
             if (identity is null || identity.Id == Guid.Empty) return;
-            clusters[identity.Id] = new DiscoveredCentral(identity.Id, identity.Name, options.CentralApiBaseUrl, DateTimeOffset.UtcNow, "configured");
+            centrals[identity.Id] = new DiscoveredCentral(identity.Id, identity.Name, options.CentralApiBaseUrl, DateTimeOffset.UtcNow, "configured");
             logger.LogInformation("Cluster configuré découvert : {ClusterName} ({ClusterId}).", identity.Name, identity.Id);
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
@@ -187,7 +187,7 @@ public sealed class WorkerCentralDiscovery(
     private void OnServiceFound(ServiceProfile service)
     {
         if (!service.Properties.TryGetValue("centralId", out var idValue)
-            || !Guid.TryParse(idValue, out var clusterId)) return;
+            || !Guid.TryParse(idValue, out var centralId)) return;
 
         var apiBaseUrl = service.Properties.TryGetValue("apiUrl", out var configuredUrl)
             ? configuredUrl
@@ -198,15 +198,15 @@ public sealed class WorkerCentralDiscovery(
         var clusterName = service.Properties.TryGetValue("centralName", out var configuredName) && !string.IsNullOrWhiteSpace(configuredName)
             ? configuredName
             : service.InstanceName;
-        var cluster = new DiscoveredCentral(clusterId, clusterName, uri.AbsoluteUri.EndsWith('/') ? uri.AbsoluteUri : uri.AbsoluteUri + '/', DateTimeOffset.UtcNow);
-        clusters.AddOrUpdate(clusterId, cluster, (_, existing) => existing.Source == "configured" ? existing : cluster);
-        logger.LogInformation("Cluster découvert : {ClusterName} ({ClusterId}).", cluster.Name, cluster.Id);
+        var central = new DiscoveredCentral(centralId, clusterName, uri.AbsoluteUri.EndsWith('/') ? uri.AbsoluteUri : uri.AbsoluteUri + '/', DateTimeOffset.UtcNow);
+        centrals.AddOrUpdate(centralId, central, (_, existing) => existing.Source == "configured" ? existing : central);
+        logger.LogInformation("Cluster découvert : {ClusterName} ({ClusterId}).", central.Name, central.Id);
     }
 
     private void OnServiceLost(ServiceProfile service)
     {
-        if (service.Properties.TryGetValue("centralId", out var idValue) && Guid.TryParse(idValue, out var clusterId))
-            clusters.TryRemove(clusterId, out _);
+        if (service.Properties.TryGetValue("centralId", out var idValue) && Guid.TryParse(idValue, out var centralId))
+            centrals.TryRemove(centralId, out _);
     }
 
     public override void Dispose()

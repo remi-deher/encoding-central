@@ -12,12 +12,12 @@ public static class WorkerVerificationCode
     private const string Alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     public const int Length = 6;
 
-    public static string FromToken(Guid nodeId, string token) =>
-        FromTokenHash(nodeId, SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
+    public static string FromToken(Guid workerId, string token) =>
+        FromTokenHash(workerId, SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
 
-    public static string FromTokenHash(Guid nodeId, byte[] tokenHash)
+    public static string FromTokenHash(Guid workerId, byte[] tokenHash)
     {
-        var digest = SHA256.HashData([.. nodeId.ToByteArray(), .. tokenHash]);
+        var digest = SHA256.HashData([.. workerId.ToByteArray(), .. tokenHash]);
         var chars = new char[Length];
         for (var index = 0; index < Length; index++) chars[index] = Alphabet[digest[index] % Alphabet.Length];
         return new string(chars);

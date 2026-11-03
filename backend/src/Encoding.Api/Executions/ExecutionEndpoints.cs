@@ -20,21 +20,21 @@ public static class ExecutionEndpoints
         executions.MapGet("", async (
             string? state,
             Guid? libraryId,
-            Guid? nodeId,
+            Guid? workerId,
             DateTimeOffset? since,
             int? limit,
             int? offset,
             ExecutionRepository repository,
             CancellationToken ct) =>
         {
-            var query = new ExecutionFilterQuery(state, libraryId, nodeId, since, limit ?? 200, offset ?? 0);
+            var query = new ExecutionFilterQuery(state, libraryId, workerId, since, limit ?? 200, offset ?? 0);
             return Results.Ok(await repository.OverviewAsync(query, ct));
         }).WithName("GetExecutionOverview");
 
         executions.MapGet("/stream", async (
             string? state,
             Guid? libraryId,
-            Guid? nodeId,
+            Guid? workerId,
             int? limit,
             int? offset,
             bool? once,
@@ -44,7 +44,7 @@ public static class ExecutionEndpoints
             CancellationToken ct) =>
         {
             ExecutionStreamBroadcaster.PrepareResponse(http.Response);
-            var query = new ExecutionFilterQuery(state, libraryId, nodeId, null, limit ?? 200, offset ?? 0);
+            var query = new ExecutionFilterQuery(state, libraryId, workerId, null, limit ?? 200, offset ?? 0);
             var version = broadcaster.CurrentVersion;
             var initial = await repository.OverviewAsync(query, ct);
             await ExecutionStreamBroadcaster.WriteEventAsync(http.Response, "overview", initial, SseJsonOptions, ct);

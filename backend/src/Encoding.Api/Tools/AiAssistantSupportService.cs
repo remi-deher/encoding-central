@@ -30,8 +30,8 @@ public sealed class AiAssistantSupportService(
     ExecutionRepository executions,
     LibraryWorkflowRepository libraryWorkflows,
     LibraryRepository libraries,
-    WorkerRepository nodes,
-    WorkerPresenceOptions nodePresence,
+    WorkerRepository workers,
+    WorkerPresenceOptions workerPresence,
     McpService mcp,
     IDataProtectionProvider protection,
     FlowTemplateRepository? flowTemplates = null)
@@ -43,8 +43,8 @@ public sealed class AiAssistantSupportService(
     public ExecutionRepository Executions => executions;
     public LibraryWorkflowRepository LibraryWorkflows => libraryWorkflows;
     public LibraryRepository Libraries => libraries;
-    public WorkerRepository Workers => nodes;
-    public WorkerPresenceOptions WorkerPresence => nodePresence;
+    public WorkerRepository Workers => workers;
+    public WorkerPresenceOptions WorkerPresence => workerPresence;
     public McpService Mcp => mcp;
 
     public FlowTemplateRepository FlowTemplates => flowTemplates
@@ -55,9 +55,9 @@ public sealed class AiAssistantSupportService(
         if (refresh) await cluster.ModelsAsync(true, ct);
         var view = await cluster.CachedViewAsync(ct);
         var policy = await cluster.ModelPolicyAsync(ct);
-        var nodes = settings.AssistantLocalOnly ? view.Workers.Take(1) : view.Workers;
-        var catalogs = nodes.Where(n => n.Reachable).Select(n => new AiWorkerModelCatalog(n.WorkerId, n.Name, n.Catalogs ?? [])).ToArray();
-        var options = catalogs.SelectMany(node => node.Providers
+        var workers = settings.AssistantLocalOnly ? view.Workers.Take(1) : view.Workers;
+        var catalogs = workers.Where(n => n.Reachable).Select(n => new AiWorkerModelCatalog(n.WorkerId, n.Name, n.Catalogs ?? [])).ToArray();
+        var options = catalogs.SelectMany(worker => worker.Providers
             .Where(c => c.State == "available"
                 && (!settings.AssistantLocalOnly || c.Provider == "ollama")
                 && (c.Provider != "codex-cli" || settings.CodexEnabled)
@@ -67,7 +67,7 @@ public sealed class AiAssistantSupportService(
                 && (c.Provider != "anthropic" || settings.AnthropicEnabled))
             .SelectMany(c => c.Models.Where(m => !policy.DisabledModels.Any(d => d.Provider == c.Provider && d.Model == m.Id))
                 .Select(m => new AiAssistantModelOption(c.Provider, m.Id, m.Label, m.ReasoningEfforts,
-                    node.WorkerId, node.Name, m.DefaultReasoningEffort, m.ReasoningKnown, m.IsDefault)))).ToArray();
+                    worker.WorkerId, worker.Name, m.DefaultReasoningEffort, m.ReasoningKnown, m.IsDefault)))).ToArray();
         var defaultProvider = settings.AssistantProvider ?? settings.DefaultProvider;
         var inheritedProvider = settings.AssistantProvider is null;
         var configuredModel = inheritedProvider ? settings.AssistantModel ?? settings.DefaultModel : settings.AssistantModel;
@@ -185,11 +185,11 @@ public sealed class AiAssistantSupportService(
             case "node":
             {
                 if (version is not null) throw new ArgumentException("Un worker ne prend pas de version de ressource.");
-                var node = await nodes.GetAsync(id, nodePresence.OfflineAfter, ct);
-                if (node is null) return null;
-                var label = string.IsNullOrWhiteSpace(node.DisplayName) ? node.Name : node.DisplayName;
+                var worker = await workers.GetAsync(id, workerPresence.OfflineAfter, ct);
+                if (worker is null) return null;
+                var label = string.IsNullOrWhiteSpace(worker.DisplayName) ? worker.Name : worker.DisplayName;
                 var source = new AiAssistantSource("node", id, $"Worker {label}", "/nodes");
-                return new(source, JsonSerializer.Serialize(node, ContextJsonOptions));
+                return new(source, JsonSerializer.Serialize(worker, ContextJsonOptions));
             }
             case "library":
             {

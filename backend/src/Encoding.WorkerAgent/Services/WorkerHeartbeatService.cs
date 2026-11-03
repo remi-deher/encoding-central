@@ -61,17 +61,17 @@ public sealed class WorkerHeartbeatService(
                                 logger.LogWarning("Le heartbeat du worker {NodeId} vers {ServerUrl} a reçu HTTP {StatusCode}.", identity.Id, serverUrl, (int)response.StatusCode);
                             else if (response.IsSuccessStatusCode)
                             {
-                                var node = await response.Content.ReadFromJsonAsync<WorkerResponse>(AgentJson.Options, stoppingToken);
+                                var worker = await response.Content.ReadFromJsonAsync<WorkerResponse>(AgentJson.Options, stoppingToken);
                                 if (!identity.IsEnrolled)
                                 {
                                     await identityStore.MarkEnrolledAsync(stoppingToken);
                                     logger.LogInformation("L’enrôlement en attente du worker {NodeId} a été confirmé par le central.", identity.Id);
                                 }
-                                if (!string.IsNullOrWhiteSpace(node?.MasterUrl))
-                                    await identityStore.UpdateMasterUrlAsync(node.MasterUrl, stoppingToken);
+                                if (!string.IsNullOrWhiteSpace(worker?.MasterUrl))
+                                    await identityStore.UpdateMasterUrlAsync(worker.MasterUrl, stoppingToken);
 
                                 logger.LogDebug("Heartbeat envoyé pour le worker {NodeId} vers {ServerUrl}.", identity.Id, serverUrl);
-                                ReportLifecycle(node);
+                                ReportLifecycle(worker);
                             }
                         }
                         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException && !stoppingToken.IsCancellationRequested)
@@ -99,14 +99,14 @@ public sealed class WorkerHeartbeatService(
     }
 
     // Le central décide de l'éligibilité ; le worker se contente de le dire clairement dans ses journaux, une fois par changement.
-    private void ReportLifecycle(WorkerResponse? node)
+    private void ReportLifecycle(WorkerResponse? worker)
     {
-        if (node?.Lifecycle is not { } lifecycle || lifecycle == lastLifecycle) return;
+        if (worker?.Lifecycle is not { } lifecycle || lifecycle == lastLifecycle) return;
         lastLifecycle = lifecycle;
         if (lifecycle is WorkerLifecycle.Online or WorkerLifecycle.Offline)
             logger.LogInformation("Le central considère ce worker comme {Lifecycle}.", lifecycle);
         else
-            logger.LogWarning("Le central ne confie plus de tâche à ce worker ({Lifecycle}) : {Reason}", lifecycle, node.LifecycleReason);
+            logger.LogWarning("Le central ne confie plus de tâche à ce worker ({Lifecycle}) : {Reason}", lifecycle, worker.LifecycleReason);
     }
 
     public override void Dispose()

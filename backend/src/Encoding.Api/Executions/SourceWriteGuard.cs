@@ -10,16 +10,16 @@ namespace Encoding.Api.Executions;
 /// </summary>
 public sealed class SourceWriteGuard(DbDataSource db)
 {
-    internal async Task<bool> NodeCanWriteAsync(Guid node,DbConnection c,DbTransaction? tx,CancellationToken ct)
+    internal async Task<bool> NodeCanWriteAsync(Guid worker,DbConnection c,DbTransaction? tx,CancellationToken ct)
     {
         await using var actor=Sql.Command("SELECT EXISTS(SELECT 1 FROM workers WHERE id=@node AND deleted_at IS NULL AND NOT quarantined AND incompatible_reason IS NULL)",c,tx);
-        actor.Parameters.AddWithValue("node",node);
+        actor.Parameters.AddWithValue("node",worker);
         return await actor.ScalarBoolAsync(ct);
     }
 
-    internal async Task<bool> NodeCanWriteAsync(Guid node,CancellationToken ct)
+    internal async Task<bool> NodeCanWriteAsync(Guid worker,CancellationToken ct)
     {
         await using var c=await db.OpenConnectionAsync(ct);
-        return await NodeCanWriteAsync(node,c,null,ct);
+        return await NodeCanWriteAsync(worker,c,null,ct);
     }
 }

@@ -61,7 +61,7 @@ internal static class CentralUiProxy
 
             if (context.Request.Path.StartsWithSegments("/api/v1/local-worker"))
             {
-                await RelayLocalNodeAsync(context, client, central, localPort, secretFile);
+                await RelayLocalWorkerAsync(context, client, central, localPort, secretFile);
                 return;
             }
 
@@ -121,7 +121,7 @@ internal static class CentralUiProxy
         }
     }
 
-    private static async Task RelayLocalNodeAsync(HttpContext context, HttpClient client, string central, int localPort, string? secretFile)
+    private static async Task RelayLocalWorkerAsync(HttpContext context, HttpClient client, string central, int localPort, string? secretFile)
     {
         var role = await SessionRoleAsync(context, client, central);
         if (role is null)

@@ -23,9 +23,9 @@ public sealed class DefaultSystemLogWorkerContext : ISystemLogWorkerContext
 {
     private readonly Func<(Guid? NodeId, string? NodeName)>? _resolver;
 
-    public DefaultSystemLogWorkerContext(Guid? nodeId = null, string? nodeName = null)
+    public DefaultSystemLogWorkerContext(Guid? workerId = null, string? nodeName = null)
     {
-        WorkerId = nodeId;
+        WorkerId = workerId;
         WorkerName = nodeName;
     }
 

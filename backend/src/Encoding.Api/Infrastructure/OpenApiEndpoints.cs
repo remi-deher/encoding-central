@@ -150,9 +150,9 @@ public static class OpenApiEndpoints
             ["/api/v1/executions"] = ("ExecutionOverviewResponse", null),
             ["/api/v1/executions/{id}"] = ("ExecutionResponse", null),
             ["/api/v1/executions/{id}/events"] = ("ExecutionEventResponse", null),
-            ["/api/v1/runtime/workers/{nodeId}/execution-states"] = ("RuntimeExecutionState", "RuntimeExecutionStatesRequest"),
-            ["/api/v1/runtime/workers/{nodeId}/executions/{id}/finish"] = (null, "FinishRuntimeExecution"),
-            ["/api/v1/runtime/workers/{nodeId}/executions/{id}/source-failure"] = (null, "FinishRuntimeExecution"),
+            ["/api/v1/runtime/workers/{workerId}/execution-states"] = ("RuntimeExecutionState", "RuntimeExecutionStatesRequest"),
+            ["/api/v1/runtime/workers/{workerId}/executions/{id}/finish"] = (null, "FinishRuntimeExecution"),
+            ["/api/v1/runtime/workers/{workerId}/executions/{id}/source-failure"] = (null, "FinishRuntimeExecution"),
         };
 
     public static void MapOpenApiEndpoints(this WebApplication app)
