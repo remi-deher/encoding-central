@@ -10,10 +10,7 @@ import {
 } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
-import {
-  ApiTokenResponse,
-  CreatedApiTokenResponse,
-} from '../../../shared/models/api-token';
+import { ApiTokenResponse, CreatedApiTokenResponse } from '../../../shared/models/api-token';
 import { formatRelativeTime } from '../../../shared/models/date-format';
 import { ApiTokenService } from '../../../shared/services/api-token.service';
 import { ClipboardService } from '../../../shared/services/clipboard.service';

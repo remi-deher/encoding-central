@@ -27,8 +27,8 @@ import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-
       icon="api"
     >
       <p>
-        Actualisation chaque minute. Plusieurs workers peuvent utiliser le même compte : leurs quotas
-        ne s’additionnent pas.
+        Actualisation chaque minute. Plusieurs workers peuvent utiliser le même compte : leurs
+        quotas ne s’additionnent pas.
       </p>
       @if (error()) {
         <p role="status">{{ error() }}</p>

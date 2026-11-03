@@ -12,9 +12,7 @@ describe('SystemTabComponent', () => {
     const fixture = TestBed.createComponent(SystemTabComponent);
     const http = TestBed.inject(HttpTestingController);
     fixture.detectChanges();
-    http
-      .expectOne('/api/v1/central')
-      .flush({ id: 'abc-123', name: 'Maison' });
+    http.expectOne('/api/v1/central').flush({ id: 'abc-123', name: 'Maison' });
     http.expectOne('/health/details').flush({
       status: 'degraded',
       totalDurationMs: 40,
