@@ -860,7 +860,7 @@ internal static partial class Harness
             Directory.CreateDirectory(sourceOptions.DataDirectory);
             await File.WriteAllTextAsync(Path.Combine(sourceOptions.DataDirectory,"node-identity.json"),
                 JsonSerializer.Serialize(new WorkerIdentityState(a,"fixture","fixture",app.Urls.Single()+"/",Token,true),Json),deadline.Token);
-            using var sourceService=new RuntimeTransferService(sourceOptions,new WorkerIdentityStore(sourceOptions),scanner,new PublicationGuardRunner(new NoGuardInvoker(),NullLogger<PublicationGuardRunner>.Instance),localPublicationArtifacts,NullLogger<RuntimeTransferService>.Instance);
+            using var sourceService=new RuntimeTransferService(sourceOptions,new WorkerIdentityStore(sourceOptions),scanner,new PublicationGuardRunner(new NoGuardInvoker(),NullLogger<PublicationGuardRunner>.Instance),localPublicationArtifacts,new WorkerWakeSignal(),NullLogger<RuntimeTransferService>.Instance);
             await sourceService.StartAsync(deadline.Token);
             await run;
             await sourceService.StopAsync(CancellationToken.None);

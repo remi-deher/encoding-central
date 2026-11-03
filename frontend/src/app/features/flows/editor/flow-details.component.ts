@@ -16,7 +16,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDialog } from '@angular/material/dialog';
-import { firstValueFrom, interval } from 'rxjs';
+import { firstValueFrom, skip } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FlowValidation } from '../../../shared/services/flow-validation';
 import {
@@ -34,6 +34,7 @@ import { NotificationService } from '../../../shared/services/notification.servi
 import { AuthService } from '../../../core/auth/auth.service';
 
 import { formatFullDateTime } from '../../../shared/models/date-format';
+import { LiveUpdates } from '../../../shared/services/live-updates';
 
 type Selection =
   | { kind: 'current' }
@@ -61,6 +62,7 @@ export class FlowDetailsComponent implements OnChanges, OnDestroy {
   readonly initialTab = input(0);
   readonly refreshed = output<void>();
   private readonly api = inject(FlowValidation);
+  private readonly live = inject(LiveUpdates);
   protected readonly auth = inject(AuthService);
   private readonly dialog = inject(MatDialog);
   private readonly downloads = inject(FileDownload);
@@ -173,8 +175,10 @@ export class FlowDetailsComponent implements OnChanges, OnDestroy {
   private generation = 0;
   private previewGeneration = 0;
   constructor() {
-    interval(60_000)
-      .pipe(takeUntilDestroyed(this.destroyRef))
+    // Le premier passage de drive() recharge ce que ngOnChanges vient de charger : on le saute.
+    this.live
+      .drive(['flows'])
+      .pipe(skip(1), takeUntilDestroyed(this.destroyRef))
       .subscribe(() => void this.refreshInBackground());
   }
   ngOnChanges(): void {

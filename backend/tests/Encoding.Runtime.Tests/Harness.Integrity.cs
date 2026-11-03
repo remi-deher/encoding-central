@@ -34,7 +34,7 @@ internal static partial class Harness
             await File.WriteAllTextAsync(Path.Combine(sourceOptions.DataDirectory,"node-identity.json"),
                 JsonSerializer.Serialize(new WorkerIdentityState(a,"fixture","fixture",app.Urls.Single()+"/",Token,true),Json));
             using var sourceService = new RuntimeTransferService(sourceOptions,new WorkerIdentityStore(sourceOptions),
-                new MediaScanner(tools),new PublicationGuardRunner(new NoGuardInvoker(),NullLogger<PublicationGuardRunner>.Instance),localPublicationArtifacts,NullLogger<RuntimeTransferService>.Instance);
+                new MediaScanner(tools),new PublicationGuardRunner(new NoGuardInvoker(),NullLogger<PublicationGuardRunner>.Instance),localPublicationArtifacts,new WorkerWakeSignal(),NullLogger<RuntimeTransferService>.Instance);
             await sourceService.StartAsync(deadline.Token);
             try { await run; }
             finally { await sourceService.StopAsync(default); }
