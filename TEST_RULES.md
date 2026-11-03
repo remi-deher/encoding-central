@@ -69,6 +69,7 @@ Ces règles sont obligatoires pour les changements du projet. Les tests doivent 
 
 **Lourd — CI uniquement, ne jamais lancer en local :**
 
+- Seule exception légère en CI sur `dev` : le workflow `backend-dev.yml` (job `backend-dev-fast`) compile avec `-warnaserror` et n'exécute que `ArchitectureTests` sur les PR et push vers `dev`.
 - Suite backend complète non filtrée (outils média exigés via `ENCODING_TEST_REQUIRE_MEDIA_TOOLS=1`, collecte de couverture, artefacts `.trx`) : job `backend-runtime-tests` de `.github/workflows/backend.yml`.
 - Tests de stress `Category=Stress` (`LoadStressTests`, variables `ENCODING_STRESS_EXECUTIONS` / `ENCODING_STRESS_NODES` / `ENCODING_STRESS_SECONDS`) : workflow `.github/workflows/stress.yml` (nightly + manuel), exclu des PR par le filtre `Category!=Stress`.
 - Tests multi-processus réels (`WorkerProcessLossTests`, `ENCODING_TEST_MULTIPROCESS=1` : vrai serveur, vrais workers, SIGKILL en plein encodage, plusieurs minutes) : job `backend-multiprocess-tests`.
