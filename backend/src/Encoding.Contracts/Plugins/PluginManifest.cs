@@ -13,7 +13,22 @@ public sealed record PluginManifest(
     IReadOnlyList<FlowComponentDescriptor> Components,
     FlowConfigurationSchema? ConfigurationSchema = null,
     PluginPublicationGuard? PublicationGuard = null,
-    IReadOnlyList<Encoding.Contracts.Tools.PluginToolDependency>? RequiredToolPackages = null);
+    IReadOnlyList<Encoding.Contracts.Tools.PluginToolDependency>? RequiredToolPackages = null,
+    IReadOnlyList<string>? Capabilities = null);
+
+/// <summary>
+/// Privilèges supplémentaires qu'un plugin déclare dans son manifeste (champ <c>capabilities</c>). Sans déclaration, le processus du
+/// plugin s'exécute sans réseau. Une valeur inconnue rend le manifeste invalide : jamais d'ignorance silencieuse d'un privilège.
+/// </summary>
+public static class PluginCapabilities
+{
+    /// <summary>Connexions TCP/IP sortantes (API de serveurs multimédias, services distants). Absent : aucune socket hors AF_UNIX.</summary>
+    public const string Network = "network";
+
+    public static readonly IReadOnlySet<string> Ids = new HashSet<string>(StringComparer.Ordinal) { Network };
+
+    public static bool AllowsNetwork(PluginManifest manifest) => manifest.Capabilities?.Contains(Network) == true;
+}
 
 /// <summary>
 /// Point d'extension (architecture 0059) : le plugin fournit une garde consultée par le worker d'accès avant de remplacer un
