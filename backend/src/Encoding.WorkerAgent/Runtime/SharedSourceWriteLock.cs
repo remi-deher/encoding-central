@@ -3,8 +3,8 @@ using System.Text.Json;
 
 namespace Encoding.WorkerAgent.Runtime;
 
-/// <summary>État d'un verrou d'écriture de source : <c>Orphaned</c> n'est affirmé que si le propriétaire est prouvé disparu (même hôte, processus absent ou réutilisé).</summary>
-internal enum SourceWriteLockState { Free, Held, Unverifiable, Orphaned }
+/// <summary>État d'un verrou d'écriture de source : <c>Orphaned</c> n'est affirmé que si le propriétaire est prouvé disparu (même hôte, processus absent ou réutilisé) ; <c>ProbablyOrphaned</c> désigne un fichier vide ou tronqué (coupure avant l'écriture de l'identité), ancien et non verrouillé.</summary>
+internal enum SourceWriteLockState { Free, Held, Unverifiable, Orphaned, ProbablyOrphaned }
 
 /// <summary>Contenu du fichier de verrou : identifie le propriétaire pour permettre la détection d'un verrou laissé par un arrêt brutal.</summary>
 internal sealed record SourceWriteLockInfo(string Owner, string Host, int ProcessId, long ProcessStartedUtcTicks, Guid? ExecutionId, DateTimeOffset AcquiredAt);
@@ -28,7 +28,7 @@ internal static class SharedSourceWriteLock
         catch (IOException) when (File.Exists(path))
         {
             var status = Inspect(original);
-            throw status.State == SourceWriteLockState.Orphaned ? new OrphanSourceWriteLockException(status) : new SafeMediaPaths.MediaLockBusyException();
+            throw status.State is SourceWriteLockState.Orphaned or SourceWriteLockState.ProbablyOrphaned ? new OrphanSourceWriteLockException(status) : new SafeMediaPaths.MediaLockBusyException();
         }
         using var process = Process.GetCurrentProcess();
         var info = new SourceWriteLockInfo(Guid.NewGuid().ToString("N"), Environment.MachineName, process.Id, process.StartTime.ToUniversalTime().Ticks, executionId, DateTimeOffset.UtcNow);
@@ -53,10 +53,27 @@ internal static class SharedSourceWriteLock
         }
         catch (FileNotFoundException) { return new(SourceWriteLockState.Free, path, null); }
         catch (IOException) { return new(SourceWriteLockState.Held, path, null); } // ouvert en exclusivité par son propriétaire : vivant
-        catch (JsonException) { return new(SourceWriteLockState.Unverifiable, path, null); } // ancien format ou écriture interrompue
-        if (info is null || string.IsNullOrEmpty(info.Owner)) return new(SourceWriteLockState.Unverifiable, path, info);
+        catch (UnauthorizedAccessException) { return new(SourceWriteLockState.Unverifiable, path, null); } // illisible : on ne peut rien affirmer
+        catch (JsonException) { return ClassifyUnreadable(path); } // vide, tronqué ou ancien format
+        if (info is null || string.IsNullOrEmpty(info.Owner)) return ClassifyUnreadable(path);
         if (!string.Equals(info.Host, Environment.MachineName, StringComparison.Ordinal)) return new(SourceWriteLockState.Unverifiable, path, info);
         return new(OwnerProcessIsAlive(info) ? SourceWriteLockState.Held : SourceWriteLockState.Orphaned, path, info);
+    }
+
+    /// <summary>Âge minimal d'un verrou sans identité lisible avant de le dire « probablement orphelin » (laisse le temps à un propriétaire vivant d'écrire son identité).</summary>
+    internal static TimeSpan MinimumUnreadableAge { get; } = TimeSpan.FromMinutes(5);
+
+    private static SourceWriteLockStatus ClassifyUnreadable(string path)
+    {
+        if (DateTime.UtcNow - File.GetLastWriteTimeUtc(path) < MinimumUnreadableAge) return new(SourceWriteLockState.Unverifiable, path, null);
+        try
+        {
+            // Si l'ouverture exclusive réussit, plus personne ne tient le fichier ouvert. Elle ne prouve rien (ancien format possible) : jamais de suppression automatique.
+            using var probe = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
+            return new(SourceWriteLockState.ProbablyOrphaned, path, null);
+        }
+        catch (IOException) { return new(SourceWriteLockState.Held, path, null); }
+        catch (UnauthorizedAccessException) { return new(SourceWriteLockState.Unverifiable, path, null); }
     }
 
     /// <summary>Retire le verrou uniquement s'il est encore prouvé orphelin et appartient à <paramref name="expectedOwner"/> (action explicite d'un opérateur).</summary>
@@ -98,7 +115,9 @@ internal sealed class OrphanSourceWriteLockException(SourceWriteLockStatus statu
 {
     public SourceWriteLockStatus Status { get; } = status;
     private static string Describe(SourceWriteLockStatus status) =>
-        $"Verrou d'écriture orphelin ({Path.GetFileName(status.LockPath)}) : le processus {status.Info?.ProcessId} de l'hôte {status.Info?.Host} (exécution {status.Info?.ExecutionId:D}) n'existe plus. Intervention de l'opérateur requise.";
+        status.Info is null
+            ? $"Verrou d'écriture probablement orphelin ({Path.GetFileName(status.LockPath)}) : fichier sans identité de propriétaire, non utilisé et ancien. Intervention de l'opérateur requise."
+            : $"Verrou d'écriture orphelin ({Path.GetFileName(status.LockPath)}) : le processus {status.Info?.ProcessId} de l'hôte {status.Info?.Host} (exécution {status.Info?.ExecutionId:D}) n'existe plus. Intervention de l'opérateur requise.";
 }
 
 internal sealed class SourceWriteDeferredException() : IOException("Écriture différée : autorisation du central indisponible.");

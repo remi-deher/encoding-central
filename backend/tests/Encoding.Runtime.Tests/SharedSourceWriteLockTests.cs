@@ -114,4 +114,49 @@ public sealed class SharedSourceWriteLockTests : IDisposable
         Assert.Equal(SourceWriteLockState.Free, SharedSourceWriteLock.Inspect(Media).State);
         Assert.False(File.Exists(LockFile));
     }
+
+    private void WriteUnreadable(string content, TimeSpan age)
+    {
+        File.WriteAllText(LockFile, content);
+        File.SetLastWriteTimeUtc(LockFile, DateTime.UtcNow - age);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("{\"Owner\":\"ab")]
+    public void OldUnlockedEmptyOrTruncatedLockIsProbablyOrphanButNeverReleased(string content)
+    {
+        WriteUnreadable(content, SharedSourceWriteLock.MinimumUnreadableAge + TimeSpan.FromMinutes(1));
+
+        Assert.Equal(SourceWriteLockState.ProbablyOrphaned, SharedSourceWriteLock.Inspect(Media).State);
+        Assert.Throws<OrphanSourceWriteLockException>(() => SharedSourceWriteLock.Acquire(Media));
+        Assert.False(SharedSourceWriteLock.ReleaseOrphan(Media, ""));
+        Assert.True(File.Exists(LockFile));
+    }
+
+    [Fact]
+    public void RecentEmptyLockIsNotClassifiedOrphan()
+    {
+        WriteUnreadable("", TimeSpan.Zero);
+
+        Assert.Equal(SourceWriteLockState.Unverifiable, SharedSourceWriteLock.Inspect(Media).State);
+    }
+
+    [Fact]
+    public void OldEmptyLockStillOpenedByItsOwnerIsHeld()
+    {
+        WriteUnreadable("", TimeSpan.FromHours(1));
+        using var owner = new FileStream(LockFile, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        Assert.Equal(SourceWriteLockState.Held, SharedSourceWriteLock.Inspect(Media).State);
+    }
+
+    [NonRootUnixFact]
+    public void UnreadableLockIsUnverifiableWithoutThrowing()
+    {
+        WriteLock("x", Environment.MachineName, int.MaxValue, 1);
+        File.SetUnixFileMode(LockFile, UnixFileMode.None);
+
+        Assert.Equal(SourceWriteLockState.Unverifiable, SharedSourceWriteLock.Inspect(Media).State);
+    }
 }
