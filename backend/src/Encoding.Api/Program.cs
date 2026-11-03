@@ -185,6 +185,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 
 var app = builder.Build();
+app.Services.GetRequiredService<Encoding.Api.Auth.AuthOptions>().EnsureAllowedIn(app.Environment);
 // Fail startup if the bundled installed catalog is invalid or missing.
 var flowRegistry = app.Services.GetRequiredService<FlowComponentRegistry>();
 // Store descriptors and their tool dependencies must be active before default flows are validated or seeded.

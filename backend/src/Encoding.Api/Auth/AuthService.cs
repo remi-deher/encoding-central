@@ -4,7 +4,10 @@ using Encoding.Contracts.Auth;
 
 namespace Encoding.Api.Auth;
 
-public enum SetupOutcome { Created, AlreadyConfigured }
+public enum SetupOutcome { Created, AlreadyConfigured, InvalidToken }
+
+/// <summary>Résultat de l'initialisation ; <c>GeneratedPassword</c> n'existe que si le mot de passe a été généré et n'est jamais conservé.</summary>
+public sealed record SetupResult(SetupOutcome Outcome, UserResponse? User, string Username, string? Password, bool PasswordWasGenerated);
 
 public sealed record LoginResult(CurrentUserResponse User, string SessionToken);
 
@@ -43,17 +46,31 @@ public sealed partial class AuthService(
         return errors;
     }
 
-    public string? LastCreatedPassword { get; private set; }
-
     public async Task<bool> SetupRequiredAsync(CancellationToken ct) => !await users.AnyAsync(ct);
 
-    public async Task<(SetupOutcome Outcome, UserResponse? User)> SetupAsync(SetupRequest request, CancellationToken ct)
+    /// <summary>Comparaison en temps constant (empreintes SHA-256 de longueur fixe : ni contenu ni longueur du jeton ne fuient).</summary>
+    public bool IsSetupTokenAccepted(string? provided)
+    {
+        if (options.SetupToken is not { } expected) return true;
+        var expectedHash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(expected));
+        var providedHash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(provided?.Trim() ?? string.Empty));
+        return CryptographicOperations.FixedTimeEquals(expectedHash, providedHash);
+    }
+
+    /// <summary>
+    /// Crée le premier administrateur. Aucun état partagé : le mot de passe, éventuellement généré, est porté par le résultat
+    /// et ne revient qu'à l'appelant dont la création a réussi.
+    /// </summary>
+    public async Task<SetupResult> SetupAsync(SetupRequest request, CancellationToken ct)
     {
         var username = string.IsNullOrWhiteSpace(request.Username) ? "admin" : request.Username.Trim();
-        var password = string.IsNullOrWhiteSpace(request.Password) ? Convert.ToHexString(RandomNumberGenerator.GetBytes(16)) : request.Password;
-        LastCreatedPassword = password;
+        if (!IsSetupTokenAccepted(request.SetupToken)) return new SetupResult(SetupOutcome.InvalidToken, null, username, null, false);
+        var generated = string.IsNullOrWhiteSpace(request.Password);
+        var password = generated ? Convert.ToHexString(RandomNumberGenerator.GetBytes(16)) : request.Password!;
         var user = await users.CreateFirstAdministratorAsync(username, PasswordHasher.Hash(password), ct);
-        return user is null ? (SetupOutcome.AlreadyConfigured, null) : (SetupOutcome.Created, user);
+        return user is null
+            ? new SetupResult(SetupOutcome.AlreadyConfigured, null, username, null, generated)
+            : new SetupResult(SetupOutcome.Created, user, username, password, generated);
     }
 
     /// <summary>Ouvre une session ; l’échec est identique pour un compte inconnu, un mauvais mot de passe, un compte inactif ou verrouillé.</summary>

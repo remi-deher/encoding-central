@@ -23,6 +23,9 @@ public static class AuthEndpoints
 
         auth.MapPost("/setup", async (SetupRequest request, HttpContext http, AuthService service, AuthOptions options, Encoding.Api.Workers.LocalWorkerRegistry localWorker, CancellationToken ct) =>
         {
+            // Jeton vérifié avant toute validation : réponse identique quel que soit l'état du central, sans détail sur le jeton attendu.
+            if (!service.IsSetupTokenAccepted(request.SetupToken))
+                return RefuseSetupToken(http);
             var errors = new Dictionary<string, string[]>();
             if (!string.IsNullOrWhiteSpace(request.Username) || !string.IsNullOrWhiteSpace(request.Password))
             {
@@ -35,8 +38,9 @@ public static class AuthEndpoints
                 errors["centralName"] = [$"Le nom du central ne peut pas dépasser {Encoding.Api.Infrastructure.CentralIdentityRepository.MaximumNameLength} caractères."];
             if (errors.Count > 0) return (IResult)Results.ValidationProblem(errors);
 
-            var (outcome, _) = await service.SetupAsync(request, ct);
-            if (outcome == SetupOutcome.AlreadyConfigured)
+            var setup = await service.SetupAsync(request, ct);
+            if (setup.Outcome == SetupOutcome.InvalidToken) return RefuseSetupToken(http);
+            if (setup.Outcome == SetupOutcome.AlreadyConfigured)
                 return Results.Conflict(new { title = "Le central possède déjà un administrateur." });
             await localWorker.RequestNameAsync(request.WorkerDisplayName, ct);
             if (!string.IsNullOrWhiteSpace(request.CentralName))
@@ -44,12 +48,11 @@ public static class AuthEndpoints
                 var centralRepo = http.RequestServices.GetRequiredService<Encoding.Api.Infrastructure.CentralIdentityRepository>();
                 if (Encoding.Api.Infrastructure.CentralIdentityRepository.IsValidName(request.CentralName)) await centralRepo.RenameAsync(request.CentralName, ct);
             }
-            var effectiveUsername = string.IsNullOrWhiteSpace(request.Username) ? "admin" : request.Username.Trim();
-            var effectivePassword = service.LastCreatedPassword ?? request.Password ?? "admin";
-            var login = await service.LoginAsync(effectiveUsername, effectivePassword, ct);
+            var login = await service.LoginAsync(setup.Username, setup.Password!, ct);
             if (login is null) return Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Le compte a été créé mais la session n’a pas pu être ouverte.");
             SetSessionCookie(http, login.SessionToken, options);
-            return Results.Created("/api/v1/auth/me", login.User);
+            var created = new SetupResponse(login.User.Id, login.User.Username, login.User.Role, setup.PasswordWasGenerated ? setup.Password : null);
+            return Results.Created("/api/v1/auth/me", created);
         }).AllowAnonymous().RequireRateLimiting(AuthExtensions.AnonymousPolicy).WithName("SetupFirstAdministrator");
 
         // Fiche du worker local pour l'assistant (décision du propriétaire du 2026-10-23) : ouverte sans compte seulement
@@ -103,6 +106,13 @@ public static class AuthEndpoints
             var changed = await service.ChangePasswordAsync(Current(http.User)!.Id, request.CurrentPassword ?? string.Empty, request.NewPassword, token, ct);
             return changed ? Results.NoContent() : Results.ValidationProblem(new Dictionary<string, string[]> { ["currentPassword"] = ["Le mot de passe actuel est incorrect."] });
         }).AllowViewer().WithName("ChangeOwnPassword");
+    }
+
+    private static IResult RefuseSetupToken(HttpContext http)
+    {
+        http.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Encoding.Api.Auth.Setup")
+            .LogWarning("Initialisation refusée : jeton d'initialisation absent ou invalide.");
+        return Results.Json(new { title = "Jeton d’initialisation absent ou invalide." }, statusCode: StatusCodes.Status403Forbidden);
     }
 
     private static void MapUserManagementRoutes(this WebApplication app)

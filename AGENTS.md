@@ -47,7 +47,7 @@ Application auto-hébergée pour gérer et distribuer le traitement de biblioth�
 
 ## Authentification
 
-Toute route de gestion exige une session ou un jeton API Bearer ; rôles `admin` et `viewer`. **Une nouvelle route est fermée par défaut** : ne l'ouvrir (`AllowAnonymous`, `AllowViewer`, `AllowNodeCredentials`) qu'avec une décision explicite et la mise à jour du test qui énumère les routes anonymes. Aucun secret dans les journaux, erreurs, exports ni réponses. Voir [auth-ops](docs/architecture/domains/auth-ops.md) (⚠ l'authentification est aujourd'hui optionnelle : `open-questions.md` point 1).
+Toute route de gestion exige une session ou un jeton API Bearer ; rôles `admin` et `viewer`. **Une nouvelle route est fermée par défaut** : ne l'ouvrir (`AllowAnonymous`, `AllowViewer`, `AllowNodeCredentials`) qu'avec une décision explicite et la mise à jour du test qui énumère les routes anonymes. Aucun secret dans les journaux, erreurs, exports ni réponses. Voir [auth-ops](docs/architecture/domains/auth-ops.md) (l'authentification est obligatoire par défaut ; `Auth:Enabled=false` est refusé hors Development ; jeton optionnel `Auth:SetupToken` pour le premier administrateur).
 
 ## Règles absolues de programmation
 

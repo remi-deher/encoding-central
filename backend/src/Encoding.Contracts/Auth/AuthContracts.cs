@@ -6,6 +6,12 @@ public sealed record CurrentUserResponse(Guid Id, string Username, UserRole Role
 
 public sealed record AuthStatusResponse(bool SetupRequired, CurrentUserResponse? User);
 
+/// <summary>
+/// Réponse de l'initialisation : superset de <see cref="CurrentUserResponse"/>. <c>GeneratedPassword</c> n'est renseigné que
+/// si le serveur a généré le mot de passe (aucun fourni) ; il n'est communiqué qu'une fois, dans cette réponse.
+/// </summary>
+public sealed record SetupResponse(Guid Id, string Username, UserRole Role, string? GeneratedPassword = null);
+
 public sealed record UserResponse(Guid Id, string Username, UserRole Role, bool IsActive, DateTimeOffset CreatedAt);
 
 public sealed record SetupRequest(
