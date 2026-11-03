@@ -14,7 +14,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { PageShellContextService } from '../../../core/layout/page-shell-context';
 import { AiToolsService } from '../../../shared/services/ai-tools.service';
 import { NotificationService } from '../../../shared/services/notification.service';
-import { AiClusterModelCatalog, AiDiscoveredModel } from '../../../shared/models/ai-tools';
+import { AiCentralModelCatalog, AiDiscoveredModel } from '../../../shared/models/ai-tools';
 import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-section.component';
 import { SearchFieldComponent } from '../../../shared/ui/search-field.component';
 import {
@@ -262,7 +262,7 @@ export class AiModelCatalogComponent implements OnDestroy {
   private readonly api = inject(AiToolsService);
   private readonly notifications = inject(NotificationService);
   protected readonly isAdmin = inject(AuthService).isAdmin;
-  protected readonly catalog = signal<AiClusterModelCatalog | null>(null);
+  protected readonly catalog = signal<AiCentralModelCatalog | null>(null);
   protected readonly loading = signal(false);
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
@@ -354,7 +354,7 @@ export class AiModelCatalogComponent implements OnDestroy {
         },
       });
   }
-  private buildGroups(catalog: AiClusterModelCatalog | null): readonly ProviderGroup[] {
+  private buildGroups(catalog: AiCentralModelCatalog | null): readonly ProviderGroup[] {
     if (!catalog) return [];
     const nodeCount = catalog.workers.length;
     const order: string[] = [];

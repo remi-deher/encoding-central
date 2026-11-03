@@ -9,15 +9,15 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient } from '@angular/common/http';
 import { catchError, exhaustMap, of, timeout, timer } from 'rxjs';
-import { SetupNodeSheet } from '../../shared/models/local-node';
+import { SetupWorkerSheet } from '../../shared/models/local-worker';
 import { CommonModule, DOCUMENT } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { AuthService } from '../../core/auth/auth.service';
-import { LocalNodeController } from '../../shared/services/local-node-controller';
+import { LocalWorkerController } from '../../shared/services/local-worker-controller';
 import { NotificationService } from '../../shared/services/notification.service';
-import { formatMemory } from '../../shared/models/node-hardware';
+import { formatMemory } from '../../shared/models/worker-hardware';
 import { AccessTemplateComponent } from '../../shared/templates/access-template.component';
 import { IconComponent } from '../../shared/ui/icon.component';
 import { DetectedConfigurationComponent } from './detected-configuration.component';
@@ -30,7 +30,7 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-setup-wizard-page',
-  providers: [LocalNodeController],
+  providers: [LocalWorkerController],
   imports: [
     CommonModule,
     FormsModule,
@@ -256,8 +256,8 @@ export class SetupWizardPageComponent {
   private readonly notifications = inject(NotificationService);
   private readonly http = inject(HttpClient, { optional: true });
   private readonly destroyRef = inject(DestroyRef);
-  protected readonly localController = inject(LocalNodeController);
-  protected readonly setupSheet = signal<SetupNodeSheet | null>(null);
+  protected readonly localController = inject(LocalWorkerController);
+  protected readonly setupSheet = signal<SetupWorkerSheet | null>(null);
 
   protected readonly currentStep = signal(0);
   /** Accueil : n'est pas une étape, il présente la machine détectée avant de commencer. */
@@ -282,7 +282,7 @@ export class SetupWizardPageComponent {
           exhaustMap(() =>
             this.accountCreated()
               ? of(null)
-              : this.http!.get<SetupNodeSheet>('/api/v1/auth/setup/worker').pipe(
+              : this.http!.get<SetupWorkerSheet>('/api/v1/auth/setup/worker').pipe(
                   timeout(8_000),
                   catchError(() => of(null)),
                 ),

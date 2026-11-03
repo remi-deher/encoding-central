@@ -6,7 +6,7 @@ import {
   cellState,
   cellsPerDay,
   paintCells,
-} from '../models/node-schedule';
+} from '../models/worker-schedule';
 
 /** Grille jour × heure : cliquer ou glisser autorise ou bloque les créneaux. */
 @Component({

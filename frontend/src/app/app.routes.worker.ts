@@ -42,8 +42,8 @@ const applicationRoutes: Routes = [
   {
     path: 'workers',
     loadComponent: () =>
-      import('./features/nodes/node-catalog-page.component').then(
-        (module) => module.NodeCatalogPageComponent,
+      import('./features/workers/worker-catalog-page.component').then(
+        (module) => module.WorkerCatalogPageComponent,
       ),
     data: {
       title: 'Workers',

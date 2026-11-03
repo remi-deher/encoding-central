@@ -40,7 +40,7 @@ import {
   PageShellContextService,
   PageShellSearchResult,
 } from '../../core/layout/page-shell-context';
-import { ClusterApi } from '../../shared/services/cluster-api';
+import { CentralApi } from '../../shared/services/central-api';
 import { LibraryActivity } from '../../shared/services/library-activity';
 import {
   LibraryActivityCounts,
@@ -159,7 +159,7 @@ export class ActivityPageComponent {
   private readonly router = inject(Router);
   private readonly pageShellContext = inject(PageShellContextService);
   private readonly activityApi = inject(LibraryActivity);
-  private readonly clusterApi = inject(ClusterApi);
+  private readonly clusterApi = inject(CentralApi);
   private readonly tracking = inject(ExecutionTracking);
   private readonly detailPolling = inject(ExecutionDetailPolling);
   private readonly downloads = inject(FileDownload);

@@ -1,9 +1,9 @@
 import { LibraryProcessingSettings } from '../../shared/models/library-workflow';
 import { FlowValidation } from '../../shared/services/flow-validation';
 
-import { ClusterApi } from '../../shared/services/cluster-api';
+import { CentralApi } from '../../shared/services/central-api';
 
-import { LibraryResponse, NodeGroupResponse } from '../../shared/models/cluster';
+import { LibraryResponse, WorkerGroupResponse } from '../../shared/models/central';
 
 import { HttpClient } from '@angular/common/http';
 
@@ -72,15 +72,15 @@ import { RecordFormActionsComponent } from '../../shared/ui/record-form-actions.
 import { RecordFormComponent, RecordFormData } from '../../shared/ui/record-form.component';
 
 import {
-  LibraryNodeAccessFormComponent,
-  LibraryNodeAccessOption,
-  LibraryNodeAccessValue,
-} from '../../shared/ui/library-node-access-form.component';
+  LibraryWorkerAccessFormComponent,
+  LibraryWorkerAccessOption,
+  LibraryWorkerAccessValue,
+} from '../../shared/ui/library-worker-access-form.component';
 
 import {
-  LibraryNodeAccessMode,
-  LibraryNodeAccessResponse,
-} from '../../shared/ui/library-node-access-types';
+  LibraryWorkerAccessMode,
+  LibraryWorkerAccessResponse,
+} from '../../shared/ui/library-worker-access-types';
 
 import { DrawerActionButtonComponent } from '../../shared/ui/drawer-action-button/drawer-action-button.component';
 
@@ -152,7 +152,7 @@ interface LibraryAccessRecord extends DataTableRow {
 
   readonly permissions: string;
 
-  readonly mode: LibraryNodeAccessMode;
+  readonly mode: LibraryWorkerAccessMode;
 }
 
 @Component({
@@ -170,7 +170,7 @@ interface LibraryAccessRecord extends DataTableRow {
     RecordFormComponent,
     RecordFormActionsComponent,
 
-    LibraryNodeAccessFormComponent,
+    LibraryWorkerAccessFormComponent,
 
     DrawerActionButtonComponent,
     LibrarySectionTabsComponent,
@@ -203,7 +203,7 @@ export class LibraryCatalogPageComponent {
 
   private readonly http = inject(HttpClient);
 
-  private readonly clusterApi = inject(ClusterApi);
+  private readonly clusterApi = inject(CentralApi);
 
   private readonly executionTracking = inject(ExecutionTracking);
 
@@ -231,7 +231,7 @@ export class LibraryCatalogPageComponent {
     Readonly<Record<string, LibraryProcessingSettings>>
   >({});
 
-  private readonly selectedAccesses = signal<readonly LibraryNodeAccessResponse[]>([]);
+  private readonly selectedAccesses = signal<readonly LibraryWorkerAccessResponse[]>([]);
 
   protected readonly processingForm = signal<RecordFormData | null>(null);
   private processingRevision = 0;
@@ -275,7 +275,7 @@ export class LibraryCatalogPageComponent {
         firstValueFrom(this.clusterApi.libraryProcessing(library.id)),
         firstValueFrom(this.clusterApi.listNodes()),
         firstValueFrom(
-          this.http.get<readonly LibraryNodeAccessResponse[]>(
+          this.http.get<readonly LibraryWorkerAccessResponse[]>(
             '/api/v1/libraries/' + library.id + '/worker-access',
           ),
         ),
@@ -407,13 +407,13 @@ export class LibraryCatalogPageComponent {
 
   private readonly accessActivationBusy = signal<ReadonlySet<string>>(new Set());
 
-  protected readonly accessNodes = signal<readonly LibraryNodeAccessOption[]>([]);
+  protected readonly accessNodes = signal<readonly LibraryWorkerAccessOption[]>([]);
 
-  protected readonly accessNodeGroups = signal<readonly NodeGroupResponse[]>([]);
+  protected readonly accessNodeGroups = signal<readonly WorkerGroupResponse[]>([]);
 
   protected readonly automaticallySelectedAccessNodeIds = signal<readonly string[]>([]);
 
-  protected readonly initialAccesses = signal<readonly LibraryNodeAccessResponse[]>([]);
+  protected readonly initialAccesses = signal<readonly LibraryWorkerAccessResponse[]>([]);
 
   protected readonly selectedLibrary = signal<LibraryRecord | null>(null);
 
@@ -1575,7 +1575,7 @@ export class LibraryCatalogPageComponent {
 
     this.http
 
-      .put<LibraryNodeAccessResponse>(
+      .put<LibraryWorkerAccessResponse>(
         `/api/v1/libraries/${library.id}/worker-access/${access.workerId}/activation`,
 
         { isEnabled: event.checked },
@@ -1685,11 +1685,11 @@ export class LibraryCatalogPageComponent {
       });
   }
 
-  protected configureLibraryAccess(values: readonly LibraryNodeAccessValue[]): void {
+  protected configureLibraryAccess(values: readonly LibraryWorkerAccessValue[]): void {
     this.saveAccessConfiguration(values);
   }
 
-  private saveAccessConfiguration(values: readonly LibraryNodeAccessValue[]): void {
+  private saveAccessConfiguration(values: readonly LibraryWorkerAccessValue[]): void {
     const library = this.selectedLibrary();
 
     if (!library) return;
@@ -1698,7 +1698,7 @@ export class LibraryCatalogPageComponent {
 
     this.http
 
-      .put<readonly LibraryNodeAccessResponse[]>(`/api/v1/libraries/${library.id}/worker-access`, {
+      .put<readonly LibraryWorkerAccessResponse[]>(`/api/v1/libraries/${library.id}/worker-access`, {
         nodes: values,
       })
 
@@ -1824,7 +1824,7 @@ export class LibraryCatalogPageComponent {
       });
   }
 
-  protected accessModeLabel(mode: LibraryNodeAccessMode): string {
+  protected accessModeLabel(mode: LibraryWorkerAccessMode): string {
     if (mode === 'direct') return 'Accès direct';
 
     if (mode === 'transfer') return 'Transfert worker';
@@ -1837,7 +1837,7 @@ export class LibraryCatalogPageComponent {
 
     this.http
 
-      .get<readonly LibraryNodeAccessResponse[]>(`/api/v1/libraries/${libraryId}/worker-access`)
+      .get<readonly LibraryWorkerAccessResponse[]>(`/api/v1/libraries/${libraryId}/worker-access`)
 
       .pipe(
         catchError(() => {
@@ -1860,20 +1860,20 @@ export class LibraryCatalogPageComponent {
 
     forkJoin({
       nodes: this.clusterApi.listNodes(),
-      groups: this.http.get<readonly NodeGroupResponse[]>('/api/v1/worker-groups'),
+      groups: this.http.get<readonly WorkerGroupResponse[]>('/api/v1/worker-groups'),
 
-      accesses: this.http.get<readonly LibraryNodeAccessResponse[]>(
+      accesses: this.http.get<readonly LibraryWorkerAccessResponse[]>(
         `/api/v1/libraries/${libraryId}/worker-access`,
       ),
       otherLibraryAccesses: otherLibraryIds.length
         ? forkJoin(
             otherLibraryIds.map((id) =>
-              this.http.get<readonly LibraryNodeAccessResponse[]>(
+              this.http.get<readonly LibraryWorkerAccessResponse[]>(
                 `/api/v1/libraries/${id}/worker-access`,
               ),
             ),
           )
-        : of([] as readonly (readonly LibraryNodeAccessResponse[])[]),
+        : of([] as readonly (readonly LibraryWorkerAccessResponse[])[]),
     })
       .pipe(
         catchError(() => {
@@ -1908,7 +1908,7 @@ export class LibraryCatalogPageComponent {
   }
 
   private toAccessSummary(
-    accesses: readonly LibraryNodeAccessResponse[],
+    accesses: readonly LibraryWorkerAccessResponse[],
   ): Pick<
     LibraryRecord,
     | 'configuredNodes'

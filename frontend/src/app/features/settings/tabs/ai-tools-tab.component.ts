@@ -41,8 +41,8 @@ import {
   AiSettings,
   AiSettingsUpdateRequest,
   AiToolInfo,
-  AiClusterView,
-  AiClusterModelCatalog,
+  AiCentralView,
+  AiCentralModelCatalog,
   AiDiscoveredModel,
 } from '../../../shared/models/ai-tools';
 import { ConfirmationDialogComponent } from '../../../shared/ui/confirmation-dialog.component';
@@ -155,8 +155,8 @@ export class AiToolsTabComponent implements OnInit, OnDestroy {
   ];
   readonly usageOptions = ['assistant', 'flow'] as const;
   readonly tools = signal<readonly AiToolInfo[]>([]);
-  readonly cluster = signal<AiClusterView | null>(null);
-  readonly modelCatalog = signal<AiClusterModelCatalog | null>(null);
+  readonly cluster = signal<AiCentralView | null>(null);
+  readonly modelCatalog = signal<AiCentralModelCatalog | null>(null);
   readonly loadingModelCatalog = signal(false);
   readonly quotaRevision = signal(0);
   readonly loadingSettings = signal(true);

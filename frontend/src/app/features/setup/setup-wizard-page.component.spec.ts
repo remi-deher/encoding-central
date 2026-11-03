@@ -3,9 +3,9 @@ import { Router } from '@angular/router';
 import { signal } from '@angular/core';
 import { SetupWizardPageComponent } from './setup-wizard-page.component';
 import { AuthService } from '../../core/auth/auth.service';
-import { LocalNodeController } from '../../shared/services/local-node-controller';
+import { LocalWorkerController } from '../../shared/services/local-worker-controller';
 import { NotificationService } from '../../shared/services/notification.service';
-import { LocalNodeStatus } from '../../shared/models/local-node';
+import { LocalWorkerStatus } from '../../shared/models/local-worker';
 
 const VALID_PASSWORD = 'un-mot-de-passe-long';
 
@@ -17,14 +17,14 @@ function fillAdmin(component: SetupWizardPageComponent): void {
 describe('SetupWizardPageComponent', () => {
   let setupFn: ReturnType<typeof vi.fn>;
   let navigateFn: ReturnType<typeof vi.fn>;
-  let statusSignal: ReturnType<typeof signal<LocalNodeStatus | null>>;
+  let statusSignal: ReturnType<typeof signal<LocalWorkerStatus | null>>;
   let pendingSignal: ReturnType<typeof signal<boolean>>;
 
   beforeEach(() => {
     setupFn = vi.fn().mockResolvedValue(undefined);
     navigateFn = vi.fn().mockResolvedValue(true);
     pendingSignal = signal(false);
-    statusSignal = signal<LocalNodeStatus | null>({
+    statusSignal = signal<LocalWorkerStatus | null>({
       workerId: 'node-1',
       name: 'srv-transcode',
       displayName: 'Serveur Salon',
@@ -78,7 +78,7 @@ describe('SetupWizardPageComponent', () => {
       set: {
         providers: [
           {
-            provide: LocalNodeController,
+            provide: LocalWorkerController,
             useValue: {
               status: statusSignal,
               clusters: signal([]),

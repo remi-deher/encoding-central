@@ -11,7 +11,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { RouterLink } from '@angular/router';
 import { catchError, forkJoin, interval, of } from 'rxjs';
-import { AiClusterView, AiSettings, AiToolInfo } from '../../shared/models/ai-tools';
+import { AiCentralView, AiSettings, AiToolInfo } from '../../shared/models/ai-tools';
 import { AiToolsService } from '../../shared/services/ai-tools.service';
 
 interface ProviderSummary {
@@ -322,7 +322,7 @@ export class AiProviderOverviewComponent {
   protected readonly loading = signal(true);
   protected readonly loadFailed = signal(false);
   protected readonly tools = signal<readonly AiToolInfo[] | null>(null);
-  protected readonly cluster = signal<AiClusterView | null>(null);
+  protected readonly cluster = signal<AiCentralView | null>(null);
   protected readonly settings = signal<AiSettings | null>(null);
   protected readonly providersUnavailable = computed(
     () => this.tools() === null || this.settings() === null,

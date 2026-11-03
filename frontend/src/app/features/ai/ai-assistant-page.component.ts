@@ -46,7 +46,7 @@ import {
   AiTurnModelSelection,
 } from '../../shared/models/ai-tools';
 import { ExecutionResponse } from '../../shared/models/execution';
-import { LibraryResponse, NodeResponse } from '../../shared/models/cluster';
+import { LibraryResponse, WorkerResponse } from '../../shared/models/central';
 import {
   FlowDocument,
   FlowSummary,
@@ -56,7 +56,7 @@ import { FlowComponentDefinition } from '../../shared/models/flow-component';
 import { FlowPreviewComponent } from '../../shared/ui/flow-preview/flow-preview';
 import { ConfirmationDialogComponent } from '../../shared/ui/confirmation-dialog.component';
 import { AiToolsService } from '../../shared/services/ai-tools.service';
-import { ClusterApi } from '../../shared/services/cluster-api';
+import { CentralApi } from '../../shared/services/central-api';
 import { ExecutionTracking } from '../../shared/services/execution-tracking';
 import { FlowValidation } from '../../shared/services/flow-validation';
 import { AuthService } from '../../core/auth/auth.service';
@@ -110,7 +110,7 @@ export class AiAssistantPageComponent implements OnDestroy {
   private readonly aiTools = inject(AiToolsService);
   private readonly dialog = inject(MatDialog);
   private readonly flowValidation = inject(FlowValidation);
-  private readonly clusterApi = inject(ClusterApi);
+  private readonly clusterApi = inject(CentralApi);
   private readonly executionTracking = inject(ExecutionTracking);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -168,7 +168,7 @@ export class AiAssistantPageComponent implements OnDestroy {
 
   protected readonly flows = signal<readonly FlowSummary[]>([]);
   protected readonly executions = signal<readonly ExecutionResponse[]>([]);
-  protected readonly nodes = signal<readonly NodeResponse[]>([]);
+  protected readonly nodes = signal<readonly WorkerResponse[]>([]);
   protected readonly libraries = signal<readonly LibraryResponse[]>([]);
   protected readonly conversations = signal<readonly AiAssistantConversation[]>([]);
   protected readonly searchQuery = signal('');

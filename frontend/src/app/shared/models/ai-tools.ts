@@ -141,7 +141,7 @@ export interface AiCredentialStatus {
   readonly revision?: number | null;
   readonly syncedAt?: string | null;
 }
-export interface AiNodeAvailability {
+export interface AiWorkerAvailability {
   readonly workerId: string;
   readonly name: string;
   readonly providers: readonly string[];
@@ -152,8 +152,8 @@ export interface AiNodeAvailability {
   /** Fournisseurs que le central détient mais que la CLI de ce worker déclare non connectés. */
   readonly reconnect?: readonly string[] | null;
 }
-export interface AiClusterView {
-  readonly workers: readonly AiNodeAvailability[];
+export interface AiCentralView {
+  readonly workers: readonly AiWorkerAvailability[];
 }
 
 export interface AiAssistantSource {
@@ -196,7 +196,7 @@ export interface AiAssistantOptions {
   readonly defaultProvider: string;
   readonly defaultModel?: string | null;
   readonly models: readonly AiAssistantModelOption[];
-  readonly catalogs?: readonly AiNodeModelCatalog[];
+  readonly catalogs?: readonly AiWorkerModelCatalog[];
   readonly defaultReasoningEffort?: string | null;
 }
 
@@ -394,13 +394,13 @@ export interface AiQuotaSnapshot {
   readonly experimental: boolean;
   readonly message?: string | null;
 }
-export interface AiNodeQuotas {
+export interface AiWorkerQuotas {
   readonly workerId: string;
   readonly name: string;
   readonly providers: readonly AiQuotaSnapshot[];
 }
-export interface AiClusterQuotas {
-  readonly workers: readonly AiNodeQuotas[];
+export interface AiCentralQuotas {
+  readonly workers: readonly AiWorkerQuotas[];
 }
 
 export interface AiDiscoveredModel {
@@ -419,7 +419,7 @@ export interface AiModelCatalog {
   readonly checkedAt: string;
   readonly message?: string | null;
 }
-export interface AiNodeModelCatalog {
+export interface AiWorkerModelCatalog {
   readonly workerId: string;
   readonly name: string;
   readonly providers: readonly AiModelCatalog[];
@@ -427,8 +427,8 @@ export interface AiNodeModelCatalog {
 export interface AiModelPolicy {
   readonly disabledModels: readonly { readonly provider: string; readonly model: string }[];
 }
-export interface AiClusterModelCatalog {
-  readonly workers: readonly AiNodeModelCatalog[];
+export interface AiCentralModelCatalog {
+  readonly workers: readonly AiWorkerModelCatalog[];
   readonly policy: AiModelPolicy;
 }
 
@@ -444,16 +444,16 @@ export interface AiProviderUsage {
   readonly provider: string;
   readonly totals: AiUsageTotals;
 }
-export interface AiNodeUsage {
+export interface AiWorkerUsage {
   readonly workerId?: string | null;
   readonly name: string;
   readonly providers: readonly AiProviderUsage[];
   readonly total: AiUsageTotals;
 }
-export interface AiClusterUsage {
+export interface AiCentralUsage {
   readonly days: number;
   readonly since: string;
-  readonly workers: readonly AiNodeUsage[];
+  readonly workers: readonly AiWorkerUsage[];
   readonly total: AiUsageTotals;
   readonly truncated: boolean;
 }

@@ -34,7 +34,7 @@ interface HealthDetailsResponse {
   readonly checks: readonly HealthCheckEntry[];
 }
 
-interface ClusterIdentityResponse {
+interface CentralIdentityResponse {
   readonly id: string;
   readonly name: string;
 }
@@ -176,7 +176,7 @@ export class SystemTabComponent {
 
   protected readonly refreshing = signal(false);
   protected readonly refreshError = signal(false);
-  protected readonly cluster = signal<ClusterIdentityResponse | null>(null);
+  protected readonly cluster = signal<CentralIdentityResponse | null>(null);
   protected readonly health = signal<HealthDetailsResponse | null>(null);
 
   private readonly clipboard = inject(ClipboardService);
@@ -224,7 +224,7 @@ export class SystemTabComponent {
     if (this.refreshing()) return;
     this.refreshing.set(true);
     const outcomes = await Promise.allSettled([
-      firstValueFrom(this.http.get<ClusterIdentityResponse>('/api/v1/central')),
+      firstValueFrom(this.http.get<CentralIdentityResponse>('/api/v1/central')),
       firstValueFrom(this.http.get<HealthDetailsResponse>('/health/details')),
     ]);
     const [identity, diagnostics] = outcomes;

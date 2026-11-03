@@ -7,22 +7,22 @@ import {
 import { HomeExecutions, INITIAL_HOME_EXECUTIONS } from './home-executions';
 import { DatePipe } from '@angular/common';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { ClusterOverview, INITIAL_CLUSTER_OVERVIEW } from '../../shared/services/cluster-overview';
+import { CentralOverview, INITIAL_CLUSTER_OVERVIEW } from '../../shared/services/central-overview';
 import {
-  assessClusterHealth,
+  assessCentralHealth,
   NODE_LIFECYCLE_LABELS,
   NODE_LIFECYCLE_TONES,
-  nodeLifecycle,
-} from '../../shared/models/cluster-health';
+  workerLifecycle,
+} from '../../shared/models/central-health';
 import { HealthBannerComponent } from '../../shared/ui/health-banner.component';
 import { SummaryTilesComponent } from '../../shared/ui/summary-tiles.component';
 import { MatrixCell, MatrixTableComponent } from '../../shared/ui/matrix-table.component';
 import {
-  formatNodeLabel,
-  NodeResponse,
-  NodeRole,
+  formatWorkerLabel,
+  WorkerResponse,
+  WorkerRole,
   NODE_ROLE_LABELS,
-} from '../../shared/models/cluster';
+} from '../../shared/models/central';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -277,11 +277,11 @@ export class HomePageComponent {
   );
   protected readonly count = (value: number | null | undefined): string =>
     value == null ? '—' : String(value);
-  protected readonly formatNodeLabel = formatNodeLabel;
+  protected readonly formatNodeLabel = formatWorkerLabel;
   protected readonly clusterName = computed(
     () => this.state().snapshot?.identity.name ?? 'Installation',
   );
-  private readonly overview = inject(ClusterOverview);
+  private readonly overview = inject(CentralOverview);
   private aiOverviewInFlight = false;
   private aiOverviewLoaded = false;
   protected readonly state = toSignal(this.overview.state$, {
@@ -453,7 +453,7 @@ export class HomePageComponent {
   protected readonly health = computed(() => {
     const snapshot = this.state().snapshot;
     return snapshot
-      ? assessClusterHealth(
+      ? assessCentralHealth(
           snapshot.nodes,
           snapshot.libraries,
           snapshot.accesses,
@@ -463,7 +463,7 @@ export class HomePageComponent {
   protected readonly matrixRows = computed(() =>
     this.nodes().map((node) => ({
       id: node.id,
-      label: formatNodeLabel(node.name, node.displayName),
+      label: formatWorkerLabel(node.name, node.displayName),
     })),
   );
   protected readonly matrixColumns = computed(() =>
@@ -485,13 +485,13 @@ export class HomePageComponent {
     }
     return cells;
   });
-  protected lifecycleLabel(node: NodeResponse): string {
-    return NODE_LIFECYCLE_LABELS[nodeLifecycle(node)];
+  protected lifecycleLabel(node: WorkerResponse): string {
+    return NODE_LIFECYCLE_LABELS[workerLifecycle(node)];
   }
-  protected lifecycleTone(node: NodeResponse) {
-    return NODE_LIFECYCLE_TONES[nodeLifecycle(node)];
+  protected lifecycleTone(node: WorkerResponse) {
+    return NODE_LIFECYCLE_TONES[workerLifecycle(node)];
   }
-  protected roleLabel(roles: readonly NodeRole[]): string {
+  protected roleLabel(roles: readonly WorkerRole[]): string {
     return roles.map((r) => NODE_ROLE_LABELS[r]).join(' · ');
   }
 }

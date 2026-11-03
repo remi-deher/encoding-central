@@ -8,7 +8,7 @@ import { RouterLink } from '@angular/router';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { of, switchMap } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
-import { ClusterOverview, INITIAL_CLUSTER_OVERVIEW } from '../services/cluster-overview';
+import { CentralOverview, INITIAL_CLUSTER_OVERVIEW } from '../services/central-overview';
 import { ExecutionTracking, INITIAL_EXECUTION_TRACKING } from '../services/execution-tracking';
 
 @Component({
@@ -179,7 +179,7 @@ export class PageSystemActionsComponent {
   }
   private readonly auth = inject(AuthService);
   private readonly disabled = computed(() => !this.auth.user());
-  private readonly overview = inject(ClusterOverview);
+  private readonly overview = inject(CentralOverview);
   private readonly clusterState = toSignal(
     toObservable(this.disabled).pipe(
       switchMap((disabled) => (disabled ? of(INITIAL_CLUSTER_OVERVIEW) : this.overview.state$)),

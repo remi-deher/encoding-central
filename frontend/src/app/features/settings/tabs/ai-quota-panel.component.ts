@@ -13,7 +13,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { interval } from 'rxjs';
 import { AiToolsService } from '../../../shared/services/ai-tools.service';
-import { AiNodeQuotas, AiQuotaSnapshot } from '../../../shared/models/ai-tools';
+import { AiWorkerQuotas, AiQuotaSnapshot } from '../../../shared/models/ai-tools';
 import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-section.component';
 
 @Component({
@@ -150,7 +150,7 @@ export class AiQuotaPanelComponent {
   private readonly destroyRef = inject(DestroyRef);
   private revision = 0;
   readonly refreshKey = input(0);
-  readonly nodes = signal<readonly AiNodeQuotas[]>([]);
+  readonly nodes = signal<readonly AiWorkerQuotas[]>([]);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly now = signal(Date.now());

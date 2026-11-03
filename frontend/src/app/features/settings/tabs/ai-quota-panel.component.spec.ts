@@ -2,11 +2,11 @@ import { TestBed } from '@angular/core/testing';
 import { of, Subject, throwError } from 'rxjs';
 import { AiQuotaPanelComponent } from './ai-quota-panel.component';
 import { AiToolsService } from '../../../shared/services/ai-tools.service';
-import { AiClusterQuotas } from '../../../shared/models/ai-tools';
+import { AiCentralQuotas } from '../../../shared/models/ai-tools';
 
 describe('AiQuotaPanelComponent', () => {
   const api = { getQuotas: vi.fn() };
-  const view = (): AiClusterQuotas => ({
+  const view = (): AiCentralQuotas => ({
     workers: [
       {
         workerId: 'node',
@@ -92,7 +92,7 @@ describe('AiQuotaPanelComponent', () => {
   });
 
   it('ignore une réponse en vol après un changement de connexion', () => {
-    const pending = new Subject<AiClusterQuotas>();
+    const pending = new Subject<AiCentralQuotas>();
     api.getQuotas.mockReturnValueOnce(pending).mockReturnValue(of({ workers: [] }));
     const fixture = TestBed.createComponent(AiQuotaPanelComponent);
     fixture.detectChanges();

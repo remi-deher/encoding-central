@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { AiUsagePanelComponent } from './ai-usage-panel.component';
 import { AiToolsService } from '../../../shared/services/ai-tools.service';
-import { AiClusterUsage } from '../../../shared/models/ai-tools';
+import { AiCentralUsage } from '../../../shared/models/ai-tools';
 
 describe('AiUsagePanelComponent', () => {
   const api = { getUsage: vi.fn() };
@@ -14,7 +14,7 @@ describe('AiUsagePanelComponent', () => {
     costUsd: null,
     turnsWithoutUsage: missing,
   });
-  const usage: AiClusterUsage = {
+  const usage: AiCentralUsage = {
     days: 30,
     since: '2026-09-21T00:00:00Z',
     truncated: false,

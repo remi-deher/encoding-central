@@ -14,9 +14,9 @@ import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { AuthService } from '../../core/auth/auth.service';
-import { NodeInventory } from '../../shared/models/cluster';
-import { formatMemory } from '../../shared/models/node-hardware';
-import { LocalNodeController } from '../../shared/services/local-node-controller';
+import { WorkerInventory } from '../../shared/models/central';
+import { formatMemory } from '../../shared/models/worker-hardware';
+import { LocalWorkerController } from '../../shared/services/local-worker-controller';
 import { AccessTemplateComponent } from '../../shared/templates/access-template.component';
 import { IconComponent } from '../../shared/ui/icon.component';
 import { DetectedConfigurationComponent } from './detected-configuration.component';
@@ -24,14 +24,14 @@ import { SETUP_SURFACE_STYLES } from './setup-surface.styles';
 
 /** Matériel détecté, lu sans secret avant le rattachement (`GET /api/v1/worker/hardware`). */
 interface WorkerHardware {
-  readonly inventory: NodeInventory;
+  readonly inventory: WorkerInventory;
   readonly tools: readonly { readonly toolId: string; readonly accelerationTypes: readonly string[] }[];
 }
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-worker-setup-page',
-  providers: [LocalNodeController],
+  providers: [LocalWorkerController],
   imports: [
     AccessTemplateComponent,
     DetectedConfigurationComponent,
@@ -196,7 +196,7 @@ export class WorkerSetupPageComponent {
   private readonly router = inject(Router);
   private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
-  protected readonly local = inject(LocalNodeController);
+  protected readonly local = inject(LocalWorkerController);
 
   protected centralAddress = '';
   protected username = '';
