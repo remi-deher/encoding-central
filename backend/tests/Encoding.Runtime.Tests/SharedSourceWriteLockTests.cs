@@ -152,6 +152,7 @@ public sealed class SharedSourceWriteLockTests : IDisposable
     }
 
     [NonRootUnixFact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public void UnreadableLockIsUnverifiableWithoutThrowing()
     {
         WriteLock("x", Environment.MachineName, int.MaxValue, 1);
