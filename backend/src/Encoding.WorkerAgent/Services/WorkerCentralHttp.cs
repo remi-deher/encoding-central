@@ -4,5 +4,5 @@ namespace Encoding.WorkerAgent.Services;
 internal static class WorkerCentralHttp
 {
     public static HttpClient Create(TimeSpan timeout) =>
-        new(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = timeout };
+        new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = timeout };
 }
