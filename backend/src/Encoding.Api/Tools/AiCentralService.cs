@@ -11,7 +11,7 @@ namespace Encoding.Api.Tools;
 /// <summary>Sessions IA du central : l'historique et les secrets restent sur le central, l'inférence s'exécute sur ce même central.</summary>
 public sealed class AiCentralService(Encoding.Api.Infrastructure.CentralId centralId, AiCentralStore store, DeviceCodeAuthService auth,
     AiSettingsService settings, AiClientFactory factory, IConfiguration configuration, LocalWorkerRegistry localWorker, AiQuotaService? quotaService = null,
-        AiModelCatalogService? modelCatalog = null, IServiceProvider? services = null)
+        AiModelCatalogService? modelCatalog = null)
 {
     private readonly ConcurrentDictionary<string, SemaphoreSlim> gates = new();
     private readonly ConcurrentDictionary<Guid, Lazy<Task<AiCompletionResult>>> running = new();

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadModel } from './model-loader.mjs';
-const { localWorkerSheet, formatLastSignal, centralJoinSteps } = await loadModel('worker-management');
+const { localWorkerSheet, formatLastSignal, centralJoinSteps } =
+  await loadModel('worker-management');
 const { formatWorkerLabel } = await loadModel('central');
 
 const NOW = Date.parse('2026-10-15T12:00:00Z');
@@ -101,7 +102,11 @@ test('an old agent without GPU data says so instead of claiming none', () => {
 });
 
 test('an invalid date stays unknown and a missing central name falls back to the agent', () => {
-  const sheet = localWorkerSheet({ ...base, centralName: null, status: { ...status, centralName: null } });
+  const sheet = localWorkerSheet({
+    ...base,
+    centralName: null,
+    status: { ...status, centralName: null },
+  });
   assert.equal(sheet.subtitle, 'Membre de son central');
   assert.equal(formatLastSignal('n’importe quoi'), null);
 });
