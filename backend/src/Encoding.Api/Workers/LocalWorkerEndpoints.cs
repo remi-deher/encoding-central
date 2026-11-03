@@ -25,11 +25,11 @@ public static class LocalWorkerEndpoints
         local.MapGet("/status", (HttpContext http, IHttpClientFactory clients, LocalWorkerRegistry registry, CancellationToken ct) =>
             RelayAsync(http, clients, HttpMethod.Get, "status", ct, hideSecrets: !http.User.IsInRole("admin"), registry)).WithName("GetLocalNodeStatus");
         local.MapGet("/centrals", (HttpContext http, IHttpClientFactory clients, CancellationToken ct) =>
-            RelayAsync(http, clients, HttpMethod.Get, "clusters", ct)).WithName("ListLocalNodeClusters");
+            RelayAsync(http, clients, HttpMethod.Get, "centrals", ct)).WithName("ListLocalNodeClusters");
         local.MapPost("/centrals", (HttpContext http, IHttpClientFactory clients, CancellationToken ct) =>
-            RelayAsync(http, clients, HttpMethod.Post, "clusters", ct)).WithName("AddLocalNodeCluster");
+            RelayAsync(http, clients, HttpMethod.Post, "centrals", ct)).WithName("AddLocalNodeCluster");
         local.MapDelete("/centrals/{centralId:guid}", (Guid centralId, HttpContext http, IHttpClientFactory clients, CancellationToken ct) =>
-            RelayAsync(http, clients, HttpMethod.Delete, "clusters/" + centralId.ToString("D"), ct)).WithName("ForgetLocalNodeCluster");
+            RelayAsync(http, clients, HttpMethod.Delete, "centrals/" + centralId.ToString("D"), ct)).WithName("ForgetLocalNodeCluster");
         local.MapPost("/enroll", (HttpContext http, IHttpClientFactory clients, LocalWorkerRegistry registry, CancellationToken ct) =>
             RelayWithDisplayNameAsync(http, clients, "enroll", registry, ct)).WithName("EnrollLocalNode");
         local.MapPost("/pairing-key", (HttpContext http, IHttpClientFactory clients, LocalWorkerRegistry registry, CancellationToken ct) =>

@@ -76,7 +76,7 @@ public sealed class WorkerAgentGateTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, await StatusAsync(client, HttpMethod.Get, WorkerAgentGate.HardwarePath));
         Assert.Equal(HttpStatusCode.OK, await StatusAsync(client, HttpMethod.Post, WorkerAgentGate.ClustersPath));
         Assert.Equal(HttpStatusCode.Unauthorized, await StatusAsync(client, HttpMethod.Get, "/api/v1/worker/status"));
-        Assert.Equal(HttpStatusCode.Unauthorized, await StatusAsync(client, HttpMethod.Get, WorkerAgentGate.ClustersPath));
+        Assert.Equal(HttpStatusCode.OK, await StatusAsync(client, HttpMethod.Get, WorkerAgentGate.ClustersPath));
         Assert.Equal(HttpStatusCode.OK, await StatusAsync(client, HttpMethod.Get, "/api/v1/worker/status", File.ReadAllText(secretFile).Trim()));
         Assert.Equal(HttpStatusCode.Unauthorized, await StatusAsync(client, HttpMethod.Get, "/api/v1/worker/status", "mauvais-secret"));
     }
@@ -90,6 +90,7 @@ public sealed class WorkerAgentGateTests : IAsyncLifetime
 
         await identities.SaveEnrollmentAsync(Guid.NewGuid().ToString("D"), "Maison", "http://server:8080/", CancellationToken.None);
         Assert.Equal(HttpStatusCode.Unauthorized, await StatusAsync(client, HttpMethod.Post, WorkerAgentGate.ClustersPath));
+        Assert.Equal(HttpStatusCode.Unauthorized, await StatusAsync(client, HttpMethod.Get, WorkerAgentGate.ClustersPath));
         Assert.Equal(HttpStatusCode.OK, await StatusAsync(client, HttpMethod.Get, WorkerAgentGate.HardwarePath));
 
         await identities.MarkEnrolledAsync(CancellationToken.None);
