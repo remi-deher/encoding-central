@@ -465,15 +465,15 @@ export class SetupWizardPageComponent {
   protected async submitCreateCluster(): Promise<void> {
     const name = this.clusterName().trim() || this.defaultClusterName();
     await this.completeSetup({
-      nodeDisplayName: this.effectiveNodeName(),
-      clusterName: name,
+      workerDisplayName: this.effectiveNodeName(),
+      centralName: name,
     });
   }
 
   private async completeSetup(
     payload: {
-      nodeDisplayName: string;
-      clusterName?: string;
+      workerDisplayName: string;
+      centralName?: string;
     },
   ): Promise<void> {
     if (this.busy() || this.accountCreated()) return;

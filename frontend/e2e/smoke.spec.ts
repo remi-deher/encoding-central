@@ -266,7 +266,7 @@ test('the first-run setup studio completes standalone onboarding and passes WCAG
   await initialize.click();
   await expect(page).toHaveURL(/\/$/);
   expect(setupPayload).toMatchObject({
-    nodeDisplayName: 'Serveur Salon',
+    workerDisplayName: 'Serveur Salon',
     username: 'admin',
     password: 'un-mot-de-passe-long',
   });

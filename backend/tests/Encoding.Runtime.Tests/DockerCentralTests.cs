@@ -265,9 +265,9 @@ public sealed class DockerCentralTests
         await WaitAsync(async () =>
         {
             var current = (await cluster.Client.GetFromJsonAsync<JsonElement>("api/v1/executions")).GetProperty("executions")[0];
-            executionDiagnostic = $"État : {current.GetProperty("state").GetString()} ; worker : {current.GetProperty("node")} ; détail : {current.GetProperty("detail")}";
-            if (current.GetProperty("state").GetString() != "running" || current.GetProperty("node").ValueKind != JsonValueKind.String) return false;
-            var name = current.GetProperty("node").GetString()!;
+            executionDiagnostic = $"État : {current.GetProperty("state").GetString()} ; worker : {current.GetProperty("worker")} ; détail : {current.GetProperty("detail")}";
+            if (current.GetProperty("state").GetString() != "running" || current.GetProperty("worker").ValueKind != JsonValueKind.String) return false;
+            var name = current.GetProperty("worker").GetString()!;
             if (!(await cluster.ProcessesAsync(cluster.ContainerOf(name))).Contains("ffmpeg", StringComparison.Ordinal)) return false;
             victim = name;
             return true;
@@ -286,7 +286,7 @@ public sealed class DockerCentralTests
 
         var history = (await cluster.Client.GetFromJsonAsync<JsonElement>($"api/v1/executions/{executionId}/events")).ToString();
         Assert.True(final.GetProperty("state").GetString() == "succeeded", $"{final.GetProperty("detail")}\n{history}\n{await cluster.NodeDiagnosticsAsync()}\n{await cluster.LibraryAccessDiagnosticsAsync()}\n{await cluster.IdentityDiagnosticsAsync()}\n{await cluster.ProcessDiagnosticsAsync()}\n{await cluster.LogsAsync()}");
-        Assert.NotEqual(victim, final.GetProperty("node").GetString());
+        Assert.NotEqual(victim, final.GetProperty("worker").GetString());
         Assert.Contains("reprise", history, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(sourceSha, Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(source))));
         Assert.DoesNotContain(Directory.GetFiles(cluster.Media), path => path != source);
@@ -314,7 +314,7 @@ public sealed class DockerCentralTests
 
         var history = (await cluster.Client.GetFromJsonAsync<JsonElement>($"api/v1/executions/{executionId}/events")).ToString();
         Assert.True(final.GetProperty("state").GetString() == "succeeded", $"{final.GetProperty("detail")}\n{history}\n{await cluster.NodeDiagnosticsAsync()}\n{await cluster.LibraryAccessDiagnosticsAsync()}\n{await cluster.IdentityDiagnosticsAsync()}\n{await cluster.ProcessDiagnosticsAsync()}\n{await cluster.LogsAsync()}");
-        Assert.Equal("worker-old", final.GetProperty("node").GetString());
+        Assert.Equal("worker-old", final.GetProperty("worker").GetString());
         Assert.Equal(sourceSha, Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(source))));
     }
 
@@ -346,7 +346,7 @@ public sealed class DockerCentralTests
         var library = (await PostAsync(client, "api/v1/libraries", new { name = "Docker" })).GetProperty("id").GetGuid();
         using (var access = await client.PutAsJsonAsync($"api/v1/libraries/{library}/worker-access", new
         {
-            nodes = workers.EnumerateArray().Select(node => new { workerId = node.GetProperty("id").GetGuid(), mode = "direct", localPath = "/media/lib", canRead = true, canWrite = true, transferSourceWorkerId = (Guid?)null, isEnabled = true })
+            workers = workers.EnumerateArray().Select(node => new { workerId = node.GetProperty("id").GetGuid(), mode = "direct", localPath = "/media/lib", canRead = true, canWrite = true, transferSourceWorkerId = (Guid?)null, isEnabled = true })
         })) Assert.True(access.IsSuccessStatusCode, await access.Content.ReadAsStringAsync());
         var flowNodes = encodeVideo
             ? new object[]

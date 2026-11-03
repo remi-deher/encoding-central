@@ -262,8 +262,8 @@ describe('SetupWizardPageComponent', () => {
     await component['submitCreateCluster']();
 
     expect(setupFn).toHaveBeenCalledWith({
-      nodeDisplayName: 'Serveur Salon',
-      clusterName: 'Mon Central Maison',
+      workerDisplayName: 'Serveur Salon',
+      centralName: 'Mon Central Maison',
       username: 'admin',
       password: VALID_PASSWORD,
     });
