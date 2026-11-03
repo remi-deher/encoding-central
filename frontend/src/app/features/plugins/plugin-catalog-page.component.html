@@ -1,4 +1,4 @@
-<app-cluster-maintenance-template
+<app-central-maintenance-template
   [title]="title()"
   navigationLabel="Sections"
   [navigationOptions]="extensionTabs()"
@@ -25,7 +25,7 @@
   <div catalogue-table>
     @if (activeTab() === 'plugins') {
       <p class="activation-scope-note">
-        L’activation est partagée dans le cluster. Une désactivation bloque les nouveaux traitements
+        L’activation est partagée dans le central. Une désactivation bloque les nouveaux traitements
         quand elle est reçue par chaque serveur ; les traitements déjà lancés continuent. Elle ne
         désinstalle pas le paquet, qui reste installé séparément sur chaque serveur.
       </p>
@@ -99,13 +99,13 @@
       </div>
     } @else if (activeTab() === 'tools') {
       <p class="activation-scope-note">
-        Ces interrupteurs règlent l’usage des outils dans tout le cluster. Les binaires restent
+        Ces interrupteurs règlent l’usage des outils dans tout le central. Les binaires restent
         installés ; les traitements déjà lancés continuent.
       </p>
-      <section class="plugin-section" aria-label="Outils média déclarés par le cluster">
+      <section class="plugin-section" aria-label="Outils média déclarés par le central">
         <header class="plugin-section-heading">
           <div>
-            <h2>Outils déclarés par le cluster</h2>
+            <h2>Outils déclarés par le central</h2>
             <p>Inventaire, exécutables et capacités remontés par les workers</p>
           </div>
         </header>
@@ -261,7 +261,7 @@
         </div>
         <p class="store-note">
           Les paquets s’installent sur ce serveur ; les workers les téléchargent et vérifient leur
-          empreinte. Dans un cluster à plusieurs serveurs, installez le paquet sur chacun.
+          empreinte. Dans un central à plusieurs serveurs, installez le paquet sur chacun.
         </p>
       </div>
 
@@ -369,7 +369,7 @@
           <div class="plugin-configuration-section">
             <h3>Configuration globale par défaut</h3>
             <p>
-              Ces valeurs sont partagées par le cluster. Un flow peut définir ses propres
+              Ces valeurs sont partagées par le central. Un flow peut définir ses propres
               dérogations.
             </p>
           </div>
@@ -393,4 +393,4 @@
       }
     </mat-tab-group>
   </ng-template>
-</app-cluster-maintenance-template>
+</app-central-maintenance-template>

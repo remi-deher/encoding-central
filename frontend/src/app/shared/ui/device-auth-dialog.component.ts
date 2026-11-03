@@ -67,9 +67,9 @@ export interface DeviceAuthDialogData {
           </p>
         }
         <p class="instruction">
-          Une fois associé, le compte est copié chiffré sur tous les nœuds du cluster.
+          Une fois associé, le compte est copié chiffré sur tous les workers du central.
         </p>
-        <p class="instruction">La tentative continue sur le nœud si vous fermez cette fenêtre.</p>
+        <p class="instruction">La tentative continue sur le worker si vous fermez cette fenêtre.</p>
 
         @if (data.prompt.userCode; as userCode) {
           <div class="code-box">

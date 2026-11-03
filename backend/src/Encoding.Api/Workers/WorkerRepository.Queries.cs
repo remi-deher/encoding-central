@@ -1,0 +1,198 @@
+using Encoding.Api.Infrastructure.Data;
+using Encoding.Api.Infrastructure;
+using Encoding.Api.Executions;
+using System.Data.Common;
+using System.Security.Cryptography;
+using System.Text.Json;
+using Encoding.Contracts.Workers;
+using Encoding.Core.Workers;
+
+namespace Encoding.Api.Workers;
+
+public sealed partial class WorkerRepository
+{
+    public async Task<IReadOnlyList<WorkerResponse>> ListAsync(TimeSpan offlineAfter, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT id, name, roles, max_concurrent_tasks, capabilities, last_seen_at,
+                   last_seen_at >= clock_timestamp() - @offline_after AS is_online, inventory, display_name, labels
+            FROM workers WHERE deleted_at IS NULL
+            ORDER BY name, id
+            """;
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = Sql.Command(sql, connection);
+        command.Parameters.AddWithValue("offline_after", offlineAfter);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var workers = new List<WorkerResponse>();
+        while (await reader.ReadAsync(cancellationToken)) workers.Add(ReadResponse(reader, reader.GetBoolean(6)));
+        await reader.DisposeAsync();
+        return await WithLifecycleAsync(workers, cancellationToken);
+    }
+
+    public async Task<WorkerResponse?> GetAsync(Guid workerId, TimeSpan offlineAfter, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT id, name, roles, max_concurrent_tasks, capabilities, last_seen_at,
+                   last_seen_at >= clock_timestamp() - @offline_after AS is_online, inventory, display_name, labels
+            FROM workers WHERE id = @id AND deleted_at IS NULL
+            """;
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = Sql.Command(sql, connection);
+        command.Parameters.AddWithValue("id", workerId);
+        command.Parameters.AddWithValue("offline_after", offlineAfter);
+        WorkerResponse? worker;
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+            worker = await reader.ReadAsync(cancellationToken) ? ReadResponse(reader, reader.GetBoolean(6)) : null;
+        return worker is null ? null : (await WithLifecycleAsync([worker], cancellationToken))[0];
+    }
+
+    public Task<WorkerResponse?> FindByIdAsync(Guid workerId, CancellationToken cancellationToken) =>
+        GetAsync(workerId, TimeSpan.FromDays(365), cancellationToken);
+
+
+
+    /// <summary>Donne un nom convivial à un worker qui n'en a pas encore ; ne remplace jamais un nom choisi par un administrateur.</summary>
+    public async Task SetDisplayNameIfUnsetAsync(Guid workerId, string displayName, CancellationToken ct)
+    {
+        await using var command = dataSource.CreateCommand("UPDATE workers SET display_name = @name WHERE id = @id AND deleted_at IS NULL AND (display_name IS NULL OR trim(display_name) = '')");
+        command.Parameters.AddWithValue("id", workerId);
+        command.Parameters.AddWithValue("name", displayName);
+        await command.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>
+    /// Attribue le nom d'affichage au seul worker actif sans nom lorsque l'identifiant du worker local n'est pas encore en mémoire
+    /// (par exemple après un redémarrage du serveur alors que l'agent local était déjà enrôlé).
+    /// </summary>
+    public async Task<bool> SetFallbackLocalDisplayNameAsync(string displayName, CancellationToken ct)
+    {
+        await using var command = dataSource.CreateCommand("""
+            UPDATE workers SET display_name = @name
+            WHERE id = (
+                SELECT id FROM workers
+                WHERE deleted_at IS NULL AND (display_name IS NULL OR trim(display_name) = '')
+                ORDER BY last_seen_at DESC
+                LIMIT 1
+            )
+            AND (SELECT count(*) FROM workers WHERE deleted_at IS NULL) = 1
+            """);
+        command.Parameters.AddWithValue("name", displayName);
+        return await command.ExecuteNonQueryAsync(ct) > 0;
+    }
+
+    /// <summary>Départ volontaire d’un worker (0039) : même retrait que la suppression par un administrateur, mais authentifié par le jeton du worker lui-même.</summary>
+    public async Task<string> LeaveAsync(Guid id, string token, CancellationToken ct)
+    {
+        await using var owner = dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM workers WHERE id = @id AND worker_token_hash = @hash AND deleted_at IS NULL)");
+        owner.Parameters.AddWithValue("id", id);
+        owner.Parameters.AddWithValue("hash", SqlKind.Bytes, HashSecret(token));
+        return (await owner.ScalarBoolAsync(ct)) ? await DeleteAsync(id, ct) : "unauthorized";
+    }
+
+    public async Task<string> DeleteAsync(Guid id,CancellationToken ct)
+    {
+        bool server;
+        await using(var read=dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM workers WHERE id=@id AND 'server'=ANY(roles))")) {read.Parameters.AddWithValue("id",
+            id);server=await read.ScalarBoolAsync(ct);}
+        if(server) return "coordination"; // Le central ne se retire pas : il est l'unique serveur.
+        await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
+        await using var node=Sql.Command("SELECT id FROM workers WHERE id=@id AND deleted_at IS NULL FOR UPDATE",c,tx);
+        node.Parameters.AddWithValue("id",id); if(await node.ExecuteScalarAsync(ct) is null) return "missing";
+        if(!server) {await using var changed=Sql.Command("SELECT EXISTS(SELECT 1 FROM workers WHERE id=@id AND 'server'=ANY(roles))",c,tx);
+            changed.Parameters.AddWithValue("id",id);if(await changed.ScalarBoolAsync(ct)) return "coordination";}
+        await using var active=Sql.Command("""
+          SELECT EXISTS(SELECT 1 FROM execution_work w JOIN executions e ON e.id=w.execution_id
+            WHERE (w.worker_id=@id OR w.source_worker_id=@id) AND (w.lease_until>clock_timestamp() OR w.handoff_pending) AND e.state IN ('running','cancelling'))
+          OR EXISTS(SELECT 1 FROM library_scans WHERE worker_id=@id AND state='running' AND lease_until>clock_timestamp())
+          """,c,tx);
+        active.Parameters.AddWithValue("id",id); if((await active.ScalarBoolAsync(ct))) return "busy";
+        await using(var queues=Sql.Command("SELECT EXISTS(SELECT 1 FROM executions WHERE state IN ('queued','running','cancelling')) AND EXISTS(SELECT 1 FROM workers WHERE id=@id AND 'server'=ANY(roles))",
+            c,tx))
+        {queues.Parameters.AddWithValue("id",id);if(await queues.ScalarBoolAsync(ct)) return "busy";}
+        await using var remove=Sql.Command("""
+          UPDATE workers SET deleted_at=clock_timestamp(),worker_token_hash=NULL WHERE id=@id;
+          DELETE FROM worker_group_members WHERE worker_id=@id;
+          DELETE FROM library_worker_accesses WHERE worker_id=@id;
+          UPDATE library_worker_accesses SET is_enabled=false WHERE transfer_source_worker_id=@id;
+          DELETE FROM worker_enrollment_requests WHERE worker_id=@id;
+          """,c,tx);
+        remove.Parameters.AddWithValue("id",id); await remove.ExecuteNonQueryAsync(ct); await tx.CommitAsync(ct); return "deleted";
+    }
+
+    /// <summary>Tâches actives (bail valide) par worker worker, en une requête : alimente la charge des cartes de workers.</summary>
+    public async Task<IReadOnlyDictionary<Guid,int>> ActiveTaskCountsAsync(CancellationToken ct)
+    {
+        await using var cmd=dataSource.CreateCommand("""
+          SELECT w.worker_id, count(*)::integer
+          FROM execution_work w JOIN executions e ON e.id=w.execution_id
+          WHERE w.worker_id IS NOT NULL AND w.lease_until>clock_timestamp() AND e.state IN ('running','cancelling')
+          GROUP BY w.worker_id
+          """);
+        await using var r=await cmd.ExecuteReaderAsync(ct);
+        var counts=new Dictionary<Guid,int>();
+        while(await r.ReadAsync(ct)) counts[r.GetGuid(0)]=r.GetInt32(1);
+        return counts;
+    }
+
+    public async Task<WorkerActivityResponse> ActivityAsync(Guid id,CancellationToken ct)
+    {
+        await using var cmd=dataSource.CreateCommand("""
+          SELECT
+           (SELECT count(*)::integer FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.worker_id=@id AND w.lease_until>clock_timestamp() AND e.state IN ('running','cancelling')),
+           (SELECT count(*)::integer FROM executions WHERE worker_id=@id AND state='succeeded'),
+           (SELECT count(*)::integer FROM executions WHERE worker_id=@id AND state='failed'),
+           (SELECT count(*)::integer FROM executions WHERE worker_id=@id AND state='cancelled'),
+           (SELECT max(updated_at) FROM executions WHERE worker_id=@id),
+           (SELECT count(*)::integer FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.source_worker_id=@id AND w.lease_until>clock_timestamp() AND e.state IN ('running','cancelling'))
+          """);
+        cmd.Parameters.AddWithValue("id",id); await using var r=await cmd.ExecuteReaderAsync(ct); await r.ReadAsync(ct);
+        return new(r.GetInt32(0),r.GetInt32(1),r.GetInt32(2),r.GetInt32(3),r.IsDBNull(4)?(DateTimeOffset?)null:r.GetFieldValue<DateTimeOffset>(4),r.GetInt32(5));
+    }
+
+    public async Task<string?> GetActiveDisplayNameAsync(CancellationToken ct)
+    {
+        await using var cmd = dataSource.CreateCommand("""
+            SELECT display_name
+            FROM workers
+            WHERE deleted_at IS NULL AND display_name IS NOT NULL AND trim(display_name) <> ''
+            ORDER BY last_seen_at DESC
+            LIMIT 1
+            """);
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return result is string { Length: > 0 } s ? s : null;
+    }
+
+    private static void AddWorkerParameters(DbCommand command, WorkerEnrollmentRequest request)
+    {
+        AddWorkerParameters(command, request.Id, new WorkerHeartbeatRequest(request.Name, request.Roles, request.MaxConcurrentTasks, request.Capabilities, request.Inventory));
+    }
+
+    private static void AddWorkerParameters(DbCommand command, Guid workerId, WorkerHeartbeatRequest request)
+    {
+        command.Parameters.AddWithValue("id", workerId);
+        command.Parameters.AddWithValue("name", request.Name.Trim());
+        command.Parameters.AddWithValue("roles", request.Roles.Select(role => role.ToString().ToLowerInvariant()).ToArray());
+        command.Parameters.AddWithValue("max_concurrent_tasks", request.MaxConcurrentTasks);
+        command.Parameters.AddWithValue("capabilities", SqlKind.Json, JsonSerializer.Serialize(request.Capabilities, JsonOptions));
+        command.Parameters.AddWithValue("inventory", SqlKind.Json, JsonSerializer.Serialize(request.Inventory ?? new WorkerInventory("unknown", "unknown", 0, 0), JsonOptions));
+    }
+
+    internal static WorkerResponse ReadResponse(DbDataReader reader, bool isOnline)
+    {
+        var lastSeenAt = new DateTimeOffset(DateTime.SpecifyKind(reader.GetDateTime(5), DateTimeKind.Utc));
+        var roles = reader.GetStringArray(2).Select(role => Enum.Parse<WorkerRole>(role, true)).ToArray();
+        var capabilities = JsonSerializer.Deserialize<IReadOnlyList<WorkerToolCapability>>(reader.GetString(4), JsonOptions) ?? [];
+        var inventoryOrdinal = reader.FieldCount >= 10 ? 7 : 6;
+        var inventory = ReadInventory(reader.GetString(inventoryOrdinal));
+        var displayName = reader.FieldCount > inventoryOrdinal + 1 && !reader.IsDBNull(inventoryOrdinal + 1) ? reader.GetString(inventoryOrdinal + 1) : null;
+        var labels = reader.FieldCount > inventoryOrdinal + 2
+            ? JsonSerializer.Deserialize<Dictionary<string, string?>>(reader.GetString(inventoryOrdinal + 2), JsonOptions) ?? []
+            : new Dictionary<string, string?>();
+        return new WorkerResponse(reader.GetGuid(0), reader.GetString(1), roles, reader.GetInt32(3), capabilities,
+            isOnline ? WorkerPresenceStatus.Online : WorkerPresenceStatus.Offline, lastSeenAt, inventory, displayName, labels);
+    }
+
+    private static byte[] HashSecret(string value) => SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value));
+
+    private static WorkerInventory? ReadInventory(string json) => json == "{}" ? null : JsonSerializer.Deserialize<WorkerInventory>(json, JsonOptions);
+}

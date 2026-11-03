@@ -11,13 +11,13 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import {
-  NodeSchedule,
+  WorkerSchedule,
   SCHEDULE_DAYS,
   ScheduleInterval,
   allSlots,
   isValidSlots,
   paintDay,
-} from '../models/node-schedule';
+} from '../models/worker-schedule';
 import { WeeklyScheduleGridComponent } from './weekly-schedule-grid.component';
 
 @Component({
@@ -35,7 +35,7 @@ import { WeeklyScheduleGridComponent } from './weekly-schedule-grid.component';
         Activer le calendrier
       </mat-slide-toggle>
       <p class="schedule-hint">
-        Hors des plages colorées, aucun nouveau traitement ne démarre sur ce nœud. Les traitements
+        Hors des plages colorées, aucun nouveau traitement ne démarre sur ce worker. Les traitements
         déjà en cours ne sont pas interrompus. Fuseau horaire : {{ timeZone() }}.
       </p>
       @if (enabled()) {
@@ -111,9 +111,9 @@ import { WeeklyScheduleGridComponent } from './weekly-schedule-grid.component';
   `,
 })
 export class WeeklyScheduleFormComponent implements OnInit {
-  readonly schedule = input.required<NodeSchedule>();
+  readonly schedule = input.required<WorkerSchedule>();
   readonly busy = input(false);
-  readonly saved = output<NodeSchedule>();
+  readonly saved = output<WorkerSchedule>();
   readonly cancelled = output<void>();
 
   protected readonly days = SCHEDULE_DAYS;

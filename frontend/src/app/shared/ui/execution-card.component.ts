@@ -35,7 +35,7 @@ import { StatusBadgeComponent, StatusTone } from './status-badge.component';
       <div class="execution-card__facts">
         <div>
           <span>Worker</span>
-          <strong>{{ execution().node ?? 'Non attribué' }}</strong>
+          <strong>{{ execution().worker ?? 'Non attribué' }}</strong>
         </div>
         <div>
           <span>Dernière activité</span>

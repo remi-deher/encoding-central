@@ -12,9 +12,6 @@ public static class ApiTokenEndpoints
             Results.Ok(await auth.ListTokensAsync(ct)))
             .WithName("ListApiTokens");
 
-        group.MapGet("/replication", async (Encoding.Api.Tools.AiClusterService cluster, CancellationToken ct) =>
-            Results.Ok(await cluster.ApiTokenReplicationAsync(ct)))
-            .WithName("ApiTokenReplication").RequireAuthorization(AuthExtensions.AdministratorPolicy);
 
         group.MapPost("", async (CreateApiTokenRequest request, HttpContext http, AuthService auth, CancellationToken ct) =>
         {

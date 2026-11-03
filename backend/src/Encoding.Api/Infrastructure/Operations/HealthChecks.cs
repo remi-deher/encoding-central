@@ -1,7 +1,7 @@
 using Encoding.Api.Infrastructure.Data;
 using System.Data.Common;
 using Encoding.Api.Executions;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Encoding.Api.Infrastructure.Operations;
@@ -33,7 +33,7 @@ public sealed class MigrationsHealthCheck(DbDataSource dataSource, IHostEnvironm
             var status = await DatabaseMigrator.StatusAsync(dataSource, environment.ContentRootPath, cancellationToken);
             var data = new Dictionary<string, object> { ["applied"] = status.Applied, ["pending"] = status.Pending.Count, ["unknown"] = status.Unknown.Count };
             if (status.Pending.Count > 0) return HealthCheckResult.Unhealthy("Des migrations ne sont pas appliquées.", data: data);
-            if (status.Unknown.Count > 0) return HealthCheckResult.Degraded("La base contient des migrations inconnues de ce binaire (nœud plus ancien que le schéma).", data: data);
+            if (status.Unknown.Count > 0) return HealthCheckResult.Degraded("La base contient des migrations inconnues de ce binaire (worker plus ancien que le schéma).", data: data);
             return HealthCheckResult.Healthy("Schéma à jour.", data);
         }
         catch (DbException)
@@ -67,7 +67,7 @@ public sealed class StorageHealthCheck(string directory, long minFreeBytes) : IH
     }
 }
 
-public sealed class ClusterHealthCheck(DbDataSource dataSource, NodePresenceOptions presence) : IHealthCheck
+public sealed class CentralHealthCheck(DbDataSource dataSource, WorkerPresenceOptions presence) : IHealthCheck
 {
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
@@ -75,7 +75,7 @@ public sealed class ClusterHealthCheck(DbDataSource dataSource, NodePresenceOpti
         {
             await using var command = dataSource.CreateCommand("""
                 SELECT
-                  (SELECT count(*) FROM cluster_nodes WHERE deleted_at IS NULL AND 'worker' = ANY(roles) AND last_seen_at >= clock_timestamp() - make_interval(secs => @offline)),
+                  (SELECT count(*) FROM workers WHERE deleted_at IS NULL AND 'worker' = ANY(roles) AND last_seen_at >= clock_timestamp() - make_interval(secs => @offline)),
                   (SELECT count(*) FROM execution_work w JOIN executions e ON e.id = w.execution_id
                     WHERE e.state IN ('running','cancelling') AND (w.lease_until IS NULL OR w.lease_until <= clock_timestamp() - interval '2 minutes'))
                 """);
@@ -86,11 +86,11 @@ public sealed class ClusterHealthCheck(DbDataSource dataSource, NodePresenceOpti
             var data = new Dictionary<string, object> { ["onlineWorkers"] = workers, ["stalledExecutions"] = stalled };
             if (stalled > 0) return HealthCheckResult.Degraded("Des exécutions ont un bail expiré depuis plus de 2 minutes.", data: data);
             if (workers == 0) return HealthCheckResult.Degraded("Aucun worker en ligne.", data: data);
-            return HealthCheckResult.Healthy("Cluster opérationnel.", data);
+            return HealthCheckResult.Healthy("Central opérationnel.", data);
         }
         catch (DbException)
         {
-            return HealthCheckResult.Unhealthy("État du cluster illisible.");
+            return HealthCheckResult.Unhealthy("État du central illisible.");
         }
     }
 }

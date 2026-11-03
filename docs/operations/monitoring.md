@@ -11,7 +11,7 @@ Voir [0029](../architecture/domains/auth-ops.md) pour les décisions.
 | `GET /health/details` | Tous les contrôles, avec données chiffrées. Statut global `healthy`, `degraded` ou `unhealthy`. |
 | `GET /metrics` | Métriques Prometheus. |
 
-Contrôles de `/health/details` : `database`, `migrations`, `cluster`, `flow-backups`, `artifact-storage`, `backup-storage`.
+Contrôles de `/health/details` : `database`, `migrations`, `central`, `flow-backups`, `artifact-storage`, `backup-storage`.
 
 
 ## Prometheus
@@ -26,12 +26,12 @@ scrape_configs:
       - targets: ['encoding-api-1:8080', 'encoding-api-2:8080']
 ```
 
-Les métriques de cluster (`encoding_nodes`, `encoding_executions`, …) sont identiques sur chaque serveur : agréger avec `max by (…)` plutôt que `sum`.
+Les métriques de central (`encoding_nodes`, `encoding_executions`, …) sont identiques sur chaque serveur : agréger avec `max by (…)` plutôt que `sum`.
 
 | Métrique | Signification |
 | --- | --- |
 | `encoding_up`, `encoding_database_up` | Le serveur et sa base SQLite locale répondent. |
-| `encoding_nodes{status}` | Nœuds en ligne / hors ligne (retirés exclus). |
+| `encoding_nodes{status}` | Workers en ligne / hors ligne (retirés exclus). |
 | `encoding_executions{state}` | Exécutions par état. |
 | `encoding_executions_oldest_queued_age_seconds` | Ancienneté de la plus ancienne exécution en file. |
 | `encoding_execution_leases_expired` | Exécutions en cours dont le bail a expiré. |
@@ -69,9 +69,9 @@ Alertes suggérées :
   expr: increase(encoding_artifact_retention_errors_total[1h]) > 0
 ```
 
-## Supervision du maillage
+## Supervision du central
 
-Suivre le statut de réconciliation et les métriques SQLite de chaque serveur. La disponibilité locale ne dépend pas de la présence d’un pair. Les anciennes métriques et alertes de consensus sont retirées.
+Suivre le contrôle de santé `central` et les métriques SQLite du central. Il n'y a ni réconciliation ni maillage : les anciennes métriques et alertes de consensus et de réconciliation sont retirées.
 
 ## Journaux
 
@@ -97,16 +97,16 @@ Rechercher dans les journaux « à supprimer (simulation) » et contrôler `enco
 
 `Operations__Health__MinFreeDiskBytes` (5 Gio par défaut) et `Operations__Health__BackupLagMinutes` (15) règlent le passage à `degraded`.
 
-## Dossiers de travail des nœuds
+## Dossiers de travail des workers
 
-Chaque nœud supprime lui-même `executions/<id>` et `transfers/<id>` de son dossier de données (`Node:DataDirectory`) quand l'exécution est terminée, après un délai d'inactivité :
+Chaque worker supprime lui-même `executions/<id>` et `transfers/<id>` de son dossier de données (`Worker:DataDirectory`) quand l'exécution est terminée, après un délai d'inactivité :
 
 ```yaml
-Node__Workspace__CleanupEnabled: "true"           # "false" pour désactiver
-Node__Workspace__CompletedRetentionHours: "0"     # réussies et annulées
-Node__Workspace__FailedRetentionHours: "0"        # échouées
-Node__Workspace__UnknownRetentionHours: "72"      # identifiant inconnu du serveur
-Node__Workspace__CleanupIntervalMinutes: "10"
+Worker__Workspace__CleanupEnabled: "true"           # "false" pour désactiver
+Worker__Workspace__CompletedRetentionHours: "0"     # réussies et annulées
+Worker__Workspace__FailedRetentionHours: "0"        # échouées
+Worker__Workspace__UnknownRetentionHours: "72"      # identifiant inconnu du serveur
+Worker__Workspace__CleanupIntervalMinutes: "10"
 ```
 
 Une exécution en file, en cours ou en annulation n'est jamais touchée. Les médias des bibliothèques ne sont pas concernés.

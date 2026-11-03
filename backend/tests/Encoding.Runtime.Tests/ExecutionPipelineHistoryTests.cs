@@ -21,7 +21,7 @@ public sealed class ExecutionPipelineHistoryTests
         await using (var insert = db.Db.CreateCommand("""
             INSERT INTO executions(id,media,library_name,flow_name,flow_version,flow_definition,state,attempt)
             VALUES(@id,'synthetic.mkv','Synthetic','Partial',1,'{}',@state,1);
-            INSERT INTO execution_steps(execution_id,node_id,invocation_id,idempotent,command_logs,checkpoint)
+            INSERT INTO execution_steps(execution_id,flow_node_id,invocation_id,idempotent,command_logs,checkpoint)
             VALUES(@id,'unavailable-block',@invocation,true,'null','{}')
             """))
         {
@@ -52,7 +52,7 @@ public sealed class ExecutionPipelineHistoryTests
         await using (var insert = db.Db.CreateCommand("""
             INSERT INTO executions(id,media,library_name,flow_name,flow_version,flow_definition,state,attempt)
             VALUES(@id,'synthetic.mkv','Synthetic','Duplicate node fixture',1,@flow,'failed',1);
-            INSERT INTO execution_steps(execution_id,node_id,invocation_id,idempotent,command_logs,checkpoint)
+            INSERT INTO execution_steps(execution_id,flow_node_id,invocation_id,idempotent,command_logs,checkpoint)
             VALUES(@id,'finish',@invocation,true,'[]','{}')
             """))
         {
@@ -80,7 +80,7 @@ public sealed class ExecutionPipelineHistoryTests
         await using (var insert = db.Db.CreateCommand("""
             INSERT INTO executions(id,media,library_name,flow_name,flow_version,flow_definition,state,attempt)
             VALUES(@id,'synthetic.mkv','Synthetic','Legacy command logs',1,'{}','failed',1);
-            INSERT INTO execution_steps(execution_id,node_id,invocation_id,idempotent,command_logs,checkpoint)
+            INSERT INTO execution_steps(execution_id,flow_node_id,invocation_id,idempotent,command_logs,checkpoint)
             VALUES(@id,'unknown-step',@invocation,true,@logs,'{}')
             """))
         {
@@ -104,7 +104,7 @@ public sealed class ExecutionPipelineHistoryTests
         await using (var insert = db.Db.CreateCommand("""
             INSERT INTO executions(id,media,library_name,flow_name,flow_version,flow_definition,state,attempt)
             VALUES(@id,'synthetic.mkv','Synthetic','Corrupt command logs',1,'{}','failed',1);
-            INSERT INTO execution_steps(execution_id,node_id,invocation_id,idempotent,command_logs,checkpoint)
+            INSERT INTO execution_steps(execution_id,flow_node_id,invocation_id,idempotent,command_logs,checkpoint)
             VALUES(@id,'unknown-step',@invocation,true,'[invalid]','{}')
             """))
         {

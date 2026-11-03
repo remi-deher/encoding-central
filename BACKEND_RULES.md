@@ -28,7 +28,7 @@ Ces règles sont obligatoires pour toute conception ou modification du backend. 
 - Les plugins s’intègrent par des contrats et points d’extension communs ; ils ne contournent pas les règles centrales.
 - Suivre les conventions et les frontières déjà établies dans le code environnant.
 - Ces frontières sont vérifiées par `backend/tests/Encoding.Runtime.Tests/ArchitectureTests.cs` : références de projets, aucun type de stockage (`DbException`, SQL, `DbDataSource`) dans les endpoints, lancement de processus limité à une liste fermée, aucun accès fichier direct dans les endpoints (`FileResults`), plafond de 600 lignes par fichier : scinder en classes partielles ou en types distincts plutôt que d’ajouter une exception.
-- Un endpoint traduit HTTP vers un service ; les conflits d’unicité passent par `UniqueConflict.GuardAsync`, la logique de pair maillé par `ClusterTaskPeerHandler`.
+- Un endpoint traduit HTTP vers un service ; les conflits d’unicité passent par `UniqueConflict.GuardAsync`.
 
 ## 4. Centraliser les règles et les états
 
@@ -37,14 +37,14 @@ Ces règles sont obligatoires pour toute conception ou modification du backend. 
 - Définir explicitement les états, transitions, erreurs et conditions de reprise.
 - Distinguer l’état observé, l’état souhaité et l’absence d’information.
 - Ne pas déduire un état certain depuis une mesure ou un indicateur indirect.
-- Les valeurs par défaut doivent être explicites, documentées et cohérentes entre les nœuds.
+- Les valeurs par défaut doivent être explicites, documentées et cohérentes entre les workers.
 
 ## 5. Définir des contrats explicites
 
 - Définir des contrats métier stables pour l’API, les événements, les tâches et les plugins.
 - Transmettre les objets métier selon un modèle partagé ; ne pas reconstruire des versions partielles et divergentes dans chaque couche.
 - Valider les données aux frontières du système et retourner des erreurs structurées, cohérentes et exploitables.
-- Versionner ou faire évoluer les contrats de façon compatible lorsque plusieurs nœuds peuvent être mis à jour à des moments différents.
+- Versionner ou faire évoluer les contrats de façon compatible lorsque plusieurs workers peuvent être mis à jour à des moments différents.
 - Ne pas exposer les détails internes de stockage ou d’exécution comme contrats publics par accident.
 
 ## 6. Rendre les opérations prévisibles et récupérables
@@ -56,13 +56,13 @@ Ces règles sont obligatoires pour toute conception ou modification du backend. 
 - Les opérations sur les fichiers média doivent respecter les garanties d’intégrité définies dans `AGENTS.md`.
 - Les secrets et jetons ne doivent pas apparaître dans les journaux ou les erreurs retournées aux clients.
 
-## 7. Préserver les frontières du cluster
+## 7. Préserver les frontières du central
 
-- Aucun nœud serveur ne doit être traité implicitement comme l’autorité permanente ou l’unique point de coordination.
+- Aucun worker serveur ne doit être traité implicitement comme l’autorité permanente ou l’unique point de coordination.
 - Les composants serveur doivent lire et modifier l’état partagé selon les mécanismes de cohérence définis par le projet.
 - Les workers annoncent leurs capacités ; le répartiteur attribue uniquement les tâches compatibles avec ces capacités et les accès aux bibliothèques.
 - Un plugin ou un worker ne peut pas déclarer une tâche terminée avant la validation attendue de son résultat.
-- Les changements de configuration partagée doivent être cohérents et identifiables entre nœuds.
+- Les changements de configuration partagée doivent être cohérents et identifiables entre workers.
 
 ## 8. Maintenir le code modifiable
 

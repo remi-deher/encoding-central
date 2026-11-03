@@ -111,7 +111,7 @@ import { aiEffortLabel, aiModelKey, aiTypeLabel } from './ai-model-selection';
             }
             @for (option of filteredModels(); track key(option)) {
               <mat-option [value]="key(option)"
-                >{{ option.label }}{{ option.nodeName ? ' · ' + option.nodeName : '' }}</mat-option
+                >{{ option.label }}{{ option.workerName ? ' · ' + option.workerName : '' }}</mat-option
               >
             }
           </mat-select>

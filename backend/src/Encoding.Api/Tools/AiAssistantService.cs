@@ -9,14 +9,14 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.DataProtection;
 using Encoding.Api.Executions;
 using Encoding.Api.Flows;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Encoding.Api.Mcp;
 using Encoding.Api.Libraries;
 using Encoding.Api.Infrastructure;
 using Encoding.Contracts.Executions;
 using Encoding.Contracts.Flows;
 using Encoding.Contracts.Libraries;
-using Encoding.Contracts.Nodes;
+using Encoding.Contracts.Workers;
 using Encoding.Contracts.Tools;
 
 namespace Encoding.Api.Tools;
@@ -29,21 +29,21 @@ public sealed class AiAssistantService(
     AiAssistantActionsService actions)
 {
     public static AiAssistantService Create(
-        AiClusterStore store,
-        AiClusterService cluster,
-        Encoding.Api.Infrastructure.ClusterPeerIdentityStore identity,
+        AiCentralStore store,
+        AiCentralService cluster,
+        Encoding.Api.Infrastructure.CentralId centralId,
         FlowRepository flows,
         ExecutionRepository executions,
         LibraryWorkflowRepository libraryWorkflows,
         LibraryRepository libraries,
-        NodeRepository nodes,
-        NodePresenceOptions nodePresence,
+        WorkerRepository workers,
+        WorkerPresenceOptions workerPresence,
         McpService mcp,
         IDataProtectionProvider protection,
         FlowTemplateRepository? flowTemplates = null)
     {
-        var support = new AiAssistantSupportService(store, cluster, identity, flows, executions, libraryWorkflows,
-            libraries, nodes, nodePresence, mcp, protection, flowTemplates);
+        var support = new AiAssistantSupportService(store, cluster, centralId, flows, executions, libraryWorkflows,
+            libraries, workers, workerPresence, mcp, protection, flowTemplates);
         var conversations = new AiAssistantConversationsService(support);
         var actions = new AiAssistantActionsService(support, conversations);
         var send = new AiAssistantSendService(support, actions);
@@ -60,7 +60,6 @@ public sealed class AiAssistantService(
     public Task<bool> DeleteConversationAsync(string id, ClaimsPrincipal user, CancellationToken ct) => conversations.DeleteConversationAsync(id, user, ct);
     public Task<IReadOnlyList<AiAssistantActivity>> ActivityAsync(ClaimsPrincipal user, CancellationToken ct) => conversations.ActivityAsync(user, ct);
     public Task<AiAssistantActivity?> GetActivityAsync(Guid requestId, ClaimsPrincipal user, CancellationToken ct) => conversations.GetActivityAsync(requestId, user, ct);
-    public Task<Guid?> GetRequestCoordinatorIdAsync(Guid requestId, ClaimsPrincipal user, CancellationToken ct) => conversations.GetRequestCoordinatorIdAsync(requestId, user, ct);
     public Task RecordOperationActivityAsync(
         ClaimsPrincipal user, Guid requestId, string operation, string provider, string status,
         DateTimeOffset startedAt, string? errorCategory, CancellationToken ct) =>

@@ -56,17 +56,17 @@ describe('AiToolsTabComponent', () => {
 
   async function setup() {
     aiServiceMock = {
-      getModelCatalog: vi.fn().mockReturnValue(of({ nodes: [], policy: { disabledModels: [] } })),
+      getModelCatalog: vi.fn().mockReturnValue(of({ workers: [], policy: { disabledModels: [] } })),
       getSettingsModelCatalog: vi
         .fn()
-        .mockReturnValue(of({ nodes: [], policy: { disabledModels: [] } })),
+        .mockReturnValue(of({ workers: [], policy: { disabledModels: [] } })),
       listSessions: vi.fn().mockReturnValue(of({ items: [], offset: 0, hasMore: false })),
-      getQuotas: vi.fn().mockReturnValue(of({ nodes: [] })),
+      getQuotas: vi.fn().mockReturnValue(of({ workers: [] })),
       getUsage: vi.fn().mockReturnValue(
         of({
           days: 30,
           since: '',
-          nodes: [],
+          workers: [],
           truncated: false,
           total: {
             turns: 0,
@@ -77,7 +77,7 @@ describe('AiToolsTabComponent', () => {
           },
         }),
       ),
-      getCluster: vi.fn().mockReturnValue(of({ nodes: [] })),
+      getCluster: vi.fn().mockReturnValue(of({ workers: [] })),
       listTools: vi.fn().mockReturnValue(of(sampleTools)),
       getSettings: vi.fn().mockReturnValue(of(sampleSettings)),
       updateSettings: vi.fn().mockReturnValue(of(sampleSettings)),

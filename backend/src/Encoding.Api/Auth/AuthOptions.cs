@@ -1,6 +1,6 @@
 namespace Encoding.Api.Auth;
 
-/// <summary>Paramètres d’authentification, identiques pour tous les serveurs du cluster.</summary>
+/// <summary>Paramètres d’authentification, identiques pour tous les serveurs du central.</summary>
 public sealed record AuthOptions(
     TimeSpan SessionIdleTimeout,
     TimeSpan SessionAbsoluteLifetime,

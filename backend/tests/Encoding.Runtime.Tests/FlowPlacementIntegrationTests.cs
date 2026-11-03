@@ -4,11 +4,11 @@ using Encoding.Api.Executions;
 using Encoding.Api.Flows;
 using Encoding.Api.Infrastructure;
 using Encoding.Api.Infrastructure.Data;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Encoding.Api.Plugins;
 using Encoding.Contracts.Executions;
 using Encoding.Contracts.Flows;
-using Encoding.Contracts.Nodes;
+using Encoding.Contracts.Workers;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Xunit;
@@ -36,7 +36,7 @@ public sealed class FlowPlacementIntegrationTests
         return new FlowDefinition(1, Guid.NewGuid(), 1, name, "video", nodes, connections);
     }
 
-    private static NodeToolCapability[] StandardCapabilities(params string[] encoders) =>
+    private static WorkerToolCapability[] StandardCapabilities(params string[] encoders) =>
     [
         new("plugin/base", "1.9.0", ["general"], []),
         new("plugin/conditions", "1.1.0", ["general"], []),
@@ -52,31 +52,31 @@ public sealed class FlowPlacementIntegrationTests
         await DatabaseMigrator.ApplyAsync(database.Db, Harness.RepositoryRoot(), CancellationToken.None);
 
         var (registry, validator, eligibility) = Harness.Services();
-        var presence = new NodePresenceOptions(TimeSpan.FromHours(1));
+        var presence = new WorkerPresenceOptions(TimeSpan.FromHours(1));
         var configs = new PluginConfigurationRepository(database.Db, new EphemeralDataProtectionProvider());
-        var groups = new NodeGroupRepository(database.Db);
+        var groups = new WorkerGroupRepository(database.Db);
         var planner = new FlowPlacementPlanner(registry);
         var runtime = new RuntimeRepository(database.Db, eligibility, registry, presence, configs, groups, placementPlanner: planner);
 
         var libId = Guid.NewGuid();
-        var nodeA = Guid.NewGuid(); // Direct node
-        var nodeB = Guid.NewGuid(); // Transfer node
+        var workerA = Guid.NewGuid(); // Direct node
+        var workerB = Guid.NewGuid(); // Transfer node
 
         await using (var c = await database.Db.OpenConnectionAsync())
         await using (var tx = await c.BeginTransactionAsync())
         {
             await using var cmd = Sql.Command("""
                 INSERT INTO libraries(id, name, is_active) VALUES(@lib, 'TestLib', true);
-                INSERT INTO cluster_nodes(id, name, roles, max_concurrent_tasks, capabilities, last_seen_at)
+                INSERT INTO workers(id, name, roles, max_concurrent_tasks, capabilities, last_seen_at)
                 VALUES(@nodeA, 'Node-A-Direct', ARRAY['worker'], 4, @capsA, clock_timestamp()),
                       (@nodeB, 'Node-B-Transfer', ARRAY['worker'], 4, @capsB, clock_timestamp());
-                INSERT INTO library_node_accesses(library_id, node_id, mode, local_path, can_read, can_write, is_enabled, transfer_source_node_id)
+                INSERT INTO library_worker_accesses(library_id, worker_id, mode, local_path, can_read, can_write, is_enabled, transfer_source_worker_id)
                 VALUES(@lib, @nodeA, 'direct', '/media/library', true, true, true, NULL),
                       (@lib, @nodeB, 'transfer', NULL, true, true, true, @nodeA);
                 """, c, tx);
             cmd.Parameters.AddWithValue("lib", libId);
-            cmd.Parameters.AddWithValue("nodeA", nodeA);
-            cmd.Parameters.AddWithValue("nodeB", nodeB);
+            cmd.Parameters.AddWithValue("nodeA", workerA);
+            cmd.Parameters.AddWithValue("nodeB", workerB);
             cmd.Parameters.AddWithValue("capsA", SqlKind.Json, JsonSerializer.Serialize(StandardCapabilities("libx264", "aac"), Json));
             cmd.Parameters.AddWithValue("capsB", SqlKind.Json, JsonSerializer.Serialize(StandardCapabilities("libx264", "aac"), Json));
             await cmd.ExecuteNonQueryAsync();
@@ -100,18 +100,18 @@ public sealed class FlowPlacementIntegrationTests
         }
 
         // Node B (transfer) tries to claim -> must be skipped because Node A covers everything directly
-        var claimB = await runtime.ClaimAsync(nodeB, CancellationToken.None);
+        var claimB = await runtime.ClaimAsync(workerB, CancellationToken.None);
         Assert.Null(claimB);
 
         // Node A (direct) tries to claim -> must succeed
-        var claimA = await runtime.ClaimAsync(nodeA, CancellationToken.None);
+        var claimA = await runtime.ClaimAsync(workerA, CancellationToken.None);
         Assert.NotNull(claimA);
         Assert.Equal(execId, claimA.ExecutionId);
         Assert.Equal(FlowPlacementPlan.StrategyDirectUnified,claimA.PlacementPlan?.Strategy);
         await using(var beforePlan=database.Db.CreateCommand("SELECT placement_plan::text FROM execution_work WHERE execution_id=@id"))
         {beforePlan.Parameters.AddWithValue("id",execId);var value=await beforePlan.ExecuteScalarAsync();Assert.True(value is null or DBNull || string.IsNullOrWhiteSpace(value.ToString()),$"Claim persisted an unexpected placement plan: {value}");}
-        Assert.Equal(FlowPlacementPlan.StrategyDirectUnified,(await runtime.PersistPlacementPlanAsync(execId,nodeA,claimA.Epoch,CancellationToken.None))?.Strategy);
-        await runtime.RecordSourceMetadataAsync(execId,nodeA,claimA.Epoch,JsonSerializer.SerializeToElement(new { streams=Array.Empty<object>() },Json),CancellationToken.None);
+        Assert.Equal(FlowPlacementPlan.StrategyDirectUnified,(await runtime.PersistPlacementPlanAsync(execId,workerA,claimA.Epoch,CancellationToken.None))?.Strategy);
+        await runtime.RecordSourceMetadataAsync(execId,workerA,claimA.Epoch,JsonSerializer.SerializeToElement(new { streams=Array.Empty<object>() },Json),CancellationToken.None);
 
         // Verify stored placement plan
         await using (var c = await database.Db.OpenConnectionAsync())
@@ -123,7 +123,7 @@ public sealed class FlowPlacementIntegrationTests
             var plan = JsonSerializer.Deserialize<FlowPlacementPlan>(jsonText, Json);
             Assert.NotNull(plan);
             Assert.Equal(FlowPlacementPlan.StrategyDirectUnified, plan.Strategy);
-            Assert.Equal(nodeA, plan.AssignedNodeId);
+            Assert.Equal(workerA, plan.AssignedWorkerId);
         }
     }
 
@@ -134,27 +134,27 @@ public sealed class FlowPlacementIntegrationTests
         await DatabaseMigrator.ApplyAsync(database.Db, Harness.RepositoryRoot(), CancellationToken.None);
 
         var (registry, validator, eligibility) = Harness.Services();
-        var presence = new NodePresenceOptions(TimeSpan.FromHours(1));
+        var presence = new WorkerPresenceOptions(TimeSpan.FromHours(1));
         var configs = new PluginConfigurationRepository(database.Db, new EphemeralDataProtectionProvider());
-        var groups = new NodeGroupRepository(database.Db);
+        var groups = new WorkerGroupRepository(database.Db);
         var planner = new FlowPlacementPlanner(registry);
         var runtime = new RuntimeRepository(database.Db, eligibility, registry, presence, configs, groups, placementPlanner: planner);
 
         var libId = Guid.NewGuid();
-        var nodeA = Guid.NewGuid();
+        var workerA = Guid.NewGuid();
 
         await using (var c = await database.Db.OpenConnectionAsync())
         await using (var tx = await c.BeginTransactionAsync())
         {
             await using var cmd = Sql.Command("""
                 INSERT INTO libraries(id, name, is_active) VALUES(@lib, 'TestLib', true);
-                INSERT INTO cluster_nodes(id, name, roles, max_concurrent_tasks, capabilities, last_seen_at)
+                INSERT INTO workers(id, name, roles, max_concurrent_tasks, capabilities, last_seen_at)
                 VALUES(@nodeA, 'Node-A', ARRAY['worker'], 4, @capsA, clock_timestamp());
-                INSERT INTO library_node_accesses(library_id, node_id, mode, local_path, can_read, can_write, is_enabled)
+                INSERT INTO library_worker_accesses(library_id, worker_id, mode, local_path, can_read, can_write, is_enabled)
                 VALUES(@lib, @nodeA, 'direct', '/media/library', true, true, true);
                 """, c, tx);
             cmd.Parameters.AddWithValue("lib", libId);
-            cmd.Parameters.AddWithValue("nodeA", nodeA);
+            cmd.Parameters.AddWithValue("nodeA", workerA);
             cmd.Parameters.AddWithValue("capsA", SqlKind.Json, JsonSerializer.Serialize(StandardCapabilities("libx264"), Json));
             await cmd.ExecuteNonQueryAsync();
             await tx.CommitAsync();
@@ -182,7 +182,7 @@ public sealed class FlowPlacementIntegrationTests
         }
 
         // An impossible placement remains queued until the existing read-only placement grace expires.
-        var claim = await runtime.ClaimAsync(nodeA, CancellationToken.None);
+        var claim = await runtime.ClaimAsync(workerA, CancellationToken.None);
         Assert.Null(claim);
         await using(var age=database.Db.CreateCommand("UPDATE executions SET queued_at=clock_timestamp()-interval '3 minutes' WHERE id=@id"))
         { age.Parameters.AddWithValue("id",execId); await age.ExecuteNonQueryAsync(); }
@@ -208,31 +208,31 @@ public sealed class FlowPlacementIntegrationTests
         await DatabaseMigrator.ApplyAsync(database.Db, Harness.RepositoryRoot(), CancellationToken.None);
 
         var (registry, validator, eligibility) = Harness.Services();
-        var presence = new NodePresenceOptions(TimeSpan.FromHours(1));
+        var presence = new WorkerPresenceOptions(TimeSpan.FromHours(1));
         var configs = new PluginConfigurationRepository(database.Db, new EphemeralDataProtectionProvider());
-        var groups = new NodeGroupRepository(database.Db);
+        var groups = new WorkerGroupRepository(database.Db);
         var planner = new FlowPlacementPlanner(registry);
         var runtime = new RuntimeRepository(database.Db, eligibility, registry, presence, configs, groups, placementPlanner: planner);
 
         var libId = Guid.NewGuid();
-        var nodeA = Guid.NewGuid(); // Direct node (CPU only)
-        var nodeB = Guid.NewGuid(); // Transfer node (has hevc_nvenc)
+        var workerA = Guid.NewGuid(); // Direct node (CPU only)
+        var workerB = Guid.NewGuid(); // Transfer node (has hevc_nvenc)
 
         await using (var c = await database.Db.OpenConnectionAsync())
         await using (var tx = await c.BeginTransactionAsync())
         {
             await using var cmd = Sql.Command("""
                 INSERT INTO libraries(id, name, is_active) VALUES(@lib, 'TestLib', true);
-                INSERT INTO cluster_nodes(id, name, roles, max_concurrent_tasks, capabilities, last_seen_at)
+                INSERT INTO workers(id, name, roles, max_concurrent_tasks, capabilities, last_seen_at)
                 VALUES(@nodeA, 'Node-A-Direct', ARRAY['worker'], 4, @capsA, clock_timestamp()),
                       (@nodeB, 'Node-B-Transfer', ARRAY['worker'], 4, @capsB, clock_timestamp());
-                INSERT INTO library_node_accesses(library_id, node_id, mode, local_path, can_read, can_write, is_enabled, transfer_source_node_id)
+                INSERT INTO library_worker_accesses(library_id, worker_id, mode, local_path, can_read, can_write, is_enabled, transfer_source_worker_id)
                 VALUES(@lib, @nodeA, 'direct', '/media/library', true, true, true, NULL),
                       (@lib, @nodeB, 'transfer', NULL, true, true, true, @nodeA);
                 """, c, tx);
             cmd.Parameters.AddWithValue("lib", libId);
-            cmd.Parameters.AddWithValue("nodeA", nodeA);
-            cmd.Parameters.AddWithValue("nodeB", nodeB);
+            cmd.Parameters.AddWithValue("nodeA", workerA);
+            cmd.Parameters.AddWithValue("nodeB", workerB);
             cmd.Parameters.AddWithValue("capsA", SqlKind.Json, JsonSerializer.Serialize(StandardCapabilities("libx264", "aac"), Json));
             cmd.Parameters.AddWithValue("capsB", SqlKind.Json, JsonSerializer.Serialize(StandardCapabilities("libx264", "hevc_nvenc", "aac"), Json));
             await cmd.ExecuteNonQueryAsync();
@@ -292,14 +292,14 @@ public sealed class FlowPlacementIntegrationTests
 
         // Because the media is already HEVC, the transcode branch is pruned!
         // Node B (transfer) must skip:
-        var claimB = await runtime.ClaimAsync(nodeB, CancellationToken.None);
+        var claimB = await runtime.ClaimAsync(workerB, CancellationToken.None);
         Assert.Null(claimB);
 
         // Node A (direct access) claims and executes locally:
-        var claimA = await runtime.ClaimAsync(nodeA, CancellationToken.None);
+        var claimA = await runtime.ClaimAsync(workerA, CancellationToken.None);
         Assert.NotNull(claimA);
         Assert.Equal(execId, claimA.ExecutionId);
-        await runtime.RecordSourceMetadataAsync(execId,nodeA,claimA.Epoch,beforeMeta,CancellationToken.None);
+        await runtime.RecordSourceMetadataAsync(execId,workerA,claimA.Epoch,beforeMeta,CancellationToken.None);
 
         // Verify the plan is DirectUnified
         await using (var c = await database.Db.OpenConnectionAsync())
@@ -311,7 +311,7 @@ public sealed class FlowPlacementIntegrationTests
             var plan = JsonSerializer.Deserialize<FlowPlacementPlan>(jsonText, Json);
             Assert.NotNull(plan);
             Assert.Equal(FlowPlacementPlan.StrategyDirectUnified, plan.Strategy);
-            Assert.Equal(nodeA, plan.AssignedNodeId);
+            Assert.Equal(workerA, plan.AssignedWorkerId);
         }
     }
 
@@ -321,17 +321,17 @@ public sealed class FlowPlacementIntegrationTests
         await using var database=await TestDatabase.CreateSqliteAsync("placement-segmented-runtime");
         await DatabaseMigrator.ApplyAsync(database.Db,Harness.RepositoryRoot(),CancellationToken.None);
         var (registry,_,eligibility)=Harness.Services();
-        var presence=new NodePresenceOptions(TimeSpan.FromHours(1));
+        var presence=new WorkerPresenceOptions(TimeSpan.FromHours(1));
         var configurations=new PluginConfigurationRepository(database.Db,new EphemeralDataProtectionProvider());
-        var groups=new NodeGroupRepository(database.Db);
+        var groups=new WorkerGroupRepository(database.Db);
         var runtime=new RuntimeRepository(database.Db,eligibility,registry,presence,configurations,groups);
         var library=Guid.NewGuid();var direct=Guid.NewGuid();var gpu=Guid.NewGuid();
-        NodeToolCapability[] directCapabilities=
+        WorkerToolCapability[] directCapabilities=
         [
             new("plugin/base","1.9.0",["general"],[]),new("plugin/video","1.2.0",["general"],[]),new("plugin/mkv","1.0.0",["general"],[]),
             new("ffprobe","7.0.0",["probe"],[]),new("ffmpeg","7.0.0",["video"],["cpu"],["libx264"]),new("mkvtoolnix","90.0",["mkv"],[])
         ];
-        NodeToolCapability[] gpuCapabilities=
+        WorkerToolCapability[] gpuCapabilities=
         [
             new("plugin/video","1.2.0",["general"],[]),new("ffprobe","7.0.0",["probe"],[]),
             new("ffmpeg","7.0.0",["video"],["qsv"],["hevc_qsv"])
@@ -341,10 +341,10 @@ public sealed class FlowPlacementIntegrationTests
         {
             await using var insert=Sql.Command("""
                 INSERT INTO libraries(id,name,is_active) VALUES(@library,'Synthetic',true);
-                INSERT INTO cluster_nodes(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at)
+                INSERT INTO workers(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at)
                 VALUES(@direct,'Direct',ARRAY['worker'],4,@directCapabilities,clock_timestamp()),
                       (@gpu,'GPU',ARRAY['worker'],4,@gpuCapabilities,clock_timestamp());
-                INSERT INTO library_node_accesses(library_id,node_id,mode,local_path,can_read,can_write,is_enabled,transfer_source_node_id)
+                INSERT INTO library_worker_accesses(library_id,worker_id,mode,local_path,can_read,can_write,is_enabled,transfer_source_worker_id)
                 VALUES(@library,@direct,'direct','/synthetic',true,true,true,NULL),(@library,@gpu,'transfer',NULL,true,true,true,@direct);
                 """,c,tx);
             insert.Parameters.AddWithValue("library",library);insert.Parameters.AddWithValue("direct",direct);insert.Parameters.AddWithValue("gpu",gpu);
@@ -367,7 +367,7 @@ public sealed class FlowPlacementIntegrationTests
         var lease=await runtime.ClaimAsync(direct,CancellationToken.None);
         Assert.NotNull(lease);
         Assert.Equal(FlowPlacementPlan.StrategySegmented,lease.PlacementPlan?.Strategy);
-        Assert.Equal(gpu,lease.PlacementPlan!.NodeAssignments!["encode"]);
+        Assert.Equal(gpu,lease.PlacementPlan!.WorkerAssignments!["encode"]);
         Assert.Equal(FlowPlacementPlan.StrategySegmented,(await runtime.PersistPlacementPlanAsync(id,direct,lease.Epoch,CancellationToken.None))?.Strategy);
         var metadata=JsonSerializer.SerializeToElement(new { streams=new[]{new{codec_type="video",codec_name="h264",width=16,height=16}} },Json);
         await runtime.RecordSourceMetadataAsync(id,direct,lease.Epoch,metadata,CancellationToken.None);

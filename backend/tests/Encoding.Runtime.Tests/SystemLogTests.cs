@@ -7,7 +7,7 @@ using Encoding.Api.Infrastructure.Data;
 using Encoding.Api.Libraries;
 using Encoding.Api.Logging;
 using Encoding.Api.Mcp;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Encoding.Api.Plugins;
 using Encoding.Api.Resources;
 using Encoding.Contracts.Logging;
@@ -193,14 +193,14 @@ public sealed class SystemLogRingBufferTests
     public void RingBuffer_Filters_By_MinLevel_Category_Search_And_Node()
     {
         var buffer = new SystemLogRingBuffer(capacity: 100);
-        var node1 = Guid.NewGuid();
-        var node2 = Guid.NewGuid();
+        var worker1 = Guid.NewGuid();
+        var worker2 = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
 
-        buffer.Add(new SystemLogEntry("1", now.AddMinutes(1), SystemLogLevel.Information, "Encoding.Probe", "Probe GPU started", NodeId: node1));
-        buffer.Add(new SystemLogEntry("2", now.AddMinutes(2), SystemLogLevel.Warning, "Encoding.Probe", "GPU NVENC throttled", NodeId: node1));
-        buffer.Add(new SystemLogEntry("3", now.AddMinutes(3), SystemLogLevel.Error, "Encoding.Plugins", "Plugin Python crashed", NodeId: node2));
-        buffer.Add(new SystemLogEntry("4", now.AddMinutes(4), SystemLogLevel.Information, "Encoding.Plugins", "Plugin loaded successfully", NodeId: node2));
+        buffer.Add(new SystemLogEntry("1", now.AddMinutes(1), SystemLogLevel.Information, "Encoding.Probe", "Probe GPU started", WorkerId: worker1));
+        buffer.Add(new SystemLogEntry("2", now.AddMinutes(2), SystemLogLevel.Warning, "Encoding.Probe", "GPU NVENC throttled", WorkerId: worker1));
+        buffer.Add(new SystemLogEntry("3", now.AddMinutes(3), SystemLogLevel.Error, "Encoding.Plugins", "Plugin Python crashed", WorkerId: worker2));
+        buffer.Add(new SystemLogEntry("4", now.AddMinutes(4), SystemLogLevel.Information, "Encoding.Plugins", "Plugin loaded successfully", WorkerId: worker2));
 
         // Filter by MinLevel Warning
         var warnEntries = buffer.Query(new SystemLogFilterQuery { MinLevel = SystemLogLevel.Warning });
@@ -219,9 +219,9 @@ public sealed class SystemLogRingBufferTests
         Assert.Equal("3", searchEntries[0].Id);
 
         // Filter by Node
-        var node1Entries = buffer.Query(new SystemLogFilterQuery { NodeId = node1 });
+        var node1Entries = buffer.Query(new SystemLogFilterQuery { WorkerId = worker1 });
         Assert.Equal(2, node1Entries.Count);
-        Assert.All(node1Entries, e => Assert.Equal(node1, e.NodeId));
+        Assert.All(node1Entries, e => Assert.Equal(worker1, e.WorkerId));
 
         // Categories
         var categories = buffer.GetCategories();
@@ -259,23 +259,23 @@ public sealed class SystemLogProviderTests
     {
         var ringBuffer = new SystemLogRingBuffer(capacity: 100);
         var broadcaster = new SystemLogStreamBroadcaster();
-        var nodeId = Guid.NewGuid();
-        var nodeContext = new DefaultSystemLogNodeContext(nodeId, "Worker-01");
+        var workerId = Guid.NewGuid();
+        var workerContext = new DefaultSystemLogWorkerContext(workerId, "Worker-01");
 
-        using var provider = new SystemLogProvider(ringBuffer, broadcaster, nodeContext);
-        var logger = provider.CreateLogger("Encoding.NodeAgent.Services.ToolCapabilityProbe");
+        using var provider = new SystemLogProvider(ringBuffer, broadcaster, workerContext);
+        var logger = provider.CreateLogger("Encoding.WorkerAgent.Services.ToolCapabilityProbe");
 
         logger.LogInformation("Sonde GPU terminée avec token enc_pat_1122334455667788");
 
         var entries = ringBuffer.Query(new SystemLogFilterQuery { Limit = 10 });
         Assert.Single(entries);
         var entry = entries[0];
-        Assert.Equal("Encoding.NodeAgent.Services.ToolCapabilityProbe", entry.Category);
+        Assert.Equal("Encoding.WorkerAgent.Services.ToolCapabilityProbe", entry.Category);
         Assert.Equal(SystemLogLevel.Information, entry.Level);
         Assert.Contains("***REDACTED***", entry.Message);
         Assert.DoesNotContain("enc_pat_1122334455667788", entry.Message);
-        Assert.Equal(nodeId, entry.NodeId);
-        Assert.Equal("Worker-01", entry.NodeName);
+        Assert.Equal(workerId, entry.WorkerId);
+        Assert.Equal("Worker-01", entry.WorkerName);
     }
 }
 
@@ -345,14 +345,14 @@ public sealed class SystemLogMcpTests
         services.AddSingleton(db.Db);
         services.AddSingleton<LibraryRepository>();
         services.AddSingleton<LibraryWorkflowRepository>();
-        services.AddSingleton<LibraryNodeAccessRepository>();
+        services.AddSingleton<LibraryWorkerAccessRepository>();
         services.AddSingleton<LibraryProcessingRepository>();
         services.AddSingleton<FlowRepository>();
         services.AddSingleton<FlowComponentRegistry>();
         services.AddSingleton<FlowDefinitionValidator>();
-        services.AddSingleton<NodeRepository>();
-        services.AddSingleton<NodeGroupRepository>();
-        services.AddSingleton(new NodePresenceOptions(TimeSpan.FromSeconds(30)));
+        services.AddSingleton<WorkerRepository>();
+        services.AddSingleton<WorkerGroupRepository>();
+        services.AddSingleton(new WorkerPresenceOptions(TimeSpan.FromSeconds(30)));
         services.AddSingleton<ExecutionRepository>();
         services.AddSingleton<FlowScriptRepository>();
         services.AddSingleton(new ResourceBlobStore(config));
@@ -453,7 +453,7 @@ public sealed class SystemLogApiFactoryTests
             {
                 builder.UseSetting(Microsoft.AspNetCore.Hosting.WebHostDefaults.ContentRootKey, AppContext.BaseDirectory);
                 foreach(var setting in database.Settings()) builder.UseSetting(setting.Key,setting.Value);
-                builder.UseSetting("Node:DataDirectory",directory);
+                builder.UseSetting("Worker:DataDirectory",directory);
                 builder.UseSetting("PluginSettings:KeyDirectory",Path.Combine(directory,"keys"));
                 builder.UseSetting("Logging:LogLevel:Default", "Error");
                 builder.UseSetting("Auth:Enabled", "false");

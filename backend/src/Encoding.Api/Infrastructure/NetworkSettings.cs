@@ -5,8 +5,8 @@ using Encoding.Api.Auth;
 namespace Encoding.Api.Infrastructure;
 
 /// <summary>
-/// Réglage réseau propre à ce nœud : reverse proxy dont les en-têtes <c>X-Forwarded-*</c> sont crus, et URL publique
-/// (adresse par laquelle ce nœud est joignable, affichée à la place de celle du navigateur ; vide = adresse du navigateur).
+/// Réglage réseau propre à ce worker : reverse proxy dont les en-têtes <c>X-Forwarded-*</c> sont crus, et URL publique
+/// (adresse par laquelle ce worker est joignable, affichée à la place de celle du navigateur ; vide = adresse du navigateur).
 /// </summary>
 public sealed record NetworkSettings(bool TrustProxy, IReadOnlyList<string> Proxies, string? PublicUrl = null)
 {
@@ -14,7 +14,7 @@ public sealed record NetworkSettings(bool TrustProxy, IReadOnlyList<string> Prox
 }
 
 /// <summary>
-/// Conserve le réglage dans un fichier du dossier de données du nœud (non répliqué : chaque nœud a son propre proxy).
+/// Conserve le réglage dans un fichier du dossier de données du worker (non répliqué : chaque worker a son propre proxy).
 /// Premier démarrage : repris des variables <c>Auth__TrustForwardedHeaders</c>, <c>Auth__KnownProxies</c> et
 /// <c>Auth__KnownNetworks</c> si elles existent, pour ne pas casser les installations déjà configurées.
 /// </summary>
@@ -29,7 +29,7 @@ public sealed class NetworkSettingsService
     public NetworkSettingsService(IConfiguration configuration)
     {
         path = configuration["Network:SettingsFile"] is { Length: > 0 } configured ? configured
-            : Path.Combine(configuration["Node:DataDirectory"] ?? Path.Combine(AppContext.BaseDirectory, "Data"), "network-settings.json");
+            : Path.Combine(configuration["Worker:DataDirectory"] ?? Path.Combine(AppContext.BaseDirectory, "Data"), "network-settings.json");
         current = Load(configuration);
         matcher = ProxyMatcher.Create(current.Proxies);
     }

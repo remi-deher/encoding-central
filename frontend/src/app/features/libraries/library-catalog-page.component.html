@@ -76,7 +76,7 @@
     @if (selectedLibrary()) {
       <section class="library-access-summary" aria-labelledby="library-access-heading">
         <div>
-          <h3 id="library-access-heading">Nœuds autorisés par le serveur</h3>
+          <h3 id="library-access-heading">Workers autorisés par le serveur</h3>
           <p>{{ accessStatus() }}</p>
         </div>
         <button
@@ -100,7 +100,7 @@
         />
       } @else {
         <p class="library-access-empty">
-          Aucun nœud n’a encore accès à cette bibliothèque. Elle ne sera pas traitée tant qu’un
+          Aucun worker n’a encore accès à cette bibliothèque. Elle ne sera pas traitée tant qu’un
           accès n’est pas configuré.
         </p>
       }
@@ -147,7 +147,7 @@
         (activated)="configureProcessing()"
       />
       <app-drawer-action-button
-        label="Attribuer un nœud / groupe"
+        label="Attribuer un worker / groupe"
         (activated)="configureAccesses()"
       />
     }
@@ -195,7 +195,7 @@
         />
       }
     } @else if (accessFormLoading()) {
-      <p role="status">Chargement des nœuds et des accès…</p>
+      <p role="status">Chargement des workers et des accès…</p>
     } @else {
       <app-library-node-access-form
         [libraryName]="selectedLibrary()?.name ?? ''"

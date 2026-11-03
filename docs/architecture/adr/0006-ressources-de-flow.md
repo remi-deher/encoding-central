@@ -15,7 +15,7 @@ tags: [ressource, police, image, audio, catalogue, version, sha-256, distributio
 ## Contexte
 - Les polices d'un flow sont un dossier **local à chaque nœud** (`ENCODING_FONT_DIR`, un sous-dossier par jeu). Le worker l'annonce dans `inventory.fontSets` et l'éligibilité du bloc `subtitles-add-fonts` en dépend ([flows](../domains/flows.md), [runtime](../domains/runtime.md)).
 - Constaté le 2026-10-22 sur les deux hôtes : sans jeu « Crunchyroll » sur un nœud, tout segment qui contient ce bloc n'est éligible nulle part et le flow reste en file ; la mise en place a demandé une copie manuelle par hôte, un montage de volume et un redéploiement de chaque application.
-- Les fichiers binaires ne sont **jamais réconciliés** entre serveurs ([replication-storage](../domains/replication-storage.md)) ; seuls les scripts, modèles, profils et packs le sont, car ce sont des métadonnées.
+- Les fichiers binaires ne sont **jamais réconciliés** entre serveurs ([replication-storage](../domains/storage.md)) ; seuls les scripts, modèles, profils et packs le sont, car ce sont des métadonnées.
 - Rémi veut une catégorie de fichiers réutilisables (polices, images, audio…) dans la section Librairies et un sélecteur correspondant dans les blocs.
 
 ## Décision
@@ -28,7 +28,7 @@ tags: [ressource, police, image, audio, catalogue, version, sha-256, distributio
 
 ## Choix arrêtés
 - **Nom** : « Ressources » (choisi par Rémi le 2026-10-22).
-- **Stockage** : métadonnées réconciliées par le journal ; octets dans un **magasin adressé par empreinte (SHA-256)** sur chaque serveur, récupérés d'un pair à la demande et vérifiés à l'arrivée. L'invariant « binaires jamais réconciliés » est modifié explicitement pour ce seul magasin (l'implémentation met à jour [replication-storage](../domains/replication-storage.md)).
+- **Stockage** : métadonnées réconciliées par le journal ; octets dans un **magasin adressé par empreinte (SHA-256)** sur chaque serveur, récupérés d'un pair à la demande et vérifiés à l'arrivée. L'invariant « binaires jamais réconciliés » est modifié explicitement pour ce seul magasin (l'implémentation met à jour [replication-storage](../domains/storage.md)).
 - **Portée** (par défaut, à rouvrir si besoin) : toutes les ressources sont partagées par tout le cluster ; pas de ressource propre à un flow.
 - **Types livrés d'emblée** : polices seules. Images et audio s'ajoutent quand un bloc les consomme.
 
@@ -41,7 +41,7 @@ tags: [ressource, police, image, audio, catalogue, version, sha-256, distributio
 - **Récupération par un pair** : livrée dans une PR séparée (protocole à concevoir après lecture du maillage).
 
 ## Récupération d'un octet par un pair (conception proposée, à valider dans sa PR)
-- L'échange de réconciliation existant ne convient pas : sa signature couvre le corps de la requête (≤ 16 Mio, `ClusterReconciliationSignature.MaximumBodyBytes`) et ses lots sont comptés en événements (32). Il faut un point d'accès dédié, authentifié par les mêmes identités de pairs admis : `GET /api/v1/cluster/resources/blobs/{sha256}`.
+- L'échange de réconciliation existant ne convient pas : sa signature couvre le corps de la requête (≤ 16 Mio, `ClusterReconciliationSignature.MaximumBodyBytes`) et ses lots sont comptés en événements (32). Il faut un point d'accès dédié, authentifié par les mêmes identités de pairs admis : `GET /api/v1/central/resources/blobs/{sha256}`.
 - Signature versionnée sur la méthode, le chemin, l'horodatage et l'identité du pair (pas sur un corps) ; mêmes en-têtes et même fenêtre d'horloge que la réconciliation, limiteur `cluster-mesh`, pairs admis et actifs uniquement, jamais d'accès anonyme.
 - Réponse en flux avec `Range` (reprise). Le demandeur vérifie taille et SHA-256 **avant** de publier le fichier dans son magasin (écriture temporaire, puis déplacement sans écrasement).
 - Qui possède l'octet n'est pas répliqué : le demandeur interroge les pairs connus, dans l'ordre, jusqu'à trouver l'empreinte (les adresses des pairs sont déjà mémorisées par la réconciliation).
@@ -78,7 +78,7 @@ Constaté sur des médias réels (ex. *Overgeared* S01E01) : l'ajout d'un jeu de
 - **Embarquer les octets dans la définition du flow** : alourdit chaque version, duplique les fichiers, dépasse vite la limite de taille d'import et de document.
 
 ## Conséquences et risques
-- Invariants touchés : « fichiers binaires jamais réconciliés » ([replication-storage](../domains/replication-storage.md)) ; toute nouvelle table décide « réconciliée » ou « locale » et inscrit les suppressions en tombstone.
+- Invariants touchés : « fichiers binaires jamais réconciliés » ([replication-storage](../domains/storage.md)) ; toute nouvelle table décide « réconciliée » ou « locale » et inscrit les suppressions en tombstone.
 - Compatibilité du cluster : versions mixtes gérées par la version mineure du plugin ; un nœud qui n'a pas encore la ressource la télécharge, il n'est donc plus exclu de l'éligibilité.
 - Tests à écrire : empreinte et taille, fichier corrompu ou tronqué, reprise du téléchargement, ancien agent, version supprimée ou inconnue, perte d'un serveur pendant le transfert, non-contournement de la liste blanche, flow existant avec `fontSet`.
 - Non vérifié : la limite réelle de taille d'un lot du journal de réconciliation, le coût de réplication de dizaines de mégaoctets, la cohérence avec les sauvegardes JSON de flows.

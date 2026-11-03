@@ -3,11 +3,11 @@ using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Encoding.Api.Flows;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Encoding.Api.Plugins;
 using Encoding.Contracts.Executions;
 using Encoding.Contracts.Flows;
-using Encoding.Contracts.Nodes;
+using Encoding.Contracts.Workers;
 
 namespace Encoding.Api.Executions;
 
@@ -15,7 +15,6 @@ public sealed partial class RuntimeRepository
 {
     public async Task<RuntimeLease?> ClaimAsync(Guid worker,CancellationToken ct)
     {
-        if(ownership is not null && !await ownership.PrepareClaimsAsync(ct)) return null;
         // Persist failures independently, so an inaccessible task cannot delay another eligible task.
         if (await HasUnavailableSourcesAsync(dataSource, presence.OfflineAfter, ct))
         {
@@ -40,7 +39,7 @@ public sealed partial class RuntimeRepository
     private sealed record ClaimCursor(DateTimeOffset QueuedAt, Guid Id);
     private sealed record ClaimPage(RuntimeLease? Lease, ClaimCursor? Next = null);
 
-    internal async Task<IReadOnlyList<NodePlacementCandidate>> LoadPlacementCandidatesAsync(
+    internal async Task<IReadOnlyList<WorkerPlacementCandidate>> LoadPlacementCandidatesAsync(
         Guid libraryId,
         DbConnection c,
         DbTransaction tx,
@@ -49,25 +48,25 @@ public sealed partial class RuntimeRepository
     {
         const string sql = """
           SELECT n.id, n.name, n.roles,
-            COALESCE((SELECT p.max_concurrent_tasks FROM node_processing_settings p WHERE p.node_id=n.id), n.max_concurrent_tasks) AS max_tasks,
-            (SELECT count(*) FROM execution_work aw JOIN executions ae ON ae.id=aw.execution_id WHERE aw.worker_node_id=n.id AND aw.execution_id<>@exclude_execution AND aw.lease_until>clock_timestamp() AND ae.state IN ('running','cancelling')) AS active_tasks,
+            COALESCE((SELECT p.max_concurrent_tasks FROM worker_processing_settings p WHERE p.worker_id=n.id), n.max_concurrent_tasks) AS max_tasks,
+            (SELECT count(*) FROM execution_work aw JOIN executions ae ON ae.id=aw.execution_id WHERE aw.worker_id=n.id AND aw.execution_id<>@exclude_execution AND aw.lease_until>clock_timestamp() AND ae.state IN ('running','cancelling')) AS active_tasks,
             n.capabilities::text,
             n.inventory::text,
             n.last_seen_at >= clock_timestamp() - @offline AS is_online,
             n.accepts_work,
             a.mode, a.local_path, a.can_read, a.can_write,
-            (SELECT p.schedule_timezone FROM node_processing_settings p WHERE p.node_id=n.id AND p.schedule_enabled) AS sched_tz,
-            (SELECT p.schedule_slots FROM node_processing_settings p WHERE p.node_id=n.id AND p.schedule_enabled) AS sched_slots,
+            (SELECT p.schedule_timezone FROM worker_processing_settings p WHERE p.worker_id=n.id AND p.schedule_enabled) AS sched_tz,
+            (SELECT p.schedule_slots FROM worker_processing_settings p WHERE p.worker_id=n.id AND p.schedule_enabled) AS sched_slots,
             n.labels::text,
             EXISTS(
-              SELECT 1 FROM library_node_accesses da JOIN cluster_nodes dn ON dn.id=da.node_id
+              SELECT 1 FROM library_worker_accesses da JOIN workers dn ON dn.id=da.worker_id
               WHERE da.library_id=@library AND da.mode='direct' AND da.is_enabled AND da.can_read
                 AND da.local_path IS NOT NULL
                 AND dn.deleted_at IS NULL AND dn.last_seen_at>clock_timestamp()-@offline
                 AND dn.accepts_work AND 'worker'=ANY(dn.roles)
             ) AS has_valid_transfer_source
-          FROM cluster_nodes n
-          LEFT JOIN library_node_accesses a ON a.node_id=n.id AND a.library_id=@library AND a.is_enabled
+          FROM workers n
+          LEFT JOIN library_worker_accesses a ON a.worker_id=n.id AND a.library_id=@library AND a.is_enabled
           WHERE n.deleted_at IS NULL
           """;
         await using var cmd = Sql.Command(sql, c, tx);
@@ -75,7 +74,7 @@ public sealed partial class RuntimeRepository
         cmd.Parameters.AddWithValue("library", libraryId);
         cmd.Parameters.AddWithValue("exclude_execution", excludeExecutionId?.ToString("D") ?? string.Empty);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
-        var list = new List<NodePlacementCandidate>();
+        var list = new List<WorkerPlacementCandidate>();
         while (await reader.ReadAsync(ct))
         {
             var id = reader.GetGuid(0);
@@ -84,8 +83,8 @@ public sealed partial class RuntimeRepository
             var isWorker = roles.Contains("worker", StringComparer.OrdinalIgnoreCase);
             var maxTasks = Convert.ToInt32(reader.GetValue(3));
             var activeTasks = Convert.ToInt32(reader.GetValue(4));
-            var caps = JsonSerializer.Deserialize<NodeToolCapability[]>(reader.GetString(5), Json) ?? [];
-            var inv = reader.IsDBNull(6) ? null : JsonSerializer.Deserialize<NodeInventory>(reader.GetString(6), Json);
+            var caps = JsonSerializer.Deserialize<WorkerToolCapability[]>(reader.GetString(5), Json) ?? [];
+            var inv = reader.IsDBNull(6) ? null : JsonSerializer.Deserialize<WorkerInventory>(reader.GetString(6), Json);
             var isOnline = reader.GetBoolean(7);
             var acceptsWork = reader.GetBoolean(8);
             var mode = reader.IsDBNull(9) ? null : reader.GetString(9);
@@ -97,10 +96,10 @@ public sealed partial class RuntimeRepository
             var labelsJson = reader.IsDBNull(15) ? null : reader.GetString(15);
             var hasValidTransferSource = reader.GetBoolean(16);
 
-            LibraryNodeAccessInfo? access = null;
+            LibraryWorkerAccessInfo? access = null;
             if (mode is not null)
             {
-                access = new LibraryNodeAccessInfo(
+                access = new LibraryWorkerAccessInfo(
                     libraryId,
                     mode,
                     true,
@@ -110,10 +109,10 @@ public sealed partial class RuntimeRepository
                     null);
             }
 
-            var identity = await nodeGroups.GetNodeIdentityAsync(id, ct);
+            var identity = await workerGroups.GetWorkerIdentityAsync(id, ct);
 
-            list.Add(new NodePlacementCandidate(
-                NodeId: id,
+            list.Add(new WorkerPlacementCandidate(
+                WorkerId: id,
                 Name: name,
                 IsWorker: isWorker,
                 IsOnline: isOnline && acceptsWork,
@@ -129,22 +128,22 @@ public sealed partial class RuntimeRepository
     private async Task<ClaimPage> ClaimAvailableAsync(Guid worker, ClaimCursor? after, CancellationToken ct)
     {
         await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
-        IReadOnlyList<NodeToolCapability> capabilities; int capacity; NodeInventory? inventory;
-        await using(var node=Sql.Command("SELECT capabilities::text,COALESCE((SELECT p.max_concurrent_tasks FROM node_processing_settings p WHERE p.node_id=cluster_nodes.id),max_concurrent_tasks),(SELECT p.schedule_timezone FROM node_processing_settings p WHERE p.node_id=cluster_nodes.id AND p.schedule_enabled),(SELECT p.schedule_slots FROM node_processing_settings p WHERE p.node_id=cluster_nodes.id AND p.schedule_enabled),inventory::text FROM cluster_nodes WHERE id=@node AND deleted_at IS NULL AND accepts_work AND 'worker'=ANY(roles) AND last_seen_at>clock_timestamp()-@offline FOR UPDATE",
+        IReadOnlyList<WorkerToolCapability> capabilities; int capacity; WorkerInventory? inventory;
+        await using(var node=Sql.Command("SELECT capabilities::text,COALESCE((SELECT p.max_concurrent_tasks FROM worker_processing_settings p WHERE p.worker_id=workers.id),max_concurrent_tasks),(SELECT p.schedule_timezone FROM worker_processing_settings p WHERE p.worker_id=workers.id AND p.schedule_enabled),(SELECT p.schedule_slots FROM worker_processing_settings p WHERE p.worker_id=workers.id AND p.schedule_enabled),inventory::text FROM workers WHERE id=@node AND deleted_at IS NULL AND accepts_work AND 'worker'=ANY(roles) AND last_seen_at>clock_timestamp()-@offline FOR UPDATE",
             c,tx))
         {
             node.Parameters.AddWithValue("offline",presence.OfflineAfter); node.Parameters.AddWithValue("node",worker); await using var r=await node.ExecuteReaderAsync(ct);
             if(!await r.ReadAsync(ct)) return new(null);
-            capabilities=JsonSerializer.Deserialize<NodeToolCapability[]>(r.GetString(0),Json)??[]; capacity=r.GetInt32(1);
-                inventory=r.IsDBNull(4)?null:JsonSerializer.Deserialize<NodeInventory>(r.GetString(4),Json);
+            capabilities=JsonSerializer.Deserialize<WorkerToolCapability[]>(r.GetString(0),Json)??[]; capacity=r.GetInt32(1);
+                inventory=r.IsDBNull(4)?null:JsonSerializer.Deserialize<WorkerInventory>(r.GetString(4),Json);
             // Le calendrier ne bloque que les nouveaux démarrages : les baux actifs ne sont ni révoqués ni interrompus.
-            if(!r.IsDBNull(2) && !r.IsDBNull(3) && !new NodeSchedule(true,r.GetString(2),r.GetString(3)).IsOpen(DateTimeOffset.UtcNow)) return new(null);
+            if(!r.IsDBNull(2) && !r.IsDBNull(3) && !new WorkerSchedule(true,r.GetString(2),r.GetString(3)).IsOpen(DateTimeOffset.UtcNow)) return new(null);
         }
-        await using(var active=Sql.Command("SELECT count(*) FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.worker_node_id=@worker AND w.lease_until>clock_timestamp() AND e.state IN ('running','cancelling')",
+        await using(var active=Sql.Command("SELECT count(*) FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.worker_id=@worker AND w.lease_until>clock_timestamp() AND e.state IN ('running','cancelling')",
             c,tx))
         { active.Parameters.AddWithValue("worker",worker); if((long)(await active.ExecuteScalarAsync(ct))!>=capacity) return new(null); }
-        var nodeIdentity=await nodeGroups.GetNodeIdentityAsync(worker,ct);
-        if(nodeIdentity is null) return new(null);
+        var workerIdentity=await workerGroups.GetWorkerIdentityAsync(worker,ct);
+        if(workerIdentity is null) return new(null);
         var candidates=new List<(Guid Id,Guid Library,string Path,string Key,FlowDefinition Flow,int Attempt,int Revision,long Epoch,
             RuntimeCheckpoint? Checkpoint,RuntimeHandoffSelector? Selector,Guid? PreviousWorker,Guid? Source,byte[]? Settings,RuntimeWaitProbe? Probe,
                 DateTimeOffset QueuedAt,FlowPlacementPlan? PlacementPlan,JsonElement? BeforeMetadata)>();
@@ -152,19 +151,17 @@ public sealed partial class RuntimeRepository
         await using(var read=Sql.Command($"""
           SELECT e.id,w.library_id,w.media_path,w.media_key,e.flow_definition::text,e.attempt,e.revision,w.lease_epoch,
             (SELECT checkpoint::text FROM execution_steps WHERE execution_id=e.id AND completed_at IS NOT NULL ORDER BY completed_revision DESC LIMIT 1),
-            w.handoff_selector::text,w.previous_worker_node_id,w.source_node_id,w.plugin_configuration_snapshot,
+            w.handoff_selector::text,w.previous_worker_id,w.source_worker_id,w.plugin_configuration_snapshot,
             CASE WHEN w.wait_probe_due THEN (SELECT x.spec::text FROM execution_waits x WHERE x.execution_id=e.id AND x.state='waiting') END,e.queued_at,w.placement_plan::text,w.before_metadata::text
           FROM execution_work w JOIN executions e ON e.id=w.execution_id JOIN libraries l ON l.id=w.library_id
-          WHERE (e.state='queued' OR e.state='running' AND w.worker_node_id IS NULL)
-          AND {TaskOwnershipRepository.ActiveSql("e.id")}
-          AND COALESCE(w.handoff_selector->>'mode','')<>'server'
+          WHERE (e.state='queued' OR e.state='running' AND w.worker_id IS NULL)
           AND l.is_active AND w.available_at<=clock_timestamp()
           AND w.lease_until IS NULL
           {cursorPredicate}
           AND NOT EXISTS(SELECT 1 FROM library_processing_settings p WHERE p.library_id=l.id AND p.max_concurrent_tasks IS NOT NULL
             AND p.max_concurrent_tasks<=(SELECT count(*) FROM execution_work aw JOIN executions ae ON ae.id=aw.execution_id WHERE aw.library_id=l.id AND aw.lease_until>clock_timestamp() AND ae.state IN ('running','cancelling')))
-          AND NOT EXISTS(SELECT 1 FROM library_node_processing_limits p WHERE p.library_id=l.id AND p.node_id=@worker
-            AND p.max_concurrent_tasks<=(SELECT count(*) FROM execution_work aw JOIN executions ae ON ae.id=aw.execution_id WHERE aw.library_id=l.id AND aw.worker_node_id=@worker AND aw.lease_until>clock_timestamp() AND ae.state IN ('running','cancelling')))
+          AND NOT EXISTS(SELECT 1 FROM library_worker_processing_limits p WHERE p.library_id=l.id AND p.worker_id=@worker
+            AND p.max_concurrent_tasks<=(SELECT count(*) FROM execution_work aw JOIN executions ae ON ae.id=aw.execution_id WHERE aw.library_id=l.id AND aw.worker_id=@worker AND aw.lease_until>clock_timestamp() AND ae.state IN ('running','cancelling')))
           ORDER BY e.queued_at,e.id LIMIT @page_size
           FOR UPDATE OF e,w SKIP LOCKED
           """,c,tx))
@@ -186,7 +183,7 @@ public sealed partial class RuntimeRepository
                     r.GetFieldValue<DateTimeOffset>(14),r.IsDBNull(15)?null:JsonSerializer.Deserialize<FlowPlacementPlan>(r.GetString(15),Json),
                     r.IsDBNull(16)?null:JsonSerializer.Deserialize<JsonElement>(r.GetString(16),Json)));
         }
-        var placementCandidatesByLibrary=new Dictionary<Guid,IReadOnlyList<NodePlacementCandidate>>();
+        var placementCandidatesByLibrary=new Dictionary<Guid,IReadOnlyList<WorkerPlacementCandidate>>();
         var placementPlans=new Dictionary<(Guid Library,Guid Flow,int Version,string Metadata),FlowPlacementPlan>();
         foreach(var item in candidates)
         {
@@ -200,9 +197,9 @@ public sealed partial class RuntimeRepository
                 var key=(item.Library,item.Flow.Id,item.Flow.Version,metadataKey);
                 if(!placementPlans.TryGetValue(key,out plan))
                 {
-                    if(!placementCandidatesByLibrary.TryGetValue(item.Library,out var nodeCandidates))
-                        placementCandidatesByLibrary[item.Library]=nodeCandidates=await LoadPlacementCandidatesAsync(item.Library,c,tx,ct);
-                    plan=planner.Plan(item.Flow,item.BeforeMetadata,nodeCandidates,DateTimeOffset.UtcNow);
+                    if(!placementCandidatesByLibrary.TryGetValue(item.Library,out var workerCandidates))
+                        placementCandidatesByLibrary[item.Library]=workerCandidates=await LoadPlacementCandidatesAsync(item.Library,c,tx,ct);
+                    plan=planner.Plan(item.Flow,item.BeforeMetadata,workerCandidates,DateTimeOffset.UtcNow);
                     if(plan.Strategy==FlowPlacementPlan.StrategyImpossible)
                         logger?.LogWarning("Placement impossible pour l’exécution {ExecutionId} : {Reason}",item.Id,plan.Reason);
                     placementPlans[key]=plan;
@@ -221,28 +218,28 @@ public sealed partial class RuntimeRepository
 
                 var directUnifiedStayOnWorker = plan.Strategy == FlowPlacementPlan.StrategyDirectUnified
                     && item.Selector?.Mode == "eligible"
-                    && plan.AssignedNodeId == worker;
+                    && plan.AssignedWorkerId == worker;
 
-                if(!directUnifiedStayOnWorker && item.Selector is {} selector && (!item.PreviousWorker.HasValue || !selector.Accepts(worker,item.PreviousWorker.Value,nodeIdentity)))
+                if(!directUnifiedStayOnWorker && item.Selector is {} selector && (!item.PreviousWorker.HasValue || !selector.Accepts(worker,item.PreviousWorker.Value,workerIdentity)))
                     continue;
 
                 if(item.Selector is null)
                 {
                     if(plan.Strategy is FlowPlacementPlan.StrategyDirectUnified or FlowPlacementPlan.StrategyTransferWorker)
                     {
-                        if(plan.AssignedNodeId.HasValue && plan.AssignedNodeId.Value != worker) continue;
+                        if(plan.AssignedWorkerId.HasValue && plan.AssignedWorkerId.Value != worker) continue;
                     }
                     else if(plan.Strategy is FlowPlacementPlan.StrategyTranscodeRelay or FlowPlacementPlan.StrategySegmented)
                     {
                         if(item.Checkpoint is null)
                         {
                             var entry=item.Flow.Nodes.Single(node=>components.Resolve(node.Component)?.Kind=="input").Id;
-                            var initialTarget=plan.NodeAssignments?.TryGetValue(entry,out var assignedEntry)==true?assignedEntry:plan.AssignedNodeId;
+                            var initialTarget=plan.WorkerAssignments?.TryGetValue(entry,out var assignedEntry)==true?assignedEntry:plan.AssignedWorkerId;
                             if(initialTarget.HasValue && initialTarget.Value!=worker) continue;
                         }
                         else
                         {
-                            var target = item.Checkpoint.NextNodeId is { } next && plan.NodeAssignments?.TryGetValue(next, out var assigned)==true
+                            var target = item.Checkpoint.NextNodeId is { } next && plan.WorkerAssignments?.TryGetValue(next, out var assigned)==true
                                 ? assigned : (Guid?)null;
                             if(target.HasValue && target.Value != worker) continue;
                         }
@@ -250,14 +247,14 @@ public sealed partial class RuntimeRepository
                 }
             }
             else if(item.Probe is null && item.Selector is {} selector
-                && (!item.PreviousWorker.HasValue || !selector.Accepts(worker,item.PreviousWorker.Value,nodeIdentity))) continue;
+                && (!item.PreviousWorker.HasValue || !selector.Accepts(worker,item.PreviousWorker.Value,workerIdentity))) continue;
             var planValidatesWorker = (placementIsPersisted || item.Checkpoint is null) && plan is not null
-                && (plan.Strategy == FlowPlacementPlan.StrategyDirectUnified && plan.AssignedNodeId == worker
-                    || plan.Strategy == FlowPlacementPlan.StrategyTransferWorker && plan.AssignedNodeId == worker);
+                && (plan.Strategy == FlowPlacementPlan.StrategyDirectUnified && plan.AssignedWorkerId == worker
+                    || plan.Strategy == FlowPlacementPlan.StrategyTransferWorker && plan.AssignedWorkerId == worker);
 
             if(item.Probe is null && !planValidatesWorker
-                && !eligibility.CanRun(item.Flow,capabilities,worker,item.Checkpoint?.NextNodeId,item.Checkpoint is not null,item.Checkpoint?.Context,nodeIdentity,inventory,
-                placementIsPersisted || item.Checkpoint is null ? plan?.NodeAssignments : null)) continue;
+                && !eligibility.CanRun(item.Flow,capabilities,worker,item.Checkpoint?.NextNodeId,item.Checkpoint is not null,item.Checkpoint?.Context,workerIdentity,inventory,
+                placementIsPersisted || item.Checkpoint is null ? plan?.WorkerAssignments : null)) continue;
             var sourceEditResume=false;
             await using(var waiting=Sql.Command("SELECT EXISTS(SELECT 1 FROM runtime_source_write_waits WHERE execution_id=@id)",c,tx))
             {
@@ -266,7 +263,7 @@ public sealed partial class RuntimeRepository
             }
             // Library row serializes claims from all workers before counting active leases.
             await using(var limits=Sql.Command("""
-              SELECT p.max_concurrent_tasks,(SELECT max_concurrent_tasks FROM library_node_processing_limits WHERE library_id=l.id AND node_id=@worker)
+              SELECT p.max_concurrent_tasks,(SELECT max_concurrent_tasks FROM library_worker_processing_limits WHERE library_id=l.id AND worker_id=@worker)
               FROM libraries l LEFT JOIN library_processing_settings p ON p.library_id=l.id
               WHERE l.id=@library AND l.is_active FOR UPDATE OF l SKIP LOCKED
               """,c,tx))
@@ -275,7 +272,7 @@ public sealed partial class RuntimeRepository
                 await using var r=await limits.ExecuteReaderAsync(ct); if(!await r.ReadAsync(ct)) continue;
                 int? global=r.IsDBNull(0)?null:r.GetInt32(0); int? local=r.IsDBNull(1)?null:r.GetInt32(1); await r.DisposeAsync();
                 await using var count=Sql.Command("""
-                  SELECT count(*)::integer,count(*) FILTER(WHERE w.worker_node_id=@worker)::integer
+                  SELECT count(*)::integer,count(*) FILTER(WHERE w.worker_id=@worker)::integer
                   FROM execution_work w JOIN executions e ON e.id=w.execution_id
                   WHERE w.library_id=@library AND w.lease_until>clock_timestamp() AND e.state IN ('running','cancelling')
                   """,c,tx);
@@ -295,7 +292,7 @@ public sealed partial class RuntimeRepository
             }
             var needsDirect=sourceEditResume || eligibility.RequiresDirectAccess(item.Flow,item.Checkpoint?.NextNodeId,item.Checkpoint is not null);
             // ADR 0024 : par défaut le worker à accès direct fait le travail. Un worker par transfert ne le prend que si aucun worker
-            // direct en ligne n'en est capable (capacités évaluées comme pour une réclamation) ; une passation ou un choix de nœud
+            // direct en ligne n'en est capable (capacités évaluées comme pour une réclamation) ; une passation ou un choix de worker
             // explicite garde la décision du flow.
             var prefersDirect=eligibility.PrefersDirectAccess(item.Flow,item.Checkpoint?.NextNodeId,item.Checkpoint is not null)
                 || item.Selector is null && !eligibility.ChoosesPlacementExplicitly(item.Flow,item.Checkpoint?.NextNodeId,item.Checkpoint is not null);
@@ -305,11 +302,11 @@ public sealed partial class RuntimeRepository
             if(item.Probe is null)
             {
                 await using(var access=Sql.Command("""
-                  SELECT COALESCE(a.transfer_source_node_id,a.node_id),CASE WHEN a.mode='direct' THEN a.local_path END
-                  FROM library_node_accesses a JOIN cluster_nodes n ON n.id=a.node_id
-                  LEFT JOIN library_node_accesses s ON s.library_id=a.library_id AND s.node_id=a.transfer_source_node_id
-                  LEFT JOIN cluster_nodes sn ON sn.id=s.node_id
-                  WHERE a.library_id=@library AND a.node_id=@worker AND a.is_enabled AND a.can_read
+                  SELECT COALESCE(a.transfer_source_worker_id,a.worker_id),CASE WHEN a.mode='direct' THEN a.local_path END
+                  FROM library_worker_accesses a JOIN workers n ON n.id=a.worker_id
+                  LEFT JOIN library_worker_accesses s ON s.library_id=a.library_id AND s.worker_id=a.transfer_source_worker_id
+                  LEFT JOIN workers sn ON sn.id=s.worker_id
+                  WHERE a.library_id=@library AND a.worker_id=@worker AND a.is_enabled AND a.can_read
                   AND ((a.mode='direct' AND a.local_path IS NOT NULL AND (NOT @write OR a.can_write))
                     OR (NOT @direct AND NOT @defer AND a.mode='transfer' AND s.mode='direct' AND s.is_enabled AND s.can_read AND (NOT @write OR s.can_write)
                         AND sn.deleted_at IS NULL AND sn.last_seen_at>clock_timestamp()-@offline))
@@ -327,8 +324,8 @@ public sealed partial class RuntimeRepository
                 {
                     // A relay does not move ownership of the library or reinterpret the source path.
                     await using var originalAccess=Sql.Command("""
-                      SELECT EXISTS(SELECT 1 FROM library_node_accesses a JOIN cluster_nodes n ON n.id=a.node_id
-                        WHERE a.library_id=@library AND a.node_id=@source AND a.mode='direct' AND a.is_enabled
+                      SELECT EXISTS(SELECT 1 FROM library_worker_accesses a JOIN workers n ON n.id=a.worker_id
+                        WHERE a.library_id=@library AND a.worker_id=@source AND a.mode='direct' AND a.is_enabled
                         AND a.can_read AND (NOT @write OR a.can_write) AND a.local_path IS NOT NULL
                         AND n.deleted_at IS NULL AND n.last_seen_at>clock_timestamp()-@offline)
                       """,c,tx);
@@ -346,7 +343,7 @@ public sealed partial class RuntimeRepository
             {
                 await ExecutionRepository.RecordInTransactionAsync(item.Id,
                     new(Guid.NewGuid(), item.Revision, "failed", worker, null,
-                        $"{missing.Code} : bloc {missing.NodeId}, plugin {missing.PluginId}, paramètre requis {missing.FieldId}."), c, tx, ct);
+                        $"{missing.Code} : bloc {missing.WorkerId}, plugin {missing.PluginId}, paramètre requis {missing.FieldId}."), c, tx, ct);
                 await ReleaseAsync(item.Id, c, tx, ct);
                 await tx.CommitAsync(ct);
                 return new(null);
@@ -362,14 +359,13 @@ public sealed partial class RuntimeRepository
                     try { destination=RuntimeHandoffPolicy.Resolve(relay,pluginSettings.GetValueOrDefault("nodes")); }
                     catch(ArgumentException)
                     {
-                        await using var actor=Sql.Command("UPDATE executions SET node_id=@worker WHERE id=@id",c,tx);
+                        await using var actor=Sql.Command("UPDATE executions SET worker_id=@worker WHERE id=@id",c,tx);
                         actor.Parameters.AddWithValue("id",item.Id); actor.Parameters.AddWithValue("worker",worker); await actor.ExecuteNonQueryAsync(ct);
                         await ExecutionRepository.RecordInTransactionAsync(item.Id,new(Guid.NewGuid(),item.Revision,"failed",worker,null,
                             "La configuration du relais ne désigne pas un worker valide."),c,tx,ct);
                         await ReleaseAsync(item.Id,c,tx,ct); await tx.CommitAsync(ct); return new(null);
                     }
-                    if(destination.Mode=="node" && destination.TargetNodeId==worker) returnsToSelf=true;
-                    if(destination.Mode=="server" && !capabilities.Any(c=>c.ToolId=="plugin/nodes" && Version.TryParse(c.Version,out var v) && v>=new Version(1,8,0))) returnsToSelf=true;
+                    if(destination.Mode=="node" && destination.TargetWorkerId==worker) returnsToSelf=true;
                 }
                 if(returnsToSelf) continue;
             }
@@ -391,10 +387,10 @@ public sealed partial class RuntimeRepository
                 clear.Parameters.AddWithValue("id",item.Id);await clear.ExecuteNonQueryAsync(ct);
             }
             await using(var set=Sql.Command("""
-              UPDATE execution_work SET worker_node_id=@worker,source_node_id=@source,lease_epoch=@epoch,handoff_pending=false,
+              UPDATE execution_work SET worker_id=@worker,source_worker_id=@source,lease_epoch=@epoch,handoff_pending=false,
                  plugin_configuration_snapshot=COALESCE(plugin_configuration_snapshot,@settings),
                  lease_until=clock_timestamp()+interval '180 seconds' WHERE execution_id=@id;
-              UPDATE executions SET node_id=@worker WHERE id=@id;
+              UPDATE executions SET worker_id=@worker WHERE id=@id;
               """,c,tx))
             { set.Parameters.AddWithValue("worker",worker); set.Parameters.AddWithValue("source",source); set.Parameters.AddWithValue("epoch",epoch); set.Parameters.AddWithValue("id",item.Id);
                 set.Parameters.AddWithValue("settings",SqlKind.Bytes,pluginConfigurations.ProtectSnapshot(pluginSettings)); await set.ExecuteNonQueryAsync(ct); }

@@ -5,7 +5,7 @@ using System.Text.Json;
 using Encoding.Api.Executions;
 using Encoding.Api.Infrastructure;
 using Encoding.Api.Infrastructure.Operations;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -85,7 +85,7 @@ internal static class OperationsScenarios
             Check(await Scalar(db, "SELECT count(*) FROM schema_migrations WHERE checksum IS NULL") == 0, "Chaque migration enregistre son empreinte.");
 
             await Exec(db, "INSERT INTO schema_migrations(version, checksum) VALUES ('9999_from_a_newer_node', 'x')");
-            Check((await DatabaseMigrator.StatusAsync(db, contentRoot, CancellationToken.None)).Unknown.SequenceEqual(["9999_from_a_newer_node"]), "Une migration d’un nœud plus récent est signalée sans bloquer.");
+            Check((await DatabaseMigrator.StatusAsync(db, contentRoot, CancellationToken.None)).Unknown.SequenceEqual(["9999_from_a_newer_node"]), "Une migration d’un worker plus récent est signalée sans bloquer.");
             await Exec(db, "DELETE FROM schema_migrations WHERE version = '9999_from_a_newer_node'");
             await Exec(db, $"UPDATE schema_migrations SET checksum = 'tampered' WHERE version = '{First}'");
             var rejected = false;
@@ -156,7 +156,7 @@ internal static class OperationsScenarios
             ["Operations:Health:MinFreeDiskBytes"] = "1",
         });
         builder.Services.AddSingleton<System.Data.Common.DbDataSource>(db);
-        builder.Services.AddSingleton(new NodePresenceOptions(TimeSpan.FromSeconds(30)));
+        builder.Services.AddSingleton(new WorkerPresenceOptions(TimeSpan.FromSeconds(30)));
         builder.Services.AddSingleton<RuntimeArtifactStore>();
         builder.AddOperations();
         await using var app = builder.Build();
@@ -177,9 +177,9 @@ internal static class OperationsScenarios
 
             using var details = JsonDocument.Parse(await client.GetStringAsync("/health/details"));
             var checks = details.RootElement.GetProperty("checks").EnumerateArray().ToDictionary(item => item.GetProperty("name").GetString()!, item => item.GetProperty("status").GetString());
-            Check(new[] { "database", "migrations", "cluster", "flow-backups", "artifact-storage", "backup-storage" }.All(checks.ContainsKey), "/health/details liste chaque contrôle.");
+            Check(new[] { "database", "migrations", "central", "flow-backups", "artifact-storage", "backup-storage" }.All(checks.ContainsKey), "/health/details liste chaque contrôle.");
             Check(checks["database"] == "healthy" && checks["migrations"] == "healthy" && checks["artifact-storage"] == "healthy", "Base, schéma et volumes sont sains.");
-            Check(checks["cluster"] == "degraded", "Un cluster sans worker en ligne est dégradé, pas en panne.");
+            Check(checks["central"] == "degraded", "Un central sans worker en ligne est dégradé, pas en panne.");
             Check(!(await client.GetStringAsync("/health/details")).Contains(directory, StringComparison.Ordinal), "Les chemins du serveur ne sont pas exposés.");
 
             Check((await client.GetAsync("/metrics")).StatusCode == HttpStatusCode.Unauthorized, "/metrics exige le jeton configuré.");

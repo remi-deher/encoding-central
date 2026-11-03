@@ -14,7 +14,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { PageShellContextService } from '../../../core/layout/page-shell-context';
 import { AiToolsService } from '../../../shared/services/ai-tools.service';
 import { NotificationService } from '../../../shared/services/notification.service';
-import { AiClusterModelCatalog, AiDiscoveredModel } from '../../../shared/models/ai-tools';
+import { AiCentralModelCatalog, AiDiscoveredModel } from '../../../shared/models/ai-tools';
 import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-section.component';
 import { SearchFieldComponent } from '../../../shared/ui/search-field.component';
 import {
@@ -28,7 +28,7 @@ type ModelFilter = 'all' | 'enabled' | 'disabled';
 interface ModelEntry {
   readonly model: AiDiscoveredModel;
   readonly enabled: boolean;
-  /** Détail des nœuds, seulement quand le modèle n'est pas partout. */
+  /** Détail des workers, seulement quand le modèle n'est pas partout. */
   readonly nodes: string;
 }
 interface ProviderGroup {
@@ -44,8 +44,8 @@ interface ProviderGroup {
 }
 
 /**
- * Modèles annoncés par les nœuds, regroupés par fournisseur : l'interrupteur est une règle
- * du cluster (fournisseur + modèle), il n'a donc pas lieu d'être répété par nœud.
+ * Modèles annoncés par les workers, regroupés par fournisseur : l'interrupteur est une règle
+ * du central (fournisseur + modèle), il n'a donc pas lieu d'être répété par worker.
  */
 @Component({
   selector: 'app-ai-model-catalog',
@@ -62,7 +62,7 @@ interface ProviderGroup {
   template: `
     <app-configuration-section
       title="Modèles disponibles"
-      description="Choisissez les modèles proposés à l’assistant et aux flows. Valable pour tout le cluster."
+      description="Choisissez les modèles proposés à l’assistant et aux flows. Valable pour tout le central."
       icon="pack"
     >
       @if (loading()) {
@@ -262,7 +262,7 @@ export class AiModelCatalogComponent implements OnDestroy {
   private readonly api = inject(AiToolsService);
   private readonly notifications = inject(NotificationService);
   protected readonly isAdmin = inject(AuthService).isAdmin;
-  protected readonly catalog = signal<AiClusterModelCatalog | null>(null);
+  protected readonly catalog = signal<AiCentralModelCatalog | null>(null);
   protected readonly loading = signal(false);
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
@@ -308,7 +308,7 @@ export class AiModelCatalogComponent implements OnDestroy {
     this.api.getModelCatalog().subscribe({
       next: (catalog) => {
         this.catalog.set(catalog);
-        const catalogLoading = catalog.nodes.some((node) =>
+        const catalogLoading = catalog.workers.some((node) =>
           node.providers.some((provider) => provider.state === 'loading'),
         );
         this.loading.set(catalogLoading);
@@ -316,7 +316,7 @@ export class AiModelCatalogComponent implements OnDestroy {
       },
       error: () => {
         this.loading.set(false);
-        this.error.set('Impossible de lire les modèles annoncés par les nœuds.');
+        this.error.set('Impossible de lire les modèles annoncés par les workers.');
       },
     });
   }
@@ -354,9 +354,9 @@ export class AiModelCatalogComponent implements OnDestroy {
         },
       });
   }
-  private buildGroups(catalog: AiClusterModelCatalog | null): readonly ProviderGroup[] {
+  private buildGroups(catalog: AiCentralModelCatalog | null): readonly ProviderGroup[] {
     if (!catalog) return [];
-    const nodeCount = catalog.nodes.length;
+    const nodeCount = catalog.workers.length;
     const order: string[] = [];
     const byProvider = new Map<
       string,
@@ -366,7 +366,7 @@ export class AiModelCatalogComponent implements OnDestroy {
         problems: { node: string; state: string; message: string | null }[];
       }
     >();
-    for (const node of catalog.nodes) {
+    for (const node of catalog.workers) {
       for (const provider of node.providers) {
         let entry = byProvider.get(provider.provider);
         if (!entry) {
@@ -420,7 +420,7 @@ export class AiModelCatalogComponent implements OnDestroy {
         stateTone: loading || unavailable ? 'muted' : partial ? 'warning' : 'ok',
         nodeSummary:
           nodeCount > 1 && !loading
-            ? `${entry.available.length} ${entry.available.length > 1 ? 'nœuds' : 'nœud'} sur ${nodeCount}`
+            ? `${entry.available.length} ${entry.available.length > 1 ? 'workers' : 'worker'} sur ${nodeCount}`
             : '',
         message: message || null,
         total: models.length,

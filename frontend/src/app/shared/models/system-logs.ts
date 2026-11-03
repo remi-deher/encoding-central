@@ -13,8 +13,8 @@ export interface SystemLogEntry {
   readonly category: string;
   readonly message: string;
   readonly exception?: string | null;
-  readonly nodeId?: string | null;
-  readonly nodeName?: string | null;
+  readonly workerId?: string | null;
+  readonly workerName?: string | null;
   readonly eventId?: number | null;
 }
 
@@ -22,7 +22,7 @@ export interface SystemLogFilterQuery {
   readonly minLevel?: SystemLogLevel;
   readonly category?: string;
   readonly search?: string;
-  readonly nodeId?: string;
+  readonly workerId?: string;
   readonly limit?: number;
   readonly since?: string;
 }

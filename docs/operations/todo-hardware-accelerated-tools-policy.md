@@ -4,7 +4,7 @@
 > **Statut** : À prendre en charge (`HardwareCapabilities.RequiresHardwareAcceleration` existe dans `AiToolContracts.cs` ; le drapeau `IsHardwareAccelerated`, le rejet par le validateur de plugins et la restriction du résolveur ne sont pas codés)  
 > **Priorité** : Haute  
 > **Domaines** : Runtime Worker, Plugins, Store/Validation, Sécurité Landlock, Outils Média  
-> **Documents de référence** : [cluster](../architecture/domains/cluster.md), [plugins](../architecture/domains/plugins.md) (Store d'outils gérés livré par le socle de l'ADR 0029), [auth-ops](../architecture/domains/auth-ops.md).
+> **Documents de référence** : [workers](../architecture/domains/workers.md), [plugins](../architecture/domains/plugins.md) (Store d'outils gérés livré par le socle de l'ADR 0029), [auth-ops](../architecture/domains/auth-ops.md).
 
 Le Store vérifie aujourd'hui l'archive et le hash de chaque exécutable, et le résolveur utilise le paquet partagé choisi pour le rôle. Ce contrôle d'intégrité ne qualifie pas à lui seul un binaire pour les pilotes/GPU présents sur un nœud. Les sondes synthétiques FFmpeg déjà exécutées sur le binaire résolu restent obligatoires ; les règles d'interdiction/réservation décrites ci-dessous restent à compléter et à valider sur du matériel réel.
 

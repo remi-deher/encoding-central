@@ -27,6 +27,8 @@ jobs:
           file: backend/Dockerfile
           target: central
           push: false
+          build-args: |
+            APP_VERSION=ci-${{ github.sha }}
           cache-from: type=gha,scope=encoding-central
           cache-to: type=gha,scope=encoding-central,mode=max
       - name: Image worker
@@ -36,5 +38,7 @@ jobs:
           file: backend/Dockerfile
           target: worker
           push: false
+          build-args: |
+            APP_VERSION=ci-${{ github.sha }}
           cache-from: type=gha,scope=encoding-worker
           cache-to: type=gha,scope=encoding-worker,mode=max

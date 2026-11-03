@@ -12,7 +12,7 @@ public static class LibraryActivityEndpoints
             string? status,
             Guid? libraryId,
             string? flow,
-            Guid? nodeId,
+            Guid? workerId,
             string? search,
             int? limit,
             int? offset,
@@ -22,7 +22,7 @@ public static class LibraryActivityEndpoints
             if (!string.IsNullOrWhiteSpace(status) &&
                 status.Trim().ToLowerInvariant() is not ("untreated" or "active" or "done" or "failed" or "cancelled" or "disabled"))
                 return ApiProblem.BadRequest("État d’activité invalide.");
-            return Results.Ok(await repository.GetAsync(status, libraryId, flow, nodeId, search, limit, offset, ct));
+            return Results.Ok(await repository.GetAsync(status, libraryId, flow, workerId, search, limit, offset, ct));
         })
             .WithName("GetLibraryActivityFiles");
 
@@ -30,7 +30,7 @@ public static class LibraryActivityEndpoints
             string? status,
             Guid? libraryId,
             string? flow,
-            Guid? nodeId,
+            Guid? workerId,
             string? search,
             int? limit,
             int? offset,
@@ -46,7 +46,7 @@ public static class LibraryActivityEndpoints
 
             ExecutionStreamBroadcaster.PrepareResponse(http.Response);
             var version = broadcaster.CurrentVersion;
-            var initial = await repository.GetAsync(status, libraryId, flow, nodeId, search, limit, offset, ct);
+            var initial = await repository.GetAsync(status, libraryId, flow, workerId, search, limit, offset, ct);
             await ExecutionStreamBroadcaster.WriteEventAsync(http.Response, "activity", initial, ExecutionStreamBroadcaster.SseJsonOptions, ct);
             if (once == true) return (IResult)Results.Empty;
 
@@ -54,7 +54,7 @@ public static class LibraryActivityEndpoints
             {
                 version = await broadcaster.WaitForChangeAsync(version, TimeSpan.FromSeconds(15), ct);
                 if (ct.IsCancellationRequested) break;
-                var snapshot = await repository.GetAsync(status, libraryId, flow, nodeId, search, limit, offset, ct);
+                var snapshot = await repository.GetAsync(status, libraryId, flow, workerId, search, limit, offset, ct);
                 await ExecutionStreamBroadcaster.WriteEventAsync(http.Response, "activity", snapshot, ExecutionStreamBroadcaster.SseJsonOptions, ct);
             }
             return (IResult)Results.Empty;

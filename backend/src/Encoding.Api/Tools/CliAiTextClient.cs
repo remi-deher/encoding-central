@@ -21,7 +21,7 @@ public sealed class CliAiTextClient(string toolId, AiCliRuntime runtime, int tim
         if (!runtime.CanRun)
         {
             await LogDiagnosticAsync("sandbox_unavailable", attemptId, timer.ElapsedMilliseconds);
-            return new(false, "", "Landlock est requis pour exécuter les outils IA sur ce nœud.");
+            return new(false, "", "Landlock est requis pour exécuter les outils IA sur ce worker.");
         }
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));

@@ -8,7 +8,7 @@ namespace Encoding.Api.Executions;
 public sealed class RuntimeArtifactStore(DbDataSource dataSource,IConfiguration configuration)
 {
     private readonly string root=Path.GetFullPath(configuration["Runtime:ArtifactDirectory"]
-        ??(configuration["Node:DataDirectory"] is { Length: > 0 } dataDir ? Path.Combine(dataDir,"runtime-artifacts") : Path.Combine(AppContext.BaseDirectory,"runtime-artifacts")));
+        ??(configuration["Worker:DataDirectory"] is { Length: > 0 } dataDir ? Path.Combine(dataDir,"runtime-artifacts") : Path.Combine(AppContext.BaseDirectory,"runtime-artifacts")));
     public string Root=>root;
     public string DirectoryFor(Guid id)=>Path.Combine(root,id.ToString("D"));
     public static bool ValidDigest(string digest)=>Regex.IsMatch(digest??"","^[0-9a-f]{64}$",RegexOptions.CultureInvariant);
@@ -91,7 +91,7 @@ public sealed class RuntimeArtifactStore(DbDataSource dataSource,IConfiguration 
             if(!await RuntimeRepository.FenceAsync(id,actor,epoch,c,tx,ct) && !await RuntimeRepository.FenceAsync(id,actor,epoch,c,tx,ct,true)) return false;
             if(original)
             {
-                await using var set=Sql.Command("UPDATE execution_work SET source_sha=@sha WHERE execution_id=@id AND source_node_id=@actor AND (source_sha IS NULL OR source_sha=@sha)",c,tx);
+                await using var set=Sql.Command("UPDATE execution_work SET source_sha=@sha WHERE execution_id=@id AND source_worker_id=@actor AND (source_sha IS NULL OR source_sha=@sha)",c,tx);
                 set.Parameters.AddWithValue("id",id); set.Parameters.AddWithValue("actor",actor); set.Parameters.AddWithValue("sha",digest);
                 if(await set.ExecuteNonQueryAsync(ct)!=1) return false;
             }
@@ -113,7 +113,7 @@ public sealed class RuntimeArtifactStore(DbDataSource dataSource,IConfiguration 
             {
                 if (inputPath.StartsWith(Encoding.Contracts.Flows.FlowArtifactReference.Prefix, StringComparison.Ordinal)) return false;
                 inputPath=RuntimeRepository.NormalizePath(inputPath);
-                await using var declared=Sql.Command("SELECT EXISTS(SELECT 1 FROM executions e JOIN execution_work w ON w.execution_id=e.id, json_each(e.flow_definition->'nodes') n WHERE e.id=@id AND w.source_node_id=@actor AND replace(n.value->'configuration'->>'sourceFile',char(92),'/')=@path)",
+                await using var declared=Sql.Command("SELECT EXISTS(SELECT 1 FROM executions e JOIN execution_work w ON w.execution_id=e.id, json_each(e.flow_definition->'nodes') n WHERE e.id=@id AND w.source_worker_id=@actor AND replace(n.value->'configuration'->>'sourceFile',char(92),'/')=@path)",
                     c,tx);
                 declared.Parameters.AddWithValue("id",id); declared.Parameters.AddWithValue("actor",actor); declared.Parameters.AddWithValue("path",inputPath);
                 if(!(await declared.ScalarBoolAsync(ct))) return false;

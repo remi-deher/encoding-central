@@ -3,7 +3,7 @@ using Microsoft.Extensions.Hosting;
 namespace Encoding.Api.Tools;
 
 /// <summary>Keeps local provider status and observed model catalogs warm without blocking API reads.</summary>
-public sealed class AiCatalogRefreshService(AiClusterService cluster, ILogger<AiCatalogRefreshService> logger) : BackgroundService
+public sealed class AiCatalogRefreshService(AiCentralService cluster, ILogger<AiCatalogRefreshService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

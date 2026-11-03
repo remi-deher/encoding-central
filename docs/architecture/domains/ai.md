@@ -1,6 +1,6 @@
 ---
 domain: ai
-updated: 2026-10-27
+updated: 2026-11-03
 legacy_adr: [0062, 0065, 0071, 0072, 0074, 0077]
 code:
   - backend/src/Encoding.Api/Tools/
@@ -15,25 +15,25 @@ tags: [ia, codex, claude, ollama, session, checkpoint, assistant, générateur d
 
 ## Fournisseurs et connexion
 - CLI officielles lancées par le serveur : **Codex** (`codex exec --json --ephemeral`, connexion `codex login --device-auth`) et **Claude** (`claude -p --output-format stream-json …`, jeton `claude setup-token` protégé par Data Protection et passé par `CLAUDE_CODE_OAUTH_TOKEN`), plus API compatibles OpenAI/Ollama (non configurées sur une nouvelle installation). Le lien/code de connexion émis par la CLI reste en mémoire (15 min max), jamais journalisé ni persisté ; le succès n'est confirmé qu'après `codex login status` / `claude auth status`, même si le processus interactif est encore en attente de fermeture.
-- Profils par fournisseur (`CODEX_HOME`, `CLAUDE_CONFIG_DIR`) sous `AiTools:CredentialsDirectory` (défaut `Node:DataDirectory/credentials/ai-tools`) : propres au central (aucune réplication : ADR [0036](../adr/0036-separation-stricte-central-worker.md)). CLI installées sous `AiTools:RuntimeDirectory` (`/opt/encoding/ai-cli`).
+- Profils par fournisseur (`CODEX_HOME`, `CLAUDE_CONFIG_DIR`) sous `AiTools:CredentialsDirectory` (défaut `Worker:DataDirectory/credentials/ai-tools`) : propres au central (aucune copie vers les workers : ADR [0036](../adr/0036-separation-stricte-central-worker.md)). CLI installées sous `AiTools:RuntimeDirectory` (`/opt/encoding/ai-cli`).
 - CLI **confinées par Landlock** (code partagé dans `Encoding.Core.Runtime`) ; sans Landlock elles refusent de démarrer. Claude sans outils/MCP/skills/réglages hérités ; Codex en lecture seule sans approbation interactive. Aucune réponse simulée si la CLI est absente ; plus de flow synthétique en cas d'échec.
 - La page « IA & fournisseurs » distingue moteur par défaut et fiche sélectionnée ; les secrets restent masqués ; `hasOpenAiApiKey` seulement.
-- Les connexions des CLI et leur réplication sont relues en arrière-plan toutes les 15 s ; quotas toutes les 60 s et historique des sessions toutes les 30 s. La fenêtre d’association vérifie son état automatiquement.
+- Les connexions des CLI sont relues en arrière-plan toutes les 15 s ; quotas toutes les 60 s et historique des sessions toutes les 30 s. La fenêtre d’association vérifie son état automatiquement.
 - Fermer ou recharger l’interface n’annule pas le processus d’association, qui continue côté serveur jusqu’à sa confirmation ou son expiration (15 min maximum).
 
 ## Accès
-- Le central héberge les connexions IA et exécute l'inférence ; il n'existe plus d'échange entre serveurs (`/api/v1/cluster/ai/exchange` est retiré). Les workers n'exécutent pas d'inférence.
+- Le central héberge les connexions IA et exécute l'inférence ; il n'existe plus d'échange entre serveurs (`/api/v1/central/ai/exchange` est retiré). Les workers n'exécutent pas d'inférence.
 
 ## Sessions, contexte, reprise
 - Le contexte appartient à Encoding (consignes, demandes identifiées, tours validés), **chiffré et écrit dans les registres locaux avant de confirmer** ; checkpoint ≤ 512 Kio ; les CLI n'ont pas de conversation native persistante.
-- Chaque session a un **coordinateur** (`peerId.sessionId`, l'identité du central ; une session d'une ancienne installation est reprise par le central) qui sérialise les tours et l'annulation ; une réponse déjà validée pour un `requestId` est rejouée sans inférence ; un `requestId` réutilisé avec un autre prompt est refusé. Perte d'un exécuteur : jusqu'à 3 nœuds essayés après expiration de la tentative précédente. **Perte du coordinateur : aucune reprise silencieuse** (une partition ne prouve pas sa disparition) ; l'admin crée une session depuis le dernier checkpoint (`/api/v1/tools/ai/sessions/{id}/fork`). Pas de garantie « exactement une fois » de facturation côté fournisseur.
+- Une session a l'identifiant `{identifiant du central}.{demande}` ; le central, seul exécutant, sérialise les tours et l'annulation (plus de coordinateur distinct, de reprise par un autre serveur ni d'adoption) ; une réponse déjà validée pour un `requestId` est rejouée sans inférence ; un `requestId` réutilisé avec un autre prompt est refusé. Après un résultat ambigu, aucune nouvelle tentative n'est émise avant l'expiration de la précédente. Après une interruption, l'admin crée une session depuis le dernier checkpoint (`/api/v1/tools/ai/sessions/{id}/fork`). Pas de garantie « exactement une fois » de facturation côté fournisseur.
 - Périmètre d'une session (opération, bibliothèque, flow, média, exécution) immuable ; modèle fixe sauf l'assistant, qui peut changer fournisseur/modèle/effort **entre deux messages**.
 
 - **Titre de conversation** : créé à partir du début du premier message (`titleSource: fallback`), puis remplacé après la première réponse réussie par un titre court généré par le fournisseur de la conversation (`ai`, 20 s max, session masquée dédiée, deux tentatives au plus sur les deux premiers tours). Tout échec (fournisseur absent ou en erreur, délai, sortie vide) garde le titre de repli sans faire échouer le tour. Renommage manuel : `PUT /api/v1/tools/ai/assistant/conversations/{id}/title` (`user`, jamais écrasé ensuite, même par un tour en cours). Le titre est lu à la volée pour la liste des conversations et pour les demandes de la page Activité (`conversationTitle`) ; aucune migration SQL (registres existants).
 
 ## Catalogue de modèles et quotas
-- Aucun catalogue de modèles côté frontend : chaque serveur interroge ses fournisseurs (Codex `app-server model/list`, Claude contrôle stream-json, `GET /models` pour les API compatibles), met en cache (états 1 min, catalogues 5 min, instantané servi pendant le rafraîchissement, `loading`/`stale`) et expose via le transport signé. Capacités inconnues = inconnues, jamais déduites du nom. Désactivation par couple fournisseur/modèle (registre chiffré réconcilié) ; `PUT /api/v1/tools/ai/models/policy`, `…/settings`, `GET …/assistant/options`.
-- Quotas des comptes CLI : sonde locale bornée, observation en mémoire par connexion, jamais sommée entre nœuds ; la lecture Claude est expérimentale et peut être indisponible.
+- Aucun catalogue de modèles côté frontend : le central interroge ses fournisseurs (Codex `app-server model/list`, Claude contrôle stream-json, `GET /models` pour les API compatibles), met en cache (états 1 min, catalogues 5 min, instantané servi pendant le rafraîchissement, `loading`/`stale`) et les expose via son API. Capacités inconnues = inconnues, jamais déduites du nom. Désactivation par couple fournisseur/modèle (registre local chiffré) ; `PUT /api/v1/tools/ai/models/policy`, `…/settings`, `GET …/assistant/options`.
+- Quotas des comptes CLI : sonde locale bornée, observation en mémoire par connexion, propre au central ; la lecture Claude est expérimentale et peut être indisponible.
 - Détails d'exploitation : `docs/operations/ai-providers.md`, `ai-metadata-enrichment.md`.
 
 ## Assistant et générateur de flows
@@ -43,7 +43,7 @@ tags: [ia, codex, claude, ollama, session, checkpoint, assistant, générateur d
 - Pour que l'IA se branche correctement, les plugins décrivent sorties et champs ([plugins.md](plugins.md)) ; MCP : [auth-ops.md](auth-ops.md).
 
 ## Invariants
-1. Aucune inférence simulée ; les secrets IA ne transitent que chiffrés (journal du maillage) et ne sont jamais journalisés.
+1. Aucune inférence simulée ; les secrets IA sont stockés chiffrés (Data Protection) sur le central et ne sont jamais journalisés.
 2. Pas de repli non confiné pour lancer une CLI.
-3. Pas de reprise silencieuse d'un coordinateur de session.
+3. Pas de nouvelle tentative d'inférence avant l'expiration de la tentative précédente ambiguë.
 4. Toute sortie IA passe par la validation backend avant d'atteindre l'éditeur.

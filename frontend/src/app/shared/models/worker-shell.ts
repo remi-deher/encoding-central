@@ -1,6 +1,6 @@
 /** Routes servies par l'image worker. Les autres restent sur le central. */
 const WORKER_EXACT = new Set(['/', '/libraries', '/login', '/setup']);
-const WORKER_PREFIXES = ['/activity', '/nodes', '/plugins', '/settings'];
+const WORKER_PREFIXES = ['/activity', '/workers', '/plugins', '/settings'];
 
 export function workerShellAllows(url: string): boolean {
   const path = (url.split(/[?#]/, 1)[0] || '/').replace(/\/+$/, '') || '/';

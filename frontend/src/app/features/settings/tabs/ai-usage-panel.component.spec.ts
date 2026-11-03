@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { AiUsagePanelComponent } from './ai-usage-panel.component';
 import { AiToolsService } from '../../../shared/services/ai-tools.service';
-import { AiClusterUsage } from '../../../shared/models/ai-tools';
+import { AiCentralUsage } from '../../../shared/models/ai-tools';
 
 describe('AiUsagePanelComponent', () => {
   const api = { getUsage: vi.fn() };
@@ -14,14 +14,14 @@ describe('AiUsagePanelComponent', () => {
     costUsd: null,
     turnsWithoutUsage: missing,
   });
-  const usage: AiClusterUsage = {
+  const usage: AiCentralUsage = {
     days: 30,
     since: '2026-09-21T00:00:00Z',
     truncated: false,
     total: totals(150, 25, 4, 1),
-    nodes: [
+    workers: [
       {
-        nodeId: 'a',
+        workerId: 'a',
         name: 'nas-51',
         total: totals(150, 25, 3),
         providers: [{ provider: 'openai', totals: totals(150, 25, 3) }],
@@ -37,12 +37,12 @@ describe('AiUsagePanelComponent', () => {
     });
   });
 
-  it('affiche le total du cluster, chaque nœud et les échanges sans consommation', () => {
+  it('affiche le total du central, chaque worker et les échanges sans consommation', () => {
     api.getUsage.mockReturnValue(of(usage));
     const fixture = TestBed.createComponent(AiUsagePanelComponent);
     fixture.detectChanges();
     const text = fixture.nativeElement.textContent as string;
-    expect(text).toContain('Total du cluster');
+    expect(text).toContain('Total du central');
     expect(text).toContain('nas-51');
     expect(text).toContain('1 échange sans consommation rapportée');
     expect(api.getUsage).toHaveBeenCalledWith(30);

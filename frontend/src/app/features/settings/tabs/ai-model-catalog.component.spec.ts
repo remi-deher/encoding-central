@@ -4,7 +4,7 @@ import { signal } from '@angular/core';
 import { AiModelCatalogComponent } from './ai-model-catalog.component';
 import { AiToolsService } from '../../../shared/services/ai-tools.service';
 import { AuthService } from '../../../core/auth/auth.service';
-import { AiClusterModelCatalog } from '../../../shared/models/ai-tools';
+import { AiCentralModelCatalog } from '../../../shared/models/ai-tools';
 
 const model = (id: string, label: string) => ({
   id,
@@ -13,10 +13,10 @@ const model = (id: string, label: string) => ({
   isDefault: false,
   reasoningKnown: true,
 });
-const catalog: AiClusterModelCatalog = {
-  nodes: [
+const catalog: AiCentralModelCatalog = {
+  workers: [
     {
-      nodeId: 'a',
+      workerId: 'a',
       name: 'Salon',
       providers: [
         {
@@ -29,7 +29,7 @@ const catalog: AiClusterModelCatalog = {
       ],
     },
     {
-      nodeId: 'b',
+      workerId: 'b',
       name: 'Bureau',
       providers: [
         {
@@ -66,7 +66,7 @@ describe('AiModelCatalogComponent', () => {
   it('groups models by provider with one switch per model and the nodes that lack it', async () => {
     const element = await setup();
     expect(element.querySelectorAll('section.provider')).toHaveLength(1);
-    expect(element.textContent).toContain('2 nœuds sur 2');
+    expect(element.textContent).toContain('2 workers sur 2');
     expect(element.querySelectorAll('mat-slide-toggle')).toHaveLength(2);
     expect(element.textContent).toContain('seulement Salon');
     expect(element.textContent).toContain('claude-opus-5-5');

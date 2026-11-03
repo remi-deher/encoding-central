@@ -1,11 +1,11 @@
 using System.Text.Json;
 using Encoding.Contracts.Flows;
 
-using Encoding.Contracts.Nodes;
+using Encoding.Contracts.Workers;
 
 namespace Encoding.Contracts.Executions;
 
-public sealed record RuntimeHandoffSelector(string Mode, Guid? TargetNodeId = null, Guid? TargetGroupId = null, string? RequiredLabels = null, bool Resumed = false)
+public sealed record RuntimeHandoffSelector(string Mode, Guid? TargetWorkerId = null, Guid? TargetGroupId = null, string? RequiredLabels = null, bool Resumed = false)
 {
     /// <summary>Ancienne forme d'une reprise (ADR 0004), conservée pour lire les lignes déjà écrites : tout worker éligible.</summary>
     public const string ResumeMode = "resume";
@@ -14,11 +14,11 @@ public sealed record RuntimeHandoffSelector(string Mode, Guid? TargetNodeId = nu
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsResume => Resumed || Mode == ResumeMode;
 
-    public bool Accepts(Guid candidate, Guid previousWorker, NodeIdentityResponse? identity = null) => (IsResume || candidate != previousWorker)
-        && (Mode is "eligible" or ResumeMode || Mode == "node" && TargetNodeId == candidate
+    public bool Accepts(Guid candidate, Guid previousWorker, WorkerIdentityResponse? identity = null) => (IsResume || candidate != previousWorker)
+        && (Mode is "eligible" or ResumeMode || Mode == "node" && TargetWorkerId == candidate
             || Mode == "selector" && identity is not null
                 && (TargetGroupId is null || identity.GroupIds.Contains(TargetGroupId.Value))
-                && NodeLabelSelector.Matches(RequiredLabels, identity.EffectiveLabels));
+                && WorkerLabelSelector.Matches(RequiredLabels, identity.EffectiveLabels));
 }
 
 /// <summary>Opt-in, bounded policy for starting a fresh attempt after an assigned worker is lost.</summary>
@@ -52,7 +52,7 @@ public sealed record RuntimeRetryPolicy(int MaximumRetries, RuntimeHandoffSelect
         }
         var labels = configuration.TryGetValue("requiredLabels", out var labelValue) && labelValue.ValueKind == JsonValueKind.String
             ? labelValue.GetString() : null;
-        if (!string.IsNullOrWhiteSpace(labels) && !NodeLabelSelector.IsValid(labels))
+        if (!string.IsNullOrWhiteSpace(labels) && !WorkerLabelSelector.IsValid(labels))
             throw new ArgumentException("Le filtre d’étiquettes de relance est invalide.");
         if (target is not null && (group is not null || !string.IsNullOrWhiteSpace(labels)))
             throw new ArgumentException("Choisissez un worker précis ou un groupe/filtre d’étiquettes pour la relance.");
@@ -81,10 +81,10 @@ public static class RuntimeHandoffPolicy
         }
         var mode = Read("mode") ?? "eligible";
         if (mode == "eligible") return new(mode);
-        if (mode is "node" or "server")
+        if (mode == "node")
         {
-            if (!Guid.TryParse(Read(mode=="server"?"targetServerPeerId":"targetNodeId"), out var target) || target == Guid.Empty)
-                throw new ArgumentException("Le relais vers un nœud précis nécessite un identifiant de worker valide.");
+            if (!Guid.TryParse(Read("targetNodeId"), out var target) || target == Guid.Empty)
+                throw new ArgumentException("Le relais vers un worker précis nécessite un identifiant de worker valide.");
             return new(mode, target);
         }
         if (mode == "selector")
@@ -98,7 +98,7 @@ public static class RuntimeHandoffPolicy
                 group = groupId;
             }
             var labels = Read("requiredLabels");
-            if (!string.IsNullOrWhiteSpace(labels) && !NodeLabelSelector.IsValid(labels))
+            if (!string.IsNullOrWhiteSpace(labels) && !WorkerLabelSelector.IsValid(labels))
                 throw new ArgumentException("Le filtre d’étiquettes du relais est invalide.");
             if (group is null && string.IsNullOrWhiteSpace(labels))
                 throw new ArgumentException("Le filtre de relais doit définir un groupe ou des étiquettes.");
@@ -107,7 +107,7 @@ public static class RuntimeHandoffPolicy
         throw new ArgumentException("La destination du relais n’est pas prise en charge.");
     }
 
-    /// <summary>Le bloc « Bibliothèque sur ce nœud » exige-t-il aussi un encodeur utilisable du profil pour répondre « oui » ?</summary>
+    /// <summary>Le bloc « Bibliothèque sur ce worker » exige-t-il aussi un encodeur utilisable du profil pour répondre « oui » ?</summary>
     public static bool LibraryAccessNeedsEncoder(FlowNodeDefinition node) => node.Configuration.TryGetValue("requireProfileEncoder", out var value)
         && value.ValueKind == JsonValueKind.True;
 

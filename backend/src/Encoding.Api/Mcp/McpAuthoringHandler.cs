@@ -7,7 +7,7 @@ using Encoding.Api.Flows;
 using Encoding.Api.Infrastructure.Data;
 using Encoding.Api.Libraries;
 using Encoding.Api.Logging;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Encoding.Api.Plugins;
 using Encoding.Api.Resources;
 using Encoding.Contracts.Executions;

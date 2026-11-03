@@ -25,7 +25,7 @@ const step: SimulationStep = {
   outputId: null,
   detail: 'Diagnostic',
   assumed: false,
-  workerNodeId: 'worker',
+  workerId: 'worker',
   context: {
     extension: 'mkv',
     variables: {},

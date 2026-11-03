@@ -10,8 +10,8 @@ const running = {
   flowVersion: 2,
   state: 'running',
   isActivelyProcessing: true,
-  nodeId: 'n1',
-  node: 'Studio',
+  workerId: 'n1',
+  worker: 'Studio',
   progress: 100,
   detail: 'Validation de la sortie',
   attempt: 1,
@@ -46,10 +46,10 @@ test.beforeEach(async ({ page }) => {
       json: { setupRequired: false, user: { id: 'admin', username: 'admin', role: 'admin' } },
     }),
   );
-  await page.route('**/api/v1/cluster', (route) =>
-    route.fulfill({ json: { id: 'cluster', name: 'Maison', standalone: false } }),
+  await page.route('**/api/v1/central', (route) =>
+    route.fulfill({ json: { id: 'cluster', name: 'Maison' } }),
   );
-  await page.route('**/api/v1/nodes', (route) =>
+  await page.route('**/api/v1/workers', (route) =>
     route.fulfill({
       json: [
         {
@@ -180,8 +180,8 @@ test('AI overview is integrated into home and the former route redirects there',
           },
         }),
   );
-  await page.route('**/api/v1/tools/ai/cluster', (r) =>
-    r.fulfill({ json: { nodes: [{ nodeId: 'n1', name: 'Studio', providers: ['ollama'] }] } }),
+  await page.route('**/api/v1/tools/ai/central', (r) =>
+    r.fulfill({ json: { workers: [{ workerId: 'n1', name: 'Studio', providers: ['ollama'] }] } }),
   );
   await page.clock.install();
   await page.goto('/ai');
@@ -191,7 +191,7 @@ test('AI overview is integrated into home and the former route redirects there',
     page.getByRole('link', { name: 'Vue d’ensemble', exact: true, includeHidden: true }),
   ).toHaveCount(1);
   await expect(page.getByRole('heading', { name: 'Fournisseurs', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Nœuds déclarants', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Workers déclarants', exact: true })).toBeVisible();
   await expect(page.locator('app-ai-provider-overview')).toContainText('Studio');
   settingsUnavailable = true;
   await page.clock.fastForward(30_000);

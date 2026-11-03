@@ -11,7 +11,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
 import { MatTabsModule } from '@angular/material/tabs';
-import { ClusterMaintenanceTemplateComponent } from '../../shared/templates/cluster-maintenance-template.component';
+import { CentralMaintenanceTemplateComponent } from '../../shared/templates/central-maintenance-template.component';
 import { CategoryTabOption, CategoryTabsComponent } from '../../shared/ui/category-tabs.component';
 import { ComponentConfigurationFormComponent } from '../../shared/ui/component-configuration-form.component';
 import { FlowValidation } from '../../shared/services/flow-validation';
@@ -35,14 +35,14 @@ import {
 
 import { MatButtonModule } from '@angular/material/button';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
-import { ClusterExtensionsService } from '../../shared/services/cluster-extensions.service';
+import { CentralExtensionsService } from '../../shared/services/central-extensions.service';
 import {
-  ClusterTool,
+  CentralTool,
   ExtensionTab,
   RejectedPlugin,
   StorePackage,
   StoreRepository,
-} from '../../shared/models/cluster-extensions';
+} from '../../shared/models/central-extensions';
 import {
   PageShellContextService,
   PageShellSearchResult,
@@ -85,12 +85,12 @@ const PLUGIN_RECORDS: readonly StaticPluginRecord[] = [
   },
   {
     id: 'nodes',
-    name: 'Nœuds',
+    name: 'Workers',
     family: 'cluster',
-    familyLabel: 'Cluster',
+    familyLabel: 'Central',
     category: 'Orchestration des workers',
     version: '1.1.0',
-    components: 'Transférer la suite, choisir un nœud ou exiger une capacité',
+    components: 'Transférer la suite, choisir un worker ou exiger une capacité',
     runtime: 'Intégré au répartiteur et au worker',
     configuration: 'Cible par défaut, avec dérogations par flow et par bloc',
     state: 'Actif par défaut',
@@ -264,7 +264,7 @@ const PLUGIN_RECORDS: readonly StaticPluginRecord[] = [
 
 const PLUGIN_FAMILY_OPTIONS: readonly { readonly value: PluginFamily; readonly label: string }[] = [
   { value: 'base', label: 'Noyau' },
-  { value: 'cluster', label: 'Cluster' },
+  { value: 'cluster', label: 'Central' },
   { value: 'media', label: 'Média' },
   { value: 'automation', label: 'Automatisation' },
   { value: 'custom', label: 'Tiers' },
@@ -284,7 +284,7 @@ const PLUGIN_FAMILY_DESCRIPTIONS: Readonly<Record<PluginFamily, string>> = {
   imports: [
     StatusBadgeComponent,
     ResourceSheetComponent,
-    ClusterMaintenanceTemplateComponent,
+    CentralMaintenanceTemplateComponent,
     CategoryTabsComponent,
     ComponentConfigurationFormComponent,
     FlowComponentListComponent,
@@ -301,7 +301,7 @@ export class PluginCatalogPageComponent {
   private readonly pageShellContext = inject(PageShellContextService);
   private readonly flowValidation = inject(FlowValidation);
   private readonly configurationApi = inject(PluginConfigurationApi);
-  private readonly extensionsService = inject(ClusterExtensionsService);
+  private readonly extensionsService = inject(CentralExtensionsService);
   private readonly notifications = inject(NotificationService);
   private readonly route = inject(ActivatedRoute);
   private readonly routeData = toSignal(this.route.data, {
@@ -312,7 +312,7 @@ export class PluginCatalogPageComponent {
     () => (this.routeData()['title'] as string) ?? 'Plugins & Outils',
   );
   protected readonly activeTab = signal<ExtensionTab>('plugins');
-  protected readonly clusterTools = signal<readonly ClusterTool[]>([]);
+  protected readonly clusterTools = signal<readonly CentralTool[]>([]);
   protected readonly storeRepositories = signal<readonly StoreRepository[]>([]);
   protected readonly storePackages = signal<readonly StorePackage[]>([]);
   protected readonly selectedStoreCategory = signal('all');
@@ -670,8 +670,8 @@ export class PluginCatalogPageComponent {
       this.setPluginActivationView(plugin.id, result.enabled);
       this.notifications.show(
         result.enabled
-          ? `Plugin « ${plugin.name} » activé pour le cluster.`
-          : `Plugin « ${plugin.name} » désactivé pour les nouveaux traitements du cluster.`,
+          ? `Plugin « ${plugin.name} » activé pour le central.`
+          : `Plugin « ${plugin.name} » désactivé pour les nouveaux traitements du central.`,
       );
     } catch (error) {
       this.setPluginActivationView(plugin.id, plugin.enabled);
@@ -681,7 +681,7 @@ export class PluginCatalogPageComponent {
     }
   }
 
-  protected async setToolEnabled(tool: ClusterTool, enabled: boolean): Promise<void> {
+  protected async setToolEnabled(tool: CentralTool, enabled: boolean): Promise<void> {
     const busyKey = `tool:${tool.id}`;
     if (this.activationBusy().has(busyKey)) return;
     this.setActivationBusy(busyKey, true);
@@ -691,8 +691,8 @@ export class PluginCatalogPageComponent {
       this.setToolActivationView(tool.id, result.enabled);
       this.notifications.show(
         result.enabled
-          ? `Outil « ${tool.name} » activé pour le cluster.`
-          : `Outil « ${tool.name} » désactivé pour les nouveaux traitements du cluster.`,
+          ? `Outil « ${tool.name} » activé pour le central.`
+          : `Outil « ${tool.name} » désactivé pour les nouveaux traitements du central.`,
       );
     } catch (error) {
       this.setToolActivationView(tool.id, tool.enabled);

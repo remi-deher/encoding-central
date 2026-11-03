@@ -9,15 +9,15 @@ public static class AiToolEndpoints
     {
         var group = app.MapGroup("/api/v1/tools/ai").WithTags("AI Tools");
         group.MapGet("/", async (DeviceCodeAuthService service, CancellationToken ct) => Results.Ok(await service.ListToolsAsync(ct)));
-        group.MapGet("/models", async (bool? refresh, AiClusterService service, CancellationToken ct) =>
+        group.MapGet("/models", async (bool? refresh, AiCentralService service, CancellationToken ct) =>
             Results.Ok(await service.ModelsAsync(refresh ?? false, ct))).RequireAuthorization(AuthExtensions.AdministratorPolicy);
-        group.MapPut("/models/policy", async (AiModelPolicyUpdate request, AiClusterService service, CancellationToken ct) =>
+        group.MapPut("/models/policy", async (AiModelPolicyUpdate request, AiCentralService service, CancellationToken ct) =>
             await GuardAsync(async () => Results.Ok(await service.UpdateModelPolicyAsync(request, ct))))
             .RequireAuthorization(AuthExtensions.AdministratorPolicy);
-        group.MapGet("/cluster", async (AiClusterService service, CancellationToken ct) => Results.Ok(await service.CachedViewAsync(ct)));
-        group.MapGet("/quotas", async (AiClusterService service, CancellationToken ct) =>
+        group.MapGet("/central", async (AiCentralService service, CancellationToken ct) => Results.Ok(await service.CachedViewAsync(ct)));
+        group.MapGet("/quotas", async (AiCentralService service, CancellationToken ct) =>
             Results.Ok(await service.QuotasAsync(ct))).RequireAuthorization(AuthExtensions.AdministratorPolicy);
-        group.MapGet("/usage", async (int? days, AiClusterService service, CancellationToken ct) =>
+        group.MapGet("/usage", async (int? days, AiCentralService service, CancellationToken ct) =>
             await GuardAsync(async () => Results.Ok(await service.UsageAsync(days ?? 30, ct)))).RequireAuthorization(AuthExtensions.AdministratorPolicy);
         group.MapGet("/{id}/status", async (string id, DeviceCodeAuthService service, CancellationToken ct) => await GuardAsync(async () => Results.Ok(await service.GetStatusAsync(id, ct))));
         group.MapPost("/{id}/auth/device-code/start", async (string id, DeviceCodeAuthService service, AiQuotaService quotas, AiModelCatalogService models, CancellationToken ct) =>
@@ -41,11 +41,11 @@ public static class AiToolEndpoints
             await GuardAsync(async () => { quotas.Invalidate(id); models.Invalidate(id); try { return Results.Ok(new { revoked = await service.RevokeAuthAsync(id,
                 ct) }); } finally { quotas.Invalidate(id); models.Invalidate(id); } }))
             .RequireAuthorization(AuthExtensions.AdministratorPolicy);
-        group.MapGet("/settings", async (AiClusterService service, CancellationToken ct) => PublicSettings(await service.GetSettingsAsync(ct)));
-        group.MapGet("/settings/model-options", async (bool? refresh, AiClusterService service, CancellationToken ct) =>
+        group.MapGet("/settings", async (AiCentralService service, CancellationToken ct) => PublicSettings(await service.GetSettingsAsync(ct)));
+        group.MapGet("/settings/model-options", async (bool? refresh, AiCentralService service, CancellationToken ct) =>
             Results.Ok(await service.ModelsAsync(refresh ?? false, ct)))
             .RequireAuthorization(AuthExtensions.AdministratorPolicy);
-        group.MapPut("/settings", async (AiSettingsUpdateRequest request, AiClusterService service, AiSettingsService settings, CancellationToken ct) =>
+        group.MapPut("/settings", async (AiSettingsUpdateRequest request, AiCentralService service, AiSettingsService settings, CancellationToken ct) =>
             await GuardAsync(async () =>
             {
                 var current = await service.GetSettingsAsync(ct);
@@ -53,10 +53,10 @@ public static class AiToolEndpoints
                 return PublicSettings(await service.UpdateSettingsAsync(request, ct));
             }))
             .RequireAuthorization(AuthExtensions.AdministratorPolicy);
-        group.MapGet("/sessions", async (int? offset, AiClusterService service, CancellationToken ct) =>
+        group.MapGet("/sessions", async (int? offset, AiCentralService service, CancellationToken ct) =>
             await GuardAsync(async () => Results.Ok(await service.ListSessionsAsync(offset ?? 0, ct))))
             .RequireAuthorization(AuthExtensions.AdministratorPolicy);
-        group.MapGet("/sessions/{id}", async (string id, AiClusterService service, AiAssistantService assistant, CancellationToken ct) =>
+        group.MapGet("/sessions/{id}", async (string id, AiCentralService service, AiAssistantService assistant, CancellationToken ct) =>
             await GuardAsync(async () =>
             {
                 if (await assistant.IsAssistantConversationAsync(id, ct)) return Results.NotFound();
@@ -64,14 +64,14 @@ public static class AiToolEndpoints
                 return state is null ? Results.NotFound() : Results.Ok(state);
             }))
             .RequireAuthorization(AuthExtensions.AdministratorPolicy);
-        group.MapPost("/sessions/{id}/fork", async (string id, AiClusterService service, AiAssistantService assistant, CancellationToken ct) =>
+        group.MapPost("/sessions/{id}/fork", async (string id, AiCentralService service, AiAssistantService assistant, CancellationToken ct) =>
             await GuardAsync(async () =>
             {
                 if (await assistant.IsAssistantConversationAsync(id, ct)) return Results.NotFound();
                 return Results.Ok(await service.ForkSessionAsync(id, ct));
             }))
             .RequireAuthorization(AuthExtensions.AdministratorPolicy);
-        group.MapPost("/generate", async (AiGenerateRequest request, AiClusterService service, AiAssistantService assistant, CancellationToken ct) =>
+        group.MapPost("/generate", async (AiGenerateRequest request, AiCentralService service, AiAssistantService assistant, CancellationToken ct) =>
             await GuardAsync(async () =>
             {
                 if (request.Prompt.SessionId is { } sessionId && await assistant.IsAssistantConversationAsync(sessionId, ct))

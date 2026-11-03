@@ -29,8 +29,8 @@ export class FlowSimulation {
       ],
     },
     variables: {},
-    sourceNodeId: createUuid(),
-    workerNodeId: createUuid(),
+    sourceWorkerId: createUuid(),
+    workerId: createUuid(),
   };
   readonly profile = signal<FlowComponentConfiguration>(simulationProfile(this.file));
   readonly result = signal<SimulationResult | null>(null);
@@ -77,7 +77,7 @@ export class FlowSimulation {
         ...(metadata ? { metadata } : {}),
         variables: simulationObject(String(values['variables'] ?? '{}')),
         ...(values['extension'] ? { extension: String(values['extension']) } : {}),
-        ...(values['workerNodeId'] ? { workerNodeId: String(values['workerNodeId']) } : {}),
+        ...(values['workerId'] ? { workerId: String(values['workerId']) } : {}),
       };
       await this.simulate();
     } catch (error) {

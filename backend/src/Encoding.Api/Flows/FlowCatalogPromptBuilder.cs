@@ -8,7 +8,7 @@ namespace Encoding.Api.Flows;
 
 public sealed class FlowCatalogPromptBuilder(
     FlowComponentRegistry registry,
-    ClusterExtensionActivationState? activation = null)
+    CentralExtensionActivationState? activation = null)
 {
     public string BuildSystemPrompt(string mediaType)
     {

@@ -9,7 +9,6 @@ public sealed record ApiTokenRecord(Guid Id, string Name, string Role, IReadOnly
 
 public sealed class ApiTokenRepository(DbDataSource dataSource)
 {
-    public const string ClusterDefaultTokenName = "Cluster Default Token";
 
     public async Task<(ApiTokenResponse Summary, string Plaintext)> CreateTokenAsync(
         string name,
@@ -54,34 +53,6 @@ public sealed class ApiTokenRepository(DbDataSource dataSource)
             scopes);
 
         return (summary, plaintext);
-    }
-
-    /// <summary>
-    /// Crée le jeton administrateur du cluster lors de sa création ou adoption s'il n'existe pas encore.
-    /// Retourne le jeton en clair s'il vient d'être généré, ou null s'il existait déjà.
-    /// </summary>
-    public async Task<string?> EnsureClusterTokenAsync(CancellationToken ct)
-    {
-        await using var connection = await dataSource.OpenConnectionAsync(ct);
-        await using var check = Sql.Command("""
-            SELECT EXISTS(SELECT 1 FROM api_tokens WHERE name = @name AND is_active = true AND revoked_at IS NULL)
-            """, connection);
-        check.Parameters.AddWithValue("name", ClusterDefaultTokenName);
-        var exists = await check.ScalarBoolAsync(ct);
-        if (exists) return null;
-
-        var (_, plaintext) = await CreateTokenAsync(ClusterDefaultTokenName, "admin", null, ct);
-        return plaintext;
-    }
-
-    public async Task<bool> HasClusterTokenAsync(CancellationToken ct)
-    {
-        await using var connection = await dataSource.OpenConnectionAsync(ct);
-        await using var check = Sql.Command("""
-            SELECT EXISTS(SELECT 1 FROM api_tokens WHERE name = @name AND is_active = true AND revoked_at IS NULL)
-            """, connection);
-        check.Parameters.AddWithValue("name", ClusterDefaultTokenName);
-        return await check.ScalarBoolAsync(ct);
     }
 
     public async Task<ApiTokenRecord?> ValidateTokenAsync(byte[] tokenHash, CancellationToken ct)
@@ -150,17 +121,6 @@ public sealed class ApiTokenRepository(DbDataSource dataSource)
                 reader.IsDBNull(8) ? null : reader.GetFieldValue<DateTimeOffset>(8),
                 ApiTokenScopes.Parse(reader.IsDBNull(9) ? null : reader.GetString(9))));
         }
-        return list;
-    }
-
-    /// <summary>Identifiants et états de révocation connus de ce nœud, pour contrôler la propagation du cluster.</summary>
-    public async Task<IReadOnlyList<ApiTokenReplicationEntry>> ReplicationStateAsync(CancellationToken ct)
-    {
-        await using var connection = await dataSource.OpenConnectionAsync(ct);
-        await using var command = Sql.Command("SELECT id, is_active, revoked_at FROM api_tokens ORDER BY id", connection);
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        var list = new List<ApiTokenReplicationEntry>();
-        while (await reader.ReadAsync(ct)) list.Add(new(reader.GetGuid(0), !reader.GetBoolean(1) || !reader.IsDBNull(2)));
         return list;
     }
 

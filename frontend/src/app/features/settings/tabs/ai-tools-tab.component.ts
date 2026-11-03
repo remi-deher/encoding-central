@@ -1,6 +1,5 @@
 import { AiModelCatalogComponent } from './ai-model-catalog.component';
 import { AiQuotaPanelComponent } from './ai-quota-panel.component';
-import { AiReplicationPanelComponent } from './ai-replication-panel.component';
 import { AiUsagePanelComponent } from './ai-usage-panel.component';
 import { AiSessionHistoryComponent } from './ai-session-history.component';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -42,8 +41,8 @@ import {
   AiSettings,
   AiSettingsUpdateRequest,
   AiToolInfo,
-  AiClusterView,
-  AiClusterModelCatalog,
+  AiCentralView,
+  AiCentralModelCatalog,
   AiDiscoveredModel,
 } from '../../../shared/models/ai-tools';
 import { ConfirmationDialogComponent } from '../../../shared/ui/confirmation-dialog.component';
@@ -62,7 +61,6 @@ import { aiEffortLabel, aiTypeLabel } from '../../ai/components/ai-model-selecti
     SettingsNoticeComponent,
     SettingsSaveBarComponent,
     AiQuotaPanelComponent,
-    AiReplicationPanelComponent,
     AiUsagePanelComponent,
     AiModelCatalogComponent,
     AiSessionHistoryComponent,
@@ -157,8 +155,8 @@ export class AiToolsTabComponent implements OnInit, OnDestroy {
   ];
   readonly usageOptions = ['assistant', 'flow'] as const;
   readonly tools = signal<readonly AiToolInfo[]>([]);
-  readonly cluster = signal<AiClusterView | null>(null);
-  readonly modelCatalog = signal<AiClusterModelCatalog | null>(null);
+  readonly cluster = signal<AiCentralView | null>(null);
+  readonly modelCatalog = signal<AiCentralModelCatalog | null>(null);
   readonly loadingModelCatalog = signal(false);
   readonly quotaRevision = signal(0);
   readonly loadingSettings = signal(true);
@@ -332,7 +330,7 @@ export class AiToolsTabComponent implements OnInit, OnDestroy {
       this.assistantActivityRetentionDays() < 1 ||
       this.assistantActivityRetentionDays() > 3650
     ) {
-      this.notifications.show('Vérifiez les limites du cluster.');
+      this.notifications.show('Vérifiez les limites du central.');
       return;
     }
     if (
@@ -413,7 +411,7 @@ export class AiToolsTabComponent implements OnInit, OnDestroy {
     this.aiService.getSettingsModelCatalog().subscribe({
       next: (catalog) => {
         this.modelCatalog.set(catalog);
-        const catalogLoading = catalog.nodes.some((node) =>
+        const catalogLoading = catalog.workers.some((node) =>
           node.providers.some((provider) => provider.state === 'loading'),
         );
         this.loadingModelCatalog.set(catalogLoading);
@@ -450,7 +448,7 @@ export class AiToolsTabComponent implements OnInit, OnDestroy {
         : usage === 'flow'
           ? this.flowLocalOnly()
           : false;
-    const nodes = localOnly ? catalog.nodes.slice(0, 1) : catalog.nodes;
+    const nodes = localOnly ? catalog.workers.slice(0, 1) : catalog.workers;
     return nodes.flatMap((node) =>
       node.providers
         .filter((provider) => provider.provider === providerId && provider.state === 'available')
@@ -636,22 +634,18 @@ export class AiToolsTabComponent implements OnInit, OnDestroy {
     const title: unknown = error.error?.title;
     return typeof title === 'string' && title.trim()
       ? title
-      : 'Impossible de joindre le service de connexion. Consultez les journaux système de ce nœud.';
+      : 'Impossible de joindre le service de connexion. Consultez les journaux système de ce worker.';
   }
   revoke(id: string): void {
     if (!this.isAdmin()) return;
-    const count = this.cluster()?.nodes.length ?? 1;
     const message =
       id === 'codex-cli' || id === 'claude-cli'
-        ? count > 1
-          ? `La connexion sera supprimée sur les ${count} nœuds du cluster, y compris ceux qui sont injoignables : ils la perdront à leur retour. Les flows qui utilisent ce fournisseur échoueront tant qu’une nouvelle connexion n’est pas enregistrée.`
-          : 'La connexion sera supprimée. Les flows qui utilisent ce fournisseur échoueront tant qu’une nouvelle connexion n’est pas enregistrée.'
+        ? 'La connexion sera supprimée. Les flows qui utilisent ce fournisseur échoueront tant qu’une nouvelle connexion n’est pas enregistrée.'
         : 'La connexion sera supprimée.';
     this.dialog
       .open(ConfirmationDialogComponent, {
         data: {
           title: `Déconnecter ${this.providerName(id)} ?`,
-          eyebrow: count > 1 ? 'Action sur le cluster' : undefined,
           message,
           confirmLabel: 'Déconnecter',
           variant: 'danger',
@@ -667,7 +661,7 @@ export class AiToolsTabComponent implements OnInit, OnDestroy {
     this.aiService.revokeAuth(id).subscribe({
       next: () => {
         this.connecting.set(false);
-        this.notifications.show('Connexion supprimée ; la suppression se propage au cluster.');
+        this.notifications.show('Connexion supprimée ; la suppression se propage au central.');
         this.refreshTools();
       },
       error: () => {
@@ -679,9 +673,9 @@ export class AiToolsTabComponent implements OnInit, OnDestroy {
   clusterLabel(id: string): string {
     const view = this.cluster();
     if (!view) return 'Disponibilité à vérifier';
-    const count = view.nodes.filter((n) => n.providers.includes(id)).length;
+    const count = view.workers.filter((n) => n.providers.includes(id)).length;
     return count
-      ? `${count} nœud${count > 1 ? 's' : ''} configuré${count > 1 ? 's' : ''}`
+      ? `${count} worker${count > 1 ? 's' : ''} configuré${count > 1 ? 's' : ''}`
       : 'Aucune connexion déclarée';
   }
   providerNames(ids: readonly string[]): string {

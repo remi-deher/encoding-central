@@ -39,9 +39,9 @@
           </mat-select>
         </mat-form-field>
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
-          <mat-label>Nœud</mat-label>
+          <mat-label>Worker</mat-label>
           <mat-select [value]="nodeFilter() ?? ''" (selectionChange)="setNode($event.value)">
-            <mat-option value="">Tous les nœuds</mat-option>
+            <mat-option value="">Tous les workers</mat-option>
             @for (node of nodes(); track node.id) {
               <mat-option [value]="node.id">{{ node.name }}</mat-option>
             }
@@ -161,8 +161,8 @@
                 <span class="item-subtitle">
                   {{ file.library }} ·
                   {{ file.flow ? file.flow + ' · v' + file.flowVersion : 'Aucun flow attribué' }}
-                  @if (file.node) {
-                    · {{ file.node }}
+                  @if (file.worker) {
+                    · {{ file.worker }}
                   }
                 </span>
                 @if (activityExecutionLabel(file); as exactState) {

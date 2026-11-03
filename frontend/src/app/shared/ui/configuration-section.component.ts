@@ -119,7 +119,7 @@ export class ConfigurationSectionComponent {
   readonly title = input.required<string>();
   readonly description = input('');
   readonly icon = input<IconName | null>(null);
-  /** Puce d’état à côté du titre (« 3 nœuds sur 3 connectés »). */
+  /** Puce d’état à côté du titre (« 3 workers sur 3 connectés »). */
   readonly badge = input('');
   readonly badgeTone = input<'neutral' | 'success' | 'warning'>('neutral');
 }

@@ -44,7 +44,7 @@ internal static class PlexSetupTests
 
     private static void TrailingSegmentsAndKindBreakTies()
     {
-        // Montages différents entre le nœud et Plex : les dossiers finaux communs décident, le type départage.
+        // Montages différents entre le worker et Plex : les dossiers finaux communs décident, le type départage.
         var result = LibraryMappingSuggester.Suggest(
             [new(MoviesData, "Films", ["/mnt/pool/MEDIA/FILMS"]), new(ShowsUsb, "Séries", ["/mnt/pool/MEDIA/SERIES"])],
             [new("1", "Films", "movie", ["/data/MEDIA/FILMS"]), new("2", "Séries", "show", ["/data/MEDIA/SERIES"])]);

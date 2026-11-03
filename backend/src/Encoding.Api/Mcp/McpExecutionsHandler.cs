@@ -7,7 +7,7 @@ using Encoding.Api.Flows;
 using Encoding.Api.Infrastructure.Data;
 using Encoding.Api.Libraries;
 using Encoding.Api.Logging;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Encoding.Api.Plugins;
 using Encoding.Api.Resources;
 using Encoding.Contracts.Executions;
@@ -24,8 +24,8 @@ public sealed class McpExecutionsHandler(
     FlowRepository flows,
     FlowComponentRegistry components,
     FlowDefinitionValidator validator,
-    NodeRepository nodes,
-    NodePresenceOptions presenceOptions)
+    WorkerRepository workers,
+    WorkerPresenceOptions presenceOptions)
     : IMcpDomainHandler
 {
     private static JsonSerializerOptions JsonOptions => McpToolHelpers.JsonOptions;
@@ -38,7 +38,7 @@ public sealed class McpExecutionsHandler(
 
     public IReadOnlyCollection<string> ToolNames { get; } =
     [
-        "list_nodes",
+        "list_workers",
         "get_execution",
         "get_execution_events",
         "get_execution_pipeline",
@@ -57,7 +57,7 @@ public sealed class McpExecutionsHandler(
     public async Task<McpCallToolResult> HandleAsync(string toolName, JsonElement arguments, bool isAdmin, CancellationToken ct) =>
         toolName switch
         {
-            "list_nodes" => await ToolListNodesAsync(ct),
+            "list_workers" => await ToolListNodesAsync(ct),
             "get_execution" => await ToolGetExecutionAsync(arguments, ct),
             "get_execution_events" => await ToolGetExecutionEventsAsync(arguments, ct),
             "get_execution_pipeline" => await ToolGetExecutionPipelineAsync(arguments, ct),
@@ -283,7 +283,7 @@ public sealed class McpExecutionsHandler(
 
     public async Task<McpCallToolResult> ToolListNodesAsync(CancellationToken ct)
     {
-        var list = await nodes.ListAsync(presenceOptions.OfflineAfter, ct);
+        var list = await workers.ListAsync(presenceOptions.OfflineAfter, ct);
         return McpCallToolResult.Text(JsonSerializer.Serialize(list, JsonOptions));
     }
 

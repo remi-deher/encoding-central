@@ -11,29 +11,29 @@ public interface ISystemLogSink
 }
 
 /// <summary>
-/// Contexte d'identification du nœud pour les logs système.
+/// Contexte d'identification du worker pour les logs système.
 /// </summary>
-public interface ISystemLogNodeContext
+public interface ISystemLogWorkerContext
 {
-    Guid? NodeId { get; }
-    string? NodeName { get; }
+    Guid? WorkerId { get; }
+    string? WorkerName { get; }
 }
 
-public sealed class DefaultSystemLogNodeContext : ISystemLogNodeContext
+public sealed class DefaultSystemLogWorkerContext : ISystemLogWorkerContext
 {
     private readonly Func<(Guid? NodeId, string? NodeName)>? _resolver;
 
-    public DefaultSystemLogNodeContext(Guid? nodeId = null, string? nodeName = null)
+    public DefaultSystemLogWorkerContext(Guid? workerId = null, string? nodeName = null)
     {
-        NodeId = nodeId;
-        NodeName = nodeName;
+        WorkerId = workerId;
+        WorkerName = nodeName;
     }
 
-    public DefaultSystemLogNodeContext(Func<(Guid? NodeId, string? NodeName)> resolver)
+    public DefaultSystemLogWorkerContext(Func<(Guid? NodeId, string? NodeName)> resolver)
     {
         _resolver = resolver;
     }
 
-    public Guid? NodeId => _resolver?.Invoke().NodeId ?? field;
-    public string? NodeName => _resolver?.Invoke().NodeName ?? field;
+    public Guid? WorkerId => _resolver?.Invoke().NodeId ?? field;
+    public string? WorkerName => _resolver?.Invoke().NodeName ?? field;
 }

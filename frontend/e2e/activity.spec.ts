@@ -10,8 +10,8 @@ const running = {
   flowVersion: 3,
   state: 'running',
   isActivelyProcessing: true,
-  nodeId: 'node-1',
-  node: 'Studio',
+  workerId: 'node-1',
+  worker: 'Studio',
   progress: 100,
   detail: 'Validation avant publication',
   attempt: 1,
@@ -51,8 +51,8 @@ function activityResponse(status: string, offset: number, limit: number) {
       executionId: `done-${offset + index}`,
       executionState: 'succeeded',
       detail: 'Traitement terminé',
-      nodeId: 'node-1',
-      node: 'Studio',
+      workerId: 'node-1',
+      worker: 'Studio',
       progress: 100,
       updatedAt: now,
     }));
@@ -71,8 +71,8 @@ function activityResponse(status: string, offset: number, limit: number) {
       executionId: `failed-${offset + index}`,
       executionState: 'failed',
       detail: 'Erreur encodage',
-      nodeId: 'node-1',
-      node: 'Studio',
+      workerId: 'node-1',
+      worker: 'Studio',
       progress: null,
       updatedAt: now,
     }));
@@ -91,8 +91,8 @@ function activityResponse(status: string, offset: number, limit: number) {
       executionId: `cancelled-${offset + index}`,
       executionState: 'cancelled',
       detail: 'Annulé par utilisateur',
-      nodeId: 'node-1',
-      node: 'Studio',
+      workerId: 'node-1',
+      worker: 'Studio',
       progress: null,
       updatedAt: now,
     }));
@@ -111,8 +111,8 @@ function activityResponse(status: string, offset: number, limit: number) {
       executionId: `active-${offset + index}`,
       executionState: 'running',
       detail: 'Encodage en cours',
-      nodeId: 'node-1',
-      node: 'Studio',
+      workerId: 'node-1',
+      worker: 'Studio',
       progress: 50,
       updatedAt: now,
     }));
@@ -134,8 +134,8 @@ test.beforeEach(async ({ page }) => {
       json: { setupRequired: false, user: { id: 'admin', username: 'admin', role: 'admin' } },
     }),
   );
-  await page.route('**/api/v1/cluster', (route) =>
-    route.fulfill({ json: { id: 'cluster', name: 'Maison', standalone: true } }),
+  await page.route('**/api/v1/central', (route) =>
+    route.fulfill({ json: { id: 'cluster', name: 'Maison' } }),
   );
   await page.route('**/api/v1/activity/stream**', (route) => route.abort());
   await page.route('**/api/v1/activity/files**', (route) => {

@@ -2,7 +2,7 @@
 id: 0010
 title: Capture incrémentale locale par clés modifiées
 status: superseded
-domain: replication-storage
+domain: storage
 date: 2026-10-23
 decided_by: Rémi, demande de mise en place des optimisations le 2026-10-23
 supersedes: []

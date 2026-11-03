@@ -6,7 +6,7 @@ using Encoding.Contracts.Tools;
 
 namespace Encoding.Api.Executions;
 
-public sealed class AiMetadataEnrichmentService(IHttpClientFactory clients, IConfiguration configuration, AiClusterService ai)
+public sealed class AiMetadataEnrichmentService(IHttpClientFactory clients, IConfiguration configuration, AiCentralService ai)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private sealed record Match(string Source, string Id, string Url, string Title, string? Year, string? Synopsis,

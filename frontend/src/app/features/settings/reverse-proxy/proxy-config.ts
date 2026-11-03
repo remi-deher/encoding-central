@@ -10,7 +10,7 @@ export interface ProxyConfigInput {
   readonly proxy: ProxyKind;
   readonly domain: string;
   readonly backends: readonly ProxyBackend[];
-  /** Plusieurs nœuds serveurs derrière le proxy ; sinon seul le premier est utilisé. */
+  /** Plusieurs workers serveurs derrière le proxy ; sinon seul le premier est utilisé. */
   readonly redundancy: boolean;
   /** Le proxy termine le HTTPS ; le certificat reste à la charge de l'utilisateur. */
   readonly https: boolean;
@@ -31,7 +31,7 @@ export const PROXY_LABELS: Readonly<Record<ProxyKind, string>> = {
 
 export const DEFAULT_DOMAIN = 'encoding.example.com';
 
-/** Sonde de santé publique des nœuds serveurs. */
+/** Sonde de santé publique des workers serveurs. */
 export const HEALTH_PATH = '/health/ready';
 
 const MAX_BODY_MB = 100;
@@ -154,7 +154,7 @@ function nginx(
     'À placer dans /etc/nginx/conf.d/encoding.conf (ou sites-available), puis nginx -s reload.',
     ...(backends.length > 1
       ? [
-          'Le premier nœud reçoit le trafic ; les autres prennent le relais s’il ne répond plus (bascule passive, Nginx libre n’a pas de sonde active).',
+          'Le premier worker reçoit le trafic ; les autres prennent le relais s’il ne répond plus (bascule passive, Nginx libre n’a pas de sonde active).',
         ]
       : []),
     ...(https ? ['Remplacez les deux chemins de certificat par les vôtres.'] : []),
@@ -198,7 +198,7 @@ function caddy(
     'À ajouter dans votre Caddyfile, puis caddy reload.',
     ...(backends.length > 1
       ? [
-          'Le premier nœud reçoit le trafic ; Caddy sonde /health/ready et bascule sur les suivants si besoin.',
+          'Le premier worker reçoit le trafic ; Caddy sonde /health/ready et bascule sur les suivants si besoin.',
         ]
       : []),
     ...(https
@@ -257,7 +257,7 @@ function traefik(
     `Les points d’entrée « ${https ? 'websecure' : 'web'} » doivent exister dans votre configuration statique.`,
     ...(backends.length > 1
       ? [
-          'Traefik répartit entre les nœuds en gardant chaque navigateur sur le même (cookie) et écarte un nœud dont /health/ready ne répond plus.',
+          'Traefik répartit entre les workers en gardant chaque navigateur sur le même (cookie) et écarte un worker dont /health/ready ne répond plus.',
         ]
       : []),
     ...(https ? ['Ajoutez votre « certResolver » dans tls si Traefik gère le certificat.'] : []),
@@ -279,7 +279,7 @@ function npm(domain: string, backends: readonly ProxyBackend[]): ProxyConfigOutp
   if (fallbacks.length) {
     lines.push(
       '',
-      '# Nœuds de secours : utilisés si le précédent ne répond plus.',
+      '# Workers de secours : utilisés si le précédent ne répond plus.',
       'proxy_intercept_errors on;',
       'proxy_connect_timeout 3s;',
       'error_page 502 503 504 = @encoding_1;',
@@ -309,7 +309,7 @@ function npm(domain: string, backends: readonly ProxyBackend[]): ProxyConfigOutp
     'Onglet Advanced : collez le texte ci-contre dans « Custom Nginx Configuration ». Le HTTPS se règle dans l’onglet SSL.',
     ...(fallbacks.length
       ? [
-          'Le nœud saisi dans Details reçoit le trafic ; les suivants prennent le relais s’il répond par une erreur 502, 503 ou 504 (bascule passive, sans sonde de santé).',
+          'Le worker saisi dans Details reçoit le trafic ; les suivants prennent le relais s’il répond par une erreur 502, 503 ou 504 (bascule passive, sans sonde de santé).',
         ]
       : []),
     REMINDER,

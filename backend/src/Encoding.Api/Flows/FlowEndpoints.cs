@@ -38,7 +38,7 @@ public static class FlowEndpoints
             return result.IsValid ? (IResult)Results.Ok(result) : Results.UnprocessableEntity(result);
         }).AllowViewer().WithName("ValidateFlowDefinition");
 
-        flows.MapGet("/components", (FlowComponentRegistry registry, ClusterExtensionActivationState activation) => Results.Ok(
+        flows.MapGet("/components", (FlowComponentRegistry registry, CentralExtensionActivationState activation) => Results.Ok(
             registry.Plugins.Select(plugin => new
             {
                 plugin.ContractVersion,
@@ -53,7 +53,7 @@ public static class FlowEndpoints
             })))
             .WithName("GetFlowComponentCatalog");
 
-        flows.MapGet("/schema", (FlowComponentRegistry registry, ClusterExtensionActivationState activation) =>
+        flows.MapGet("/schema", (FlowComponentRegistry registry, CentralExtensionActivationState activation) =>
             Results.Ok(BuildFlowSchema(registry, activation)))
             .AllowViewer().WithName("GetFlowSchema");
     }
@@ -61,7 +61,7 @@ public static class FlowEndpoints
     private static void MapFlowPreflightAndValidationEndpoints(this RouteGroupBuilder flows)
     {
         flows.MapGet("/{id:guid}/preflight", async (Guid id, FlowCoordinatorService coordinator,
-            Encoding.Api.Nodes.NodePresenceOptions presence, CancellationToken ct) =>
+            Encoding.Api.Workers.WorkerPresenceOptions presence, CancellationToken ct) =>
             await coordinator.PreflightAsync(id, presence.OfflineAfter, ct) is { } result
                 ? Results.Ok(result)
                 : ApiProblem.NotFound("Flow introuvable."))
@@ -238,7 +238,7 @@ public static class FlowEndpoints
         }).RequireRateLimiting(AuthExtensions.HeavyOperationsPolicy).WithName("ImportFlowsArchive");
     }
 
-    private static object BuildFlowSchema(FlowComponentRegistry registry, ClusterExtensionActivationState activation)
+    private static object BuildFlowSchema(FlowComponentRegistry registry, CentralExtensionActivationState activation)
     {
         var components = registry.Plugins.SelectMany(p => p.Components.Select(c => new
         {

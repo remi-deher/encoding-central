@@ -4,15 +4,15 @@ using System.Diagnostics;
 using Encoding.Api.Executions;
 using Encoding.Api.Infrastructure;
 using Encoding.Api.Infrastructure.Data;
-using Encoding.Api.Nodes;
-using Encoding.Contracts.Nodes;
+using Encoding.Api.Workers;
+using Encoding.Contracts.Workers;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Encoding.Runtime.Tests;
 
 /// <summary>
-/// Régressions de charge sur la base SQLite d'un nœud (verrou d'écriture unique) : une grosse file ne doit ni bloquer les heartbeats,
+/// Régressions de charge sur la base SQLite d'un worker (verrou d'écriture unique) : une grosse file ne doit ni bloquer les heartbeats,
 /// ni produire d'erreur « database is locked », ni faire échouer des exécutions saines quand un heartbeat est en retard.
 /// Les bornes sont larges : elles détectent une régression, pas une performance précise.
 /// </summary>
@@ -20,25 +20,25 @@ public sealed class LoadContentionTests
 {
     private const string Token = "load-token";
 
-    private sealed record Cluster(TestDatabase Database, Guid[] Nodes, Guid Library);
+    private sealed record Central(TestDatabase Database, Guid[] Nodes, Guid Library);
 
-    private static async Task<Cluster> SeedAsync(string prefix, int nodeCount, int queued)
+    private static async Task<Central> SeedAsync(string prefix, int nodeCount, int queued)
     {
         var database = await TestDatabase.CreateSqliteAsync(prefix);
         await DatabaseMigrator.ApplyAsync(database.Db, Harness.RepositoryRoot(), CancellationToken.None);
-        var repository = new NodeRepository(database.Db);
-        var nodes = new Guid[nodeCount];
+        var repository = new WorkerRepository(database.Db);
+        var workers = new Guid[nodeCount];
         for (var i = 0; i < nodeCount; i++)
         {
-            nodes[i] = Guid.NewGuid();
-            Assert.NotNull(await repository.EnrollAsync(new(nodes[i], "node-" + i, [NodeRole.Server, NodeRole.Worker], 1, [], Token), true, CancellationToken.None));
+            workers[i] = Guid.NewGuid();
+            Assert.NotNull(await repository.EnrollAsync(new(workers[i], "node-" + i, [WorkerRole.Server, WorkerRole.Worker], 1, [], Token), true, CancellationToken.None));
         }
         var library = Guid.NewGuid();
         await using var connection = await database.Db.OpenConnectionAsync(CancellationToken.None);
         await using var transaction = await connection.BeginTransactionAsync(CancellationToken.None);
         await Run(connection, transaction, "INSERT INTO libraries(id, name) VALUES (@id, 'load')", ("id", library.ToString("D")));
-        await Run(connection, transaction, "INSERT INTO library_node_accesses(library_id, node_id, mode, local_path, can_read, can_write) VALUES (@l, @n, 'direct', '/media/load', 1, 1)",
-            ("l", library.ToString("D")), ("n", nodes[0].ToString("D")));
+        await Run(connection, transaction, "INSERT INTO library_worker_accesses(library_id, worker_id, mode, local_path, can_read, can_write) VALUES (@l, @n, 'direct', '/media/load', 1, 1)",
+            ("l", library.ToString("D")), ("n", workers[0].ToString("D")));
         for (var i = 0; i < queued; i++)
         {
             var id = Guid.NewGuid().ToString("D");
@@ -49,7 +49,7 @@ public sealed class LoadContentionTests
                 ("id", id), ("l", library.ToString("D")), ("media", $"film-{i}.mkv"), ("key", $"FILM-{i}.MKV"));
         }
         await transaction.CommitAsync(CancellationToken.None);
-        return new(database, nodes, library);
+        return new(database, workers, library);
     }
 
     private static async Task Run(DbConnection connection, DbTransaction transaction, string sql, params (string Name, object Value)[] parameters)
@@ -72,9 +72,9 @@ public sealed class LoadContentionTests
         var cluster = await SeedAsync("load-mixed", nodeCount, queued);
         await using var _ = cluster.Database;
         var db = cluster.Database.Db;
-        var nodes = new NodeRepository(db);
+        var workers = new WorkerRepository(db);
         var executions = new ExecutionRepository(db);
-        var recovery = new RuntimeRecoveryService(db, NullLogger<RuntimeRecoveryService>.Instance, presence: new NodePresenceOptions(TimeSpan.FromSeconds(30)));
+        var recovery = new RuntimeRecoveryService(db, NullLogger<RuntimeRecoveryService>.Instance, presence: new WorkerPresenceOptions(TimeSpan.FromSeconds(30)));
         var failures = new ConcurrentQueue<string>();
         var slowestHeartbeat = 0L; var slowestOverview = 0L; var heartbeats = 0; var overviews = 0; var passes = 0;
         using var stop = new CancellationTokenSource(duration);
@@ -94,12 +94,12 @@ public sealed class LoadContentionTests
         var work = new List<Task>();
         for (var i = 0; i < cluster.Nodes.Length; i++)
         {
-            var node = cluster.Nodes[i];
-            var request = new NodeHeartbeatRequest("node-" + i, [NodeRole.Server, NodeRole.Worker], 1, [], ProtocolVersion: ClusterProtocol.Current, SessionNonce: "session-" + i);
+            var worker = cluster.Nodes[i];
+            var request = new WorkerHeartbeatRequest("node-" + i, [WorkerRole.Server, WorkerRole.Worker], 1, [], Version: AppVersion.Current, SessionNonce: "session-" + i);
             work.Add(Loop("heartbeat", async () =>
             {
                 var clock = Stopwatch.StartNew();
-                Assert.NotNull(await nodes.RecordHeartbeatAsync(node, Token, request, CancellationToken.None));
+                Assert.NotNull(await workers.RecordHeartbeatAsync(worker, Token, request, CancellationToken.None));
                 Max(ref slowestHeartbeat, clock.ElapsedMilliseconds); Interlocked.Increment(ref heartbeats);
             }, 50));
         }
@@ -131,16 +131,16 @@ public sealed class LoadContentionTests
         var cluster = await SeedAsync("load-delayed", 2, 40);
         await using var _ = cluster.Database;
         var db = cluster.Database.Db;
-        var recovery = new RuntimeRecoveryService(db, NullLogger<RuntimeRecoveryService>.Instance, presence: new NodePresenceOptions(TimeSpan.FromSeconds(30)));
+        var recovery = new RuntimeRecoveryService(db, NullLogger<RuntimeRecoveryService>.Instance, presence: new WorkerPresenceOptions(TimeSpan.FromSeconds(30)));
 
-        // Le nœud qui détient l'accès direct ne s'est pas manifesté depuis 90 s (heartbeat retardé par un verrou ou un redémarrage).
-        await Exec(db, "UPDATE cluster_nodes SET last_seen_at = strftime('%Y-%m-%d %H:%M:%f', 'now', '-90 seconds') || '000Z'");
+        // Le worker qui détient l'accès direct ne s'est pas manifesté depuis 90 s (heartbeat retardé par un verrou ou un redémarrage).
+        await Exec(db, "UPDATE workers SET last_seen_at = strftime('%Y-%m-%d %H:%M:%f', 'now', '-90 seconds') || '000Z'");
         for (var i = 0; i < 3; i++) await recovery.ProcessOnceAsync(CancellationToken.None);
         Assert.Equal(40L, await Scalar(db, "SELECT count(*) FROM executions WHERE state = 'queued'"));
         Assert.Equal(0L, await Scalar(db, "SELECT count(*) FROM executions WHERE state = 'failed'"));
 
-        // Un nœud réellement perdu (absent depuis 30 minutes) finit par faire échouer les exécutions qui dépendent de lui.
-        await Exec(db, "UPDATE cluster_nodes SET last_seen_at = strftime('%Y-%m-%d %H:%M:%f', 'now', '-30 minutes') || '000Z'");
+        // Un worker réellement perdu (absent depuis 30 minutes) finit par faire échouer les exécutions qui dépendent de lui.
+        await Exec(db, "UPDATE workers SET last_seen_at = strftime('%Y-%m-%d %H:%M:%f', 'now', '-30 minutes') || '000Z'");
         for (var i = 0; i < 3; i++) await recovery.ProcessOnceAsync(CancellationToken.None);
         Assert.Equal(40L, await Scalar(db, "SELECT count(*) FROM executions WHERE state = 'failed'"));
     }

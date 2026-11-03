@@ -13,14 +13,14 @@ Les fiches décrivent ce qui est **vrai aujourd'hui sur la branche `dev`**. Le c
 
 | Je travaille sur… | Fiche | Compléments |
 | --- | --- | --- |
-| Nœuds, rattachement, jumelage, groupes, modes serveur/worker, image Docker, GPU | [cluster](domains/cluster.md) | `docs/operations/release.md` |
-| SQLite, migrations, réconciliation entre serveurs, sauvegardes de flows | [replication-storage](domains/replication-storage.md) | `docs/operations/backup-restore.md` |
+| Central et workers, rattachement, jumelage, version exacte, groupes, image Docker, GPU | [workers](domains/workers.md) | `docs/operations/release.md` |
+| SQLite, migrations, registres locaux, sauvegardes de flows | [storage](domains/storage.md) | `docs/operations/backup-restore.md` |
 | Définition de flow, validation, versions/brouillons, import/export, scripts, modèles, packs, profils d'encodage, simulation | [flows](domains/flows.md) | `BACKEND_RULES.md` |
 | Exécution, baux, reprise, relais, attentes, verrous de disque, découverte et surveillance des bibliothèques, publication, remplacement de la source | [runtime](domains/runtime.md) | `TEST_RULES.md` |
 | Plugins, composants, manifestes, Store, intégrations Plex/Sonarr/Radarr/Jellyfin, outils média, blocs audio/vidéo/sous-titres | [plugins](domains/plugins.md) | `backend/plugins/README.md`, `docs/operations/fileflows-v3-flow.md` |
 | Authentification, rôles, jetons API, MCP, santé, métriques, journaux système, rétention | [auth-ops](domains/auth-ops.md) | `docs/operations/monitoring.md` |
 | Fournisseurs IA, sessions, assistant, génération de flows | [ai](domains/ai.md) | `docs/operations/ai-providers.md` |
-| Angular, composants communs, éditeur de flow, page Nœuds | [ui](domains/ui.md) | `UI_RULES.md`, `docs/design/` |
+| Angular, composants communs, éditeur de flow, page Workers | [ui](domains/ui.md) | `UI_RULES.md`, `docs/design/` |
 
 Un changement qui franchit plusieurs domaines (ex. nouvelle table partagée : stockage + domaine métier) lit les fiches concernées, pas toutes.
 

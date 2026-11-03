@@ -10,12 +10,7 @@ import {
 } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
-import {
-  ApiTokenReplicationView,
-  ApiTokenResponse,
-  CreatedApiTokenResponse,
-  tokenPropagation,
-} from '../../../shared/models/api-token';
+import { ApiTokenResponse, CreatedApiTokenResponse } from '../../../shared/models/api-token';
 import { formatRelativeTime } from '../../../shared/models/date-format';
 import { ApiTokenService } from '../../../shared/services/api-token.service';
 import { ClipboardService } from '../../../shared/services/clipboard.service';
@@ -111,7 +106,6 @@ export class ApiTokenTabComponent {
   readonly tokensUpdated = output<readonly ApiTokenResponse[]>();
   readonly tokenCreated = output<CreatedApiTokenResponse>();
   protected readonly tokens = signal<readonly ApiTokenResponse[]>([]);
-  protected readonly replication = signal<ApiTokenReplicationView | null>(null);
   protected readonly state = signal<'loading' | 'error' | 'ready'>('loading');
   protected readonly busy = signal(false);
   protected readonly secret = signal('');
@@ -166,7 +160,7 @@ export class ApiTokenTabComponent {
       visibleWhen: (row) => !!row['isActive'],
       confirmation: (row) => ({
         title: 'Révoquer ce jeton ?',
-        message: `Les applications utilisant « ${row.title} » perdront leur accès au cluster.`,
+        message: `Les applications utilisant « ${row.title} » perdront leur accès au central.`,
         confirmLabel: 'Révoquer',
       }),
     },
@@ -183,7 +177,6 @@ export class ApiTokenTabComponent {
   ];
   protected readonly rows = computed<readonly TokenRow[]>(() =>
     this.tokens().map((token) => {
-      const propagation = tokenPropagation(token, this.replication());
       const expired = !!token.expiresAt && new Date(token.expiresAt).getTime() <= Date.now();
       const usage = !token.isActive
         ? { label: 'Révoqué', tone: 'danger' as const }
@@ -216,7 +209,6 @@ export class ApiTokenTabComponent {
             ? [{ label: 'Écriture MCP', tone: 'warning' as const, plain: true }]
             : []),
           usage,
-          ...(propagation ? [propagation] : []),
         ],
       };
     }),
@@ -230,11 +222,6 @@ export class ApiTokenTabComponent {
       this.tokens.set(list);
       this.tokensUpdated.emit(list);
       this.state.set('ready');
-      // La propagation est une information complémentaire : son échec ne masque pas la liste.
-      this.tokenService.replication().subscribe({
-        next: (view) => this.replication.set(view),
-        error: () => this.replication.set(null),
-      });
     } catch {
       this.state.set('error');
       this.notifications.show('Impossible de récupérer les jetons d’API.');

@@ -1,4 +1,4 @@
-using Encoding.NodeAgent.Services;
+using Encoding.WorkerAgent.Services;
 using static Encoding.Plugins.Tests.Support;
 
 namespace Encoding.Plugins.Tests;

@@ -4,25 +4,25 @@ using Encoding.Contracts.Executions;
 
 namespace Encoding.Api.Executions;
 
-public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionStreamBroadcaster? broadcaster=null,TaskOwnershipRepository? ownership=null,
+public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionStreamBroadcaster? broadcaster=null,
     Encoding.Api.Flows.FlowComponentRegistry? components=null)
 {
-    public async Task<IReadOnlyList<RuntimeTransfer>> ListAsync(Guid node,CancellationToken ct)
+    public async Task<IReadOnlyList<RuntimeTransfer>> ListAsync(Guid worker,CancellationToken ct)
     {
         await using var cmd=dataSource.CreateCommand("""
           SELECT w.execution_id,w.lease_epoch,a.local_path,w.media_path,w.source_sha,w.result_sha,w.result_extension,w.publication_requested,e.flow_definition::text,a.can_write,w.replacement_grace_hours,w.library_id,
             (SELECT checkpoint::text FROM execution_steps WHERE execution_id=w.execution_id AND completed_at IS NOT NULL ORDER BY completed_revision DESC LIMIT 1),
             w.media_policy<>'beside' AND EXISTS(SELECT 1 FROM library_replacement_policies p WHERE p.library_id=w.library_id AND p.enabled),
-            (SELECT node_id FROM execution_steps s WHERE s.execution_id=w.execution_id ORDER BY (s.completed_at IS NULL) DESC,s.started_at DESC LIMIT 1),
+            (SELECT flow_node_id FROM execution_steps s WHERE s.execution_id=w.execution_id ORDER BY (s.completed_at IS NULL) DESC,s.started_at DESC LIMIT 1),
             (SELECT invocation_id FROM execution_steps s WHERE s.execution_id=w.execution_id ORDER BY (s.completed_at IS NULL) DESC,s.started_at DESC LIMIT 1)
           FROM execution_work w JOIN executions e ON e.id=w.execution_id
-          JOIN library_node_accesses a ON a.library_id=w.library_id AND a.node_id=w.source_node_id
-          WHERE w.source_node_id=@node AND w.lease_until>clock_timestamp() AND e.state='running'
+          JOIN library_worker_accesses a ON a.library_id=w.library_id AND a.worker_id=w.source_worker_id
+          WHERE w.source_worker_id=@node AND w.lease_until>clock_timestamp() AND e.state='running'
           AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.local_path IS NOT NULL
           AND (w.source_sha IS NULL AND w.source_preparation_requested OR (w.publication_requested AND w.published_path IS NULL AND a.can_write))
           ORDER BY e.queued_at LIMIT 20
           """);
-        cmd.Parameters.AddWithValue("node",node); await using var r=await cmd.ExecuteReaderAsync(ct); var result=new List<RuntimeTransfer>();
+        cmd.Parameters.AddWithValue("node",worker); await using var r=await cmd.ExecuteReaderAsync(ct); var result=new List<RuntimeTransfer>();
         var json = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
         while (await r.ReadAsync(ct))
         {
@@ -51,7 +51,7 @@ public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionS
         await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
         if(!await RuntimeRepository.FenceAsync(id,source,request.Epoch,c,tx,ct,true)) return false;
         Guid worker; Guid library; string original; string sourceSha; string resultSha; int? graceHours; string mediaPolicy; bool continueFlow;
-        await using(var read=Sql.Command("SELECT worker_node_id,library_id,media_path,source_sha,result_sha,replacement_grace_hours,media_policy,continue_after_publication FROM execution_work WHERE execution_id=@id AND result_sha=@sha AND publication_requested AND @path='.encoding-results/'||execution_id::text||'/result'||result_extension",
+        await using(var read=Sql.Command("SELECT worker_id,library_id,media_path,source_sha,result_sha,replacement_grace_hours,media_policy,continue_after_publication FROM execution_work WHERE execution_id=@id AND result_sha=@sha AND publication_requested AND @path='.encoding-results/'||execution_id::text||'/result'||result_extension",
             c,tx))
         {
             read.Parameters.AddWithValue("id",id); read.Parameters.AddWithValue("sha",request.Sha256); read.Parameters.AddWithValue("path",request.PublishedPath);
@@ -82,7 +82,7 @@ public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionS
         if(!continueFlow) await RuntimeRepository.ReleaseAsync(id,c,tx,ct);
         await tx.CommitAsync(ct); broadcaster?.Publish(id); return true;
     }
-    /// <summary>Publication déjà confirmée par le nœud d'accès pour une exécution dont le flow continue (ADR 0003).</summary>
+    /// <summary>Publication déjà confirmée par le worker d'accès pour une exécution dont le flow continue (ADR 0003).</summary>
     public async Task<RuntimePublicationState?> PublicationStateAsync(Guid id,CancellationToken ct)
     {
         await using var cmd=dataSource.CreateCommand("SELECT published_path,result_sha,publication_requested FROM execution_work WHERE execution_id=@id");
@@ -100,7 +100,7 @@ public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionS
         if (!Encoding.Contracts.Flows.MediaIntegrityPolicy.IsExplicit(flow)) return true;
         var checks = flow.Nodes.Where(node => node.Component.PluginId == "probe"
             && node.Component.ComponentId == Encoding.Contracts.Flows.MediaIntegrityPolicy.Component).Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
-        await using var read = Sql.Command("SELECT node_id,checkpoint FROM execution_steps WHERE execution_id=@id AND completed_at IS NOT NULL", c, tx);
+        await using var read = Sql.Command("SELECT flow_node_id,checkpoint FROM execution_steps WHERE execution_id=@id AND completed_at IS NOT NULL", c, tx);
         read.Parameters.AddWithValue("id", id);
         await using var reader = await read.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
@@ -126,7 +126,7 @@ public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionS
         if(sourceFailure)
         {
             if(request.State!="failed") return false;
-            await using var read=Sql.Command("SELECT worker_node_id FROM execution_work WHERE execution_id=@id",c,tx); read.Parameters.AddWithValue("id",id);
+            await using var read=Sql.Command("SELECT worker_id FROM execution_work WHERE execution_id=@id",c,tx); read.Parameters.AddWithValue("id",id);
                 worker=(await read.ScalarGuidAsync(ct))!.Value;
         }
         if(request.ContinueFlow)
@@ -164,13 +164,13 @@ public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionS
               UPDATE execution_work w SET result_sha=@sha,result_extension=@extension,publication_requested=true,continue_after_publication=@continue,
               replacement_grace_hours=CASE WHEN w.media_policy='beside' THEN NULL ELSE (SELECT p.grace_period_hours FROM library_replacement_policies p WHERE p.library_id=w.library_id AND p.enabled) END
               WHERE execution_id=@id AND EXISTS(SELECT 1 FROM execution_artifacts a WHERE a.execution_id=w.execution_id AND a.sha256=@sha)
-              AND EXISTS(SELECT 1 FROM library_node_accesses a WHERE a.library_id=w.library_id AND a.node_id=w.source_node_id AND a.is_enabled AND a.can_write)
+              AND EXISTS(SELECT 1 FROM library_worker_accesses a WHERE a.library_id=w.library_id AND a.worker_id=w.source_worker_id AND a.is_enabled AND a.can_write)
               """,c,tx);
             set.Parameters.AddWithValue("id",id); set.Parameters.AddWithValue("sha",sha); set.Parameters.AddWithValue("extension",request.Extension);
                 set.Parameters.AddWithValue("continue",request.ContinueFlow);
             if(await set.ExecuteNonQueryAsync(ct)!=1) return false;
             if(!await ExecutionRepository.RecordInTransactionAsync(id,new(request.EventId,request.ExpectedRevision,"running",worker,null,
-                "Résultat validé ; publication demandée au nœud d’accès."),c,tx,ct)) return false;
+                "Résultat validé ; publication demandée au worker d’accès."),c,tx,ct)) return false;
         }
         else
         {
@@ -189,7 +189,6 @@ public sealed class RuntimeTransferRepository(DbDataSource dataSource,ExecutionS
                   """,c,tx);
                 schedule.Parameters.AddWithValue("id",id); schedule.Parameters.AddWithValue("next",next); schedule.Parameters.AddWithValue("event",Guid.NewGuid());
                 schedule.Parameters.AddWithValue("delay",TimeSpan.FromMinutes(request.DeferMinutes!.Value)); await schedule.ExecuteNonQueryAsync(ct);
-                if(ownership is not null) await ownership.CreateAsync([next],c,tx,ct);
             }
         }
         await tx.CommitAsync(ct); return true;

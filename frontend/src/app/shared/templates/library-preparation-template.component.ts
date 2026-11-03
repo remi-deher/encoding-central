@@ -96,7 +96,7 @@ import { ResourceCatalogTemplateComponent } from './resource-catalog-template.co
           <mat-tab [label]="'Fichiers détectés (' + mediaCount() + ')'">
             <ng-container [ngTemplateOutlet]="mediaContent()" />
           </mat-tab>
-          <mat-tab [label]="'Accès des nœuds (' + accessCount() + ')'">
+          <mat-tab [label]="'Accès des workers (' + accessCount() + ')'">
             <ng-container [ngTemplateOutlet]="accessContent()" />
           </mat-tab>
           <mat-tab label="Historique">

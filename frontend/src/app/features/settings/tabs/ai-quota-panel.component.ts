@@ -13,7 +13,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { interval } from 'rxjs';
 import { AiToolsService } from '../../../shared/services/ai-tools.service';
-import { AiNodeQuotas, AiQuotaSnapshot } from '../../../shared/models/ai-tools';
+import { AiWorkerQuotas, AiQuotaSnapshot } from '../../../shared/models/ai-tools';
 import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-section.component';
 
 @Component({
@@ -27,13 +27,13 @@ import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-
       icon="api"
     >
       <p>
-        Actualisation chaque minute. Plusieurs nœuds peuvent utiliser le même compte : leurs quotas
-        ne s’additionnent pas.
+        Actualisation chaque minute. Plusieurs workers peuvent utiliser le même compte : leurs
+        quotas ne s’additionnent pas.
       </p>
       @if (error()) {
         <p role="status">{{ error() }}</p>
       }
-      @for (node of nodes(); track node.nodeId) {
+      @for (node of nodes(); track node.workerId) {
         <h4>{{ node.name }}</h4>
         <div class="quota-grid">
           @for (quota of node.providers; track quota.provider) {
@@ -150,7 +150,7 @@ export class AiQuotaPanelComponent {
   private readonly destroyRef = inject(DestroyRef);
   private revision = 0;
   readonly refreshKey = input(0);
-  readonly nodes = signal<readonly AiNodeQuotas[]>([]);
+  readonly nodes = signal<readonly AiWorkerQuotas[]>([]);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly now = signal(Date.now());
@@ -197,16 +197,16 @@ export class AiQuotaPanelComponent {
           }
           this.now.set(Date.now());
           const missing = this.nodes().filter(
-            (old) => !view.nodes.some((node) => node.nodeId === old.nodeId),
+            (old) => !view.workers.some((node) => node.workerId === old.workerId),
           );
           this.nodes.set([
-            ...view.nodes,
+            ...view.workers,
             ...missing.map((node) => ({
               ...node,
               providers: node.providers.map((quota) => ({
                 ...quota,
                 state: 'stale' as const,
-                message: 'Nœud indisponible. Dernière observation conservée.',
+                message: 'Worker indisponible. Dernière observation conservée.',
               })),
             })),
           ]);

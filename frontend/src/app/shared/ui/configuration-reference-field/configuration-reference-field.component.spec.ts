@@ -22,7 +22,7 @@ describe('Configuration references', () => {
     fixture.componentRef.setInput('value', 'Saved but unavailable');
     fixture.detectChanges();
     TestBed.inject(HttpTestingController)
-      .expectOne('/api/v1/nodes')
+      .expectOne('/api/v1/workers')
       .flush([
         {
           id: 'worker',
@@ -56,7 +56,7 @@ describe('Configuration references', () => {
     fixture.componentInstance.valueChange.subscribe(changed);
     fixture.detectChanges();
     TestBed.inject(HttpTestingController)
-      .expectOne('/api/v1/nodes')
+      .expectOne('/api/v1/workers')
       .flush([
         {
           id: 'worker-id',
@@ -83,7 +83,7 @@ describe('Configuration references', () => {
     const changed = vi.fn();
     fixture.componentInstance.valueChange.subscribe(changed);
     fixture.detectChanges();
-    TestBed.inject(HttpTestingController).expectOne('/api/v1/nodes').flush([]);
+    TestBed.inject(HttpTestingController).expectOne('/api/v1/workers').flush([]);
     await fixture.whenStable();
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('input').value).toBe('missing-worker');

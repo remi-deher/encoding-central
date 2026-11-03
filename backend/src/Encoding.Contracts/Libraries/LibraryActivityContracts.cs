@@ -14,8 +14,8 @@ public sealed record LibraryActivityFile(
     Guid? ExecutionId,
     string? ExecutionState,
     string? Detail,
-    Guid? NodeId,
-    string? Node,
+    Guid? WorkerId,
+    string? Worker,
     decimal? Progress,
     DateTimeOffset? UpdatedAt);
 

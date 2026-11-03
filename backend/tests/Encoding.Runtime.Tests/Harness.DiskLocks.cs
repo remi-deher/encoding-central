@@ -96,7 +96,7 @@ internal static partial class Harness
             Check(await runtime.ClaimAsync(b, token) is null, "Another worker cannot silently resume the assigned attempt.");
             var recovery = new RuntimeRecoveryService(db, NullLogger<RuntimeRecoveryService>.Instance);
             await recovery.ProcessOnceAsync(token);
-            Check((await executions.GetAsync(x, token))?.State == "running" && await ScalarAsync<long>("SELECT count(*) FROM execution_work WHERE execution_id=@id AND worker_node_id IS NULL AND handoff_pending", ("id", x)) == 1, "The disconnected worker's attempt is handed back for a resume.");
+            Check((await executions.GetAsync(x, token))?.State == "running" && await ScalarAsync<long>("SELECT count(*) FROM execution_work WHERE execution_id=@id AND worker_id IS NULL AND handoff_pending", ("id", x)) == 1, "The disconnected worker's attempt is handed back for a resume.");
             Check(await LockHolderAsync("nas-loss") is null, "Resuming releases the lost worker's disk lock.");
             Check((await Locks.TryAcquireAsync(y, a, new(second.Epoch, "nas-loss"), token)) is { Acquired: true }, "A later explicit task can acquire the released disk.");
             var secondState = (await executions.GetAsync(y, token))?.State;

@@ -2,11 +2,11 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, finalize, shareReplay } from 'rxjs';
 import {
-  AiClusterView,
-  AiClusterModelCatalog,
+  AiCentralView,
+  AiCentralModelCatalog,
   AiModelPolicy,
-  AiClusterQuotas,
-  AiClusterUsage,
+  AiCentralQuotas,
+  AiCentralUsage,
   AiSessionPage,
   AiSessionState,
   AiAssistantConversation,
@@ -36,7 +36,7 @@ import {
 })
 export class AiToolsService {
   private readonly http = inject(HttpClient);
-  private readonly modelCatalogRequests = new Map<string, Observable<AiClusterModelCatalog>>();
+  private readonly modelCatalogRequests = new Map<string, Observable<AiCentralModelCatalog>>();
   private readonly assistantOptionsRequests = new Map<string, Observable<AiAssistantOptions>>();
 
   private shareInFlight<T>(
@@ -69,9 +69,9 @@ export class AiToolsService {
     );
   }
 
-  getModelCatalog(): Observable<AiClusterModelCatalog> {
+  getModelCatalog(): Observable<AiCentralModelCatalog> {
     return this.shareInFlight(this.modelCatalogRequests, 'cluster', () =>
-      this.http.get<AiClusterModelCatalog>('/api/v1/tools/ai/models'),
+      this.http.get<AiCentralModelCatalog>('/api/v1/tools/ai/models'),
     );
   }
 
@@ -267,15 +267,15 @@ export class AiToolsService {
     );
   }
 
-  getQuotas(): Observable<AiClusterQuotas> {
-    return this.http.get<AiClusterQuotas>('/api/v1/tools/ai/quotas');
+  getQuotas(): Observable<AiCentralQuotas> {
+    return this.http.get<AiCentralQuotas>('/api/v1/tools/ai/quotas');
   }
-  getUsage(days: number): Observable<AiClusterUsage> {
-    return this.http.get<AiClusterUsage>(`/api/v1/tools/ai/usage?days=${days}`);
+  getUsage(days: number): Observable<AiCentralUsage> {
+    return this.http.get<AiCentralUsage>(`/api/v1/tools/ai/usage?days=${days}`);
   }
 
-  getCluster(): Observable<AiClusterView> {
-    return this.http.get<AiClusterView>('/api/v1/tools/ai/cluster');
+  getCluster(): Observable<AiCentralView> {
+    return this.http.get<AiCentralView>('/api/v1/tools/ai/central');
   }
 
   submitAuthInput(toolId: string, input: string, attemptId?: string | null): Observable<{ readonly accepted: boolean }> {
@@ -332,7 +332,7 @@ export class AiToolsService {
     return this.http.get<AiSettings>('/api/v1/tools/ai/settings');
   }
 
-  getSettingsModelCatalog(): Observable<AiClusterModelCatalog> {
+  getSettingsModelCatalog(): Observable<AiCentralModelCatalog> {
     return this.getModelCatalog();
   }
 

@@ -1,0 +1,84 @@
+<app-management-catalog-template
+  title="Groupes de workers"
+  [titleVisuallyHidden]="true"
+  filterLabel="Groupes"
+  searchLabel="Rechercher par nom, description ou étiquette"
+  [searchQuery]="searchQuery()"
+  (searchQueryChange)="searchQuery.set($event)"
+  [catalogState]="state()"
+  [catalogMessage]="message()"
+  [actionOpen]="formOpen()"
+  [actionTitle]="editingGroup() ? 'Modifier le groupe' : 'Nouveau groupe de workers'"
+  actionDescription="Configurez les membres manuels ou les critères dynamiques et étiquettes partagées."
+  drawerSize="wide"
+  [detailOpen]="detailOpen()"
+  [detailTitle]="selectedGroup()?.name ?? 'Détails du groupe'"
+  detailDescription="Inventaire des membres et critères d’attribution résolus."
+  (actionClosed)="closeForm()"
+  (detailClosed)="closeDetail()"
+>
+  <ng-template #pageActions>
+    <a matButton="outlined" routerLink="/workers">Retour aux workers</a>
+    @if (isAdmin()) {
+      <button matButton="filled" type="button" (click)="create()">Créer un groupe</button>
+    }
+  </ng-template>
+
+  <!-- Grille de cartes expressives M3 -->
+  <div catalogue-table class="groups-grid">
+    @if (filteredGroups().length === 0) {
+      <div class="groups-empty">
+        <span class="empty-icon"><app-icon name="sell" /></span>
+        @if (searchQuery().trim()) {
+          <h3 class="empty-title">Aucun résultat</h3>
+          <p class="empty-desc">
+            Aucun groupe de workers ne correspond à la recherche « {{ searchQuery() }} ».
+          </p>
+        } @else {
+          <h3 class="empty-title">Aucun groupe de workers</h3>
+          <p class="empty-desc">
+            Les groupes permettent d’organiser vos serveurs et workers, d’attribuer des étiquettes
+            partagées et de contraindre l’exécution des flows.
+          </p>
+          @if (isAdmin()) {
+            <button matButton="filled" type="button" (click)="create()">
+              Créer mon premier groupe
+            </button>
+          }
+        }
+      </div>
+    } @else {
+      @for (group of filteredGroups(); track group.id) {
+        <app-worker-group-card
+          [group]="group"
+          [nodes]="nodes()"
+          [isAdmin]="isAdmin()"
+          (open)="openDetail(group)"
+          (edit)="openEdit(group)"
+          (delete)="confirmDelete(group)"
+        />
+      }
+    }
+  </div>
+
+  <!-- Tiroir : Édition / Création -->
+  <ng-template #actionContent>
+    <app-worker-group-editor
+      [group]="editingGroup()"
+      [nodes]="nodes()"
+      [busy]="busy()"
+      (saved)="onSave($event)"
+      (cancelled)="closeForm()"
+    />
+  </ng-template>
+
+  <!-- Tiroir : Détail -->
+  <ng-template #detailContent catalogue-detail>
+    <app-worker-group-detail
+      [group]="selectedGroup()"
+      [nodes]="nodes()"
+      [isAdmin]="isAdmin()"
+      (edit)="openEditFromDetail()"
+    />
+  </ng-template>
+</app-management-catalog-template>

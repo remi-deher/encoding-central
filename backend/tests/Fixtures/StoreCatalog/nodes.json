@@ -2,7 +2,7 @@
   "contractVersion": 1,
   "id": "nodes",
   "version": "1.8.0",
-  "name": "Nœuds",
+  "name": "Workers",
   "supportedHostContractVersions": [
     1
   ],
@@ -10,8 +10,8 @@
     {
       "id": "nodes-run-on-node",
       "version": "1.0.0",
-      "name": "Exécuter sur un nœud ou un groupe",
-      "description": "Contraint le worker du segment courant selon un nœud, un groupe et des étiquettes. Les critères se cumulent. Sans candidat disponible, le traitement attend.",
+      "name": "Exécuter sur un worker ou un groupe",
+      "description": "Contraint le worker du segment courant selon un worker, un groupe et des étiquettes. Les critères se cumulent. Sans candidat disponible, le traitement attend.",
       "kind": "action",
       "mediaType": "general",
       "supportedFlowMediaTypes": [
@@ -24,7 +24,7 @@
         {
           "id": "success",
           "label": "Suite",
-          "description": "Le traitement a été attribué au nœud demandé."
+          "description": "Le traitement a été attribué au worker demandé."
         }
       ],
       "configurationSchema": {
@@ -33,8 +33,8 @@
           {
             "id": "targetNodeId",
             "type": "text",
-            "label": "Identifiant du nœud (facultatif)",
-            "description": "Copiez l’identifiant depuis la fiche du nœud.",
+            "label": "Identifiant du worker (facultatif)",
+            "description": "Copiez l’identifiant depuis la fiche du worker.",
             "placeholder": "UUID du worker",
             "importance": "basic",
             "section": "Paramètres",
@@ -186,7 +186,7 @@
     {
       "id": "nodes-handoff",
       "version": "1.0.0",
-      "name": "Transférer la suite à un autre nœud",
+      "name": "Transférer la suite à un autre worker",
       "description": "Cède la suite à un worker, ou à un serveur via une réception inactive et une activation signée. Le checkpoint et les artefacts vérifiés sont conservés.",
       "kind": "action",
       "mediaType": "general",
@@ -223,7 +223,7 @@
               },
               {
                 "value": "node",
-                "label": "Un nœud précis"
+                "label": "Un worker précis"
               },
               {
                 "value": "selector",
@@ -231,7 +231,7 @@
               },
               {
                 "value": "server",
-                "label": "Un autre serveur du cluster"
+                "label": "Un autre serveur du central"
               }
             ],
             "importance": "basic",
@@ -240,8 +240,8 @@
           {
             "id": "targetNodeId",
             "type": "text",
-            "label": "Identifiant du nœud",
-            "description": "Facultatif : remplace le nœud défini dans la configuration du plugin ou du flow. Le worker courant ne peut pas être sa propre cible.",
+            "label": "Identifiant du worker",
+            "description": "Facultatif : remplace le worker défini dans la configuration du plugin ou du flow. Le worker courant ne peut pas être sa propre cible.",
             "placeholder": "UUID du worker",
             "importance": "basic",
             "section": "Paramètres",
@@ -386,7 +386,7 @@
         {
           "id": "success",
           "label": "Suite",
-          "description": "Le traitement a été attribué à un nœud disposant d’un accès direct au média."
+          "description": "Le traitement a été attribué à un worker disposant d’un accès direct au média."
         }
       ],
       "configurationSchema": {
@@ -429,8 +429,8 @@
     {
       "id": "nodes-library-access",
       "version": "1.4.0",
-      "name": "Bibliothèque sur ce nœud",
-      "description": "Teste si le nœud qui exécute ce bloc a la bibliothèque du fichier montée directement (chemin local). « Oui » : ce nœud traite le fichier sur place. « Non » : le fichier lui est arrivé par transfert ; on peut le confier à un nœud capable avec « Relais vers un autre worker ». Le nœud d'accès reste celui de la première attribution, même après un relais.",
+      "name": "Bibliothèque sur ce worker",
+      "description": "Teste si le worker qui exécute ce bloc a la bibliothèque du fichier montée directement (chemin local). « Oui » : ce worker traite le fichier sur place. « Non » : le fichier lui est arrivé par transfert ; on peut le confier à un worker capable avec « Relais vers un autre worker ». Le worker d'accès reste celui de la première attribution, même après un relais.",
       "kind": "condition",
       "mediaType": "general",
       "supportedFlowMediaTypes": [
@@ -443,12 +443,12 @@
         {
           "id": "yes",
           "label": "Oui",
-          "description": "Ce nœud a la bibliothèque en accès direct."
+          "description": "Ce worker a la bibliothèque en accès direct."
         },
         {
           "id": "no",
           "label": "Non",
-          "description": "Ce nœud n'a pas la bibliothèque en accès direct."
+          "description": "Ce worker n'a pas la bibliothèque en accès direct."
         }
       ],
       "configurationSchema": {
@@ -458,7 +458,7 @@
             "id": "requireProfileEncoder",
             "type": "boolean",
             "label": "Et pouvoir encoder avec le profil du flow",
-            "description": "Si coché, « Oui » exige aussi que ce nœud ait un encodeur utilisable du profil du bloc vidéo ; sinon il répond « Non » et le fichier peut être confié à un nœud capable. Un nœud sans encodeur n'est alors pas écarté du flow.",
+            "description": "Si coché, « Oui » exige aussi que ce worker ait un encodeur utilisable du profil du bloc vidéo ; sinon il répond « Non » et le fichier peut être confié à un worker capable. Un worker sans encodeur n'est alors pas écarté du flow.",
             "defaultValue": false,
             "requiresPluginVersion": "1.7.0",
             "importance": "basic",
@@ -494,7 +494,7 @@
           },
           {
             "value": "node",
-            "label": "Un nœud précis"
+            "label": "Un worker précis"
           },
           {
             "value": "selector",
@@ -505,8 +505,8 @@
       {
         "id": "targetNodeId",
         "type": "text",
-        "label": "Identifiant du nœud par défaut",
-        "description": "Utilisé lorsque la destination est un nœud précis. Copiez son identifiant depuis sa fiche.",
+        "label": "Identifiant du worker par défaut",
+        "description": "Utilisé lorsque la destination est un worker précis. Copiez son identifiant depuis sa fiche.",
         "placeholder": "UUID du worker"
       },
       {

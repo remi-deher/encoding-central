@@ -1,4 +1,4 @@
-using Encoding.NodeAgent.Services;
+using Encoding.WorkerAgent.Services;
 using Xunit;
 
 namespace Encoding.Runtime.Tests;
@@ -6,38 +6,38 @@ namespace Encoding.Runtime.Tests;
 public sealed class WorkerAutoEnrollmentTests
 {
     [Fact]
-    public void ConfiguredClusterIsSelectedWhenOtherClustersAreDiscovered()
+    public void ConfiguredCentralIsSelectedWhenOtherCentralsAreDiscovered()
     {
-        var configured = new DiscoveredCluster(Guid.NewGuid(), "Configured", "http://server:8080/", DateTimeOffset.UtcNow, "configured");
-        var discovered = new DiscoveredCluster(Guid.NewGuid(), "Discovered", "http://other:8080/", DateTimeOffset.UtcNow);
+        var configured = new DiscoveredCentral(Guid.NewGuid(), "Configured", "http://server:8080/", DateTimeOffset.UtcNow, "configured");
+        var discovered = new DiscoveredCentral(Guid.NewGuid(), "Discovered", "http://other:8080/", DateTimeOffset.UtcNow);
 
         Assert.Same(configured, WorkerAutoEnrollmentService.GetAutomaticEnrollmentTarget([discovered, configured], hasConfiguredApiBaseUrl: true));
     }
 
     [Fact]
-    public void MultipleDiscoveredClustersWithoutConfigurationAreNotSelected()
+    public void MultipleDiscoveredCentralsWithoutConfigurationAreNotSelected()
     {
-        var clusters = new[]
+        var centrals = new[]
         {
-            new DiscoveredCluster(Guid.NewGuid(), "First", "http://first:8080/", DateTimeOffset.UtcNow),
-            new DiscoveredCluster(Guid.NewGuid(), "Second", "http://second:8080/", DateTimeOffset.UtcNow)
+            new DiscoveredCentral(Guid.NewGuid(), "First", "http://first:8080/", DateTimeOffset.UtcNow),
+            new DiscoveredCentral(Guid.NewGuid(), "Second", "http://second:8080/", DateTimeOffset.UtcNow)
         };
 
-        Assert.Null(WorkerAutoEnrollmentService.GetAutomaticEnrollmentTarget(clusters, hasConfiguredApiBaseUrl: false));
+        Assert.Null(WorkerAutoEnrollmentService.GetAutomaticEnrollmentTarget(centrals, hasConfiguredApiBaseUrl: false));
     }
 
     [Fact]
-    public void SingleDiscoveredClusterIsSelectedWithoutConfiguration()
+    public void SingleDiscoveredCentralIsSelectedWithoutConfiguration()
     {
-        var cluster = new DiscoveredCluster(Guid.NewGuid(), "Discovered", "http://server:8080/", DateTimeOffset.UtcNow);
+        var central = new DiscoveredCentral(Guid.NewGuid(), "Discovered", "http://server:8080/", DateTimeOffset.UtcNow);
 
-        Assert.Same(cluster, WorkerAutoEnrollmentService.GetAutomaticEnrollmentTarget([cluster], hasConfiguredApiBaseUrl: false));
+        Assert.Same(central, WorkerAutoEnrollmentService.GetAutomaticEnrollmentTarget([central], hasConfiguredApiBaseUrl: false));
     }
 
     [Fact]
-    public void ConfiguredClusterIsNotReplacedWhileItIsUnavailable()
+    public void ConfiguredCentralIsNotReplacedWhileItIsUnavailable()
     {
-        var discovered = new DiscoveredCluster(Guid.NewGuid(), "Discovered", "http://other:8080/", DateTimeOffset.UtcNow);
+        var discovered = new DiscoveredCentral(Guid.NewGuid(), "Discovered", "http://other:8080/", DateTimeOffset.UtcNow);
 
         Assert.Null(WorkerAutoEnrollmentService.GetAutomaticEnrollmentTarget([discovered], hasConfiguredApiBaseUrl: true));
     }

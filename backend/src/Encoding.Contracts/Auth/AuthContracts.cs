@@ -12,31 +12,31 @@ public sealed record SetupRequest(
     string? Username = null,
     string? Password = null,
     string? SetupToken = null,
-    string? NodeDisplayName = null,
-    string? ClusterName = null);
+    string? WorkerDisplayName = null,
+    string? CentralName = null);
 
 /// <summary>
-/// Fiche du nœud local montrée par l'assistant de premier démarrage, avant toute session (liste blanche de champs) :
-/// aucune clé de jumelage, aucun code de vérification, aucun identifiant de cluster.
+/// Fiche du worker local montrée par l'assistant de premier démarrage, avant toute session (liste blanche de champs) :
+/// aucune clé de jumelage, aucun code de vérification, aucun identifiant de central.
 /// <c>Inventory</c> et <c>Tools</c> valent null tant que l'agent local n'a pas répondu (état inconnu, pas « absent »).
 /// </summary>
-public sealed record SetupNodeResponse(
+public sealed record SetupWorkerResponse(
     string? Name,
     string? DisplayName,
     bool AgentAvailable,
-    Encoding.Contracts.Nodes.NodeInventory? Inventory,
-    IReadOnlyList<SetupNodeTool>? Tools,
-    IReadOnlyList<SetupNodeAddress> Addresses,
+    Encoding.Contracts.Workers.WorkerInventory? Inventory,
+    IReadOnlyList<SetupWorkerTool>? Tools,
+    IReadOnlyList<SetupWorkerAddress> Addresses,
     IReadOnlyList<string> Urls);
 
 /// <summary>Outil détecté réduit à ce qu'il faut pour déduire l'accélération matérielle (sans version ni empreinte).</summary>
-public sealed record SetupNodeTool(
+public sealed record SetupWorkerTool(
     string ToolId,
     IReadOnlyList<string> AccelerationTypes,
-    IReadOnlyList<Encoding.Contracts.Nodes.NodeEncoderCapability> EncoderChecks);
+    IReadOnlyList<Encoding.Contracts.Workers.WorkerEncoderCapability> EncoderChecks);
 
-/// <summary>Adresse IPv4/IPv6 assignée à une interface vue par le processus du nœud (dans un conteneur : son réseau à lui).</summary>
-public sealed record SetupNodeAddress(string Interface, string Address);
+/// <summary>Adresse IPv4/IPv6 assignée à une interface vue par le processus du worker (dans un conteneur : son réseau à lui).</summary>
+public sealed record SetupWorkerAddress(string Interface, string Address);
 
 public sealed record LoginRequest(string Username, string Password);
 
@@ -87,8 +87,3 @@ public sealed record CreatedApiTokenResponse(
     IReadOnlyList<string>? Scopes = null);
 
 
-/// <summary>Jeton connu d'un nœud : identifiant et état de révocation seulement, jamais de valeur ni de condensat.</summary>
-public sealed record ApiTokenReplicationEntry(Guid Id, bool Revoked);
-/// <summary>État des jetons déclaré par un nœud ; <c>Tokens</c> vaut null pour un nœud injoignable (état inconnu).</summary>
-public sealed record ApiTokenReplicationNode(Guid NodeId, string Name, bool Reachable, IReadOnlyList<ApiTokenReplicationEntry>? Tokens);
-public sealed record ApiTokenReplicationView(IReadOnlyList<ApiTokenReplicationNode> Nodes);

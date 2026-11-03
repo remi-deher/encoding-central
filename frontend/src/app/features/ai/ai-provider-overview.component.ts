@@ -11,7 +11,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { RouterLink } from '@angular/router';
 import { catchError, forkJoin, interval, of } from 'rxjs';
-import { AiClusterView, AiSettings, AiToolInfo } from '../../shared/models/ai-tools';
+import { AiCentralView, AiSettings, AiToolInfo } from '../../shared/models/ai-tools';
 import { AiToolsService } from '../../shared/services/ai-tools.service';
 
 interface ProviderSummary {
@@ -100,19 +100,19 @@ const PROVIDERS = [
           <article class="surface-panel cluster-panel">
             <div class="panel-heading">
               <div>
-                <h2>Nœuds déclarants</h2>
-                <p>Connexions signalées par les nœuds répondants.</p>
+                <h2>Workers déclarants</h2>
+                <p>Connexions signalées par les workers répondants.</p>
               </div>
             </div>
             @if (cluster(); as view) {
-              @if (view.nodes.length === 0) {
+              @if (view.workers.length === 0) {
                 <div class="empty-state compact">
                   <h3>Aucun fournisseur signalé</h3>
-                  <p>La source n’a retourné aucun nœud déclarant un fournisseur IA.</p>
+                  <p>La source n’a retourné aucun worker déclarant un fournisseur IA.</p>
                 </div>
               } @else {
                 <ul class="node-list">
-                  @for (node of view.nodes; track node.nodeId) {
+                  @for (node of view.workers; track node.workerId) {
                     <li class="node-row">
                       <strong>{{ node.name }}</strong>
                       <span>{{ providerNames(node.providers) }}</span>
@@ -125,7 +125,7 @@ const PROVIDERS = [
                 modèle a réussi. Cette vue n’effectue pas de test fournisseur.
               </p>
             } @else {
-              <p class="unknown-state">État du cluster indisponible.</p>
+              <p class="unknown-state">État du central indisponible.</p>
             }
           </article>
         </section>
@@ -322,7 +322,7 @@ export class AiProviderOverviewComponent {
   protected readonly loading = signal(true);
   protected readonly loadFailed = signal(false);
   protected readonly tools = signal<readonly AiToolInfo[] | null>(null);
-  protected readonly cluster = signal<AiClusterView | null>(null);
+  protected readonly cluster = signal<AiCentralView | null>(null);
   protected readonly settings = signal<AiSettings | null>(null);
   protected readonly providersUnavailable = computed(
     () => this.tools() === null || this.settings() === null,
@@ -380,7 +380,7 @@ export class AiProviderOverviewComponent {
           name: provider.name,
           configured: false,
           status: 'Non installé',
-          detail: 'Outil absent de ce nœud',
+          detail: 'Outil absent de ce worker',
         };
       }
       const authLabels: Record<string, string> = {

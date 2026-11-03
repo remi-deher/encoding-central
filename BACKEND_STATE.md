@@ -1,11 +1,13 @@
 # État du backend et pistes d'amélioration
 
+> **Document d'audit daté.** Les classes citées avec un préfixe `Cluster*` (`ClusterTaskEndpoints`, `ClusterTaskPeerHandler`, `ClusterEntityReconciliation`…) ont été retirées avec le maillage ([ADR 0036](docs/architecture/adr/0036-separation-stricte-central-worker.md)) ou renommées ([ADR 0040](docs/architecture/adr/0040-vocabulaire-central-worker.md)). Les chiffres sont ceux de l'audit, pas de l'état actuel.
+
 Bilan de l'audit de séparation des responsabilités et des corrections appliquées sur la branche `cez/cff025a5` (fork de `cez/ac1b8bc0`). Les chiffres viennent de mesures sur `backend/src` (grep, `wc`, Roslyn) et de suites de tests locales ; rien ici n'a été exercé en conditions réelles sur média de production.
 
 ## 1. État actuel
 
 ### Structure
-- Cinq projets : `Contracts` → `Core` → `Api` et `NodeAgent` (+ `Launcher`). Les références sont correctement en couches et sont vérifiées par `ArchitectureTests`.
+- Cinq projets : `Contracts` → `Core` → `Api` et `WorkerAgent` (+ `Launcher`). Les références sont correctement en couches et sont vérifiées par `ArchitectureTests`.
 - Interfaces aux frontières utiles : `IProcessToolRunner`, `ILocalPublicationArtifactStore` (+ `TimeProvider` sur le store). Les services MCP/IA ne sont plus un seul monolithe partiel.
 - Aucun fichier source de plus de 600 lignes.
 - Lignes de code de plus de 200 caractères et méthodes de plus de 120 lignes plafonnées par des cliquets (Roslyn pour les méthodes).
@@ -63,11 +65,11 @@ Bilan de l'audit de séparation des responsabilités et des corrections appliqu�
 ### Maintenance
 - Baisser les plafonds `OversizedMethodCeilings` au fil des extractions (cible naturelle : `AiAssistantSendService.SendAsync`, `Map*Endpoints`, `ClaimAvailableAsync`).
 - Un commit de format dédié, puis `dotnet format --verify-no-changes` en CI.
-- Journaux structurés avec corrélation (exécution, nœud, bail) sans secret.
+- Journaux structurés avec corrélation (exécution, worker, bail) sans secret.
 
 ### Clarté
 - README court par dossier de `Encoding.Api` si besoin.
-- Réduire les noms trop proches (composant de flow, composant UI, nœud de cluster) conformément à `AGENTS.md`.
+- Réduire les noms trop proches (composant de flow, composant UI, worker de central) conformément à `AGENTS.md`.
 
 ## 4. Ordre suggéré (campagne)
 1. ~~Stabiliser les tests instables.~~ **fait**

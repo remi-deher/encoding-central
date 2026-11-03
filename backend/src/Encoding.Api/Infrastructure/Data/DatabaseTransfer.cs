@@ -15,7 +15,7 @@ public static class DatabaseTransfer
     // full capture, and copying business rows fires its triggers; never restore a foreign acknowledgement.
     private static readonly HashSet<string> Skipped = new(StringComparer.Ordinal)
         { "schema_migrations" };
-    private static readonly HashSet<string> Replaced = new(StringComparer.Ordinal) { "cluster_identity" };
+    private static readonly HashSet<string> Replaced = new(StringComparer.Ordinal) { "central_identity" };
 
     public static async Task<DatabaseTransferResult> CopyAsync(DbDataSource source, DbDataSource target, CancellationToken ct)
     {

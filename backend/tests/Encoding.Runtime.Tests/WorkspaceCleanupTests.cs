@@ -1,5 +1,5 @@
 using Encoding.Api.Infrastructure.Operations;
-using Encoding.NodeAgent.Runtime;
+using Encoding.WorkerAgent.Runtime;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
@@ -40,9 +40,9 @@ public sealed class WorkspaceCleanupTests
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["Node:Workspace:CompletedRetentionHours"] = "0.5",
-            ["Node:Workspace:FailedRetentionHours"] = "6",
-            ["Node:Workspace:CleanupEnabled"] = "false"
+            ["Worker:Workspace:CompletedRetentionHours"] = "0.5",
+            ["Worker:Workspace:FailedRetentionHours"] = "6",
+            ["Worker:Workspace:CleanupEnabled"] = "false"
         }).Build();
         var options = WorkspaceRetentionOptions.FromConfiguration(configuration);
         Assert.False(options.Enabled);

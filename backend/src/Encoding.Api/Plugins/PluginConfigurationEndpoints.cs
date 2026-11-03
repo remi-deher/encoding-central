@@ -10,7 +10,7 @@ public static class PluginConfigurationEndpoints
     public static void MapPluginConfigurationEndpoints(this WebApplication app)
     {
         var plugins = app.MapGroup("/api/v1/plugins").WithTags("Plugins");
-        plugins.MapGet("", (FlowComponentRegistry catalog, ClusterExtensionActivationState activation) =>
+        plugins.MapGet("", (FlowComponentRegistry catalog, CentralExtensionActivationState activation) =>
             Results.Ok(catalog.Plugins.Select(p => new
             {
                 p.Id,
@@ -22,7 +22,7 @@ public static class PluginConfigurationEndpoints
                 canDisable = activation.CanDisablePlugin(p.Id)
             }))).AllowViewer().WithName("ListPlugins");
         plugins.MapPut("/{pluginId}/enabled", async (string pluginId, SetExtensionEnabledRequest request,
-            ClusterExtensionActivationState activation, CancellationToken ct) =>
+            CentralExtensionActivationState activation, CancellationToken ct) =>
         {
             try
             {
@@ -103,10 +103,10 @@ public static class PluginConfigurationEndpoints
         });
 
         // --- OUTILS MÉDIA DU CLUSTER (0064) ---
-        // Le serveur ne sonde pas les outils : la version et la conformité réelles sont annoncées par chaque nœud
-        // (capacités, ToolCapabilityProbe). L'état enabled décrit la préférence d'usage partagée du cluster.
+        // Le serveur ne sonde pas les outils : la version et la conformité réelles sont annoncées par chaque worker
+        // (capacités, ToolCapabilityProbe). L'état enabled décrit la préférence d'usage partagée du central.
         var tools = app.MapGroup("/api/v1/tools").WithTags("Tools");
-        tools.MapGet("", (ClusterExtensionActivationState activation) =>
+        tools.MapGet("", (CentralExtensionActivationState activation) =>
         {
             var encoders = VideoEncoderCatalog.All.Select(e => new
             {
@@ -130,7 +130,7 @@ public static class PluginConfigurationEndpoints
                 executables,
                 mediaTypes,
                 encoders,
-                clusterReadiness = "Version et état annoncés par chaque nœud",
+                clusterReadiness = "Version et état annoncés par chaque worker",
                 enabled = activation.IsToolEnabled(id)
             };
             var none = Array.Empty<object>();
@@ -147,7 +147,7 @@ public static class PluginConfigurationEndpoints
         }).AllowViewer().WithName("ListClusterTools");
 
         tools.MapPut("/{toolId}/enabled", async (string toolId, SetExtensionEnabledRequest request,
-            ClusterExtensionActivationState activation, CancellationToken ct) =>
+            CentralExtensionActivationState activation, CancellationToken ct) =>
         {
             try
             {

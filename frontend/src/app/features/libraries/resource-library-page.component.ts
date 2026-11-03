@@ -301,11 +301,11 @@ export class ResourceLibraryPageComponent {
       return 'La nouvelle version de ce fichier sert aux prochains flows. Les flows déjà publiés gardent la leur.';
     switch (this.section()) {
       case 'subtitle-profile':
-        return 'Les mesures sont celles du canevas de référence. Les nœuds appliquent le profil cité par le flow.';
+        return 'Les mesures sont celles du canevas de référence. Les workers appliquent le profil cité par le flow.';
       case 'subtitle':
-        return 'Chaque fichier de sous-titres est une ressource, puis copié sur les nœuds.';
+        return 'Chaque fichier de sous-titres est une ressource, puis copié sur les workers.';
       default:
-        return 'Chaque police est envoyée comme une ressource séparée, puis copiée sur les nœuds.';
+        return 'Chaque police est envoyée comme une ressource séparée, puis copiée sur les workers.';
     }
   });
   protected readonly canSave = computed(
@@ -343,7 +343,7 @@ export class ResourceLibraryPageComponent {
       {
         id: 'resource-summary',
         title: 'Ressource',
-        caption: 'Partagée par tout le cluster',
+        caption: 'Partagée par tout le central',
         fields: [
           { label: 'Nom', value: summary.name },
           { label: 'Description', value: summary.description || 'Aucune description.' },
@@ -511,8 +511,8 @@ export class ResourceLibraryPageComponent {
         if (lastId) this.openResource(lastId);
         this.notifications.show(
           chosen.length > 1
-            ? `${chosen.length} fichiers ajoutés. Les nœuds les récupèrent automatiquement.`
-            : 'Ressource ajoutée. Les nœuds la récupèrent automatiquement.',
+            ? `${chosen.length} fichiers ajoutés. Les workers les récupèrent automatiquement.`
+            : 'Ressource ajoutée. Les workers la récupèrent automatiquement.',
         );
       }
     } catch (error) {
@@ -542,7 +542,7 @@ export class ResourceLibraryPageComponent {
         this.editorMode.set(null);
         await this.load();
         this.openResource(created.summary.id);
-        this.notifications.show('Profil ajouté. Les nœuds le récupèrent automatiquement.');
+        this.notifications.show('Profil ajouté. Les workers le récupèrent automatiquement.');
       }
     } catch (error) {
       this.error.set(this.message(error, 'L’envoi a échoué.'));

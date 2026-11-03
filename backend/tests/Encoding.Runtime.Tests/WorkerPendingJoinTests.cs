@@ -1,38 +1,38 @@
 using System.Net;
-using Encoding.Contracts.Nodes;
-using Encoding.NodeAgent;
-using Encoding.NodeAgent.Services;
+using Encoding.Contracts.Workers;
+using Encoding.WorkerAgent;
+using Encoding.WorkerAgent.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Encoding.Runtime.Tests;
 
-/// <summary>Un rattachement qui n'aboutit pas ne doit jamais laisser le nœud bloqué sur un cluster qui ne l'a pas accepté (architectures 0040 et 0045).</summary>
+/// <summary>Un rattachement qui n'aboutit pas ne doit jamais laisser le worker bloqué sur un central qui ne l'a pas accepté (architectures 0040 et 0045).</summary>
 public sealed class WorkerPendingJoinTests
 {
     private sealed class NoTools : IToolCapabilityProbe
     {
-        public Task<IReadOnlyList<NodeToolCapability>> DiscoverAsync(CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<NodeToolCapability>>([]);
+        public Task<IReadOnlyList<WorkerToolCapability>> DiscoverAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<WorkerToolCapability>>([]);
     }
 
-    private static NodeAgentOptions Options(string directory) =>
-        NodeAgentOptions.FromConfiguration(new ConfigurationBuilder().AddInMemoryCollection([new("Node:DataDirectory", directory)]).Build());
+    private static WorkerAgentOptions Options(string directory) =>
+        WorkerAgentOptions.FromConfiguration(new ConfigurationBuilder().AddInMemoryCollection([new("Worker:DataDirectory", directory)]).Build());
 
     private static string NewDirectory() => Path.Combine(Path.GetTempPath(), "encoding-pending-join-" + Guid.NewGuid().ToString("N"));
 
-    private static (WorkerEnrollmentService Enrollment, WorkerIdentityStore Store, WorkerClusterDiscovery Discovery) Build(string directory)
+    private static (WorkerEnrollmentService Enrollment, WorkerIdentityStore Store, WorkerCentralDiscovery Discovery) Build(string directory)
     {
         var options = Options(directory);
         var store = new WorkerIdentityStore(options);
-        var discovery = new WorkerClusterDiscovery(options, NullLogger<WorkerClusterDiscovery>.Instance);
+        var discovery = new WorkerCentralDiscovery(options, NullLogger<WorkerCentralDiscovery>.Instance);
         var json = Microsoft.Extensions.Options.Options.Create(new Microsoft.AspNetCore.Http.Json.JsonOptions());
         return (new WorkerEnrollmentService(options, store, discovery, new NoTools(), NullLogger<WorkerEnrollmentService>.Instance, json), store, discovery);
     }
 
-    /// <summary>Serveur de cluster minimal : répond à l'identité, puis à tout autre appel avec le statut demandé.</summary>
-    private static (HttpListener Listener, string Url, Guid Id, Task Serving) Cluster(HttpStatusCode otherStatus)
+    /// <summary>Serveur de central minimal : répond à l'identité, puis à tout autre appel avec le statut demandé.</summary>
+    private static (HttpListener Listener, string Url, Guid Id, Task Serving) Central(HttpStatusCode otherStatus)
     {
         var socket = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
         socket.Start();
@@ -48,7 +48,7 @@ public sealed class WorkerPendingJoinTests
             {
                 HttpListenerContext context;
                 try { context = await listener.GetContextAsync(); } catch (Exception) { return; }
-                var identity = context.Request.Url!.AbsolutePath == "/api/v1/cluster";
+                var identity = context.Request.Url!.AbsolutePath == "/api/v1/central";
                 context.Response.StatusCode = identity ? 200 : (int)otherStatus;
                 context.Response.ContentType = "application/json";
                 var body = System.Text.Encoding.UTF8.GetBytes(identity ? $"{{\"id\":\"{id}\",\"name\":\"Maison\"}}" : "{}");
@@ -60,10 +60,10 @@ public sealed class WorkerPendingJoinTests
     }
 
     [Fact]
-    public async Task RefusedDirectEnrollmentLeavesTheNodeStandalone()
+    public async Task RefusedDirectEnrollmentLeavesTheWorkerStandalone()
     {
         var (enrollment, store, discovery) = Build(NewDirectory());
-        var (listener, url, id, _) = Cluster(HttpStatusCode.Forbidden);
+        var (listener, url, id, _) = Central(HttpStatusCode.Forbidden);
         using var _ = listener;
         await discovery.AddByAddressAsync(url, CancellationToken.None);
 
@@ -71,15 +71,15 @@ public sealed class WorkerPendingJoinTests
 
         var identity = await store.GetAsync(CancellationToken.None);
         Assert.False(identity.HasCredentials);
-        Assert.Null(identity.ClusterId);
-        Assert.Contains("refusé", identity.SwitchFailure);
+        Assert.Null(identity.CentralId);
+        Assert.Contains("refusé", identity.EnrollmentFailure);
     }
 
     [Fact]
-    public async Task ConflictingIdentityIsReplacedSoTheNodeCanEnrollAgain()
+    public async Task ConflictingIdentityIsReplacedSoTheWorkerCanEnrollAgain()
     {
         var (enrollment, store, discovery) = Build(NewDirectory());
-        var (listener, url, id, _) = Cluster(HttpStatusCode.Conflict);
+        var (listener, url, id, _) = Central(HttpStatusCode.Conflict);
         using var _ = listener;
         await discovery.AddByAddressAsync(url, CancellationToken.None);
         var before = (await store.GetAsync(CancellationToken.None)).Id;
@@ -106,10 +106,10 @@ public sealed class WorkerPendingJoinTests
     }
 
     [Fact]
-    public async Task UnreachableClusterLeavesTheNodeStandaloneInsteadOfPending()
+    public async Task UnreachableCentralLeavesTheWorkerStandaloneInsteadOfPending()
     {
         var (enrollment, store, discovery) = Build(NewDirectory());
-        var (listener, url, id, _) = Cluster(HttpStatusCode.OK);
+        var (listener, url, id, _) = Central(HttpStatusCode.OK);
         await discovery.AddByAddressAsync(url, CancellationToken.None);
         listener.Stop();
 
@@ -119,14 +119,14 @@ public sealed class WorkerPendingJoinTests
     }
 
     [Fact]
-    public async Task ExpiredPairingKeyReturnsTheNodeToStandalone()
+    public async Task ExpiredPairingKeyReturnsTheWorkerToStandalone()
     {
         var directory = NewDirectory();
         var (_, store, _) = Build(directory);
         await store.SavePairingAsync(Guid.NewGuid().ToString("D"), "Maison", "http://127.0.0.1:1/", CancellationToken.None);
         await store.MarkPairingPublishedAsync(CancellationToken.None);
         var (live, _, _) = Build(directory);
-        Assert.False(await live.RollbackExpiredSwitchAsync(CancellationToken.None));
+        Assert.False(await live.AbandonExpiredPairingAsync(CancellationToken.None));
 
         // Le processus redémarre après l'échéance de la clé : l'état relu depuis le disque est périmé.
         var path = Path.Combine(directory, "node-identity.json");
@@ -134,10 +134,29 @@ public sealed class WorkerPendingJoinTests
         await File.WriteAllTextAsync(path, edited);
         var (restarted, restartedStore, _) = Build(directory);
 
-        Assert.True(await restarted.RollbackExpiredSwitchAsync(CancellationToken.None));
+        Assert.True(await restarted.AbandonExpiredPairingAsync(CancellationToken.None));
         var identity = await restartedStore.GetAsync(CancellationToken.None);
         Assert.False(identity.HasCredentials);
-        Assert.Contains("à temps", identity.SwitchFailure);
+        Assert.Contains("à temps", identity.EnrollmentFailure);
+    }
+
+    [Fact]
+    public async Task IdentityFileWrittenWithTheOldVocabularyKeepsTheEnrollment()
+    {
+        var directory = NewDirectory();
+        Directory.CreateDirectory(directory);
+        var id = Guid.NewGuid(); var central = Guid.NewGuid();
+        await File.WriteAllTextAsync(Path.Combine(directory, "node-identity.json"),
+            $"{{\"id\":\"{id}\",\"clusterId\":\"{central}\",\"clusterName\":\"Maison\",\"apiBaseUrl\":\"http://127.0.0.1:1/\",\"nodeToken\":\"{new string('a', 43)}\",\"enrolled\":true}}");
+        var (_, store, _) = Build(directory);
+
+        var identity = await store.GetAsync(CancellationToken.None);
+
+        Assert.True(identity.IsEnrolled);
+        Assert.Equal(id, identity.Id);
+        Assert.Equal(central.ToString(), identity.CentralId);
+        Assert.Equal("Maison", identity.CentralName);
+        Assert.Equal(new string('a', 43), identity.WorkerToken);
     }
 
     [Fact]
@@ -145,7 +164,7 @@ public sealed class WorkerPendingJoinTests
     {
         var directory = NewDirectory();
         var (_, _, discovery) = Build(directory);
-        var (listener, url, id, _) = Cluster(HttpStatusCode.OK);
+        var (listener, url, id, _) = Central(HttpStatusCode.OK);
         using var _ = listener;
         await discovery.AddByAddressAsync(url, CancellationToken.None);
 
@@ -156,45 +175,38 @@ public sealed class WorkerPendingJoinTests
     }
 
     [Fact]
-    public async Task BeginSwitchAndAbandonPreserveDisplayName()
+    public async Task AbandonPreservesDisplayName()
     {
         var (_, store, _) = Build(NewDirectory());
         await store.SaveEnrollmentAsync(Guid.NewGuid().ToString("D"), "Maison", "http://127.0.0.1:1/", CancellationToken.None, displayName: "Serveur Salon");
-        await store.MarkEnrolledAsync(CancellationToken.None);
 
-        var enrolled = await store.GetAsync(CancellationToken.None);
-        Assert.Equal("Serveur Salon", enrolled.DisplayName);
-
-        await store.BeginSwitchAsync(TimeSpan.FromMinutes(10), CancellationToken.None);
-        var switching = await store.GetAsync(CancellationToken.None);
-        Assert.True(switching.IsSwitching);
-        Assert.Equal("Serveur Salon", switching.DisplayName);
+        var pending = await store.GetAsync(CancellationToken.None);
+        Assert.Equal("Serveur Salon", pending.DisplayName);
 
         await store.AbandonPendingAsync("cluster injoignable", CancellationToken.None);
         var abandoned = await store.GetAsync(CancellationToken.None);
         Assert.Equal("Serveur Salon", abandoned.DisplayName);
-        Assert.Equal("cluster injoignable", abandoned.SwitchFailure);
+        Assert.Equal("cluster injoignable", abandoned.EnrollmentFailure);
     }
 
     [Fact]
     public async Task CreatePairingKeyReturnsVerificationCodeAndPreservesDisplayName()
     {
         var (enrollment, store, discovery) = Build(NewDirectory());
-        // Set an existing enrolled identity with a display name
-        await store.SaveEnrollmentAsync(Guid.NewGuid().ToString("D"), "Maison", "http://127.0.0.1:1/", CancellationToken.None, displayName: "Mon Nœud 50");
-        await store.MarkEnrolledAsync(CancellationToken.None);
+        // Une identité locale avec un nom d'affichage, pas encore rattachée à un central
+        await store.SaveEnrollmentAsync(Guid.NewGuid().ToString("D"), "Maison", "http://127.0.0.1:1/", CancellationToken.None, displayName: "Mon Worker 50");
 
-        var (listener, url, id, _) = Cluster(HttpStatusCode.Accepted);
+        var (listener, url, id, _) = Central(HttpStatusCode.Accepted);
         using var _ = listener;
         await discovery.AddByAddressAsync(url, CancellationToken.None);
 
-        var response = await enrollment.CreatePairingKeyAsync(id, CancellationToken.None, leaveCurrent: true);
+        var response = await enrollment.CreatePairingKeyAsync(id, CancellationToken.None);
 
         Assert.NotNull(response.PairingKey);
         Assert.NotNull(response.VerificationCode);
         Assert.Equal(6, response.VerificationCode.Length);
 
         var identity = await store.GetAsync(CancellationToken.None);
-        Assert.Equal("Mon Nœud 50", identity.DisplayName);
+        Assert.Equal("Mon Worker 50", identity.DisplayName);
     }
 }

@@ -10,10 +10,10 @@ public sealed class BusinessOperationSchemaTests
     public void NestedItemsAndNumericBoundsAreValidated()
     {
         var libraryId = Guid.NewGuid();
-        var nodeId = Guid.NewGuid();
-        using var valid = JsonDocument.Parse($"{{\"libraryId\":\"{libraryId}\",\"watchEnabled\":true,\"scanIntervalSeconds\":60,\"nodeLimits\":[{{\"nodeId\":\"{nodeId}\",\"maxConcurrentTasks\":4}}],\"expectedRevision\":0}}");
-        using var invalidLimit = JsonDocument.Parse($"{{\"libraryId\":\"{libraryId}\",\"watchEnabled\":true,\"scanIntervalSeconds\":60,\"nodeLimits\":[{{\"nodeId\":\"{nodeId}\",\"maxConcurrentTasks\":1001}}],\"expectedRevision\":0}}");
-        using var invalidItem = JsonDocument.Parse($"{{\"libraryId\":\"{libraryId}\",\"watchEnabled\":true,\"scanIntervalSeconds\":60,\"nodeLimits\":[{{\"maxConcurrentTasks\":4,\"unexpected\":true}}],\"expectedRevision\":0}}");
+        var workerId = Guid.NewGuid();
+        using var valid = JsonDocument.Parse($"{{\"libraryId\":\"{libraryId}\",\"watchEnabled\":true,\"scanIntervalSeconds\":60,\"workerLimits\":[{{\"workerId\":\"{workerId}\",\"maxConcurrentTasks\":4}}],\"expectedRevision\":0}}");
+        using var invalidLimit = JsonDocument.Parse($"{{\"libraryId\":\"{libraryId}\",\"watchEnabled\":true,\"scanIntervalSeconds\":60,\"workerLimits\":[{{\"workerId\":\"{workerId}\",\"maxConcurrentTasks\":1001}}],\"expectedRevision\":0}}");
+        using var invalidItem = JsonDocument.Parse($"{{\"libraryId\":\"{libraryId}\",\"watchEnabled\":true,\"scanIntervalSeconds\":60,\"workerLimits\":[{{\"maxConcurrentTasks\":4,\"unexpected\":true}}],\"expectedRevision\":0}}");
 
         Assert.True(BusinessOperationCatalog.ValidateArguments("save_library_processing", valid.RootElement));
         Assert.False(BusinessOperationCatalog.ValidateArguments("save_library_processing", invalidLimit.RootElement));

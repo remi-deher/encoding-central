@@ -41,7 +41,7 @@ public sealed class RuntimeQueryPlanTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData("worker_node_id", "ix_execution_work_worker_lease")]
+    [InlineData("worker_id", "ix_execution_work_worker_lease")]
     [InlineData("library_id", "ix_execution_work_library_lease")]
     public async Task LoadQueriesUseACoveringIndexInsteadOfScanningAllWork(string column, string index)
     {

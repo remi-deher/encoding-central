@@ -123,7 +123,7 @@ test('the first-run setup studio completes standalone onboarding and passes WCAG
       }),
     }),
   );
-  await page.route('**/api/v1/auth/setup/node', (route) =>
+  await page.route('**/api/v1/auth/setup/worker', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -161,12 +161,12 @@ test('the first-run setup studio completes standalone onboarding and passes WCAG
       }),
     }),
   );
-  await page.route('**/api/v1/local-node/status', (route) =>
+  await page.route('**/api/v1/local-worker/status', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        nodeId: 'node-local',
+        workerId: 'node-local',
         name: 'srv-salon',
         displayName: 'Serveur Salon',
         roles: ['server', 'worker'],
@@ -191,11 +191,10 @@ test('the first-run setup studio completes standalone onboarding and passes WCAG
         isEnrolled: true,
         pairingKey: null,
         pairingExpiresAt: null,
-        clusterId: null,
-        clusterName: null,
+        centralId: null,
+        centralName: null,
         verificationCode: null,
-        switching: null,
-        switchFailure: null,
+        enrollmentFailure: null,
       }),
     }),
   );
@@ -267,7 +266,7 @@ test('the first-run setup studio completes standalone onboarding and passes WCAG
   await initialize.click();
   await expect(page).toHaveURL(/\/$/);
   expect(setupPayload).toMatchObject({
-    nodeDisplayName: 'Serveur Salon',
+    workerDisplayName: 'Serveur Salon',
     username: 'admin',
     password: 'un-mot-de-passe-long',
   });
@@ -279,7 +278,7 @@ test('setup lists all interfaces and keeps browser access with a published port 
   await page.route('**/api/v1/auth/status', (route) =>
     route.fulfill({ json: { setupRequired: true, user: null } }),
   );
-  await page.route('**/api/v1/local-node/status', (route) => route.fulfill({ status: 401 }));
+  await page.route('**/api/v1/local-worker/status', (route) => route.fulfill({ status: 401 }));
   const addresses = [
     { interface: 'eth0', address: '172.16.2.2' },
     { interface: 'eth0', address: '2001:db8:abcd:1234:5678:9abc:def0:1234' },
@@ -287,7 +286,7 @@ test('setup lists all interfaces and keeps browser access with a published port 
     { interface: 'lo', address: '::1' },
     { interface: 'docker0', address: '172.17.0.1' },
   ];
-  await page.route('**/api/v1/auth/setup/node', (route) =>
+  await page.route('**/api/v1/auth/setup/worker', (route) =>
     route.fulfill({
       json: {
         name: 'container',

@@ -7,6 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/Encoding.Api/Encoding.Api.csproj" />
-    <ProjectReference Include="../../src/Encoding.NodeAgent/Encoding.NodeAgent.csproj" />
+    <ProjectReference Include="../../src/Encoding.WorkerAgent/Encoding.WorkerAgent.csproj" />
   </ItemGroup>
 </Project>

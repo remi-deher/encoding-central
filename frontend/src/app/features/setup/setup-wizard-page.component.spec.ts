@@ -3,9 +3,9 @@ import { Router } from '@angular/router';
 import { signal } from '@angular/core';
 import { SetupWizardPageComponent } from './setup-wizard-page.component';
 import { AuthService } from '../../core/auth/auth.service';
-import { LocalNodeController } from '../../shared/services/local-node-controller';
+import { LocalWorkerController } from '../../shared/services/local-worker-controller';
 import { NotificationService } from '../../shared/services/notification.service';
-import { LocalNodeStatus } from '../../shared/models/local-node';
+import { LocalWorkerStatus } from '../../shared/models/local-worker';
 
 const VALID_PASSWORD = 'un-mot-de-passe-long';
 
@@ -17,15 +17,15 @@ function fillAdmin(component: SetupWizardPageComponent): void {
 describe('SetupWizardPageComponent', () => {
   let setupFn: ReturnType<typeof vi.fn>;
   let navigateFn: ReturnType<typeof vi.fn>;
-  let statusSignal: ReturnType<typeof signal<LocalNodeStatus | null>>;
+  let statusSignal: ReturnType<typeof signal<LocalWorkerStatus | null>>;
   let pendingSignal: ReturnType<typeof signal<boolean>>;
 
   beforeEach(() => {
     setupFn = vi.fn().mockResolvedValue(undefined);
     navigateFn = vi.fn().mockResolvedValue(true);
     pendingSignal = signal(false);
-    statusSignal = signal<LocalNodeStatus | null>({
-      nodeId: 'node-1',
+    statusSignal = signal<LocalWorkerStatus | null>({
+      workerId: 'node-1',
       name: 'srv-transcode',
       displayName: 'Serveur Salon',
       roles: ['server', 'worker'],
@@ -50,11 +50,10 @@ describe('SetupWizardPageComponent', () => {
       isEnrolled: true,
       pairingKey: null,
       pairingExpiresAt: null,
-      clusterId: null,
-      clusterName: null,
+      centralId: null,
+      centralName: null,
       verificationCode: null,
-      switching: null,
-      switchFailure: null,
+      enrollmentFailure: null,
     });
 
     TestBed.configureTestingModule({
@@ -79,7 +78,7 @@ describe('SetupWizardPageComponent', () => {
       set: {
         providers: [
           {
-            provide: LocalNodeController,
+            provide: LocalWorkerController,
             useValue: {
               status: statusSignal,
               clusters: signal([]),
@@ -119,7 +118,7 @@ describe('SetupWizardPageComponent', () => {
     const fixture = TestBed.createComponent(SetupWizardPageComponent);
     fixture.componentInstance['setupSheet'].set({
       name: 'encoding-host',
-      displayName: 'Nœud Salon',
+      displayName: 'Worker Salon',
       agentAvailable: true,
       inventory: {
         operatingSystem: 'Ubuntu 24.04 LTS',
@@ -259,12 +258,12 @@ describe('SetupWizardPageComponent', () => {
     const component = fixture.componentInstance;
 
     fillAdmin(component);
-    component['clusterName'].set('Mon Cluster Maison');
+    component['clusterName'].set('Mon Central Maison');
     await component['submitCreateCluster']();
 
     expect(setupFn).toHaveBeenCalledWith({
-      nodeDisplayName: 'Serveur Salon',
-      clusterName: 'Mon Cluster Maison',
+      workerDisplayName: 'Serveur Salon',
+      centralName: 'Mon Central Maison',
       username: 'admin',
       password: VALID_PASSWORD,
     });

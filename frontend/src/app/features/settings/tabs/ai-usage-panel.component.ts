@@ -12,11 +12,11 @@ import { DecimalPipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { AiToolsService } from '../../../shared/services/ai-tools.service';
-import { AiClusterUsage, AiUsageTotals } from '../../../shared/models/ai-tools';
+import { AiCentralUsage, AiUsageTotals } from '../../../shared/models/ai-tools';
 import { aiTypeLabel } from '../../ai/components/ai-model-selection';
 import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-section.component';
 
-/** Tokens rapportés par les fournisseurs, par nœud exécutant et au global ; jamais estimés. */
+/** Tokens rapportés par les fournisseurs, par worker exécutant et au global ; jamais estimés. */
 @Component({
   selector: 'app-ai-usage-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -24,7 +24,7 @@ import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-
   template: `
     <app-configuration-section
       title="Consommation de tokens"
-      description="Tokens rapportés par les fournisseurs, regroupés par nœud qui a exécuté la demande."
+      description="Tokens rapportés par les fournisseurs, regroupés par worker qui a exécuté la demande."
       icon="api"
     >
       <div section-actions>
@@ -48,7 +48,7 @@ import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-
       }
       @if (usage(); as view) {
         <div class="total">
-          <strong>Total du cluster</strong>
+          <strong>Total du central</strong>
           <span>{{ view.total.inputTokens | number }} tokens en entrée</span>
           <span>{{ view.total.outputTokens | number }} en sortie</span>
           @if (view.total.cachedInputTokens) {
@@ -71,7 +71,7 @@ import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-
           <p role="status">Seules les sessions les plus récentes sont comptées.</p>
         }
         <div class="grid">
-          @for (node of view.nodes; track node.nodeId ?? node.name) {
+          @for (node of view.workers; track node.workerId ?? node.name) {
             <article>
               <h4>{{ node.name }}</h4>
               <p class="figures">{{ line(node.total) }}</p>
@@ -158,7 +158,7 @@ export class AiUsagePanelComponent {
   readonly refreshKey = input(0);
   readonly periods = [7, 30, 90] as const;
   readonly days = signal<number>(30);
-  readonly usage = signal<AiClusterUsage | null>(null);
+  readonly usage = signal<AiCentralUsage | null>(null);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
 

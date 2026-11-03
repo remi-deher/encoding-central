@@ -5,7 +5,7 @@ import { Router } from '@angular/router';
 import { signal } from '@angular/core';
 import { WorkerSetupPageComponent } from './worker-setup-page.component';
 import { AuthService } from '../../core/auth/auth.service';
-import { LocalNodeController } from '../../shared/services/local-node-controller';
+import { LocalWorkerController } from '../../shared/services/local-worker-controller';
 
 describe('WorkerSetupPageComponent', () => {
   let login: ReturnType<typeof vi.fn>;
@@ -32,7 +32,7 @@ describe('WorkerSetupPageComponent', () => {
       set: {
         providers: [
           {
-            provide: LocalNodeController,
+            provide: LocalWorkerController,
             useValue: {
               error: signal(''),
               targetName: signal('Central de test'),

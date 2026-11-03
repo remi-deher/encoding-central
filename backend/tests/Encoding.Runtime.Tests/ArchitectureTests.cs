@@ -15,7 +15,7 @@ public sealed partial class ArchitectureTests
         ["Encoding.Contracts"] = [],
         ["Encoding.Core"] = ["Encoding.Contracts"],
         ["Encoding.Api"] = ["Encoding.Contracts", "Encoding.Core"],
-        ["Encoding.NodeAgent"] = ["Encoding.Contracts", "Encoding.Core"],
+        ["Encoding.WorkerAgent"] = ["Encoding.Contracts", "Encoding.Core"],
         ["Encoding.Launcher"] = ["Encoding.Core"],
     };
 
@@ -30,7 +30,7 @@ public sealed partial class ArchitectureTests
         "Encoding.Api/Tools/AiCliRuntime.cs",
         "Encoding.Core/Runtime/ProcessSandbox.cs",
         "Encoding.Launcher/SystemProcess.cs",
-        "Encoding.NodeAgent/Runtime/ProcessToolRunner.cs",
+        "Encoding.WorkerAgent/Runtime/ProcessToolRunner.cs",
     ];
 
     private static readonly string[] EndpointStorageDebt = [];
@@ -42,13 +42,12 @@ public sealed partial class ArchitectureTests
         "Encoding.Api/Flows/FlowAiEndpoints.cs",
         "Encoding.Api/Flows/FlowScriptEndpoints.cs",
         "Encoding.Api/Flows/FlowTemplateEndpoints.cs",
-        "Encoding.Api/Infrastructure/ClusterEndpoints.cs",
+        "Encoding.Api/Infrastructure/CentralEndpoints.cs",
         "Encoding.Api/Libraries/LibraryActivityEndpoints.cs",
         "Encoding.Api/Libraries/LibraryEndpoints.cs",
         "Encoding.Api/Libraries/LibraryWorkflowEndpoints.cs",
         "Encoding.Api/Logging/SystemLogEndpoints.cs",
-        "Encoding.Api/Nodes/LocalNodeEndpoints.cs",
-        "Encoding.Api/Nodes/NodeGroupEndpoints.cs",
+        "Encoding.Api/Workers/WorkerGroupEndpoints.cs",
         "Encoding.Api/Plugins/ArrWebhookEndpoints.cs",
         "Encoding.Api/Plugins/PluginConfigurationEndpoints.cs",
         "Encoding.Api/Plugins/PluginStoreEndpoints.cs",
@@ -59,8 +58,8 @@ public sealed partial class ArchitectureTests
     private static readonly string[] HttpClientConstructionDebt =
     [
         "Encoding.Api/Mcp/McpCommand.cs",
-        "Encoding.NodeAgent/Services/WorkerClusterDiscovery.cs",
-        "Encoding.NodeAgent/Services/WorkerEnrollmentService.cs",
+        "Encoding.WorkerAgent/Services/WorkerCentralDiscovery.cs",
+        "Encoding.WorkerAgent/Services/WorkerEnrollmentService.cs",
     ];
 
     [Fact]
@@ -210,7 +209,7 @@ public sealed partial class ArchitectureTests
     [Fact]
     public void LongCodeLinesDoNotGrow()
     {
-        var count = new[] { "Encoding.Api", "Encoding.NodeAgent", "Encoding.Contracts", "Encoding.Core", "Encoding.Launcher" }
+        var count = new[] { "Encoding.Api", "Encoding.WorkerAgent", "Encoding.Contracts", "Encoding.Core", "Encoding.Launcher" }
             .SelectMany(SourceFiles).SelectMany(File.ReadLines)
             .Count(line => line.Length > 200 && !line.TrimStart().StartsWith("//"));
         Assert.True(count <= ArchitectureCeilings.MaxLongLines,

@@ -22,7 +22,7 @@ public sealed class ResourceBlobStore(IConfiguration configuration)
     private static readonly string[] SubtitleExtensions = [".srt", ".ass", ".ssa", ".vtt"];
 
     private readonly string root = Path.GetFullPath(configuration["Resources:Directory"]
-        ?? (configuration["Node:DataDirectory"] is { Length: > 0 } dataDir ? Path.Combine(dataDir, "resources") : Path.Combine(AppContext.BaseDirectory, "resources")));
+        ?? (configuration["Worker:DataDirectory"] is { Length: > 0 } dataDir ? Path.Combine(dataDir, "resources") : Path.Combine(AppContext.BaseDirectory, "resources")));
 
     public string Root => root;
 

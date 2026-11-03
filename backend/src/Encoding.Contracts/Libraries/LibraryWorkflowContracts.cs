@@ -28,6 +28,6 @@ public static class LibraryMediaTypes
     }
 }
 
-public sealed record LibraryNodeProcessingLimit(Guid NodeId,int MaxConcurrentTasks);
-public sealed record LibraryProcessingSettings(bool WatchEnabled,int ScanIntervalSeconds,int? MaxConcurrentTasks,IReadOnlyList<LibraryNodeProcessingLimit> NodeLimits,int Revision);
-public sealed record SaveLibraryProcessingSettings(bool WatchEnabled,int ScanIntervalSeconds,int? MaxConcurrentTasks,IReadOnlyList<LibraryNodeProcessingLimit> NodeLimits,int ExpectedRevision);
+public sealed record LibraryWorkerProcessingLimit(Guid WorkerId,int MaxConcurrentTasks);
+public sealed record LibraryProcessingSettings(bool WatchEnabled,int ScanIntervalSeconds,int? MaxConcurrentTasks,IReadOnlyList<LibraryWorkerProcessingLimit> WorkerLimits,int Revision);
+public sealed record SaveLibraryProcessingSettings(bool WatchEnabled,int ScanIntervalSeconds,int? MaxConcurrentTasks,IReadOnlyList<LibraryWorkerProcessingLimit> WorkerLimits,int ExpectedRevision);

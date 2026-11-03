@@ -14,8 +14,8 @@ const entry = {
   level: 'Warning',
   category: 'Encoding.Worker',
   message: 'Original untranslated message',
-  nodeId: 'first',
-  nodeName: 'salon',
+  workerId: 'first',
+  workerName: 'salon',
   eventId: 17,
 };
 test('summary groups exact repeats and keeps their original message, dates and IDs', () => {
@@ -37,7 +37,7 @@ test('different levels, services, nodes, event IDs and exceptions never collapse
     entry,
     { ...entry, level: 'Error' },
     { ...entry, category: 'Other' },
-    { ...entry, nodeId: 'second' },
+    { ...entry, workerId: 'second' },
     { ...entry, eventId: 18 },
     { ...entry, exception: 'Stack trace' },
   ];

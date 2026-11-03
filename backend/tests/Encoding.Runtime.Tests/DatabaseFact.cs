@@ -13,7 +13,7 @@ public sealed class MediaToolsFactAttribute : FactAttribute
     public MediaToolsFactAttribute()
     {
         if (Environment.GetEnvironmentVariable("ENCODING_TEST_REQUIRE_MEDIA_TOOLS") == "1") return;
-        if (Encoding.NodeAgent.Runtime.ProcessToolRunner.Find("ffmpeg") is null || Encoding.NodeAgent.Runtime.ProcessToolRunner.Find("ffprobe") is null)
+        if (Encoding.WorkerAgent.Runtime.ProcessToolRunner.Find("ffmpeg") is null || Encoding.WorkerAgent.Runtime.ProcessToolRunner.Find("ffprobe") is null)
             Skip = "ffmpeg and ffprobe are required (included in backend/tests/Dockerfile).";
     }
 }
@@ -24,7 +24,7 @@ public sealed class MkvToolsFactAttribute : FactAttribute
     public MkvToolsFactAttribute()
     {
         if (Environment.GetEnvironmentVariable("ENCODING_TEST_REQUIRE_MEDIA_TOOLS") == "1") return;
-        if (Encoding.NodeAgent.Runtime.ProcessToolRunner.Find("ffmpeg") is null || Encoding.NodeAgent.Runtime.ProcessToolRunner.Find("ffprobe") is null || Encoding.NodeAgent.Runtime.ProcessToolRunner.Find("mkvmerge") is null)
+        if (Encoding.WorkerAgent.Runtime.ProcessToolRunner.Find("ffmpeg") is null || Encoding.WorkerAgent.Runtime.ProcessToolRunner.Find("ffprobe") is null || Encoding.WorkerAgent.Runtime.ProcessToolRunner.Find("mkvmerge") is null)
             Skip = "ffmpeg, ffprobe and mkvmerge are required (included in backend/tests/Dockerfile).";
     }
 }

@@ -1,6 +1,6 @@
 using Encoding.Core.Runtime;
 using System.Text.Json;
-using Encoding.NodeAgent.Runtime;
+using Encoding.WorkerAgent.Runtime;
 using static Encoding.Plugins.Tests.Support;
 
 namespace Encoding.Plugins.Tests;

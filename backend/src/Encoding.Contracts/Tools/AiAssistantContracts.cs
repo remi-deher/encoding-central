@@ -18,19 +18,17 @@ public sealed record AiAssistantConversation(
     DateTimeOffset UpdatedAt,
     IReadOnlyList<AiAssistantSource>? AdditionalSources = null,
     string? Model = null,
-    string? ReasoningEffort = null, Guid? NodeId = null,
-    string? TitleSource = null,
-    /// <summary>Nœud qui coordonne la discussion (reprise comprise), renseigné à la lecture.</summary>
-    Guid? CoordinatorId = null);
+    string? ReasoningEffort = null, Guid? WorkerId = null,
+    string? TitleSource = null);
 
 public sealed record AiAssistantRenameRequest(string Title);
 
 public sealed record AiAssistantModelOption(string Provider, string? Model, string Label,
-    IReadOnlyList<string> ReasoningEfforts, Guid? NodeId = null, string? NodeName = null,
+    IReadOnlyList<string> ReasoningEfforts, Guid? WorkerId = null, string? WorkerName = null,
     string? DefaultReasoningEffort = null, bool ReasoningKnown = false, bool IsDefault = false);
 
 public sealed record AiAssistantOptions(string DefaultProvider, string? DefaultModel,
-    IReadOnlyList<AiAssistantModelOption> Models, IReadOnlyList<AiNodeModelCatalog>? Catalogs = null,
+    IReadOnlyList<AiAssistantModelOption> Models, IReadOnlyList<AiWorkerModelCatalog>? Catalogs = null,
     string? DefaultReasoningEffort = null);
 
 public sealed record AiAssistantResourceReference(string Type, Guid Id, int? Version = null);
@@ -59,7 +57,7 @@ public sealed record AiAssistantTurn(
     string UserPrompt,
     string Content,
     IReadOnlyList<AiAssistantSource>? Sources = null, AiTurnModelSelection? Selection = null,
-    string? ActualModel = null, Guid? ExecutorNodeId = null);
+    string? ActualModel = null, Guid? ExecutorWorkerId = null);
 
 public sealed record AiAssistantConversationDetail(
     AiAssistantConversation Conversation,
@@ -88,7 +86,7 @@ public sealed record AiAssistantMessageRequest(
     IReadOnlyList<AiAssistantToolCall>? ToolCalls = null,
     string? Provider = null,
     string? Model = null,
-    string? ReasoningEffort = null, Guid? NodeId = null,
+    string? ReasoningEffort = null, Guid? WorkerId = null,
     IReadOnlyList<AiAssistantFileAttachment>? Attachments = null);
 
 public sealed record AiAssistantMessageResponse(
@@ -98,7 +96,7 @@ public sealed record AiAssistantMessageResponse(
     string? Content,
     string? ErrorMessage,
     IReadOnlyList<AiAssistantSource> Sources, AiTurnModelSelection? Selection = null,
-    string? ActualModel = null, Guid? ExecutorNodeId = null,
+    string? ActualModel = null, Guid? ExecutorWorkerId = null,
     AiAssistantActionProposal? ActionProposal = null);
 
 public sealed record AiAssistantActionProposal(

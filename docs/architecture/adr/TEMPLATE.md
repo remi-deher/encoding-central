@@ -2,7 +2,7 @@
 id: NNNN
 title: Titre court
 status: proposed
-domain: cluster | replication-storage | flows | runtime | plugins | auth-ops | ai | ui
+domain: workers | storage | flows | runtime | plugins | auth-ops | ai | ui
 date: AAAA-MM-JJ
 decided_by: Rémi (date) | à décider
 supersedes: []

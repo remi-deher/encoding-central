@@ -122,7 +122,7 @@ public static partial class ToolPackageArchive
         if (string.IsNullOrWhiteSpace(manifest.Name)) throw new ToolPackageException("Le nom du paquet d'outil est obligatoire.");
         if (manifest.Platform is null || !IdPattern().IsMatch(manifest.Platform)) throw new ToolPackageException("Plateforme de paquet d'outil invalide.");
         if (expectedPlatform is not null && !string.Equals(manifest.Platform, expectedPlatform, StringComparison.Ordinal))
-            throw new ToolPackageException($"Le paquet cible {manifest.Platform}, mais ce nœud utilise {expectedPlatform}.");
+            throw new ToolPackageException($"Le paquet cible {manifest.Platform}, mais ce worker utilise {expectedPlatform}.");
         if (manifest.Executables is null || manifest.Executables.Count == 0) throw new ToolPackageException("Le paquet doit fournir au moins un exécutable.");
         if (manifest.Executables.Any(item => item is null || string.IsNullOrWhiteSpace(item.ToolId) || !IdPattern().IsMatch(item.ToolId)
             || string.IsNullOrWhiteSpace(item.Path) || string.IsNullOrWhiteSpace(item.Sha256) || !HashPattern().IsMatch(item.Sha256)))

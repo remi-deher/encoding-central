@@ -23,7 +23,7 @@ const {
 const { MEDIA_TOOL_ACTIONS } = await loadModel('media-tool-actions');
 const action = (id) => MEDIA_TOOL_ACTIONS.find((component) => component.id === id);
 
-test('les anciennes contraintes Nœuds restent éditables sans rendre le nouveau relais compatible avec un ancien plugin', async () => {
+test('les anciennes contraintes Workers restent éditables sans rendre le nouveau relais compatible avec un ancien plugin', async () => {
   const { resolveFlowComponent } = await loadModel('flow-validation');
   const plugin = JSON.parse(
     await readFile(

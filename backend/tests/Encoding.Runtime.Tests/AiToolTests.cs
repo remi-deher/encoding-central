@@ -3,7 +3,7 @@ using Encoding.Api.Tools;
 using Encoding.Contracts.Executions;
 using Encoding.Contracts.Flows;
 using Encoding.Contracts.Tools;
-using Encoding.NodeAgent.Runtime;
+using Encoding.WorkerAgent.Runtime;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
@@ -136,7 +136,7 @@ public sealed class AiToolTests
                 ["batchSize"] = System.Text.Json.JsonSerializer.SerializeToElement(20),
             };
             var batchIndexes = new List<int>();
-            var outcome = await Encoding.NodeAgent.Runtime.Media.SubtitleTranslation.TranslateAsync(
+            var outcome = await Encoding.WorkerAgent.Runtime.Media.SubtitleTranslation.TranslateAsync(
                 configuration, sourcePath, directory, "translate-node",
                 (batchIndex, items) =>
                 {

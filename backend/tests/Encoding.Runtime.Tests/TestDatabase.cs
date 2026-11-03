@@ -33,7 +33,7 @@ public sealed class TestDatabase : IAsyncDisposable
         return Task.FromResult(new TestDatabase(connection, new SqliteDataSource(connection), path));
     }
 
-    /// <summary>Second accès à la même base, comme un second serveur du cluster.</summary>
+    /// <summary>Second accès à la même base, comme un second serveur du central.</summary>
     public DbDataSource OpenAnother()
     {
         DbDataSource source = new SqliteDataSource(ConnectionString);
@@ -43,7 +43,7 @@ public sealed class TestDatabase : IAsyncDisposable
 
     /// <summary>Réglages à ajouter à la configuration d'une application de test.</summary>
     public IEnumerable<KeyValuePair<string, string>> Settings() =>
-        [new("ConnectionStrings:Cluster", ConnectionString)];
+        [new("ConnectionStrings:Central", ConnectionString)];
 
     public async ValueTask DisposeAsync()
     {

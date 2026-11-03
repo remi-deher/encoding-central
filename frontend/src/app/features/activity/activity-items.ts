@@ -131,7 +131,7 @@ export function executionItem(execution: ExecutionResponse): ActivityItem {
   const subtitle = [
     execution.library,
     `${execution.flow} · v${execution.flowVersion}`,
-    execution.node,
+    execution.worker,
     group === 'done' || group === 'queue' ? null : execution.detail,
   ]
     .filter(Boolean)

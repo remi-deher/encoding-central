@@ -7,8 +7,8 @@ Ce document définit les principes de conception, d’ergonomie et d’ingénier
 ## 1. Intention utilisateur et clarté des parcours
 
 Avant de concevoir une vue ou un composant, identifier la question principale à laquelle il répond :
-- **Surveiller** : *Est-ce que le cluster et les traitements fonctionnent normalement ?* (Vue d’ensemble, métriques héroïques, alertes).
-- **Gérer & Explorer** : *Quel est l’état de mes ressources (nœuds, bibliothèques, flows, plugins) et comment agir dessus ?*
+- **Surveiller** : *Est-ce que le central et les traitements fonctionnent normalement ?* (Vue d’ensemble, métriques héroïques, alertes).
+- **Gérer & Explorer** : *Quel est l’état de mes ressources (workers, bibliothèques, flows, plugins) et comment agir dessus ?*
 - **Concevoir** : *Comment construire et tester mon pipeline de traitement ?* (Éditeur de flow).
 - **Suivre & Comprendre** : *Où en sont les opérations en cours et que s’est-il passé ?* (Suivi temps réel, journaux de pipeline).
 - **Configurer** : *Comment régler un service, un profil ou un accès ?*
@@ -70,7 +70,7 @@ L’interface adopte les principes de **Material 3 Expressive** pour offrir une 
 
 ### 3.2. Découpage modulaire : Socle partagé + Composants de Feature
 - **Socle partagé (`shared/ui/`, `shared/templates/`)** : Héberge le design system M3 Expressive (en-têtes, cartes de ressources, fiches `ResourceSheet`, tuiles de métriques expressives, tableaux de données, tiroirs, modales, badges, éditeur de graphe). Ces composants sont purs et agnostiques du métier.
-- **Composants de feature (`features/<domaine>/`)** : Contrairement à l’ancienne règle qui interdisait tout sous-composant propre à une fonctionnalité et produisait des fichiers monolithiques de près de 2 000 lignes, **une page complexe doit être découpée en sous-composants et contrôleurs focalisés** (par exemple un sous-composant ou contrôleur pour la gestion du cluster, pour l’accès aux bibliothèques ou pour l’inspecteur de flow).
+- **Composants de feature (`features/<domaine>/`)** : Contrairement à l’ancienne règle qui interdisait tout sous-composant propre à une fonctionnalité et produisait des fichiers monolithiques de près de 2 000 lignes, **une page complexe doit être découpée en sous-composants et contrôleurs focalisés** (par exemple un sous-composant ou contrôleur pour la gestion du central, pour l’accès aux bibliothèques ou pour l’inspecteur de flow).
 - **Contrôleurs / Services de feature** : L’orchestration HTTP, le polling et les transformations métier riches vivent dans des services/contrôleurs dédiés (sur le modèle de `LocalNodeController`) plutôt que dans le template ou le corps d’un composant géant.
 
 ### 3.3. Formulaires et actions
@@ -97,7 +97,7 @@ L’interface adopte les principes de **Material 3 Expressive** pour offrir une 
 1. **Vérité des données** :
    - N’afficher que des métriques adossées à une source réelle. Ne jamais inventer une tuile ou une jauge fictive.
    - Une progression à `100 %` ne prouve pas la terminaison d’une tâche : seul l’état serveur fait foi.
-   - Distinguer visuellement : **état actif observé**, **état souhaité en attente**, **valeur indisponible** et **dernière valeur connue d’un nœud hors ligne** (jauge atténuée/hachurée `is-stale`).
+   - Distinguer visuellement : **état actif observé**, **état souhaité en attente**, **valeur indisponible** et **dernière valeur connue d’un worker hors ligne** (jauge atténuée/hachurée `is-stale`).
 2. **Accessibilité (WCAG AA) et Clavier** :
    - Tout état communiqué par la couleur (succès, avertissement, erreur, accélérateur matériel) comporte un libellé explicite.
    - Les contrôles interactifs respectent une cible minimale accessible et possèdent un `aria-label` explicite lorsque leur libellé est iconographique.

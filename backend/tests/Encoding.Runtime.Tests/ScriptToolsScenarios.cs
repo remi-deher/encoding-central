@@ -2,7 +2,7 @@ using System.Text.Json;
 using Encoding.Api.Executions;
 using Encoding.Api.Flows;
 using Encoding.Contracts.Flows;
-using Encoding.Contracts.Nodes;
+using Encoding.Contracts.Workers;
 
 namespace Encoding.Runtime.Tests;
 
@@ -29,8 +29,8 @@ internal static class ScriptToolsScenarios
             [new("edge", "input", "success", "script")]);
 
         var worker = Guid.NewGuid();
-        IReadOnlyList<NodeToolCapability> older = [new("plugin/base", "1.0.0", ["general"], []), new("javascript", "22", ["general"], []), new("ffprobe", "7.0", ["video"], [])];
-        IReadOnlyList<NodeToolCapability> newer = [.. older, new("script-tools", "1", ["general"], [])];
+        IReadOnlyList<WorkerToolCapability> older = [new("plugin/base", "1.0.0", ["general"], []), new("javascript", "22", ["general"], []), new("ffprobe", "7.0", ["video"], [])];
+        IReadOnlyList<WorkerToolCapability> newer = [.. older, new("script-tools", "1", ["general"], [])];
         Check(validator.Validate(FlowWith(true)).IsValid, "A script with useTools is a valid flow.");
         Check(eligibility.CanRun(FlowWith(false), older, worker), "A script without tools still runs on an older worker.");
         Check(!eligibility.CanRun(FlowWith(true), older, worker), "A script that needs tools is never given to a worker without the helper.");

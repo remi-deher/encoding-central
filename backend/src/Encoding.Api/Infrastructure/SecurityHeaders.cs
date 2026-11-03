@@ -23,7 +23,7 @@ public static class SecurityHeaders
                 headers.TryAdd("Referrer-Policy", "same-origin");
                 if (hsts && context.Request.IsHttps) headers.TryAdd("Strict-Transport-Security", hstsValue);
                 if (!string.IsNullOrWhiteSpace(csp)) headers.TryAdd("Content-Security-Policy", csp);
-                // Réponses d'API (sessions, jetons, état du cluster) : jamais mises en cache par un navigateur ou un proxy.
+                // Réponses d'API (sessions, jetons, état du central) : jamais mises en cache par un navigateur ou un proxy.
                 if (context.Request.Path.StartsWithSegments("/api")) headers.TryAdd("Cache-Control", "no-store");
                 return Task.CompletedTask;
             });

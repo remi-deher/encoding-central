@@ -1,10 +1,10 @@
 using System.Text.Json;
 using Encoding.Contracts.Executions;
-using Encoding.Contracts.Nodes;
-using Encoding.NodeAgent.Runtime;
-using Encoding.NodeAgent.Runtime.Media;
-using Encoding.NodeAgent.Runtime.Media.Handlers;
-using Encoding.NodeAgent.Services;
+using Encoding.Contracts.Workers;
+using Encoding.WorkerAgent.Runtime;
+using Encoding.WorkerAgent.Runtime.Media;
+using Encoding.WorkerAgent.Runtime.Media.Handlers;
+using Encoding.WorkerAgent.Services;
 using Xunit;
 
 namespace Encoding.Runtime.Tests;
@@ -81,6 +81,6 @@ public sealed class ContainerPredictabilityTests
 
     private sealed class EmptyCapabilities : IToolCapabilityProbe
     {
-        public Task<IReadOnlyList<NodeToolCapability>> DiscoverAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<NodeToolCapability>>([]);
+        public Task<IReadOnlyList<WorkerToolCapability>> DiscoverAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<WorkerToolCapability>>([]);
     }
 }

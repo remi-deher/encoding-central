@@ -9,7 +9,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{BD3EF0D8-131
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Encoding.Contracts", "src\Encoding.Contracts\Encoding.Contracts.csproj", "{D69D8A8C-DAD4-4998-898A-E1DB2A8C1ACA}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Encoding.NodeAgent", "src\Encoding.NodeAgent\Encoding.NodeAgent.csproj", "{3C25E660-477B-4BB4-A287-0306162681C3}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Encoding.WorkerAgent", "src\Encoding.WorkerAgent\Encoding.WorkerAgent.csproj", "{3C25E660-477B-4BB4-A287-0306162681C3}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Encoding.Core", "src\Encoding.Core\Encoding.Core.csproj", "{71828167-E813-4B46-A150-26303410AC12}"
 EndProject

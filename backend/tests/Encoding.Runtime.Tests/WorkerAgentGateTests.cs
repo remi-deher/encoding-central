@@ -1,7 +1,7 @@
 using System.Net;
-using Encoding.Core.Nodes;
-using Encoding.NodeAgent;
-using Encoding.NodeAgent.Services;
+using Encoding.Core.Workers;
+using Encoding.WorkerAgent;
+using Encoding.WorkerAgent.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -37,12 +37,12 @@ public sealed class WorkerAgentGateTests : IAsyncLifetime
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["Node:DataDirectory"] = directory,
-            ["Node:WorkerImage"] = workerImage ? "true" : "false",
-            ["Node:Roles"] = workerImage ? "worker" : "server,worker",
+            ["Worker:DataDirectory"] = directory,
+            ["Worker:WorkerImage"] = workerImage ? "true" : "false",
+            ["Worker:Roles"] = workerImage ? "worker" : "server,worker",
             [LocalEnrollment.SecretFileSetting] = secretFile,
         }).Build();
-        var options = NodeAgentOptions.FromConfiguration(configuration);
+        var options = WorkerAgentOptions.FromConfiguration(configuration);
         identities = new WorkerIdentityStore(options);
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseUrls("http://127.0.0.1:0");

@@ -38,8 +38,8 @@ export class AuthService {
   async setup(
     optionsOrUsername?:
       | {
-          nodeDisplayName?: string;
-          clusterName?: string;
+          workerDisplayName?: string;
+          centralName?: string;
           username?: string;
           password?: string;
         }
@@ -51,8 +51,8 @@ export class AuthService {
     const payload =
       typeof optionsOrUsername === 'object' && optionsOrUsername !== null
         ? {
-            nodeDisplayName: optionsOrUsername.nodeDisplayName?.trim() || null,
-            clusterName: optionsOrUsername.clusterName?.trim() || null,
+            workerDisplayName: optionsOrUsername.workerDisplayName?.trim() || null,
+            centralName: optionsOrUsername.centralName?.trim() || null,
             username: optionsOrUsername.username?.trim() || null,
             password: optionsOrUsername.password || null,
           }
@@ -60,7 +60,7 @@ export class AuthService {
             username: optionsOrUsername ?? null,
             password: password ?? null,
             setupToken: setupToken || null,
-            nodeDisplayName: legacyDisplayName.trim() || null,
+            workerDisplayName: legacyDisplayName.trim() || null,
           };
     const user = await firstValueFrom(this.http.post<CurrentUser>('/api/v1/auth/setup', payload));
     this.state.set({ setupRequired: false, user });

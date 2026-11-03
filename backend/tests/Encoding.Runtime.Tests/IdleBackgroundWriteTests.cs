@@ -1,7 +1,7 @@
 using Encoding.Api.Executions;
 using Encoding.Api.Flows;
 using Encoding.Api.Infrastructure;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -29,7 +29,7 @@ public sealed class IdleBackgroundWriteTests
                 return await service.ProcessOnceAsync(CancellationToken.None);
             }
             if (poll == "waits")
-                return await new ExecutionWaitRepository(database.Db, new NodePresenceOptions(TimeSpan.FromSeconds(30)))
+                return await new ExecutionWaitRepository(database.Db, new WorkerPresenceOptions(TimeSpan.FromSeconds(30)))
                     .ProcessDueAsync(CancellationToken.None);
             using var backups = new FlowBackupService(database.Db, new ConfigurationBuilder().Build(), NullLogger<FlowBackupService>.Instance);
             return await backups.ProcessOneAsync(poll == "draft-backups", CancellationToken.None) ? 1 : 0;

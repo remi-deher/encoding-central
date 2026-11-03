@@ -101,22 +101,22 @@ export function getSearchableNavigationItems(routes: Route[]): readonly Navigati
   const baseItems = getPrimaryNavigationGroups(routes).flatMap((group) => group.items);
   const extraDestinations: readonly NavigationItem[] = [
     {
-      label: 'Ce nœud (Machine locale)',
-      path: '/nodes?tab=node',
+      label: 'Ce worker (Machine locale)',
+      path: '/workers?tab=node',
       glyph: '▣',
       group: 'Infrastructure',
       keywords: ['local', 'worker', 'serveur', 'matériel', 'gpu', 'agent'],
     },
     {
-      label: 'Cluster & Membres',
-      path: '/nodes?tab=cluster',
+      label: 'Workers',
+      path: '/workers?tab=cluster',
       glyph: '▣',
       group: 'Infrastructure',
       keywords: ['cluster', 'membres', 'enrôlement', 'appairage', 'synchronisation'],
     },
     {
-      label: 'Groupes de nœuds',
-      path: '/nodes?tab=groups',
+      label: 'Groupes de workers',
+      path: '/workers?tab=groups',
       glyph: '▣',
       group: 'Infrastructure',
       keywords: ['groupes', 'étiquettes', 'labels', 'critères'],

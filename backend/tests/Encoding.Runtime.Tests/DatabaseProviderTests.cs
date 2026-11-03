@@ -13,7 +13,7 @@ public sealed class DatabaseProviderTests
     {
         var values = new Dictionary<string, string?>();
         if (provider is not null) values["Database:Provider"] = provider;
-        if (connection is not null) values["ConnectionStrings:Cluster"] = connection;
+        if (connection is not null) values["ConnectionStrings:Central"] = connection;
         return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
     }
 
@@ -51,7 +51,7 @@ public sealed class DatabaseProviderTests
         Assert.Empty(firstStatus.Pending);
         Assert.Empty(firstStatus.Unknown);
         Assert.Equal(MigrationCatalog.Load(MigrationCatalog.ResolveDirectory(contentRoot)).Last().Version, firstStatus.Latest);
-        await using (var identity = database.Db.CreateCommand("SELECT count(*) FROM cluster_identity"))
+        await using (var identity = database.Db.CreateCommand("SELECT count(*) FROM central_identity"))
             Assert.Equal(1L, await identity.ExecuteScalarAsync());
 
         await DatabaseMigrator.ApplyAsync(database.Db, contentRoot, CancellationToken.None);

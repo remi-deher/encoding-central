@@ -3,7 +3,7 @@ namespace Encoding.Contracts.Plugins;
 /// <summary>Bibliothèque d'un service externe (section Plex…) et ses dossiers vus par ce service.</summary>
 public sealed record RemoteLibrary(string Key, string Title, string Kind, IReadOnlyList<string> Locations);
 
-/// <summary>Bibliothèque Encoding et les chemins déclarés par ses nœuds en accès direct.</summary>
+/// <summary>Bibliothèque Encoding et les chemins déclarés par ses workers en accès direct.</summary>
 public sealed record LocalLibrary(Guid Id, string Name, IReadOnlyList<string> LocalPaths);
 
 /// <summary>Racine proposée pour une bibliothèque Encoding, avec la raison lisible du choix.</summary>
@@ -74,7 +74,7 @@ public static class LibraryMappingSuggester
             if (local.SequenceEqual(remote, StringComparer.Ordinal) && local.Length > 0)
             {
                 score = ExactScore;
-                reason = "Même chemin sur le nœud et dans Plex";
+                reason = "Même chemin sur le worker et dans Plex";
             }
             else
             {

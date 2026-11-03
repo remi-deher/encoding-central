@@ -2,13 +2,13 @@ using Encoding.Api.Infrastructure.Data;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Encoding.Api.Flows;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Encoding.Api.Plugins;
 using Encoding.Api.Executions;
 using Encoding.Api.Libraries;
 using Encoding.Contracts.Executions;
 using Encoding.Contracts.Flows;
-using Encoding.NodeAgent.Runtime;
+using Encoding.WorkerAgent.Runtime;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -30,11 +30,11 @@ internal static partial class Harness
         }
         private async Task ResetNodesAsync()
         {
-            await using var command=db.CreateCommand("UPDATE cluster_nodes SET last_seen_at=clock_timestamp(),max_concurrent_tasks=100,deleted_at=NULL; DELETE FROM node_processing_settings;");
+            await using var command=db.CreateCommand("UPDATE workers SET last_seen_at=clock_timestamp(),max_concurrent_tasks=100,deleted_at=NULL; DELETE FROM worker_processing_settings;");
             await command.ExecuteNonQueryAsync();
         }
 
-        /// <summary>Exécution terminée côté worker : résultat enregistré, publication demandée au nœud d'accès (a).</summary>
+        /// <summary>Exécution terminée côté worker : résultat enregistré, publication demandée au worker d'accès (a).</summary>
         private async Task<(Guid Id,RuntimeLease Lease,Guid Library,string SourceSha,string ResultSha)> PublicationRequestedAsync(bool replacement,int graceHours=1,string mediaPolicy="keep")
         {
             var flow=Chain(Node(registry,"entry","base-input-file"),Node(registry,"end","base-complete-flow"));
@@ -129,7 +129,7 @@ internal static partial class Harness
         {
             var flow=Chain(Node(registry,"entry","base-input-file"),Node(registry,"end","base-complete-flow")) with { Id=Guid.NewGuid() };
             var repository=new FlowRepository(db); Check(await repository.SaveAsync(new(0,flow),CancellationToken.None) is not null,"Publish the monitoring flow.");
-            var workflow=new LibraryWorkflowRepository(db,validator,new NodePresenceOptions(TimeSpan.FromHours(1)));
+            var workflow=new LibraryWorkflowRepository(db,validator,new WorkerPresenceOptions(TimeSpan.FromHours(1)));
             Check(await workflow.AssignAsync(library,new(flow.Id,1,0),CancellationToken.None),"Assign the flow to the library.");
             var modified=new DateTimeOffset(2024,5,6,7,8,9,TimeSpan.Zero);
             var scan=Guid.NewGuid();
@@ -148,9 +148,9 @@ internal static partial class Harness
         }
 
         /// <summary>Service de reprise complet (règles d'éligibilité et de présence), comme en production.</summary>
-        private RuntimeRecoveryService FullRecovery()=>new(db,NullLogger<RuntimeRecoveryService>.Instance,new NodeGroupRepository(db),eligibility,new NodePresenceOptions(TimeSpan.FromHours(1)));
+        private RuntimeRecoveryService FullRecovery()=>new(db,NullLogger<RuntimeRecoveryService>.Instance,new WorkerGroupRepository(db),eligibility,new WorkerPresenceOptions(TimeSpan.FromHours(1)));
 
-        /// <summary>ADR 0024 : une exécution neuve qu'aucun nœud ne pourra jamais faire échoue tôt et explicitement ; une exécution possible reste en file.</summary>
+        /// <summary>ADR 0024 : une exécution neuve qu'aucun worker ne pourra jamais faire échoue tôt et explicitement ; une exécution possible reste en file.</summary>
         public async Task FreshExecutionWithoutAnyCapableNodeFailsEarlyAsync()
         {
             await using(var leftovers=db.CreateCommand("UPDATE executions SET state='cancelled' WHERE state='queued'")) await leftovers.ExecuteNonQueryAsync();
@@ -160,7 +160,7 @@ internal static partial class Harness
                 var library=Guid.NewGuid(); var id=Guid.NewGuid();
                 await using(var command=db.CreateCommand("""
                     INSERT INTO libraries(id,name) VALUES(@library,@name);
-                    INSERT INTO library_node_accesses(library_id,node_id,mode,local_path,can_read,can_write) VALUES(@library,@a,'direct',@root,true,true);
+                    INSERT INTO library_worker_accesses(library_id,worker_id,mode,local_path,can_read,can_write) VALUES(@library,@a,'direct',@root,true,true);
                     """))
                 {
                     command.Parameters.AddWithValue("library",library); command.Parameters.AddWithValue("name",library.ToString());
@@ -176,7 +176,7 @@ internal static partial class Harness
             var possible=await QueueAsync(Chain(Node(registry,"entry","base-input-file"),Node(registry,"end","base-complete-flow")));
             await FullRecovery().ProcessOnceAsync(CancellationToken.None);
             var failed=await executions.GetAsync(impossible,CancellationToken.None);
-            Check(failed!.State=="failed","Une exécution qu'aucun nœud ne peut faire échoue tôt.");
+            Check(failed!.State=="failed","Une exécution qu'aucun worker ne peut faire échoue tôt.");
             Check((await executions.GetAsync(possible,CancellationToken.None))!.State=="queued","Une exécution possible reste en file.");
             Check(await executions.CancelAsync(possible,CancellationToken.None),"Nettoyage.");
         }
@@ -214,7 +214,7 @@ internal static partial class Harness
             Check(exhausted!.State=="failed" && exhausted.Detail?.Contains("déjà été reprise",StringComparison.Ordinal)==true,"The resume limit fails the execution with an explicit reason.");
             Check(await ScalarAsync<long>("SELECT count(*) FROM media_reservations WHERE execution_id=@id",("id",id))==0,"Failure releases the media reservation.");
 
-            await using(var lost=db.CreateCommand("UPDATE cluster_nodes SET max_concurrent_tasks=0 WHERE id=@id")){ lost.Parameters.AddWithValue("id",a); await lost.ExecuteNonQueryAsync(); }
+            await using(var lost=db.CreateCommand("UPDATE workers SET max_concurrent_tasks=0 WHERE id=@id")){ lost.Parameters.AddWithValue("id",a); await lost.ExecuteNonQueryAsync(); }
             var retryId=await executions.RetryAsync(id,CancellationToken.None)??throw new InvalidOperationException("An explicit retry must create a new execution.");
             var retry=await runtime.ClaimAsync(b,CancellationToken.None)??throw new InvalidOperationException("The eligible surviving worker must claim the explicit retry.");
             Check(retry.ExecutionId==retryId && retry.ExecutionId!=id && retry.Attempt==first.Attempt+1,"An explicit retry uses a new execution ID and increments the attempt number.");
@@ -233,7 +233,7 @@ internal static partial class Harness
             await ExpireAsync(id);
             var recovery=FullRecovery();
             await recovery.ProcessOnceAsync(CancellationToken.None);
-            await using(var gone=db.CreateCommand("UPDATE cluster_nodes SET max_concurrent_tasks=0 WHERE id IN (@a,@b,@c)")){ gone.Parameters.AddWithValue("a",a); gone.Parameters.AddWithValue("b",b); gone.Parameters.AddWithValue("c",c); await gone.ExecuteNonQueryAsync(); }
+            await using(var gone=db.CreateCommand("UPDATE workers SET max_concurrent_tasks=0 WHERE id IN (@a,@b,@c)")){ gone.Parameters.AddWithValue("a",a); gone.Parameters.AddWithValue("b",b); gone.Parameters.AddWithValue("c",c); await gone.ExecuteNonQueryAsync(); }
             await recovery.ProcessOnceAsync(CancellationToken.None);
             Check((await executions.GetAsync(id,CancellationToken.None))!.State=="running","A restarting worker has a grace period before a resume is declared impossible.");
             await using(var old=db.CreateCommand("UPDATE executions SET updated_at=clock_timestamp()-interval '10 minutes' WHERE id=@id")){ old.Parameters.AddWithValue("id",id); await old.ExecuteNonQueryAsync(); }
@@ -251,7 +251,7 @@ internal static partial class Harness
             var(id,lease,context)=await EnqueueAsync(RelayFlow());
             await CompleteAsync(id,a,lease,"entry",context);await CompleteAsync(id,a,lease,"variable",context);await CompleteAsync(id,a,lease,"relay",context);
             var(busyId,_,_)=await EnqueueAsync(RelayFlow(),clearUnassignedRunning:false);
-            await using(var setup=db.CreateCommand("UPDATE cluster_nodes SET max_concurrent_tasks=CASE WHEN id=@b THEN 1 ELSE 0 END; UPDATE execution_work SET worker_node_id=@b WHERE execution_id=@busy")){ setup.Parameters.AddWithValue("b",b); setup.Parameters.AddWithValue("busy",busyId); await setup.ExecuteNonQueryAsync(); }
+            await using(var setup=db.CreateCommand("UPDATE workers SET max_concurrent_tasks=CASE WHEN id=@b THEN 1 ELSE 0 END; UPDATE execution_work SET worker_id=@b WHERE execution_id=@busy")){ setup.Parameters.AddWithValue("b",b); setup.Parameters.AddWithValue("busy",busyId); await setup.ExecuteNonQueryAsync(); }
             await FullRecovery().ProcessOnceAsync(CancellationToken.None);
             Check((await executions.GetAsync(id,CancellationToken.None))!.State=="running","A relay whose only capable destination is busy waits instead of failing.");
             await ExpireAsync(busyId);
@@ -268,7 +268,7 @@ internal static partial class Harness
             var(id,first,context)=await EnqueueAsync(flow);
             await CompleteAsync(id,a,first,"entry",context);
             var started=await runtime.StartStepAsync(id,a,new(first.Epoch,"plex-refresh"),CancellationToken.None)??throw new InvalidOperationException("The refresh starts.");
-            Check(await ScalarAsync<long>("SELECT count(*) FROM execution_steps WHERE execution_id=@id AND node_id='plex-refresh' AND idempotent",("id",id))==1,"Refreshing a media server is classified as replayable.");
+            Check(await ScalarAsync<long>("SELECT count(*) FROM execution_steps WHERE execution_id=@id AND flow_node_id='plex-refresh' AND idempotent",("id",id))==1,"Refreshing a media server is classified as replayable.");
             await ExpireAsync(id);
             await new RuntimeRecoveryService(db,NullLogger<RuntimeRecoveryService>.Instance).ProcessOnceAsync(CancellationToken.None);
             var resumed=await runtime.ClaimAsync(b,CancellationToken.None)??throw new InvalidOperationException("Another worker resumes the unfinished replayable step.");
@@ -285,7 +285,7 @@ internal static partial class Harness
             var flow=Chain(Node(registry,"entry","base-input-file"),Node(registry,"variable","base-variable",new(){["name"]=J("kept"),["value"]=J("7")}),Node(registry,"end","base-complete-flow"));
             var(id,first,context)=await EnqueueAsync(flow);
             await CompleteAsync(id,a,first,"entry",context);
-            // Le dernier relais du flow désignait le nœud b (encodage confié à un seul nœud) : sa destination reste la règle de la reprise.
+            // Le dernier relais du flow désignait le worker b (encodage confié à un seul worker) : sa destination reste la règle de la reprise.
             await using(var relay=db.CreateCommand("UPDATE execution_work SET handoff_selector=@selector WHERE execution_id=@id"))
             { relay.Parameters.AddWithValue("id",id); relay.Parameters.AddWithValue("selector",SqlKind.Json,JsonSerializer.Serialize(new RuntimeHandoffSelector("node",b),new JsonSerializerOptions(JsonSerializerDefaults.Web))); await relay.ExecuteNonQueryAsync(); }
             await ExpireAsync(id);
@@ -294,11 +294,11 @@ internal static partial class Harness
             Check(await runtime.ClaimAsync(c,CancellationToken.None) is null && await runtime.ClaimAsync(a,CancellationToken.None) is null,"A resume never leaves the node chosen by the last relay while that node is available.");
             var resumed=await runtime.ClaimAsync(b,CancellationToken.None)??throw new InvalidOperationException("The relay destination resumes the execution.");
             Check(resumed.ExecutionId==id && resumed.Checkpoint?.NextNodeId=="variable","The destination resumes at the checkpoint.");
-            // Si ce nœud est perdu à son tour, la reprise ne part pas ailleurs : elle échoue après le délai de grâce.
+            // Si ce worker est perdu à son tour, la reprise ne part pas ailleurs : elle échoue après le délai de grâce.
             await ExpireAsync(id);
             await recovery.ProcessOnceAsync(CancellationToken.None);
             await using(var aged=db.CreateCommand("UPDATE executions SET updated_at=clock_timestamp()-interval '10 minutes' WHERE id=@id")){ aged.Parameters.AddWithValue("id",id); await aged.ExecuteNonQueryAsync(); }
-            await using(var down=db.CreateCommand("UPDATE cluster_nodes SET max_concurrent_tasks=0 WHERE id=@b")){ down.Parameters.AddWithValue("b",b); await down.ExecuteNonQueryAsync(); }
+            await using(var down=db.CreateCommand("UPDATE workers SET max_concurrent_tasks=0 WHERE id=@b")){ down.Parameters.AddWithValue("b",b); await down.ExecuteNonQueryAsync(); }
             await recovery.ProcessOnceAsync(CancellationToken.None);
             Check((await executions.GetAsync(id,CancellationToken.None))!.State=="failed","With the relay destination unavailable the resume fails instead of moving to another node.");
             Console.WriteLine("PASS: a resume keeps the destination of the last relay.");
@@ -354,8 +354,8 @@ internal static partial class Harness
             var retryId=await ScalarAsync<Guid>("SELECT id FROM executions WHERE retry_of=@id",("id",id));
             Check(retryId!=Guid.Empty,"The flow policy creates a fresh attempt automatically.");
             Check(await ScalarAsync<int>("SELECT attempt FROM executions WHERE id=@id",("id",retryId))==first.Attempt+1,"The automatic retry increments the attempt count.");
-            Check(await ScalarAsync<Guid>("SELECT previous_worker_node_id FROM execution_work WHERE execution_id=@id",("id",retryId))==a,"The failed worker is excluded from its automatic retry.");
-            await using(var unavailable=db.CreateCommand("UPDATE cluster_nodes SET max_concurrent_tasks=0 WHERE id=@id")){ unavailable.Parameters.AddWithValue("id",a); await unavailable.ExecuteNonQueryAsync(); }
+            Check(await ScalarAsync<Guid>("SELECT previous_worker_id FROM execution_work WHERE execution_id=@id",("id",retryId))==a,"The failed worker is excluded from its automatic retry.");
+            await using(var unavailable=db.CreateCommand("UPDATE workers SET max_concurrent_tasks=0 WHERE id=@id")){ unavailable.Parameters.AddWithValue("id",a); await unavailable.ExecuteNonQueryAsync(); }
             var retry=await runtime.ClaimAsync(b,CancellationToken.None)??throw new InvalidOperationException("The retry must go to another eligible worker.");
             Check(retry.ExecutionId==retryId && retry.Checkpoint is null && retry.EntryNodeId=="entry","A flow retry starts at its own entry with isolated artifacts.");
             await ExpireAsync(retryId);
@@ -374,7 +374,7 @@ internal static partial class Harness
             Check(await runtime.StartStepAsync(id,a,new(first.Epoch,"plex-refresh"),CancellationToken.None) is not null,
                 "The external plugin step starts and is recorded before its side effect.");
             // Le classement par composant est vérifié à part (RuntimeStepEffectsTests) ; ici l'étape est marquée à effet incertain.
-            await using(var mark=db.CreateCommand("UPDATE execution_steps SET idempotent=false WHERE execution_id=@id AND node_id='plex-refresh'")){ mark.Parameters.AddWithValue("id",id); await mark.ExecuteNonQueryAsync(); }
+            await using(var mark=db.CreateCommand("UPDATE execution_steps SET idempotent=false WHERE execution_id=@id AND flow_node_id='plex-refresh'")){ mark.Parameters.AddWithValue("id",id); await mark.ExecuteNonQueryAsync(); }
 
             await ExpireAsync(id);
             Check(await runtime.ClaimAsync(b,CancellationToken.None) is null,
@@ -386,7 +386,7 @@ internal static partial class Harness
                 "The execution fails with an explicit uncertain-side-effect reason and requires a deliberate retry.");
             Check(await runtime.ClaimAsync(a,CancellationToken.None) is null && await runtime.ClaimAsync(c,CancellationToken.None) is null,
                 "No worker replays the unfinished plugin invocation automatically.");
-            Check(await ScalarAsync<long>("SELECT count(*) FROM execution_steps WHERE execution_id=@id AND node_id='plex-refresh' AND completed_at IS NULL AND NOT idempotent",("id",id))==1,
+            Check(await ScalarAsync<long>("SELECT count(*) FROM execution_steps WHERE execution_id=@id AND flow_node_id='plex-refresh' AND completed_at IS NULL AND NOT idempotent",("id",id))==1,
                 "The unfinished non-idempotent plugin invocation remains recorded for diagnosis.");
             Check(await ScalarAsync<long>("SELECT count(*) FROM media_reservations WHERE execution_id=@id",("id",id))==0,
                 "The failed uncertain plugin execution releases its media reservation.");
@@ -397,8 +397,8 @@ internal static partial class Harness
             var library=Guid.NewGuid(); var id=Guid.NewGuid();
             await using var command=db.CreateCommand("""
                 INSERT INTO libraries(id,name) VALUES(@library,@name);
-                INSERT INTO library_node_accesses(library_id,node_id,mode,local_path,can_read,can_write) VALUES(@library,@a,'direct',@root,true,true);
-                INSERT INTO library_node_accesses(library_id,node_id,mode,can_read,can_write,transfer_source_node_id) VALUES(@library,@b,'transfer',true,true,@a),(@library,@c,'transfer',true,true,@a);
+                INSERT INTO library_worker_accesses(library_id,worker_id,mode,local_path,can_read,can_write) VALUES(@library,@a,'direct',@root,true,true);
+                INSERT INTO library_worker_accesses(library_id,worker_id,mode,can_read,can_write,transfer_source_worker_id) VALUES(@library,@b,'transfer',true,true,@a),(@library,@c,'transfer',true,true,@a);
                 """);
             command.Parameters.AddWithValue("library",library); command.Parameters.AddWithValue("name",library.ToString()); command.Parameters.AddWithValue("root",directory);
             command.Parameters.AddWithValue("a",a); command.Parameters.AddWithValue("b",b); command.Parameters.AddWithValue("c",c); await command.ExecuteNonQueryAsync();

@@ -31,8 +31,8 @@ export function systemLogGroupKey(entry: SystemLogEntry): string {
     entry.category,
     entry.message,
     entry.exception ?? '',
-    entry.nodeId ?? '',
-    entry.nodeName ?? '',
+    entry.workerId ?? '',
+    entry.workerName ?? '',
     entry.eventId ?? null,
   ]);
 }
@@ -72,7 +72,7 @@ export function summarizeSystemLogs(entries: readonly SystemLogEntry[]): readonl
     );
 }
 export function formatSystemLog(entry: SystemLogEntry): string {
-  const prefix = `[${entry.timestamp}] [${entry.level.toUpperCase()}] [${entry.category}]${entry.nodeName ? ` [@${entry.nodeName}]` : ''}`;
+  const prefix = `[${entry.timestamp}] [${entry.level.toUpperCase()}] [${entry.category}]${entry.workerName ? ` [@${entry.workerName}]` : ''}`;
   return `${prefix} ${entry.message}${entry.exception ? `\n${entry.exception}` : ''}`;
 }
 export function serializeSystemLogs(entries: readonly SystemLogEntry[]): string {
@@ -91,8 +91,8 @@ export function systemLogsCsv(entries: readonly SystemLogEntry[]): string {
       'timestamp',
       'level',
       'category',
-      'nodeId',
-      'nodeName',
+      'workerId',
+      'workerName',
       'eventId',
       'message',
       'exception',
@@ -102,8 +102,8 @@ export function systemLogsCsv(entries: readonly SystemLogEntry[]): string {
       e.timestamp,
       e.level,
       e.category,
-      e.nodeId,
-      e.nodeName,
+      e.workerId,
+      e.workerName,
       e.eventId,
       e.message,
       e.exception,

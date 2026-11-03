@@ -1,5 +1,5 @@
 using System.Buffers.Binary;
-using Encoding.NodeAgent.Runtime.Media;
+using Encoding.WorkerAgent.Runtime.Media;
 using static Encoding.Plugins.Tests.Support;
 
 namespace Encoding.Plugins.Tests;

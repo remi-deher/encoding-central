@@ -2,7 +2,7 @@ using System.Text.Json;
 using Encoding.Api.Executions;
 using Encoding.Api.Flows;
 using Encoding.Contracts.Flows;
-using Encoding.Contracts.Nodes;
+using Encoding.Contracts.Workers;
 
 namespace Encoding.Runtime.Tests;
 
@@ -94,10 +94,10 @@ internal static class TrackNameScenarios
             new("input", null, new("base", "1.3.0", input.Id, input.Version, 1), new Dictionary<string, JsonElement>()),
             new("names", null, new("base", "1.3.0", "base-track-names", "1.3.0", 1), new Dictionary<string, JsonElement>())], [new("edge", "input", "success", "names")]);
         var worker = Guid.NewGuid();
-        NodeToolCapability[] Caps(string baseVersion, params NodeToolCapability[] more) => [new("plugin/base", baseVersion, ["general"], []), new("ffprobe", "7.0", ["video"], []), .. more];
+        WorkerToolCapability[] Caps(string baseVersion, params WorkerToolCapability[] more) => [new("plugin/base", baseVersion, ["general"], []), new("ffprobe", "7.0", ["video"], []), .. more];
         Check(validator.Validate(Flow()).IsValid, "A flow with the track names block is valid.");
-        Check(eligibility.CanRun(Flow(), Caps("1.3.0", new NodeToolCapability("mkvtoolnix", "81.0", ["video"], [])), worker), "A worker with MKVToolNix and Base 1.3.0 can run it.");
+        Check(eligibility.CanRun(Flow(), Caps("1.3.0", new WorkerToolCapability("mkvtoolnix", "81.0", ["video"], [])), worker), "A worker with MKVToolNix and Base 1.3.0 can run it.");
         Check(!eligibility.CanRun(Flow(), Caps("1.3.0"), worker), "A worker without MKVToolNix never receives it.");
-        Check(!eligibility.CanRun(Flow(), Caps("1.2.0", new NodeToolCapability("mkvtoolnix", "81.0", ["video"], [])), worker), "A worker that does not announce Base 1.3.0 never receives it.");
+        Check(!eligibility.CanRun(Flow(), Caps("1.2.0", new WorkerToolCapability("mkvtoolnix", "81.0", ["video"], [])), worker), "A worker that does not announce Base 1.3.0 never receives it.");
     }
 }

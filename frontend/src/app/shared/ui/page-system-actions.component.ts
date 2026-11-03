@@ -8,7 +8,7 @@ import { RouterLink } from '@angular/router';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { of, switchMap } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
-import { ClusterOverview, INITIAL_CLUSTER_OVERVIEW } from '../services/cluster-overview';
+import { CentralOverview, INITIAL_CLUSTER_OVERVIEW } from '../services/central-overview';
 import { ExecutionTracking, INITIAL_EXECUTION_TRACKING } from '../services/execution-tracking';
 
 @Component({
@@ -26,11 +26,11 @@ import { ExecutionTracking, INITIAL_EXECUTION_TRACKING } from '../services/execu
     <div class="page-system-actions" role="group" aria-label="État du système">
       <a
         class="system-pill cluster-pill"
-        routerLink="/nodes"
+        routerLink="/workers"
         [queryParams]="{ tab: 'cluster' }"
         [class.is-offline]="!clusterHealthy()"
-        [attr.aria-label]="'État du cluster : ' + clusterLabel()"
-        [matTooltip]="'État du cluster : ' + clusterLabel()"
+        [attr.aria-label]="'État du central : ' + clusterLabel()"
+        [matTooltip]="'État du central : ' + clusterLabel()"
       >
         <span class="cluster-dot" [class.is-offline]="!clusterHealthy()" aria-hidden="true"></span>
         <span class="cluster-label">{{ clusterLabel() }}</span>
@@ -179,7 +179,7 @@ export class PageSystemActionsComponent {
   }
   private readonly auth = inject(AuthService);
   private readonly disabled = computed(() => !this.auth.user());
-  private readonly overview = inject(ClusterOverview);
+  private readonly overview = inject(CentralOverview);
   private readonly clusterState = toSignal(
     toObservable(this.disabled).pipe(
       switchMap((disabled) => (disabled ? of(INITIAL_CLUSTER_OVERVIEW) : this.overview.state$)),
@@ -194,7 +194,6 @@ export class PageSystemActionsComponent {
     const state = this.clusterState();
     if (state.status === 'loading') return 'Chargement…';
     if (state.status === 'error') return 'Données indisponibles';
-    if (state.snapshot?.identity.standalone) return 'Nœud autonome';
     const nodes = state.snapshot?.nodes ?? [];
     return (
       nodes.filter((node) => node.status === 'online').length + ' / ' + nodes.length + ' en ligne'

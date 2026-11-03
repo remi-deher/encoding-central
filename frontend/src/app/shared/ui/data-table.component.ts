@@ -837,11 +837,11 @@ export class DataTableComponent {
   }
 
   protected rowActionSubject(row: DataTableRow): string {
-    return String(row['name'] ?? row['nodeName'] ?? row['id'] ?? 'cet élément');
+    return String(row['name'] ?? row['workerName'] ?? row['id'] ?? 'cet élément');
   }
 
   protected rowSubject(row: DataTableRow): string {
-    return String(row['name'] ?? row['nodeName'] ?? row['id'] ?? 'cet élément');
+    return String(row['name'] ?? row['workerName'] ?? row['id'] ?? 'cet élément');
   }
 
   protected visibleRowActions(row: DataTableRow): readonly DataTableRowAction[] {

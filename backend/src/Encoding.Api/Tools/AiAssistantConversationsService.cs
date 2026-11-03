@@ -9,14 +9,14 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.DataProtection;
 using Encoding.Api.Executions;
 using Encoding.Api.Flows;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Encoding.Api.Mcp;
 using Encoding.Api.Libraries;
 using Encoding.Api.Infrastructure;
 using Encoding.Contracts.Executions;
 using Encoding.Contracts.Flows;
 using Encoding.Contracts.Libraries;
-using Encoding.Contracts.Nodes;
+using Encoding.Contracts.Workers;
 using Encoding.Contracts.Tools;
 
 namespace Encoding.Api.Tools;
@@ -33,8 +33,6 @@ public sealed class AiAssistantConversationsService(AiAssistantSupportService su
             .OrderByDescending(conversation => conversation.UpdatedAt)
             .Take(100)
             .ToArray();
-        for (var index = 0; index < page.Length; index++)
-            page[index] = page[index] with { CoordinatorId = await support.Cluster.CoordinatorAsync(page[index].Id, ct) };
         return page;
     }
 
@@ -68,7 +66,7 @@ public sealed class AiAssistantConversationsService(AiAssistantSupportService su
                     sourceLabel, $"Conversation · {sourceLabel} · {conversation.Provider}",
                     null, null, conversation.UpdatedAt));
             }
-            else if (await support.Cluster.GetSessionAsync(conversation.Id, ct) is { } session)
+            else if (await support.Central.GetSessionAsync(conversation.Id, ct) is { } session)
             {
                 for (var turnIndex = 0; turnIndex < session.Turns.Count; turnIndex++)
                 {
@@ -123,7 +121,7 @@ public sealed class AiAssistantConversationsService(AiAssistantSupportService su
         var ownerId = AiAssistantSupportService.OwnerId(user);
         var stored = await support.ReadConversationAsync(ownerId, id, ct);
         if (stored is null) return false;
-        var session = await support.Cluster.GetSessionAsync(id, ct);
+        var session = await support.Central.GetSessionAsync(id, ct);
         if (session?.PendingRequest is not null)
             throw new InvalidOperationException("Terminez ou reprenez la demande en cours avant de supprimer cette conversation.");
 
@@ -136,7 +134,6 @@ public sealed class AiAssistantConversationsService(AiAssistantSupportService su
         await support.Store.DeleteAsync(AiAssistantSupportService.ConversationKey(stored.OwnerId, stored.Conversation.Id), ct);
         await support.Store.DeleteAsync(AiAssistantSupportService.SessionOwnerKey(stored.Conversation.Id), ct);
         await support.Store.DeleteAsync("session/" + stored.Conversation.Id, ct);
-            await support.Store.DeleteAsync(AiClusterService.CoordinatorKey(stored.Conversation.Id), ct);
         for (var attempt = 1; attempt <= AiAssistantSupportService.MaxTitleAttemptTurns; attempt++)
         {
             var titleSessionId = $"{stored.Conversation.Id.Split('.')[0]}.{AiAssistantSupportService.TitleRequestId(stored.Conversation.Id, attempt):N}";
@@ -174,13 +171,6 @@ public sealed class AiAssistantConversationsService(AiAssistantSupportService su
         if (activity?.ConversationId is { } id && AiAssistantSupportService.IsSessionId(id) && await support.ReadConversationAsync(ownerId, id, ct) is { } stored)
             activity = activity with { ConversationTitle = stored.Conversation.Title };
         return activity;
-    }
-
-    public async Task<Guid?> GetRequestCoordinatorIdAsync(Guid requestId, ClaimsPrincipal user, CancellationToken ct)
-    {
-        if (requestId == Guid.Empty) return null;
-        var activity = await ReadActivityAsync(AiAssistantSupportService.OwnerId(user), requestId, ct);
-        return await support.Cluster.CoordinatorAsync(activity?.ConversationId, ct);
     }
 
     public async Task<AiAssistantActivity?> ReadActivityAsync(string ownerId, Guid requestId, CancellationToken ct) =>
@@ -243,15 +233,15 @@ public sealed class AiAssistantConversationsService(AiAssistantSupportService su
         if (!AiAssistantSupportService.IsSessionId(id)) return null;
         var stored = await support.ReadConversationAsync(ownerId: AiAssistantSupportService.OwnerId(user), id, ct);
         if (stored is null) return null;
-        var conversation = stored.Conversation with { CoordinatorId = await support.Cluster.CoordinatorAsync(id, ct) };
+        var conversation = stored.Conversation;
 
-        var session = await support.Cluster.GetSessionAsync(id, ct);
+        var session = await support.Central.GetSessionAsync(id, ct);
         var turns = session?.Turns.Select(turn => new AiAssistantTurn(
             turn.RequestId, stored.UserPrompts?.GetValueOrDefault(turn.RequestId) ?? turn.UserPrompt, turn.Content,
             stored.TurnSources?.GetValueOrDefault(turn.RequestId) ?? [conversation.Source],
             stored.TurnSelections?.GetValueOrDefault(turn.RequestId) ?? turn.Selection,
             stored.TurnActualModels?.GetValueOrDefault(turn.RequestId) ?? turn.Usage?.Model,
-            turn.ExecutorNodeId)).ToArray()
+            turn.ExecutorWorkerId)).ToArray()
             ?? Array.Empty<AiAssistantTurn>();
         var pending = session?.PendingRequest is { } requestId && session.PendingPrompt is { } prompt
             ? new AiAssistantPendingTurn(requestId, stored.UserPrompts?.GetValueOrDefault(requestId) ?? prompt.UserPrompt,
@@ -270,7 +260,7 @@ public sealed class AiAssistantConversationsService(AiAssistantSupportService su
         var ownerId = AiAssistantSupportService.OwnerId(user);
         var stored = await support.ReadConversationAsync(ownerId, id, ct);
         if (stored is null) return null;
-        var session = await support.Cluster.GetSessionAsync(id, ct);
+        var session = await support.Central.GetSessionAsync(id, ct);
         if (session?.PendingRequest is not null)
             throw new InvalidOperationException("Reprenez ou terminez la demande en cours avant de modifier ses ressources.");
         if (session is not null && session.SystemPrompt != AiAssistantSupportService.BuildSystemPrompt())

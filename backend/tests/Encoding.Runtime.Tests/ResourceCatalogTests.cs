@@ -104,7 +104,7 @@ public sealed class ResourceCatalogTests
 
         var usage = Assert.Single(await scope.Repository.UsageAsync(id, CancellationToken.None));
         Assert.Equal("Mon flow", usage.FlowName);
-        Assert.Equal("Polices", usage.NodeName);
+        Assert.Equal("Polices", usage.WorkerName);
 
         Assert.True(await scope.Repository.DeleteAsync(id, CancellationToken.None));
         Assert.False(scope.Blobs.Exists(file.Sha256));

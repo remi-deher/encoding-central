@@ -22,7 +22,7 @@ public sealed class ToolStoreService(IConfiguration configuration, ILogger<ToolS
     private readonly SemaphoreSlim gate = new(1, 1);
     private readonly ConcurrentDictionary<(string Id, string Version, string Platform), byte> verified = new();
     public string Directory { get; } = configuration["ToolStore:Directory"]
-        ?? Path.Combine(configuration["Node:DataDirectory"] is { Length: > 0 } data ? data : Path.Combine(AppContext.BaseDirectory, "Data"), "tool-store");
+        ?? Path.Combine(configuration["Worker:DataDirectory"] is { Length: > 0 } data ? data : Path.Combine(AppContext.BaseDirectory, "Data"), "tool-store");
     private string IndexPath => Path.Combine(Directory, "installed.json");
     private string PackageDirectory(string id, string version, string platform) => Path.Combine(Directory, "packages", id, version, platform);
     private string ManagedDirectory(string id, string version, string platform) => Path.Combine(Directory, "managed", id, version, platform);

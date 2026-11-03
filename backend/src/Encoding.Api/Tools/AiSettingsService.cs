@@ -29,7 +29,7 @@ public sealed class AiSettingsService
         }
     }
 
-    public void ValidateModelSelections(AiSettingsDto current, AiSettingsUpdateRequest update, AiClusterModelCatalog catalog)
+    public void ValidateModelSelections(AiSettingsDto current, AiSettingsUpdateRequest update, AiCentralModelCatalog catalog)
     {
         var defaultProvider = update.DefaultProvider ?? current.DefaultProvider;
         var assistantProvider = update.AssistantProvider is null
@@ -57,13 +57,13 @@ public sealed class AiSettingsService
         string usage,
         (string Provider, string? Model, string? Effort, bool LocalOnly) current,
         (string Provider, string? Model, string? Effort, bool LocalOnly) proposed,
-        AiClusterModelCatalog catalog)
+        AiCentralModelCatalog catalog)
     {
         if (current == proposed || proposed.Model is null && proposed.Effort is null && proposed.Provider == current.Provider)
             return;
 
-        var nodes = proposed.LocalOnly ? catalog.Nodes.Take(1) : catalog.Nodes;
-        var discovered = nodes.SelectMany(node => node.Providers)
+        var workers = proposed.LocalOnly ? catalog.Workers.Take(1) : catalog.Workers;
+        var discovered = workers.SelectMany(worker => worker.Providers)
             .Where(provider => provider.Provider == proposed.Provider && provider.State == "available")
             .SelectMany(provider => provider.Models)
             .Where(model => !catalog.Policy.DisabledModels.Any(disabled => disabled.Provider == proposed.Provider && disabled.Model == model.Id))
@@ -156,7 +156,7 @@ public sealed class AiSettingsService
         }
     }
 
-    /// <summary>Remplace uniquement la clé OpenAI (réplication entre nœuds) ; les autres réglages restent propres au nœud.</summary>
+    /// <summary>Remplace uniquement la clé OpenAI (réplication entre workers) ; les autres réglages restent propres au worker.</summary>
     public void SetOpenAiApiKey(string? key)
     {
         lock (syncRoot)
@@ -167,7 +167,7 @@ public sealed class AiSettingsService
         }
     }
 
-    /// <summary>Remplace uniquement la clé Anthropic (réplication entre nœuds).</summary>
+    /// <summary>Remplace uniquement la clé Anthropic (réplication entre workers).</summary>
     public void SetAnthropicApiKey(string? key)
     {
         lock (syncRoot)

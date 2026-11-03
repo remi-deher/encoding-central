@@ -4,7 +4,7 @@ using Encoding.Api.Flows;
 using Encoding.Contracts.Executions;
 using Encoding.Contracts.Flows;
 using Encoding.Contracts.Flows.Conditions;
-using Encoding.Contracts.Nodes;
+using Encoding.Contracts.Workers;
 using Encoding.Contracts.Plugins;
 
 namespace Encoding.Runtime.Tests;
@@ -65,7 +65,7 @@ internal static class ConditionScenarios
             new("condition",null,reference,new Dictionary<string,JsonElement>{["rules"]=document})],
             [new("edge","input","success","condition")]);
         Check(validator.Validate(flow).IsValid,"The flow validator accepts the structured tree.");
-        IReadOnlyList<NodeToolCapability> caps=[new("plugin/base","1.0.0",["general"],[]),new("plugin/conditions",manifest.Version,["general"],[]),new("ffprobe","7.0",["video"],[])];
+        IReadOnlyList<WorkerToolCapability> caps=[new("plugin/base","1.0.0",["general"],[]),new("plugin/conditions",manifest.Version,["general"],[]),new("ffprobe","7.0",["video"],[])];
         Check(eligibility.CanRun(flow,caps,worker),"Native conditions do not require JavaScript or a third-party process.");
         Check(!eligibility.CanRun(flow,caps.Where(cap=>cap.ToolId!="plugin/conditions").ToArray(),worker),"An old agent cannot execute the new plugin.");
         var draft=flow with { Nodes=[flow.Nodes[0],flow.Nodes[1] with { Configuration=new Dictionary<string,JsonElement>{["rules"]=ConditionTree.Serialize(new ConditionGroup("all",[]))} }] };

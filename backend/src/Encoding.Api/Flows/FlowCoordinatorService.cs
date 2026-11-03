@@ -1,11 +1,11 @@
 using System.Text.Json;
 using Encoding.Api.Executions;
 using Encoding.Api.Infrastructure;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Encoding.Api.Plugins;
 using Encoding.Api.Resources;
 using Encoding.Contracts.Flows;
-using Encoding.Contracts.Nodes;
+using Encoding.Contracts.Workers;
 
 namespace Encoding.Api.Flows;
 
@@ -29,7 +29,7 @@ public record FlowExportData(byte[] Bytes, string ContentType, string FileName);
 
 public sealed class FlowCoordinatorService(
     FlowRepository flows,
-    NodeRepository nodes,
+    WorkerRepository workers,
     ResourceRepository resources,
     FlowTemplateRepository templates,
     FlowDefinitionValidator validator,
@@ -38,7 +38,7 @@ public sealed class FlowCoordinatorService(
 {
     public FlowCoordinatorService(IServiceProvider services) : this(
         services.GetService(typeof(FlowRepository)) as FlowRepository ?? null!,
-        services.GetService(typeof(NodeRepository)) as NodeRepository ?? null!,
+        services.GetService(typeof(WorkerRepository)) as WorkerRepository ?? null!,
         services.GetService(typeof(ResourceRepository)) as ResourceRepository ?? null!,
         services.GetService(typeof(FlowTemplateRepository)) as FlowTemplateRepository ?? null!,
         services.GetService(typeof(FlowDefinitionValidator)) as FlowDefinitionValidator ?? null!,
@@ -60,18 +60,18 @@ public sealed class FlowCoordinatorService(
         if (flow is null) return null;
 
         var validation = validator.Validate(flow);
-        var availableWorkers = (await nodes.ListAsync(offlineAfter, ct))
-            .Where(node => node.Status == NodePresenceStatus.Online
-                && node.Lifecycle == NodeLifecycle.Online
-                && node.Roles.Contains(NodeRole.Worker))
+        var availableWorkers = (await workers.ListAsync(offlineAfter, ct))
+            .Where(worker => worker.Status == WorkerPresenceStatus.Online
+                && worker.Lifecycle == WorkerLifecycle.Online
+                && worker.Roles.Contains(WorkerRole.Worker))
             .ToArray();
 
         var compatible = validation.IsValid
-            ? availableWorkers.Where(node => eligibility.CanRun(flow, node.Capabilities, node.Id,
-                identity: new NodeIdentityResponse(node.Id, node.DisplayName,
-                    node.Labels ?? new Dictionary<string, string?>(),
-                    node.Labels ?? new Dictionary<string, string?>(), []),
-                inventory: node.Inventory)).ToArray()
+            ? availableWorkers.Where(worker => eligibility.CanRun(flow, worker.Capabilities, worker.Id,
+                identity: new WorkerIdentityResponse(worker.Id, worker.DisplayName,
+                    worker.Labels ?? new Dictionary<string, string?>(),
+                    worker.Labels ?? new Dictionary<string, string?>(), []),
+                inventory: worker.Inventory)).ToArray()
             : [];
 
         return new
@@ -99,12 +99,12 @@ public sealed class FlowCoordinatorService(
                     writePermissions = "not-evaluated",
                     aiProvider = "not-evaluated",
                 },
-                compatibleWorkers = compatible.Select(node => new
+                compatibleWorkers = compatible.Select(worker => new
                 {
-                    node.Id,
-                    node.Name,
-                    node.Capabilities,
-                    node.Inventory
+                    worker.Id,
+                    worker.Name,
+                    worker.Capabilities,
+                    worker.Inventory
                 }),
                 observedAt = DateTimeOffset.UtcNow,
             },

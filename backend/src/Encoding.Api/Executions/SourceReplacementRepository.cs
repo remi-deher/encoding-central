@@ -49,16 +49,16 @@ public sealed class SourceReplacementRepository(DbDataSource dataSource,SourceWr
         }
         catch(ArgumentException) { return false; }
     }
-    internal static async Task RecordInTransactionAsync(Guid execution,Guid library,Guid sourceNode,string original,string sourceSha,string resultSha,int graceHours,
+    internal static async Task RecordInTransactionAsync(Guid execution,Guid library,Guid sourceWorker,string original,string sourceSha,string resultSha,int graceHours,
         SourceReplacementReport report,DbConnection c,DbTransaction tx,CancellationToken ct)
     {
         var replaced=report.Status=="replaced";
         await using var insert=Sql.Command("""
-          INSERT INTO source_replacements(execution_id,library_id,source_node_id,original_path,final_path,backup_path,source_sha,result_sha,state,detail,grace_until)
+          INSERT INTO source_replacements(execution_id,library_id,source_worker_id,original_path,final_path,backup_path,source_sha,result_sha,state,detail,grace_until)
           VALUES(@execution,@library,@node,@original,@final,@backup,@source,@result,@state,@detail,CASE WHEN @replaced THEN clock_timestamp()+@grace END)
           ON CONFLICT(execution_id) DO NOTHING
           """,c,tx);
-        insert.Parameters.AddWithValue("execution",execution); insert.Parameters.AddWithValue("library",library); insert.Parameters.AddWithValue("node",sourceNode);
+        insert.Parameters.AddWithValue("execution",execution); insert.Parameters.AddWithValue("library",library); insert.Parameters.AddWithValue("node",sourceWorker);
         insert.Parameters.AddWithValue("original",original); insert.Parameters.AddWithValue("final",SqlKind.Text,(object?)report.FinalPath??DBNull.Value);
         insert.Parameters.AddWithValue("backup",SqlKind.Text,(object?)report.BackupPath??DBNull.Value);
         insert.Parameters.AddWithValue("source",sourceSha); insert.Parameters.AddWithValue("result",resultSha); insert.Parameters.AddWithValue("state",replaced?"replaced":"failed");
@@ -112,50 +112,50 @@ public sealed class SourceReplacementRepository(DbDataSource dataSource,SourceWr
         update.Parameters.AddWithValue("id",execution); await update.ExecuteNonQueryAsync(ct); await tx.CommitAsync(ct); return "ok";
     }
 
-    public async Task<IReadOnlyList<RuntimeReplacementTask>> TasksAsync(Guid node,CancellationToken ct)
+    public async Task<IReadOnlyList<RuntimeReplacementTask>> TasksAsync(Guid worker,CancellationToken ct)
     {
         if(sourceWrites is not null)
         {
             await using var connection=await dataSource.OpenConnectionAsync(ct);
-            if(!await sourceWrites.NodeCanWriteAsync(node,connection,null,ct)) return [];
+            if(!await sourceWrites.NodeCanWriteAsync(worker,connection,null,ct)) return [];
         }
 
         await using var cmd=dataSource.CreateCommand($"""
           SELECT r.execution_id,CASE WHEN r.state='rollback_requested' THEN 'rollback' ELSE 'finalize' END,a.local_path,r.original_path,r.final_path,r.backup_path,r.source_sha,r.result_sha
-          FROM source_replacements r JOIN library_node_accesses a ON a.library_id=r.library_id AND a.node_id=r.source_node_id
-          JOIN cluster_nodes n ON n.id=r.source_node_id AND n.accepts_work AND n.deleted_at IS NULL
-          WHERE {TaskOwnershipRepository.ActiveSql("r.execution_id")} AND r.source_node_id=@node AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.can_write AND a.local_path IS NOT NULL
+          FROM source_replacements r JOIN library_worker_accesses a ON a.library_id=r.library_id AND a.worker_id=r.source_worker_id
+          JOIN workers n ON n.id=r.source_worker_id AND n.accepts_work AND n.deleted_at IS NULL
+          WHERE r.source_worker_id=@node AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.can_write AND a.local_path IS NOT NULL
           AND (r.state='rollback_requested' OR (r.state='replaced' AND r.grace_until<=clock_timestamp()))
           ORDER BY r.replaced_at LIMIT 20
           """);
-        cmd.Parameters.AddWithValue("node",node); await using var r=await cmd.ExecuteReaderAsync(ct); var tasks=new List<RuntimeReplacementTask>();
+        cmd.Parameters.AddWithValue("node",worker); await using var r=await cmd.ExecuteReaderAsync(ct); var tasks=new List<RuntimeReplacementTask>();
         while(await r.ReadAsync(ct)) tasks.Add(new(r.GetGuid(0),r.GetString(1),r.GetString(2),r.GetString(3),r.GetString(4),r.GetString(5),r.GetString(6),
             r.GetString(7),SourceWriteGuardsSupported:sourceWrites is not null));
         return tasks;
     }
 
-    /// <summary>Enregistre le résultat d'une restauration ou d'une purge ; seul le nœud d'accès à l'origine du remplacement peut le faire.</summary>
-    public async Task<bool> AuthorizeAsync(Guid execution,Guid node,string root,CancellationToken ct)
+    /// <summary>Enregistre le résultat d'une restauration ou d'une purge ; seul le worker d'accès à l'origine du remplacement peut le faire.</summary>
+    public async Task<bool> AuthorizeAsync(Guid execution,Guid worker,string root,CancellationToken ct)
     {
-        await using var cmd=dataSource.CreateCommand($"SELECT EXISTS(SELECT 1 FROM source_replacements r JOIN library_node_accesses a ON a.library_id=r.library_id AND a.node_id=r.source_node_id WHERE {TaskOwnershipRepository.ActiveSql("r.execution_id")} AND r.execution_id=@id AND r.source_node_id=@node AND a.is_enabled AND a.can_write AND a.mode='direct' AND a.local_path=@root AND (r.state='rollback_requested' OR r.state='replaced' AND r.grace_until<=clock_timestamp()))");
-        cmd.Parameters.AddWithValue("id",execution);cmd.Parameters.AddWithValue("node",node);cmd.Parameters.AddWithValue("root",root);if(!await cmd.ScalarBoolAsync(ct)) return false;
+        await using var cmd=dataSource.CreateCommand($"SELECT EXISTS(SELECT 1 FROM source_replacements r JOIN library_worker_accesses a ON a.library_id=r.library_id AND a.worker_id=r.source_worker_id WHERE r.execution_id=@id AND r.source_worker_id=@node AND a.is_enabled AND a.can_write AND a.mode='direct' AND a.local_path=@root AND (r.state='rollback_requested' OR r.state='replaced' AND r.grace_until<=clock_timestamp()))");
+        cmd.Parameters.AddWithValue("id",execution);cmd.Parameters.AddWithValue("node",worker);cmd.Parameters.AddWithValue("root",root);if(!await cmd.ScalarBoolAsync(ct)) return false;
         if(sourceWrites is not null)
         {
             await using var connection=await dataSource.OpenConnectionAsync(ct);
-            if(!await sourceWrites.NodeCanWriteAsync(node,connection,null,ct)) return false;
+            if(!await sourceWrites.NodeCanWriteAsync(worker,connection,null,ct)) return false;
         }
         return await cmd.ScalarBoolAsync(ct);
     }
 
-    public async Task<bool> ReportAsync(Guid execution,Guid node,ReportReplacementTask request,CancellationToken ct)
+    public async Task<bool> ReportAsync(Guid execution,Guid worker,ReportReplacementTask request,CancellationToken ct)
     {
         if(request.Outcome is not("rolled_back" or "finalized" or "failed") || request.Detail?.Length>2000) return false;
         await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
         await using var read=Sql.Command("""
           SELECT r.state,r.grace_until<=clock_timestamp(),r.library_id,r.original_path,w.media_key FROM source_replacements r JOIN execution_work w ON w.execution_id=r.execution_id
-          WHERE r.execution_id=@id AND r.source_node_id=@node FOR UPDATE OF r
+          WHERE r.execution_id=@id AND r.source_worker_id=@node FOR UPDATE OF r
           """,c,tx);
-        read.Parameters.AddWithValue("id",execution); read.Parameters.AddWithValue("node",node); string state; bool expired; Guid library; string original; string key;
+        read.Parameters.AddWithValue("id",execution); read.Parameters.AddWithValue("node",worker); string state; bool expired; Guid library; string original; string key;
         await using(var r=await read.ExecuteReaderAsync(ct))
         {
             if(!await r.ReadAsync(ct)) return false;

@@ -14,7 +14,6 @@
     "
     [conversations]="filteredConversations()"
     [totalCount]="conversations().length"
-    [nodes]="aiNodes()"
     [activeId]="detail()?.conversation?.id ?? null"
     [deletingId]="deletingConversationId()"
     [query]="searchQuery()"
@@ -43,7 +42,7 @@
             <div>
               <h3>Joindre une ressource</h3>
               <p class="muted">
-                Ajoutez un flow, une exécution, un nœud ou une bibliothèque au contexte.
+                Ajoutez un flow, une exécution, un worker ou une bibliothèque au contexte.
               </p>
             </div>
           </div>
@@ -55,7 +54,7 @@
             >
               <mat-option value="flow">Flows</mat-option>
               <mat-option value="execution">Exécutions</mat-option>
-              <mat-option value="node">Nœuds</mat-option>
+              <mat-option value="node">Workers</mat-option>
               <mat-option value="library">Bibliothèques</mat-option>
             </mat-select>
           </mat-form-field>
@@ -236,19 +235,6 @@
         </button>
         <div class="chat-toolbar__copy">
           <h2>{{ detail()?.conversation?.title ?? 'Nouvelle conversation' }}</h2>
-          @if (detail(); as current) {
-            @if (coordinatorLabel(current.conversation); as origin) {
-              <span
-                class="node-badge"
-                [title]="
-                  coordinatorLost(current.conversation)
-                    ? 'Ce nœud ne répond plus : le nœud courant reprendra la discussion à votre prochain message.'
-                    : 'Nœud qui coordonne cette discussion.'
-                "
-                >{{ origin }}{{ coordinatorLost(current.conversation) ? ' · injoignable' : '' }}</span
-              >
-            }
-          }
         </div>
         <button matButton="tonal" type="button" class="context-toggle" (click)="openWorkspace()">
           <span>Contexte</span>
@@ -445,7 +431,7 @@
           Modèle indisponible ou désactivé. Choisissez un modèle disponible.
         </p>
       }
-      @for (node of assistantOptions()?.catalogs ?? []; track node.nodeId) {
+      @for (node of assistantOptions()?.catalogs ?? []; track node.workerId) {
         @for (catalog of node.providers; track catalog.provider) {
           @if (catalog.state !== 'available') {
             <p class="muted" role="status">

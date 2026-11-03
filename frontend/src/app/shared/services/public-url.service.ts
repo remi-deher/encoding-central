@@ -2,7 +2,7 @@ import { inject, Injectable, signal } from '@angular/core';
 import { NetworkSettingsService } from './network-settings.service';
 
 /**
- * Adresse à afficher pour joindre ce nœud : l'URL publique déclarée dans Paramètres > Réseau,
+ * Adresse à afficher pour joindre ce worker : l'URL publique déclarée dans Paramètres > Réseau,
  * sinon l'adresse du navigateur (qui peut être une adresse interne derrière un reverse proxy).
  */
 @Injectable({ providedIn: 'root' })

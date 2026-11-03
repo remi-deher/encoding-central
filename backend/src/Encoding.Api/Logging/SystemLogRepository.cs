@@ -26,8 +26,8 @@ public sealed class SystemLogRepository
         await using var transaction = await connection.BeginTransactionAsync(ct);
 
         await using var cmd = Sql.Command("""
-            INSERT INTO system_logs (id, timestamp, level, category, message, exception, node_id, node_name, event_id)
-            VALUES (@id, @timestamp, @level, @category, @message, @exception, @node_id, @node_name, @event_id)
+            INSERT INTO system_logs (id, timestamp, level, category, message, exception, worker_id, worker_name, event_id)
+            VALUES (@id, @timestamp, @level, @category, @message, @exception, @worker_id, @worker_name, @event_id)
             """, connection, transaction);
 
         var pId = cmd.Parameters.AddWithValue("id", DBNull.Value);
@@ -36,8 +36,8 @@ public sealed class SystemLogRepository
         var pCategory = cmd.Parameters.AddWithValue("category", DBNull.Value);
         var pMessage = cmd.Parameters.AddWithValue("message", DBNull.Value);
         var pException = cmd.Parameters.AddWithValue("exception", DBNull.Value);
-        var pNodeId = cmd.Parameters.AddWithValue("node_id", DBNull.Value);
-        var pNodeName = cmd.Parameters.AddWithValue("node_name", DBNull.Value);
+        var pNodeId = cmd.Parameters.AddWithValue("worker_id", DBNull.Value);
+        var pNodeName = cmd.Parameters.AddWithValue("worker_name", DBNull.Value);
         var pEventId = cmd.Parameters.AddWithValue("event_id", DBNull.Value);
 
         foreach (var entry in entries)
@@ -48,8 +48,8 @@ public sealed class SystemLogRepository
             pCategory.Value = entry.Category;
             pMessage.Value = entry.Message;
             pException.Value = (object?)entry.Exception ?? DBNull.Value;
-            pNodeId.Value = (object?)entry.NodeId?.ToString() ?? DBNull.Value;
-            pNodeName.Value = (object?)entry.NodeName ?? DBNull.Value;
+            pNodeId.Value = (object?)entry.WorkerId?.ToString() ?? DBNull.Value;
+            pNodeName.Value = (object?)entry.WorkerName ?? DBNull.Value;
             pEventId.Value = (object?)entry.EventId ?? DBNull.Value;
 
             await cmd.ExecuteNonQueryAsync(ct);
@@ -65,7 +65,7 @@ public sealed class SystemLogRepository
 
         await using var connection = await _dataSource.OpenConnectionAsync(ct);
 
-        var sql = "SELECT id, timestamp, level, category, message, exception, node_id, node_name, event_id FROM system_logs WHERE 1=1";
+        var sql = "SELECT id, timestamp, level, category, message, exception, worker_id, worker_name, event_id FROM system_logs WHERE 1=1";
 
         if (query.MinLevel.HasValue)
         {
@@ -83,9 +83,9 @@ public sealed class SystemLogRepository
             sql += " AND category LIKE @category";
         }
 
-        if (query.NodeId.HasValue)
+        if (query.WorkerId.HasValue)
         {
-            sql += " AND node_id = @node_id";
+            sql += " AND worker_id = @worker_id";
         }
 
         if (query.Since.HasValue)
@@ -108,9 +108,9 @@ public sealed class SystemLogRepository
             cmd.Parameters.AddWithValue("category", query.Category.Trim() + "%");
         }
 
-        if (query.NodeId.HasValue)
+        if (query.WorkerId.HasValue)
         {
-            cmd.Parameters.AddWithValue("node_id", query.NodeId.Value.ToString());
+            cmd.Parameters.AddWithValue("worker_id", query.WorkerId.Value.ToString());
         }
 
         if (query.Since.HasValue)
@@ -136,7 +136,7 @@ public sealed class SystemLogRepository
             var category = reader.GetString(3);
             var message = reader.GetString(4);
             var exception = reader.IsDBNull(5) ? null : reader.GetString(5);
-            var nodeId = reader.IsDBNull(6) ? null : (Guid.TryParse(reader.GetString(6), out var nid) ? nid : (Guid?)null);
+            var workerId = reader.IsDBNull(6) ? null : (Guid.TryParse(reader.GetString(6), out var nid) ? nid : (Guid?)null);
             var nodeName = reader.IsDBNull(7) ? null : reader.GetString(7);
             var eventId = reader.IsDBNull(8) ? null : (int?)reader.GetInt32(8);
 
@@ -147,8 +147,8 @@ public sealed class SystemLogRepository
                 Category: category,
                 Message: message,
                 Exception: exception,
-                NodeId: nodeId,
-                NodeName: nodeName,
+                WorkerId: workerId,
+                WorkerName: nodeName,
                 EventId: eventId));
         }
 

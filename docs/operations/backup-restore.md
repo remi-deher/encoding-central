@@ -1,21 +1,21 @@
 # Sauvegarde et restauration
 
-## Mode pair à pair
+## Une seule base
 
-Le serveur utilise exclusivement SQLite local et le maillage signé. Avant la mise à jour d’une ancienne installation utilisant le mode de consensus retiré, sauvegarder à froid ses bases, identités, clés et journaux. Ne pas démarrer ses projections indépendamment : aucune conversion automatique vers le maillage n’est prise en charge.
+Le central utilise exclusivement SQLite local ; il n'y a ni réplication ni maillage. Avant la mise à jour d’une ancienne installation qui utilisait le maillage ou le mode de consensus retirés, sauvegarder à froid sa base, ses identités, ses clés et ses journaux : aucune conversion automatique n’est prise en charge ([ADR 0036](../architecture/adr/0036-separation-stricte-central-worker.md)).
 
 ## Ce qui doit être sauvegardé
 
 | Donnée | Emplacement (Compose) | Criticité |
 | --- | --- | --- |
-| Base SQLite locale : configuration, flows, bibliothèques, membres et historique réconcilié | `/var/lib/encoding-node/cluster.db`, volume `encoding-node-data` | **Indispensable sur chaque serveur** |
+| Base SQLite du central : configuration, flows, bibliothèques, workers et historique | `/var/lib/encoding-node/cluster.db`, volume `encoding-node-data` | **Indispensable** (c'est la seule copie) |
 | Clés Data Protection des plugins | volume `encoding-plugin-keys` (`PluginSettings__KeyDirectory`) | **Indispensable.** À sauvegarder avec la base : elles servent à déchiffrer les secrets de plugins. |
 | Sauvegardes JSON des flows | volume `encoding-flow-backups` (`FlowBackups__Directory`) | Recommandé. Une copie indépendante de la base. |
 | Artefacts d’exécution | volume `encoding-runtime-artifacts` (`Runtime__ArtifactDirectory`) | Facultatif pour les tâches terminées ; requis pour préserver les reprises d’étapes qui en dépendent. |
-| Identité locale du nœud | volume `encoding-node-data` | À conserver pour éviter un nouvel enrôlement. |
+| Identité locale du worker | volume `encoding-node-data` | À conserver pour éviter un nouvel enrôlement. |
 | Fichiers média publiés | bibliothèques média | À sauvegarder selon la politique du stockage média. |
 
-Chaque serveur conserve sa propre base. Sauvegarder la base de chacun ; la réconciliation n’est ni une sauvegarde ni une copie des fichiers médias et artefacts.
+Seul le central possède une base : c’est elle qu’il faut sauvegarder. Les workers n’en ont pas ; ils ne sont ni une sauvegarde de la base ni une copie des fichiers médias et artefacts.
 
 ## Sauvegarde à froid
 
@@ -43,19 +43,19 @@ Pour une restauration réelle :
 1. Arrêter le serveur concerné et conserver une copie de ses volumes actuels.
 2. Restaurer ensemble `encoding-node-data` et `encoding-plugin-keys`. Restaurer également les volumes de sauvegarde de flows et d’artefacts si nécessaire.
 3. Démarrer le serveur et contrôler `GET /health/details` : `database`, `migrations` et les contrôles de stockage doivent être `healthy`.
-4. Vérifier la page Cluster et laisser les pairs se réconcilier. Les données réconciliables plus récentes peuvent revenir depuis un autre nœud ; les états locaux, baux actifs et fichiers ne sont pas récupérés par le maillage.
+4. Vérifier la page Workers. Un worker enrôlé après la sauvegarde n’y figure plus : il doit être enrôlé à nouveau. Les baux actifs et les fichiers ne sont pas restaurés par la base.
 
 Si un média a été remplacé, sa sauvegarde de remplacement doit également être restaurée depuis le stockage configuré pour cette bibliothèque.
 
 ## Installation fraîche
 
-Au premier démarrage, le serveur crée `/var/lib/encoding-node/cluster.db`, applique les migrations et établit l’identité locale du cluster. Pour installer sans reprendre les données précédentes, démarrer avec un volume `encoding-node-data` neuf. Cela réinitialise aussi l’identité du nœud ; les volumes de sauvegardes, de clés de plugins et d’artefacts sont distincts et doivent être conservés ou remplacés selon le besoin.
+Au premier démarrage, le serveur crée `/var/lib/encoding-node/cluster.db`, applique les migrations et établit l’identité locale du central. Pour installer sans reprendre les données précédentes, démarrer avec un volume `encoding-node-data` neuf. Cela réinitialise aussi l’identité du worker ; les volumes de sauvegardes, de clés de plugins et d’artefacts sont distincts et doivent être conservés ou remplacés selon le besoin.
 
 ## Perte d’un worker ou d’un serveur
 
 Retirer une identité de worker perdue depuis l’interface, puis enrôler la nouvelle installation et redéclarer ses accès aux bibliothèques. Les tentatives actives d’un worker perdu échouent après expiration du bail ; elles ne sont pas reprises automatiquement. Une relance vient d’une règle explicite du flow ou d’une action manuelle.
 
-À la perte d’un serveur, un autre pair conserve les états réconciliés. Restaurer le volume du nœud perdu si son état local doit être récupéré ; réenrôler l’installation si l’identité de nœud a été perdue. Les journaux du maillage ne remplacent pas les sauvegardes.
+À la perte du central, il n’existe aucune autre copie de la base : restaurer sa base et ses clés depuis la sauvegarde. Restaurer le volume d’un worker perdu si son identité locale doit être récupérée ; sinon l’enrôler à nouveau.
 
 ## Mise à jour
 

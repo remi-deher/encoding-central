@@ -14,25 +14,15 @@ public sealed class LibraryActivityRepository(DbDataSource dataSource, Execution
         WITH inventory AS (
             SELECT m.id,m.library_id,l.name AS library,m.relative_path,m.byte_length,m.modified_at,
                    l.is_active AS library_active,v.definition->>'name' AS flow,a.flow_version,
-                   e.id AS execution_id,e.state AS execution_state,e.detail,e.node_id,n.name AS node,
+                   e.id AS execution_id,e.state AS execution_state,e.detail,e.worker_id,n.name AS node,
                    e.progress,e.updated_at
             FROM library_media m
             JOIN libraries l ON l.id=m.library_id AND NOT l.is_deleted
             LEFT JOIN library_flow_assignments a ON a.library_id=l.id
             LEFT JOIN flow_versions v ON v.flow_id=a.flow_id AND v.version=a.flow_version
             LEFT JOIN executions e ON e.id=COALESCE(
-                (SELECT e2.id FROM task_ownership o2
-                 JOIN executions e2 ON e2.id=o2.execution_id
-                 WHERE o2.library_id=m.library_id AND o2.media_key=upper(m.relative_path)
-                   AND e2.state='queued' AND e2.flow_name=v.definition->>'name'
-                   AND e2.flow_version=a.flow_version
-                 ORDER BY e2.updated_at DESC,e2.id DESC LIMIT 1),
                 (SELECT e2.id FROM execution_work w2 JOIN executions e2 ON e2.id=w2.execution_id
                  WHERE w2.library_id=m.library_id AND w2.media_key=upper(m.relative_path)
-                   AND e2.flow_name=v.definition->>'name' AND e2.flow_version=a.flow_version
-                 ORDER BY e2.updated_at DESC,e2.id DESC LIMIT 1),
-                (SELECT e2.id FROM task_ownership o2 JOIN executions e2 ON e2.id=o2.execution_id
-                 WHERE o2.library_id=m.library_id AND o2.media_key=upper(m.relative_path)
                    AND e2.flow_name=v.definition->>'name' AND e2.flow_version=a.flow_version
                  ORDER BY e2.updated_at DESC,e2.id DESC LIMIT 1),
                 (SELECT r.execution_id FROM library_processing_receipts r
@@ -40,7 +30,7 @@ public sealed class LibraryActivityRepository(DbDataSource dataSource, Execution
                    AND r.flow_version=a.flow_version AND r.byte_length=m.byte_length
                    AND r.modified_at=m.modified_at LIMIT 1),
                 NULL)
-            LEFT JOIN cluster_nodes n ON n.id=e.node_id
+            LEFT JOIN workers n ON n.id=e.worker_id
         ), classified AS (
             SELECT *,CASE
                 WHEN execution_state IN ('succeeded','deferred') THEN 'done'
@@ -58,7 +48,7 @@ public sealed class LibraryActivityRepository(DbDataSource dataSource, Execution
         string? status,
         Guid? libraryId,
         string? flow,
-        Guid? nodeId,
+        Guid? workerId,
         string? search,
         int? limit,
         int? offset,
@@ -73,7 +63,7 @@ public sealed class LibraryActivityRepository(DbDataSource dataSource, Execution
         var filters = new List<string>();
         if (libraryId is not null) filters.Add("library_id=@libraryId");
         if (normalizedFlow is not null) filters.Add("flow=@flow");
-        if (nodeId is not null) filters.Add("node_id=@nodeId");
+        if (workerId is not null) filters.Add("worker_id=@nodeId");
         if (normalizedSearch is not null)
             filters.Add("(lower(relative_path) LIKE @search OR lower(library) LIKE @search OR lower(COALESCE(flow,'')) LIKE @search OR lower(COALESCE(node,'')) LIKE @search)");
         var filterSql = filters.Count > 0 ? " WHERE " + string.Join(" AND ", filters) : string.Empty;
@@ -133,7 +123,7 @@ public sealed class LibraryActivityRepository(DbDataSource dataSource, Execution
         await using var filesCommand = Sql.Command($"""
             {ClassifiedSql}
             SELECT id,library_id,library,relative_path,byte_length,modified_at,library_active,flow,flow_version,
-                   status,execution_id,execution_state,detail,node_id,node,progress,updated_at
+                   status,execution_id,execution_state,detail,worker_id,node,progress,updated_at
             FROM classified{resultFilterSql}
             ORDER BY COALESCE(updated_at,modified_at) DESC,relative_path,id
             LIMIT @limit OFFSET @offset
@@ -165,7 +155,7 @@ public sealed class LibraryActivityRepository(DbDataSource dataSource, Execution
         {
             if (libraryId is not null) command.Parameters.AddWithValue("libraryId", libraryId.Value);
             if (normalizedFlow is not null) command.Parameters.AddWithValue("flow", normalizedFlow);
-            if (nodeId is not null) command.Parameters.AddWithValue("nodeId", nodeId.Value);
+            if (workerId is not null) command.Parameters.AddWithValue("nodeId", workerId.Value);
             if (normalizedSearch is not null) command.Parameters.AddWithValue("search", $"%{normalizedSearch}%");
         }
     }

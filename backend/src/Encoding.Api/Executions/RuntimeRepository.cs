@@ -3,17 +3,17 @@ using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Encoding.Api.Flows;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Encoding.Api.Plugins;
 using Encoding.Contracts.Executions;
 using Encoding.Contracts.Flows;
-using Encoding.Contracts.Nodes;
+using Encoding.Contracts.Workers;
 
 namespace Encoding.Api.Executions;
 
 public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEligibility eligibility,FlowComponentRegistry components,
-    NodePresenceOptions presence,PluginConfigurationRepository pluginConfigurations,NodeGroupRepository nodeGroups,SourceWriteGuard? sourceWrites=null,
-    TaskOwnershipRepository? ownership=null,FlowPlacementPlanner? placementPlanner=null,ILogger<RuntimeRepository>? logger=null)
+    WorkerPresenceOptions presence,PluginConfigurationRepository pluginConfigurations,WorkerGroupRepository workerGroups,SourceWriteGuard? sourceWrites=null,
+    FlowPlacementPlanner? placementPlanner=null,ILogger<RuntimeRepository>? logger=null)
 {
     private readonly FlowPlacementPlanner planner = placementPlanner ?? new FlowPlacementPlanner(components);
     private static readonly JsonSerializerOptions Json=new(JsonSerializerDefaults.Web);
@@ -28,11 +28,11 @@ public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEli
         while(await reader.ReadAsync(ct)) states.Add(new(reader.GetGuid(0),reader.GetString(1)));
         return states;
     }
-    public async Task<bool> AuthenticateAsync(Guid node,string token,CancellationToken ct)
+    public async Task<bool> AuthenticateAsync(Guid worker,string token,CancellationToken ct)
     {
         if(string.IsNullOrWhiteSpace(token) || token.Length>256) return false;
-        await using var cmd=dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM cluster_nodes WHERE id=@node AND deleted_at IS NULL AND node_token_hash=@hash)");
-        cmd.Parameters.AddWithValue("node",node); cmd.Parameters.AddWithValue("hash",SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
+        await using var cmd=dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM workers WHERE id=@node AND deleted_at IS NULL AND worker_token_hash=@hash)");
+        cmd.Parameters.AddWithValue("node",worker); cmd.Parameters.AddWithValue("hash",SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
         return (await cmd.ScalarBoolAsync(ct));
     }
 
@@ -48,8 +48,8 @@ public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEli
             JOIN execution_work w ON w.execution_id=e.id
             JOIN execution_steps s ON s.execution_id=e.id
             WHERE e.id=@execution AND e.state='running'
-              AND w.worker_node_id=@worker AND w.lease_epoch=@epoch AND w.lease_until>clock_timestamp()
-              AND s.node_id=@flow_node AND s.invocation_id=@invocation AND s.completed_at IS NULL
+              AND w.worker_id=@worker AND w.lease_epoch=@epoch AND w.lease_until>clock_timestamp()
+              AND s.flow_node_id=@flow_node AND s.invocation_id=@invocation AND s.completed_at IS NULL
             """);
         command.Parameters.AddWithValue("execution", executionId);
         command.Parameters.AddWithValue("worker", workerId);
@@ -72,8 +72,8 @@ public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEli
             SELECT e.flow_definition::text FROM executions e
             JOIN execution_work w ON w.execution_id=e.id
             JOIN execution_steps s ON s.execution_id=e.id
-            WHERE e.id=@execution AND e.state='running' AND w.worker_node_id=@worker AND w.lease_epoch=@epoch
-              AND w.lease_until>clock_timestamp() AND s.node_id=@flow_node AND s.invocation_id=@invocation
+            WHERE e.id=@execution AND e.state='running' AND w.worker_id=@worker AND w.lease_epoch=@epoch
+              AND w.lease_until>clock_timestamp() AND s.flow_node_id=@flow_node AND s.invocation_id=@invocation
               AND s.completed_at IS NULL
             """);
         command.Parameters.AddWithValue("execution", executionId);
@@ -93,7 +93,6 @@ public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEli
     {
         await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
         if(!await EnqueueInTransactionAsync(request,flow,c,tx,ct)) return false;
-        if(ownership is not null) await ownership.CreateAsync([request.Id],c,tx,ct);
         await tx.CommitAsync(ct); return true;
     }
 
@@ -103,7 +102,7 @@ public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEli
         await using var library=Sql.Command("SELECT name FROM libraries WHERE id=@id AND is_active FOR UPDATE",c,tx);
         library.Parameters.AddWithValue("id",request.LibraryId);
         if(await library.ExecuteScalarAsync(ct) is not string name) return false;
-        await using var duplicate=Sql.Command("SELECT EXISTS(SELECT 1 FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.library_id=@library AND w.media_key=@key AND e.state IN ('queued','running','cancelling')) OR EXISTS(SELECT 1 FROM task_ownership o LEFT JOIN executions e ON e.id=o.execution_id WHERE o.cluster_id=(SELECT id FROM cluster_identity WHERE singleton=true) AND o.library_id=@library AND o.media_key=@key AND o.state IN ('active','frozen','received','transferred') AND (e.id IS NULL OR e.state IN ('queued','running','cancelling')))",
+        await using var duplicate=Sql.Command("SELECT EXISTS(SELECT 1 FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.library_id=@library AND w.media_key=@key AND e.state IN ('queued','running','cancelling'))",
             c,tx);
         duplicate.Parameters.AddWithValue("library",request.LibraryId); duplicate.Parameters.AddWithValue("key",path.ToUpperInvariant());
         if((await duplicate.ScalarBoolAsync(ct))) return false;
@@ -123,18 +122,18 @@ public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEli
     public static string NormalizePath(string? path)=>Encoding.Contracts.Libraries.MediaPathRules.Normalize(path);
 
     /// <summary>
-    /// Un nœud source n'est déclaré perdu pour une exécution en file qu'après ce délai, même si la présence est plus courte :
+    /// Un worker source n'est déclaré perdu pour une exécution en file qu'après ce délai, même si la présence est plus courte :
     /// un heartbeat retardé (verrou SQLite, redémarrage) ne doit pas faire échouer des centaines d'exécutions saines.
     /// </summary>
     internal static readonly TimeSpan SourceOfflineGrace = TimeSpan.FromMinutes(5);
 
     private static readonly string UnavailableSourcesSql = $"""
-        SELECT e.id,e.node_id,e.revision FROM executions e JOIN execution_work w ON w.execution_id=e.id
-        WHERE e.state IN ('queued','running') AND {TaskOwnershipRepository.ActiveSql("e.id")} AND NOT EXISTS(
-          SELECT 1 FROM library_node_accesses a JOIN cluster_nodes n ON n.id=a.node_id
+        SELECT e.id,e.worker_id,e.revision FROM executions e JOIN execution_work w ON w.execution_id=e.id
+        WHERE e.state IN ('queued','running') AND NOT EXISTS(
+          SELECT 1 FROM library_worker_accesses a JOIN workers n ON n.id=a.worker_id
           WHERE a.library_id=w.library_id AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.local_path IS NOT NULL
             AND n.deleted_at IS NULL AND n.last_seen_at>clock_timestamp()-@offline
-            AND (w.handoff_selector IS NULL OR w.source_node_id IS NULL OR a.node_id=w.source_node_id OR w.handoff_selector->>'mode'='resume' OR w.handoff_selector->>'resumed' IN (1,'true')))
+            AND (w.handoff_selector IS NULL OR w.source_worker_id IS NULL OR a.worker_id=w.source_worker_id OR w.handoff_selector->>'mode'='resume' OR w.handoff_selector->>'resumed' IN (1,'true')))
         LIMIT 100
         """;
 
@@ -161,7 +160,7 @@ public sealed partial class RuntimeRepository(DbDataSource dataSource,RuntimeEli
         foreach (var failure in failures)
         {
             await ExecutionRepository.RecordInTransactionAsync(failure.Id, new(Guid.NewGuid(), failure.Revision, "failed",
-                failure.Worker, null, "Média inaccessible : aucun nœud source direct disponible. La tâche a échoué ; la source est conservée."), connection, tx, ct);
+                failure.Worker, null, "Média inaccessible : aucun worker source direct disponible. La tâche a échoué ; la source est conservée."), connection, tx, ct);
             await ReleaseAsync(failure.Id, connection, tx, ct);
         }
         return failures.Count;

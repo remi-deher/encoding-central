@@ -3,29 +3,29 @@ using Encoding.Api.Flows;
 using Encoding.Contracts.Executions;
 using Encoding.Contracts.Flows;
 using Encoding.Contracts.Flows.Conditions;
-using Encoding.Contracts.Nodes;
+using Encoding.Contracts.Workers;
 
 namespace Encoding.Api.Executions;
 
-public sealed record NodePlacementCandidate(
-    Guid NodeId,
+public sealed record WorkerPlacementCandidate(
+    Guid WorkerId,
     string? Name,
     bool IsWorker,
     bool IsOnline,
-    IReadOnlyList<NodeToolCapability> Capabilities,
-    NodeInventory? Inventory,
-    NodeIdentityResponse? Identity,
-    LibraryNodeAccessInfo? Access,
+    IReadOnlyList<WorkerToolCapability> Capabilities,
+    WorkerInventory? Inventory,
+    WorkerIdentityResponse? Identity,
+    LibraryWorkerAccessInfo? Access,
     bool HasAvailableCapacity = true);
 
-public sealed record LibraryNodeAccessInfo(
+public sealed record LibraryWorkerAccessInfo(
     Guid LibraryId,
     string Mode,
     bool IsEnabled,
     bool CanRead,
     bool CanWrite,
     string? LocalPath,
-    Guid? TransferSourceNodeId);
+    Guid? TransferSourceWorkerId);
 
 public sealed record VideoTranscodeRequirement(
     string Codec,
@@ -35,8 +35,8 @@ public sealed record VideoTranscodeRequirement(
     string? HardwareAcceleration,
     bool RetryWithCpu);
 
-public sealed record NodeRunConstraint(
-    Guid? TargetNodeId,
+public sealed record WorkerRunConstraint(
+    Guid? TargetWorkerId,
     Guid? TargetGroupId,
     string? RequiredLabels);
 
@@ -57,12 +57,12 @@ public sealed record FlowPathRequirements(
     IReadOnlyList<VideoTranscodeRequirement> VideoTranscodes,
     IReadOnlySet<string> AudioEncoders,
     IReadOnlySet<string> FontSets,
-    IReadOnlyList<NodeRunConstraint> RunConstraints,
+    IReadOnlyList<WorkerRunConstraint> RunConstraints,
     IReadOnlyList<CapabilityConstraint> CapabilityConstraints);
 
 /// <summary>
 /// Planificateur de placement de flow de bout en bout (ADR 0024).
-/// Analyse les exigences complètes de chaque chemin et sélectionne dès l'entrée le nœud optimal
+/// Analyse les exigences complètes de chaque chemin et sélectionne dès l'entrée le worker optimal
 /// pour minimiser les transferts réseau (priorité accès direct, plan en 3 phases si transcode distant).
 /// </summary>
 public sealed partial class FlowPlacementPlanner(FlowComponentRegistry registry)
@@ -72,7 +72,7 @@ public sealed partial class FlowPlacementPlanner(FlowComponentRegistry registry)
     public FlowPlacementPlan Plan(
         FlowDefinition flow,
         JsonElement? sourceMetadata,
-        IReadOnlyList<NodePlacementCandidate> candidates,
+        IReadOnlyList<WorkerPlacementCandidate> candidates,
         DateTimeOffset now)
     {
         var paths = ExtractPathRequirements(flow, sourceMetadata, candidates);
@@ -96,25 +96,25 @@ public sealed partial class FlowPlacementPlanner(FlowComponentRegistry registry)
         // Un relais explicite est une frontière d'exécution du flow. Les stratégies unifiées
         // ne doivent pas masquer cette frontière ni annoncer un nombre de transferts inférieur.
         var hasExplicitHandoff = paths.SelectMany(path => path.NodeIds)
-            .Select(id => flow.Nodes.First(node => node.Id == id)).Any(IsWorkerHandoff);
+            .Select(id => flow.Nodes.First(node => node.Id == id)).Any(RuntimeHandoffPolicy.IsHandoff);
 
-        // 1. Nœuds d'accès direct en ligne
-        var directAccessNodes = candidates
+        // 1. Workers d'accès direct en ligne
+        var directAccessWorkers = candidates
             .Where(c => c.IsOnline && c.IsWorker && c.Access is { IsEnabled: true, Mode: "direct", CanRead: true, LocalPath: not null })
             .ToList();
 
-        // Cas 1 : Priorité 1 — Un nœud d'accès direct peut exécuter tous les chemins applicables
-        foreach (var directNode in placementCandidates.Where(c=>directAccessNodes.Any(direct=>direct.NodeId==c.NodeId) && !hasExplicitHandoff))
+        // Cas 1 : Priorité 1 — Un worker d'accès direct peut exécuter tous les chemins applicables
+        foreach (var directWorker in placementCandidates.Where(c=>directAccessWorkers.Any(direct=>direct.WorkerId==c.WorkerId) && !hasExplicitHandoff))
         {
-            if (paths.All(p => NodeSatisfiesPath(directNode, p, out _)))
+            if (paths.All(p => WorkerSatisfiesPath(directWorker, p, out _)))
             {
-                var nodeLabel = directNode.Name ?? directNode.NodeId.ToString("D");
+                var nodeLabel = directWorker.Name ?? directWorker.WorkerId.ToString("D");
                 return new(
                     FlowPlacementPlan.StrategyDirectUnified,
-                    directNode.NodeId,
-                    directNode.NodeId,
+                    directWorker.WorkerId,
+                    directWorker.WorkerId,
                     null,
-                    $"Placement direct unifié : le nœud d’accès local {nodeLabel} prend l’intégralité du flow (0 transfert réseau).",
+                    $"Placement direct unifié : le worker d’accès local {nodeLabel} prend l’intégralité du flow (0 transfert réseau).",
                     allRequiredCaps,
                     [],
                     now);
@@ -126,23 +126,23 @@ public sealed partial class FlowPlacementPlanner(FlowComponentRegistry registry)
             .Where(c => c.IsOnline && c.IsWorker && c.Access is { IsEnabled: true, CanRead: true })
             .ToList();
 
-        var canPublishAtSource = directAccessNodes.Any(candidate => candidate.Access is { CanWrite: true });
+        var canPublishAtSource = directAccessWorkers.Any(candidate => candidate.Access is { CanWrite: true });
         foreach (var worker in transferWorkers.Where(_ => !hasExplicitHandoff))
         {
             if ((!paths.Any(path => path.RequiresWriteAccess) || canPublishAtSource)
-                && paths.All(path => NodeSatisfiesPath(worker, path with { RequiresWriteAccess = false }, out _)))
+                && paths.All(path => WorkerSatisfiesPath(worker, path with { RequiresWriteAccess = false }, out _)))
             {
-                var workerLabel = worker.Name ?? worker.NodeId.ToString("D");
+                var workerLabel = worker.Name ?? worker.WorkerId.ToString("D");
                 return new(
                     FlowPlacementPlan.StrategyTransferWorker,
-                    worker.NodeId,
-                    directAccessNodes.FirstOrDefault()?.NodeId,
+                    worker.WorkerId,
+                    directAccessWorkers.FirstOrDefault()?.WorkerId,
                     null,
                     $"Placement avec transfert : le worker {workerLabel} prend la tâche via transfert WebDAV.",
                     allRequiredCaps,
                     [],
                     now,
-                    flow.Nodes.ToDictionary(node => node.Id, _ => worker.NodeId, StringComparer.Ordinal));
+                    flow.Nodes.ToDictionary(node => node.Id, _ => worker.WorkerId, StringComparer.Ordinal));
             }
         }
 
@@ -153,14 +153,14 @@ public sealed partial class FlowPlacementPlanner(FlowComponentRegistry registry)
         var segmented = PlanSegments(flow, paths, placementCandidates, now,sourceMetadata);
         if (segmented is not null) return segmented;
 
-        // Cas 4 : Aucun nœud ne convient
+        // Cas 4 : Aucun worker ne convient
         var missingReport = new List<string>();
         foreach (var p in paths)
         {
             var pathMissing = new List<string>();
             foreach (var c in candidates.Where(cand => cand.IsOnline && cand.IsWorker))
             {
-                NodeSatisfiesPath(c, p, out var m);
+                WorkerSatisfiesPath(c, p, out var m);
                 pathMissing.AddRange(m);
             }
             missingReport.AddRange(pathMissing);
@@ -180,7 +180,7 @@ public sealed partial class FlowPlacementPlanner(FlowComponentRegistry registry)
     }
 
     private FlowPlacementPlan? PlanSegments(FlowDefinition flow, IReadOnlyList<FlowPathRequirements> paths,
-        IReadOnlyList<NodePlacementCandidate> candidates, DateTimeOffset now,JsonElement? sourceMetadata)
+        IReadOnlyList<WorkerPlacementCandidate> candidates, DateTimeOffset now,JsonElement? sourceMetadata)
     {
         var reachable = paths.SelectMany(path => path.NodeIds).ToHashSet(StringComparer.Ordinal);
         var nodes = flow.Nodes.Where(node => reachable.Contains(node.Id)).ToDictionary(node => node.Id, StringComparer.Ordinal);
@@ -221,10 +221,10 @@ public sealed partial class FlowPlacementPlanner(FlowComponentRegistry registry)
         foreach(var id in directRequired) requirements[id]=requirements[id] with { RequiresDirectAccess=true };
         var available = requirements.ToDictionary(pair => pair.Key,
             pair => candidates.Where(candidate => candidate.IsOnline && candidate.IsWorker
-                && (candidate.Access?.Mode=="direct" ? NodeSatisfiesPath(candidate,pair.Value,out _)
-                    : NodeSatisfiesPath(candidate,pair.Value with { RequiresWriteAccess=false },out _))
+                && (candidate.Access?.Mode=="direct" ? WorkerSatisfiesPath(candidate,pair.Value,out _)
+                    : WorkerSatisfiesPath(candidate,pair.Value with { RequiresWriteAccess=false },out _))
                 && FitsExplicitHandoff(flow,incoming.GetValueOrDefault(pair.Key)??[],candidate))
-                .Select(candidate => candidate.NodeId).ToArray(), StringComparer.Ordinal);
+                .Select(candidate => candidate.WorkerId).ToArray(), StringComparer.Ordinal);
         var missingNodes = available.Where(pair => pair.Value.Length == 0).Select(pair => pair.Key).ToArray();
         if (missingNodes.Length > 0) return null;
 
@@ -239,11 +239,11 @@ public sealed partial class FlowPlacementPlanner(FlowComponentRegistry registry)
             var id=ordered[index];
             var parents=incoming.GetValueOrDefault(id)??[];
             foreach(var worker in available[id]
-                .OrderBy(candidate=>candidates.First(item=>item.NodeId==candidate).Access?.Mode=="direct"?0:1)
+                .OrderBy(candidate=>candidates.First(item=>item.WorkerId==candidate).Access?.Mode=="direct"?0:1)
                 .ThenBy(candidate=>candidate))
             {
                 if(parents.Any(edge => flow.Nodes.First(node => node.Id == edge.SourceNodeId) is { } source
-                    && IsWorkerHandoff(source)
+                    && RuntimeHandoffPolicy.IsHandoff(source)
                     && assignments.TryGetValue(edge.SourceNodeId,out var priorWorker) && priorWorker==worker)) continue;
                 var added=parents.Count(edge=>assignments.TryGetValue(edge.SourceNodeId,out var prior)&&prior!=worker);
                 if(cost+added>=bestCost) continue;
@@ -263,29 +263,29 @@ public sealed partial class FlowPlacementPlanner(FlowComponentRegistry registry)
         if (distinctWorkers == 1)
         {
             var singleWorkerId = assignments[roots[0]];
-            var singleWorker = candidates.FirstOrDefault(c => c.NodeId == singleWorkerId);
+            var singleWorker = candidates.FirstOrDefault(c => c.WorkerId == singleWorkerId);
             var directAccess = candidates.FirstOrDefault(candidate => candidate.IsOnline && candidate.IsWorker
                 && candidate.Access is { IsEnabled: true, Mode: "direct", CanRead: true, CanWrite: true, LocalPath: not null });
             if (singleWorker?.Access is { IsEnabled: true, Mode: "direct", CanRead: true, LocalPath: not null })
             {
                 var nodeLabel = singleWorker.Name ?? singleWorkerId.ToString("D");
                 return new(FlowPlacementPlan.StrategyDirectUnified, singleWorkerId, singleWorkerId, null,
-                    $"Placement direct unifié : le nœud d’accès local {nodeLabel} prend l’intégralité du flow (0 transfert réseau).",
+                    $"Placement direct unifié : le worker d’accès local {nodeLabel} prend l’intégralité du flow (0 transfert réseau).",
                     CollectCapabilitiesNames(paths), [], now, assignments);
             }
-            return new(FlowPlacementPlan.StrategyTransferWorker, singleWorkerId, directAccess?.NodeId, null,
+            return new(FlowPlacementPlan.StrategyTransferWorker, singleWorkerId, directAccess?.WorkerId, null,
                 $"Placement avec transfert : le worker {singleWorker?.Name ?? singleWorkerId.ToString("D")} prend la tâche via transfert WebDAV.",
                 CollectCapabilitiesNames(paths), [], now, assignments);
         }
-        var accessNode = candidates.FirstOrDefault(candidate => candidate.IsOnline && candidate.IsWorker
+        var accessWorker = candidates.FirstOrDefault(candidate => candidate.IsOnline && candidate.IsWorker
             && candidate.Access is { IsEnabled: true, Mode: "direct", CanRead: true, CanWrite: true, LocalPath: not null });
-        return new(FlowPlacementPlan.StrategySegmented, assignments.GetValueOrDefault(roots[0]), accessNode?.NodeId,
+        return new(FlowPlacementPlan.StrategySegmented, assignments.GetValueOrDefault(roots[0]), accessWorker?.WorkerId,
             null,
             "Placement segmenté : les blocs sont attribués à des workers compatibles ; les transitions suivent les checkpoints durables. Les branches non déterminées sont planifiées sur l’union de leurs chemins.",
             CollectCapabilitiesNames(paths), [], now, assignments);
     }
 
-    private static bool FitsExplicitHandoff(FlowDefinition flow,IReadOnlyList<FlowConnectionDefinition> incoming,NodePlacementCandidate candidate)
+    private static bool FitsExplicitHandoff(FlowDefinition flow,IReadOnlyList<FlowConnectionDefinition> incoming,WorkerPlacementCandidate candidate)
     {
         foreach(var edge in incoming)
         {
@@ -293,19 +293,17 @@ public sealed partial class FlowPlacementPlanner(FlowComponentRegistry registry)
             if(source is null || !RuntimeHandoffPolicy.IsHandoff(source)) continue;
             var mode=source.Configuration.TryGetValue("mode",out var configured)?configured.GetString():"eligible";
             if(mode=="node" && source.Configuration.TryGetValue("targetNodeId",out var target)
-                && Guid.TryParse(target.GetString(),out var id) && id!=candidate.NodeId) return false;
+                && Guid.TryParse(target.GetString(),out var id) && id!=candidate.WorkerId) return false;
             if(mode=="selector")
             {
                 Guid? group=null;
                 if(source.Configuration.TryGetValue("targetGroupId",out var groupValue) && Guid.TryParse(groupValue.GetString(),out var groupId)) group=groupId;
                 var labels=source.Configuration.TryGetValue("requiredLabels",out var labelValue)?labelValue.GetString():null;
                 if(group is not null && candidate.Identity?.GroupIds.Contains(group.Value)!=true
-                    || !NodeLabelSelector.Matches(labels,candidate.Identity?.EffectiveLabels)) return false;
+                    || !WorkerLabelSelector.Matches(labels,candidate.Identity?.EffectiveLabels)) return false;
             }
         }
         return true;
     }
 
-    private static bool IsWorkerHandoff(FlowNodeDefinition node) => RuntimeHandoffPolicy.IsHandoff(node)
-        && !(node.Configuration.TryGetValue("mode",out var mode) && mode.ValueKind==JsonValueKind.String && mode.GetString()=="server");
 }

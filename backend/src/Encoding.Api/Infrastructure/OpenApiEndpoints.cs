@@ -150,9 +150,9 @@ public static class OpenApiEndpoints
             ["/api/v1/executions"] = ("ExecutionOverviewResponse", null),
             ["/api/v1/executions/{id}"] = ("ExecutionResponse", null),
             ["/api/v1/executions/{id}/events"] = ("ExecutionEventResponse", null),
-            ["/api/v1/runtime/nodes/{nodeId}/execution-states"] = ("RuntimeExecutionState", "RuntimeExecutionStatesRequest"),
-            ["/api/v1/runtime/nodes/{nodeId}/executions/{id}/finish"] = (null, "FinishRuntimeExecution"),
-            ["/api/v1/runtime/nodes/{nodeId}/executions/{id}/source-failure"] = (null, "FinishRuntimeExecution"),
+            ["/api/v1/runtime/workers/{workerId}/execution-states"] = ("RuntimeExecutionState", "RuntimeExecutionStatesRequest"),
+            ["/api/v1/runtime/workers/{workerId}/executions/{id}/finish"] = (null, "FinishRuntimeExecution"),
+            ["/api/v1/runtime/workers/{workerId}/executions/{id}/source-failure"] = (null, "FinishRuntimeExecution"),
         };
 
     public static void MapOpenApiEndpoints(this WebApplication app)
@@ -192,7 +192,7 @@ public static class OpenApiEndpoints
 
             var operationId = endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName;
             var isAnonymous = endpoint.Metadata.GetMetadata<IAllowAnonymous>() is not null;
-            var allowsNode = endpoint.Metadata.GetMetadata<NodeCredentialAccessMetadata>() is not null;
+            var allowsNode = endpoint.Metadata.GetMetadata<WorkerCredentialAccessMetadata>() is not null;
             var allowsViewer = endpoint.Metadata.GetMetadata<ViewerAccessMetadata>() is not null;
             var accepts = endpoint.Metadata.GetOrderedMetadata<IAcceptsMetadata>();
 
@@ -255,7 +255,7 @@ public static class OpenApiEndpoints
             {
                 ["title"] = "Encoding Cluster API",
                 ["version"] = "1.0.0",
-                ["description"] = "API d’orchestration distribuée d’encodage multimédia, gestion des flows, bibliothèques et nœuds du cluster.",
+                ["description"] = "API d’orchestration distribuée d’encodage multimédia, gestion des flows, bibliothèques et workers du central.",
             },
             ["tags"] = tags.Select(name => new { name }).ToArray(),
             ["paths"] = paths,
@@ -289,7 +289,7 @@ public static class OpenApiEndpoints
                         type = "http",
                         scheme = "bearer",
                         bearerFormat = "Token API Cluster",
-                        description = "Jeton d’authentification API cluster (ex. enc_pat_...). Valable sur n’importe quel nœud du cluster, dispense de cookie et d'en-tête anti-CSRF.",
+                        description = "Jeton d’authentification API cluster (ex. enc_pat_...). Valable sur n’importe quel worker du central, dispense de cookie et d'en-tête anti-CSRF.",
                     },
                 },
                 ["schemas"] = ContractSchemas,

@@ -12,8 +12,8 @@ export interface ExecutionResponse {
   readonly flow: string;
   readonly flowVersion: number;
   readonly state: ExecutionState;
-  readonly nodeId: string | null;
-  readonly node: string | null;
+  readonly workerId: string | null;
+  readonly worker: string | null;
   readonly progress: number | null;
   readonly detail: string;
   readonly attempt: number;
@@ -110,7 +110,7 @@ export interface ExecutionOverviewResponse {
 export interface ExecutionFilterQuery {
   readonly state?: ExecutionState;
   readonly libraryId?: string;
-  readonly nodeId?: string;
+  readonly workerId?: string;
   readonly since?: string;
   readonly limit?: number;
   readonly offset?: number;
@@ -144,7 +144,7 @@ export function executionPhaseLabel(phase: string | null | undefined): string {
       {
         publication: 'Publication en cours',
         source_transfer: 'Préparation et transfert de la source',
-        waiting_handoff: 'Attente du nœud de relais',
+        waiting_handoff: 'Attente du worker de relais',
       } as Record<string, string>
     )[phase ?? ''] ?? ''
   );

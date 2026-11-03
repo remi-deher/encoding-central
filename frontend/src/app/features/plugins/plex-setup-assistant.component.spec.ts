@@ -20,7 +20,7 @@ const LIBRARIES: PlexLibraries = {
         remoteRoot: '/media/FILMS',
         remoteKey: '3',
         remoteTitle: 'Films',
-        reason: 'Même chemin sur le nœud et dans Plex',
+        reason: 'Même chemin sur le worker et dans Plex',
       },
     },
     {
@@ -59,7 +59,7 @@ describe('Plex setup assistant', () => {
     const { fixture } = await withLibraries();
     const text = fixture.nativeElement.textContent as string;
     expect(text).toContain('Films — NAS DATA');
-    expect(text).toContain('Proposée : Même chemin sur le nœud et dans Plex');
+    expect(text).toContain('Proposée : Même chemin sur le worker et dans Plex');
     expect(text).toContain('Enregistrée');
     expect(text).toContain('aucun accès direct déclaré');
   });

@@ -4,7 +4,7 @@ import { signal } from '@angular/core';
 import { of } from 'rxjs';
 import { AppShellComponent } from './app-shell.component';
 import { AuthService } from '../auth/auth.service';
-import { ClusterOverview, INITIAL_CLUSTER_OVERVIEW } from '../../shared/services/cluster-overview';
+import { CentralOverview, INITIAL_CLUSTER_OVERVIEW } from '../../shared/services/central-overview';
 import {
   ExecutionTracking,
   INITIAL_EXECUTION_TRACKING,
@@ -25,13 +25,13 @@ describe('AppShellComponent', () => {
           },
         },
         {
-          provide: ClusterOverview,
+          provide: CentralOverview,
           useValue: {
             state$: of({
               ...INITIAL_CLUSTER_OVERVIEW,
               status: 'ready',
               snapshot: {
-                identity: { clusterId: 'c-1', clusterName: 'Cluster Test', standalone: false },
+                identity: { clusterId: 'c-1', clusterName: 'Cluster Test' },
                 nodes: [
                   { id: 'n-1', name: 'srv-1', status: 'online' },
                   { id: 'n-2', name: 'srv-2', status: 'online' },

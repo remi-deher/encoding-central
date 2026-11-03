@@ -9,7 +9,7 @@ public sealed record AiPrompt(
     string? SessionId = null,
     Guid? RequestId = null,
     AiSessionScope? Scope = null,
-    string? ReasoningEffort = null, Guid? NodeId = null);
+    string? ReasoningEffort = null, Guid? WorkerId = null);
 
 /// <summary>Result returned by an AI text client.</summary>
 public sealed record AiCompletionResult(
@@ -19,7 +19,7 @@ public sealed record AiCompletionResult(
     bool IsRateLimited = false,
     string? SessionId = null,
     Guid? RequestId = null,
-    AiUsage? Usage = null, Guid? ExecutorNodeId = null);
+    AiUsage? Usage = null, Guid? ExecutorWorkerId = null);
 
 /// <summary>Observed provider usage; null values are unavailable, never zero estimates.</summary>
 public sealed record AiUsage(long? InputTokens = null, long? OutputTokens = null, long? CachedInputTokens = null,

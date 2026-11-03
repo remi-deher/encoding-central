@@ -103,7 +103,7 @@ describe('SystemLogsService', () => {
     const req = httpMock.expectOne(
       (request) =>
         request.url === '/api/v1/system/logs/categories' &&
-        request.params.get('nodeId') === 'node-123',
+        request.params.get('workerId') === 'node-123',
     );
     expect(req.request.method).toBe('GET');
     req.flush({ categories: ['WorkerNode'] });

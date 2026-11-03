@@ -10,7 +10,7 @@ test('the worker shell keeps the six agreed pages and the sign-in flow', () => {
     '/activity',
     '/activity?type=ai',
     '/libraries',
-    '/nodes?tab=cluster',
+    '/workers?tab=cluster',
     '/plugins',
     '/settings',
     '/login',

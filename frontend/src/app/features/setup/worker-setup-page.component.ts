@@ -14,9 +14,9 @@ import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { AuthService } from '../../core/auth/auth.service';
-import { NodeInventory } from '../../shared/models/cluster';
-import { formatMemory } from '../../shared/models/node-hardware';
-import { LocalNodeController } from '../../shared/services/local-node-controller';
+import { WorkerInventory } from '../../shared/models/central';
+import { formatMemory } from '../../shared/models/worker-hardware';
+import { LocalWorkerController } from '../../shared/services/local-worker-controller';
 import { AccessTemplateComponent } from '../../shared/templates/access-template.component';
 import { IconComponent } from '../../shared/ui/icon.component';
 import { DetectedConfigurationComponent } from './detected-configuration.component';
@@ -24,14 +24,14 @@ import { SETUP_SURFACE_STYLES } from './setup-surface.styles';
 
 /** Matériel détecté, lu sans secret avant le rattachement (`GET /api/v1/worker/hardware`). */
 interface WorkerHardware {
-  readonly inventory: NodeInventory;
+  readonly inventory: WorkerInventory;
   readonly tools: readonly { readonly toolId: string; readonly accelerationTypes: readonly string[] }[];
 }
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-worker-setup-page',
-  providers: [LocalNodeController],
+  providers: [LocalWorkerController],
   imports: [
     AccessTemplateComponent,
     DetectedConfigurationComponent,
@@ -156,7 +156,7 @@ interface WorkerHardware {
             </div>
             @if (local.status()?.isEnrolled) {
               <div class="notice" role="status">
-                Ce worker est rattaché à <strong>{{ local.status()?.clusterName }}</strong>.
+                Ce worker est rattaché à <strong>{{ local.status()?.centralName }}</strong>.
               </div>
               <div class="actions">
                 <button matButton="filled" type="button" (click)="openNodes()">
@@ -196,7 +196,7 @@ export class WorkerSetupPageComponent {
   private readonly router = inject(Router);
   private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
-  protected readonly local = inject(LocalNodeController);
+  protected readonly local = inject(LocalWorkerController);
 
   protected centralAddress = '';
   protected username = '';
@@ -271,7 +271,7 @@ export class WorkerSetupPageComponent {
     this.errorMessage.set(null);
     try {
       await firstValueFrom(
-        this.http.post('/api/v1/worker/clusters', { apiBaseUrl: this.centralAddress.trim() }),
+        this.http.post('/api/v1/worker/centrals', { apiBaseUrl: this.centralAddress.trim() }),
       );
       const status = await this.auth.ensureLoaded(true);
       if (status.setupRequired) {
@@ -327,6 +327,6 @@ export class WorkerSetupPageComponent {
   }
 
   protected openNodes(): void {
-    void this.router.navigate(['/nodes']);
+    void this.router.navigate(['/workers']);
   }
 }

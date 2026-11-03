@@ -54,7 +54,7 @@ interface UserRow {
   template: `
     <app-configuration-section
       title="Utilisateurs"
-      description="Les personnes qui peuvent accéder au cluster."
+      description="Les personnes qui peuvent accéder au central."
       icon="settings"
       [badge]="'' + users().length"
     >

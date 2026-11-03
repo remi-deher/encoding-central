@@ -21,13 +21,13 @@ internal static class SupervisorTests
         var supervisor = new ProcessSupervisor(
             server, agent,
             () => new Dictionary<string, string>(),
-            () => new Dictionary<string, string> { ["Node__Roles"] = "server,worker" },
+            () => new Dictionary<string, string> { ["Worker__Roles"] = "server,worker" },
             TimeSpan.FromSeconds(1), () => now);
         var token = CancellationToken.None;
 
         await supervisor.ReconcileAsync(token);
         Check.That(server.IsRunning && agent.IsRunning, "Le central démarre toujours le serveur et l’agent.");
-        Check.That(agent.LastEnvironment["Node__Roles"] == "server,worker", "L’agent du central déclare les deux fonctions.");
+        Check.That(agent.LastEnvironment["Worker__Roles"] == "server,worker", "L’agent du central déclare les deux fonctions.");
 
         // Panne : relance après un délai croissant, jamais en boucle serrée.
         server.Crash();

@@ -21,7 +21,7 @@ import { SubnavTemplateComponent } from './subnav-template.component';
         <div subnav-info class="cluster-context">
           <span class="cluster-context-symbol"><app-icon name="server" /></span>
           <span class="cluster-context-copy">
-            <span class="cluster-context-label">Cluster</span>
+            <span class="cluster-context-label">Central</span>
             <strong>{{ metadata() }}</strong>
           </span>
         </div>

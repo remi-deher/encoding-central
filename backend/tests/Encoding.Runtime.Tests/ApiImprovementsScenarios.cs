@@ -43,22 +43,22 @@ internal static class ApiImprovementsScenarios
         Directory.CreateDirectory(directory);
         try
         {
-            var secretFile = Path.Combine(directory, Encoding.Core.Nodes.LocalEnrollment.FileName);
-            Encoding.Core.Nodes.LocalEnrollment.Create(secretFile);
+            var secretFile = Path.Combine(directory, Encoding.Core.Workers.LocalEnrollment.FileName);
+            Encoding.Core.Workers.LocalEnrollment.Create(secretFile);
 
             await using var factory = CreateFactory(database, directory, new()
             {
                 ["Auth:AnonymousRequestsPerMinute"] = "1000",
                 ["Auth:HeavyOperationsPerMinute"] = "3",
-                [Encoding.Core.Nodes.LocalEnrollment.SecretFileSetting] = secretFile,
-                [Encoding.Api.Nodes.LocalNodeEndpoints.BaseUrlSetting] = "http://example.invalid/",
+                [Encoding.Core.Workers.LocalEnrollment.SecretFileSetting] = secretFile,
+                [Encoding.Api.Workers.LocalWorkerEndpoints.BaseUrlSetting] = "http://example.invalid/",
             });
 
             var anonymous = new TestClient(factory.CreateClient(new() { HandleCookies = false, AllowAutoRedirect = false }));
             var admin = new TestClient(factory.CreateClient(new() { HandleCookies = false, AllowAutoRedirect = false }));
 
             // Initialisation de l'administrateur
-            using (var setup = await anonymous.SendAsync(HttpMethod.Post, "/api/v1/auth/setup", new SetupRequest("admin", AdminPassword, NodeDisplayName: "Noeud API"), csrf: false))
+            using (var setup = await anonymous.SendAsync(HttpMethod.Post, "/api/v1/auth/setup", new SetupRequest("admin", AdminPassword, WorkerDisplayName: "Noeud API"), csrf: false))
             {
                 Check(setup.StatusCode == HttpStatusCode.Created, "Setup succeeds.");
             }
@@ -185,10 +185,6 @@ internal static class ApiImprovementsScenarios
                 var resumedId = (await resumeResp.Content.ReadFromJsonAsync<JsonElement>(Json)).GetProperty("id").GetGuid();
                 Check(resumedId != exec2 && await execRepo.GetAsync(resumedId, CancellationToken.None) is { State: "queued", Attempt: 2 },
                     "Resume responds with a linked queued attempt.");
-                using var ownerResponse=await admin.SendAsync(HttpMethod.Get,$"/api/v1/executions/{resumedId}/ownership");
-                Check(ownerResponse.StatusCode==HttpStatusCode.OK,"Resumed work has an observable owner immediately after creation.");
-                var owner=(await ownerResponse.Content.ReadFromJsonAsync<TaskOwnershipStatus>(Json))!;
-                Check(owner.ExecutionId==resumedId && owner.OwnerPeerId!=Guid.Empty && owner.Epoch==1 && owner.State=="active","A resumed execution has one initial active ownership epoch.");
             }
             Console.WriteLine("PASS: executions and events pagination and filtering.");
 
@@ -226,15 +222,14 @@ internal static class ApiImprovementsScenarios
             Console.WriteLine("PASS: HeavyOperationsPolicy rate limiting.");
 
             // 6. Cluster API Tokens, suppression/clonage de flow, et vue d'ensemble bibliothèques
-            // A. Création du cluster et génération du token cluster
+            // A. Nom du central et jeton d'accès créé par l'administrateur
             string clusterToken;
-            using (var createClusterResp = await admin.SendAsync(HttpMethod.Post, "/api/v1/cluster", new { name = "Cluster Test IA" }))
+            Check(await admin.StatusAsync(HttpMethod.Put, "/api/v1/central", new { name = "Central Test IA" }) == HttpStatusCode.OK, "The central can be renamed.");
+            using (var createClusterResp = await admin.SendAsync(HttpMethod.Post, "/api/v1/tokens", new CreateApiTokenRequest("Jeton central", "admin", CurrentPassword: AdminPassword)))
             {
-                Check(createClusterResp.StatusCode == HttpStatusCode.OK, "Cluster creation succeeds.");
-                var clusterDoc = await createClusterResp.Content.ReadFromJsonAsync<JsonElement>(Json);
-                Check(clusterDoc.GetProperty("name").GetString() == "Cluster Test IA", "Cluster name is set.");
-                clusterToken = clusterDoc.GetProperty("clusterToken").GetString()!;
-                Check(!string.IsNullOrWhiteSpace(clusterToken) && clusterToken.StartsWith("enc_pat_"), "Cluster creation generates and returns clusterToken.");
+                Check(createClusterResp.StatusCode == HttpStatusCode.Created, "An administrator creates an access token.");
+                clusterToken = (await createClusterResp.Content.ReadFromJsonAsync<CreatedApiTokenResponse>(Json))!.Token;
+                Check(!string.IsNullOrWhiteSpace(clusterToken) && clusterToken.StartsWith("enc_pat_"), "The token starts with enc_pat_.");
             }
 
             // B. Client IA utilisant Bearer token (sans cookie et sans en-tête CSRF)
@@ -243,12 +238,12 @@ internal static class ApiImprovementsScenarios
                 BearerToken = clusterToken
             };
 
-            // Vérification de GET /api/v1/cluster
-            using (var clusterGetResp = await aiClient.SendAsync(HttpMethod.Get, "/api/v1/cluster"))
+            // Vérification de GET /api/v1/central
+            using (var clusterGetResp = await aiClient.SendAsync(HttpMethod.Get, "/api/v1/central"))
             {
                 Check(clusterGetResp.StatusCode == HttpStatusCode.OK, "AI client can query cluster status with Bearer token.");
                 var clusterGetDoc = await clusterGetResp.Content.ReadFromJsonAsync<JsonElement>(Json);
-                Check(clusterGetDoc.GetProperty("hasClusterToken").GetBoolean(), "hasClusterToken is true.");
+                Check(clusterGetDoc.GetProperty("name").GetString() == "Central Test IA", "The central reports its name.");
             }
 
             // C. Gestion des tokens API : création, listage et révocation
@@ -411,7 +406,7 @@ internal static class ApiImprovementsScenarios
                       && toolsJson.Contains("get_flow_schema")
                       && toolsJson.Contains("create_flow")
                       && toolsJson.Contains("delete_flow")
-                      && toolsJson.Contains("list_nodes"), "MCP exposes all cluster management tools.");
+                      && toolsJson.Contains("list_workers"), "MCP exposes all cluster management tools.");
             }
 
             // C. Appel d'outil (tools/call : get_flow_schema)

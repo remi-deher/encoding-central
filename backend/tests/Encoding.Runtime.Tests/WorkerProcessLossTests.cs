@@ -8,7 +8,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.IO.Compression;
 using Encoding.Api.Infrastructure;
-using Encoding.NodeAgent;
+using Encoding.WorkerAgent;
 using Xunit;
 
 namespace Encoding.Runtime.Tests;
@@ -20,7 +20,7 @@ public sealed class MultiProcessFactAttribute : FactAttribute
     {
         if (Environment.GetEnvironmentVariable("ENCODING_TEST_MULTIPROCESS") != "1")
             Skip = "Définir ENCODING_TEST_MULTIPROCESS=1 (processus réels, ffmpeg requis, plusieurs minutes).";
-        else if (!OperatingSystem.IsLinux() || Encoding.NodeAgent.Runtime.ProcessToolRunner.Find("ffmpeg") is null)
+        else if (!OperatingSystem.IsLinux() || Encoding.WorkerAgent.Runtime.ProcessToolRunner.Find("ffmpeg") is null)
             Skip = "Linux et ffmpeg sont requis.";
     }
 }
@@ -48,14 +48,14 @@ public sealed class WorkerProcessLossTests
             PrepareStorePackages(Path.Combine(root, "api"));
             var secret = Path.Combine(root, "local-enrollment.secret");
             File.WriteAllText(secret, Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
-            var api = Start("api", typeof(ClusterRegisterRepository).Assembly.Location, processes, env =>
+            var api = Start("api", typeof(RegisterRepository).Assembly.Location, processes, env =>
             {
                 env["ASPNETCORE_ENVIRONMENT"] = "Production";
                 env["ASPNETCORE_URLS"] = $"http://127.0.0.1:{apiPort}";
-                env["ConnectionStrings__Cluster"] = $"Data Source={Path.Combine(root, "api", "cluster.sqlite")}";
-                env["Node__DataDirectory"] = Path.Combine(root, "api");
+                env["ConnectionStrings__Central"] = $"Data Source={Path.Combine(root, "api", "cluster.sqlite")}";
+                env["Worker__DataDirectory"] = Path.Combine(root, "api");
                 env["PluginSettings__KeyDirectory"] = Path.Combine(root, "keys");
-                env["Node__LocalEnrollmentSecretFile"] = secret;
+                env["Worker__LocalEnrollmentSecretFile"] = secret;
                 env["Auth__CookieSecure"] = "false";
                 env["Logging__LogLevel__Default"] = "Warning";
             });
@@ -69,25 +69,25 @@ public sealed class WorkerProcessLossTests
             {
                 var data = Path.Combine(root, name);
                 var port = FreePort();
-                Start(name, typeof(NodeAgentOptions).Assembly.Location, processes, env =>
+                Start(name, typeof(WorkerAgentOptions).Assembly.Location, processes, env =>
                 {
-                    env["Node__Name"] = name; env["Node__Roles"] = "worker"; env["Node__MaxConcurrentTasks"] = "1";
-                    env["Node__DataDirectory"] = data; env["Cluster__ApiBaseUrl"] = $"http://127.0.0.1:{apiPort}/";
-                    env["WorkerUi__Port"] = port.ToString(); env["Node__LocalEnrollmentSecretFile"] = secret;
+                    env["Worker__Name"] = name; env["Worker__Roles"] = "worker"; env["Worker__MaxConcurrentTasks"] = "1";
+                    env["Worker__DataDirectory"] = data; env["Central__ApiBaseUrl"] = $"http://127.0.0.1:{apiPort}/";
+                    env["WorkerUi__Port"] = port.ToString(); env["Worker__LocalEnrollmentSecretFile"] = secret;
                     env["Worker__AutoAcceptEnrollment"] = "true"; env["Logging__LogLevel__Default"] = "Warning";
                 });
             }
             JsonElement nodes = default;
             await WaitAsync(async () =>
             {
-                nodes = await client.GetFromJsonAsync<JsonElement>("nodes");
+                nodes = await client.GetFromJsonAsync<JsonElement>("workers");
                 return nodes.GetArrayLength() == 2 && nodes.EnumerateArray().All(node => node.GetProperty("status").GetString() == "online");
             }, 90, "two online workers", processes);
 
             var library = (await PostAsync(client, "libraries", new { name = "Kill" })).GetProperty("id").GetGuid();
-            using (var access = await client.PutAsJsonAsync($"libraries/{library}/node-access", new
+            using (var access = await client.PutAsJsonAsync($"libraries/{library}/worker-access", new
             {
-                nodes = nodes.EnumerateArray().Select(node => new { nodeId = node.GetProperty("id").GetGuid(), mode = "direct", localPath = media, canRead = true, canWrite = true, transferSourceNodeId = (Guid?)null, isEnabled = true })
+                workers = nodes.EnumerateArray().Select(node => new { workerId = node.GetProperty("id").GetGuid(), mode = "direct", localPath = media, canRead = true, canWrite = true, transferSourceWorkerId = (Guid?)null, isEnabled = true })
             })) Assert.True(access.IsSuccessStatusCode, await access.Content.ReadAsStringAsync());
             var flow = (await PostAsync(client, "flows", new
             {
@@ -119,9 +119,9 @@ public sealed class WorkerProcessLossTests
             {
                 var current = (await client.GetFromJsonAsync<JsonElement>("executions")).GetProperty("executions")[0];
                 executionId = current.GetProperty("id").GetGuid();
-                if (current.GetProperty("state").GetString() != "running" || current.GetProperty("node").ValueKind != JsonValueKind.String) return false;
+                if (current.GetProperty("state").GetString() != "running" || current.GetProperty("worker").ValueKind != JsonValueKind.String) return false;
                 if (!FfmpegRunningFor(executionId)) return false;
-                victim = current.GetProperty("node").GetString();
+                victim = current.GetProperty("worker").GetString();
                 return true;
             }, 180, "ffmpeg encoding", processes);
             var killed = processes.Single(proc => proc.Name == victim);
@@ -142,11 +142,11 @@ public sealed class WorkerProcessLossTests
             if (final.GetProperty("state").GetString() != "succeeded")
             {
                 var history = (await client.GetFromJsonAsync<JsonElement>($"executions/{executionId}/events")).ToString();
-                var state = (await client.GetFromJsonAsync<JsonElement>("nodes")).EnumerateArray().Select(node => $"{node.GetProperty("name")}={node.GetProperty("status")}");
+                var state = (await client.GetFromJsonAsync<JsonElement>("workers")).EnumerateArray().Select(node => $"{node.GetProperty("name")}={node.GetProperty("status")}");
                 Assert.Fail($"Exécution : {final.GetProperty("detail")}\nNœuds : {string.Join(", ", state)}\nHistorique : {history}");
             }
             Assert.Equal(executionId, final.GetProperty("id").GetGuid());
-            Assert.NotEqual(victim, final.GetProperty("node").GetString());
+            Assert.NotEqual(victim, final.GetProperty("worker").GetString());
             var events = (await client.GetFromJsonAsync<JsonElement>($"executions/{executionId}/events")).ToString();
             Assert.Contains("reprise", events, StringComparison.OrdinalIgnoreCase);
             Assert.Equal(sourceSha, Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(source))));

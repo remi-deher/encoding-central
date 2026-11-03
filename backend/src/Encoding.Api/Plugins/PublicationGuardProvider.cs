@@ -7,8 +7,8 @@ namespace Encoding.Api.Plugins;
 
 /// <summary>
 /// Gardes de publication (architecture 0059) : pour chaque plugin qui en déclare une (<see cref="PluginPublicationGuard"/>), active et
-/// configurée dans le cluster, décrit l'invocation que le nœud d'accès doit faire avant de remplacer un fichier source. Le serveur ne
-/// juge jamais la garde lui-même : il fournit les valeurs effectives (secrets compris, comme pour un worker) et l'arbitrage reste au nœud d'accès.
+/// configurée dans le central, décrit l'invocation que le worker d'accès doit faire avant de remplacer un fichier source. Le serveur ne
+/// juge jamais la garde lui-même : il fournit les valeurs effectives (secrets compris, comme pour un worker) et l'arbitrage reste au worker d'accès.
 /// </summary>
 public sealed class PublicationGuardProvider(PluginConfigurationRepository configurations, FlowComponentRegistry registry)
 {
@@ -19,7 +19,7 @@ public sealed class PublicationGuardProvider(PluginConfigurationRepository confi
         {
             var guard = plugin.PublicationGuard!;
             var stored = await configurations.ReadGlobalValuesAsync(plugin, ct);
-            // Un plugin jamais configuré n'est pas utilisé dans ce cluster : aucune garde, sans bloquer les remplacements.
+            // Un plugin jamais configuré n'est pas utilisé dans ce central : aucune garde, sans bloquer les remplacements.
             if (stored.Count == 0) continue;
             var values = WithDefaults(plugin, stored);
             if (!Flag(values, guard.EnabledField)) continue;

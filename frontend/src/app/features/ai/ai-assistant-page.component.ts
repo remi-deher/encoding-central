@@ -35,7 +35,6 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDialog } from '@angular/material/dialog';
 import {
-  AiNodeAvailability,
   AiAssistantConversation,
   AiAssistantConversationSearchResult,
   AiAssistantConversationDetail,
@@ -47,7 +46,7 @@ import {
   AiTurnModelSelection,
 } from '../../shared/models/ai-tools';
 import { ExecutionResponse } from '../../shared/models/execution';
-import { LibraryResponse, NodeResponse } from '../../shared/models/cluster';
+import { LibraryResponse, WorkerResponse } from '../../shared/models/central';
 import {
   FlowDocument,
   FlowSummary,
@@ -57,7 +56,7 @@ import { FlowComponentDefinition } from '../../shared/models/flow-component';
 import { FlowPreviewComponent } from '../../shared/ui/flow-preview/flow-preview';
 import { ConfirmationDialogComponent } from '../../shared/ui/confirmation-dialog.component';
 import { AiToolsService } from '../../shared/services/ai-tools.service';
-import { ClusterApi } from '../../shared/services/cluster-api';
+import { CentralApi } from '../../shared/services/central-api';
 import { ExecutionTracking } from '../../shared/services/execution-tracking';
 import { FlowValidation } from '../../shared/services/flow-validation';
 import { AuthService } from '../../core/auth/auth.service';
@@ -111,7 +110,7 @@ export class AiAssistantPageComponent implements OnDestroy {
   private readonly aiTools = inject(AiToolsService);
   private readonly dialog = inject(MatDialog);
   private readonly flowValidation = inject(FlowValidation);
-  private readonly clusterApi = inject(ClusterApi);
+  private readonly clusterApi = inject(CentralApi);
   private readonly executionTracking = inject(ExecutionTracking);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -169,7 +168,7 @@ export class AiAssistantPageComponent implements OnDestroy {
 
   protected readonly flows = signal<readonly FlowSummary[]>([]);
   protected readonly executions = signal<readonly ExecutionResponse[]>([]);
-  protected readonly nodes = signal<readonly NodeResponse[]>([]);
+  protected readonly nodes = signal<readonly WorkerResponse[]>([]);
   protected readonly libraries = signal<readonly LibraryResponse[]>([]);
   protected readonly conversations = signal<readonly AiAssistantConversation[]>([]);
   protected readonly searchQuery = signal('');
@@ -193,7 +192,6 @@ export class AiAssistantPageComponent implements OnDestroy {
         ),
     );
   });
-  protected readonly aiNodes = signal<readonly AiNodeAvailability[]>([]);
   protected readonly detail = signal<AiAssistantConversationDetail | null>(null);
   readonly conversationId = computed(() => this.detail()?.conversation.id ?? null);
   protected readonly assistantOptions = signal<AiAssistantOptions | null>(null);
@@ -224,11 +222,11 @@ export class AiAssistantPageComponent implements OnDestroy {
   protected readonly readTools = [
     { name: 'list_flows', label: 'Lister les flows' },
     { name: 'get_flow', label: 'Relire le flow sélectionné' },
-    { name: 'list_nodes', label: 'Lister les nœuds' },
+    { name: 'list_workers', label: 'Lister les workers' },
     { name: 'list_executions', label: 'Consulter les exécutions récentes' },
     { name: 'get_libraries_overview', label: 'Consulter les bibliothèques' },
     { name: 'list_libraries', label: 'Lister les bibliothèques' },
-    { name: 'list_node_groups', label: 'Lister les groupes de nœuds' },
+    { name: 'list_worker_groups', label: 'Lister les groupes de workers' },
     { name: 'list_scripts', label: 'Lister les scripts' },
     { name: 'list_encoding_profiles', label: 'Lister les profils d’encodage' },
     { name: 'list_templates', label: 'Lister les modèles de flow' },
@@ -331,7 +329,6 @@ export class AiAssistantPageComponent implements OnDestroy {
     this.loadNodes();
     this.loadLibraries();
     this.loadConversations();
-    this.loadAiNodes();
     this.loadAssistantOptions();
     afterNextRender(() => {
       if (this.panelMode()) return;
@@ -553,7 +550,7 @@ export class AiAssistantPageComponent implements OnDestroy {
       href: {
         flow: '/flows',
         execution: '/activity',
-        node: '/nodes',
+        node: '/workers',
         library: '/libraries',
       }[option.type],
       version: option.version,
@@ -979,7 +976,7 @@ export class AiAssistantPageComponent implements OnDestroy {
           provider: selectedModel.provider,
           model: selectedModel.model,
           reasoningEffort: this.selectedReasoningEffort(),
-          nodeId: selectedModel.nodeId,
+          workerId: selectedModel.workerId,
         }
       : activeConversation;
     this.followTail.set(true);
@@ -1009,7 +1006,7 @@ export class AiAssistantPageComponent implements OnDestroy {
         provider: this.requestSelection?.provider,
         model: this.requestSelection?.model,
         reasoningEffort: this.requestSelection?.reasoningEffort,
-        nodeId: this.requestSelection?.nodeId,
+        workerId: this.requestSelection?.workerId,
         attachments: this.attachments(),
       })
       .subscribe({
@@ -1028,7 +1025,7 @@ export class AiAssistantPageComponent implements OnDestroy {
                       sources: response.sources,
                       selection: response.selection,
                       actualModel: response.actualModel,
-                      executorNodeId: response.executorNodeId,
+                      executorNodeId: response.executorWorkerId,
                     },
                   ]
               : oldTurns;
@@ -1355,29 +1352,6 @@ export class AiAssistantPageComponent implements OnDestroy {
       },
       error: () => this.loadingLibraries.set(false),
     });
-  }
-
-  private loadAiNodes(): void {
-    this.aiTools.getCluster().subscribe({
-      next: (view) => this.aiNodes.set(view.nodes),
-      error: () => this.aiNodes.set([]),
-    });
-  }
-
-  /** Nœud qui coordonne la discussion, pour l'indication « Discussion du nœud … ». */
-  protected coordinatorLabel(conversation: AiAssistantConversation): string | null {
-    if (!conversation.coordinatorId) return null;
-    const node = this.aiNodes().find(
-      (candidate) => candidate.nodeId === conversation.coordinatorId,
-    );
-    return node ? `Discussion du nœud ${node.name}` : 'Discussion d’un autre nœud';
-  }
-
-  /** Vrai quand le coordinateur ne répond plus : le nœud courant reprendra la discussion au prochain message. */
-  protected coordinatorLost(conversation: AiAssistantConversation): boolean {
-    return this.aiNodes().some(
-      (candidate) => candidate.nodeId === conversation.coordinatorId && !candidate.reachable,
-    );
   }
 
   private loadConversations(): void {

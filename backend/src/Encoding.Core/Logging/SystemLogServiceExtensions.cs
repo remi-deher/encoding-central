@@ -20,7 +20,7 @@ public static class SystemLogServiceExtensions
             return new SystemLogProvider(
                 ringBuffer,
                 broadcaster,
-                () => sp.GetService<ISystemLogNodeContext>(),
+                () => sp.GetService<ISystemLogWorkerContext>(),
                 () => sp.GetService<ISystemLogSink>(),
                 options);
         });

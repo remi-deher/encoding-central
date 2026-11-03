@@ -7,7 +7,7 @@ using Encoding.Api.Flows;
 using Encoding.Api.Infrastructure.Data;
 using Encoding.Api.Libraries;
 using Encoding.Api.Logging;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Encoding.Api.Plugins;
 using Encoding.Api.Resources;
 using Encoding.Contracts.Executions;
@@ -266,7 +266,7 @@ public sealed class McpPluginsHandler(
                 mediaTypes = new[] { "general" },
                 commonOperations = new[] { "run_plugin_process", "execute_custom_script" },
                 scriptUsage = "Utilise le SDK encoding_plugin_sdk.py pour communiquer avec le worker.",
-                notes = "S'exécute sous le bac à sable Landlock (0032). Aucun accès aux secrets du nœud."
+                notes = "S'exécute sous le bac à sable Landlock (0032). Aucun accès aux secrets du worker."
             },
             new
             {
@@ -429,7 +429,7 @@ public sealed class McpPluginsHandler(
 
         // 5. Capabilities
         if (!defProp.TryGetProperty("capabilitiesExposed", out var capProp) || capProp.ValueKind != JsonValueKind.Array || capProp.GetArrayLength() == 0)
-            warnings.Add("Le champ 'capabilitiesExposed' est vide ou absent. L'outil n'annoncera aucune capacité au cluster.");
+            warnings.Add("Le champ 'capabilitiesExposed' est vide ou absent. L'outil n'annoncera aucune capacité au central.");
 
         var isValid = errors.Count == 0;
         var response = new
@@ -549,14 +549,14 @@ public sealed class McpPluginsHandler(
             ? Math.Clamp(l, 1, 200)
             : 50;
 
-        Guid? nodeId = null;
-        if (arguments.ValueKind == JsonValueKind.Object && arguments.TryGetProperty("node_id", out var nProp) &&
-            Guid.TryParse(nProp.GetString(), out var parsedNodeId))
+        Guid? workerId = null;
+        if (arguments.ValueKind == JsonValueKind.Object && arguments.TryGetProperty("worker_id", out var nProp) &&
+            Guid.TryParse(nProp.GetString(), out var parsedWorkerId))
         {
-            nodeId = parsedNodeId;
+            workerId = parsedWorkerId;
         }
 
-        var filter = new SystemLogFilterQuery(minLevel, category, search, nodeId, limit);
+        var filter = new SystemLogFilterQuery(minLevel, category, search, workerId, limit);
         var inMemory = ringBuffer.Query(filter);
 
         if (filter.MinLevel >= SystemLogLevel.Warning || inMemory.Count < filter.Limit)

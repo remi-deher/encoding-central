@@ -1,4 +1,4 @@
-using Encoding.NodeAgent.Runtime;
+using Encoding.WorkerAgent.Runtime;
 using Xunit;
 
 namespace Encoding.Runtime.Tests;

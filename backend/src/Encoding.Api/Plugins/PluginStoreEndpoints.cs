@@ -306,7 +306,7 @@ public static class PluginStoreEndpoints
         store.MapDelete("/packages/{pluginId}", async (string pluginId, PluginStoreService plugins) =>
             await plugins.RemoveAsync(pluginId) ? Results.NoContent() : Results.NotFound()).WithName("RemoveStorePackage");
 
-        // Distribution aux workers, authentifiés par le jeton de leur nœud (lecture seule).
+        // Distribution aux workers, authentifiés par le jeton de leur worker (lecture seule).
         store.MapGet("/installed", (PluginStoreService plugins) =>
             Results.Ok(plugins.Installed().Select(item => new { item.Id, item.Version, item.Sha256 }))).AllowNodeCredentials().WithName("ListInstalledPluginPackages");
 

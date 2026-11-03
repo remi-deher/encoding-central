@@ -40,7 +40,7 @@ import {
   PageShellContextService,
   PageShellSearchResult,
 } from '../../core/layout/page-shell-context';
-import { ClusterApi } from '../../shared/services/cluster-api';
+import { CentralApi } from '../../shared/services/central-api';
 import { LibraryActivity } from '../../shared/services/library-activity';
 import {
   LibraryActivityCounts,
@@ -159,7 +159,7 @@ export class ActivityPageComponent {
   private readonly router = inject(Router);
   private readonly pageShellContext = inject(PageShellContextService);
   private readonly activityApi = inject(LibraryActivity);
-  private readonly clusterApi = inject(ClusterApi);
+  private readonly clusterApi = inject(CentralApi);
   private readonly tracking = inject(ExecutionTracking);
   private readonly detailPolling = inject(ExecutionDetailPolling);
   private readonly downloads = inject(FileDownload);
@@ -797,7 +797,7 @@ export class ActivityPageComponent {
       .filter(
         (file) =>
           !normalized ||
-          [file.relativePath, file.library, file.flow, file.node, this.statusLabel(file.status)]
+          [file.relativePath, file.library, file.flow, file.worker, this.statusLabel(file.status)]
             .filter(Boolean)
             .join(' ')
             .toLocaleLowerCase('fr-FR')
@@ -925,7 +925,7 @@ export class ActivityPageComponent {
       'Fichier     : ' + execution.media,
       'Bibliothèque: ' + execution.library,
       'Flow        : ' + execution.flow + ' (v' + execution.flowVersion + ')',
-      'Worker      : ' + (execution.node ?? '—'),
+      'Worker      : ' + (execution.worker ?? '—'),
       'État        : ' + executionStateLabel(execution),
       'Progression : ' + (execution.progress != null ? execution.progress + '%' : '—'),
       'Démarré     : ' + (execution.startedAt ? formatFullDateTime(execution.startedAt) : '—'),

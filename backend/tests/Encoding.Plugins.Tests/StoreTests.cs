@@ -6,8 +6,8 @@ using System.Text.Json.Nodes;
 using Encoding.Api.Flows;
 using Encoding.Api.Plugins;
 using Encoding.Core.Plugins;
-using Encoding.NodeAgent;
-using Encoding.NodeAgent.Runtime;
+using Encoding.WorkerAgent;
+using Encoding.WorkerAgent.Runtime;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -243,7 +243,7 @@ internal static class StoreTests
             Check(launch.Id == "acme.tools" && launch.Version == "1.0.0" && launch.Arguments.SequenceEqual(["-B", Path.Combine(target, "main.py")]) && launch.ReadOnlyPaths.SequenceEqual([target]),
                 "A verified package becomes a sandboxed launch of its runtime restricted to its own folder.");
             var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Runtime:CustomPluginDirectory"] = root }).Build();
-            var host = new PluginProcessHost(new ProcessToolRunner(), configuration, new NodeAgentOptions("t", [Encoding.Contracts.Nodes.NodeRole.Worker], 1, Path.Combine(root, "node"), null, false, TimeSpan.FromSeconds(10), 8081));
+            var host = new PluginProcessHost(new ProcessToolRunner(), configuration, new WorkerAgentOptions("t", [Encoding.Contracts.Workers.WorkerRole.Worker], 1, Path.Combine(root, "node"), null, false, TimeSpan.FromSeconds(10), 8081));
             Check(host.Installed.Any(item => item.Id == "acme.tools"), "The worker host lists the downloaded plugins.");
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }

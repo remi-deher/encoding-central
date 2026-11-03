@@ -15,7 +15,7 @@ public static class DatabaseProvider
         if (configuration.GetValue("PeerCluster:Enabled", false))
             throw new InvalidOperationException("Le mode de consensus retiré ne peut plus démarrer. Sauvegardez les données et retirez l’ancienne configuration après avoir préparé la transition vers le maillage local.");
         var provider = configuration["Database:Provider"]?.Trim();
-        var connection = configuration.GetConnectionString("Cluster") ?? "Data Source=./data/cluster.db";
+        var connection = configuration.GetConnectionString("Central") ?? "Data Source=./data/cluster.db";
         if (provider is not null && !string.Equals(provider, SqliteName, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Seul le fournisseur SQLite est pris en charge. Configurez Database:Provider=sqlite.");
         try { _ = new SqliteConnectionStringBuilder(connection); }

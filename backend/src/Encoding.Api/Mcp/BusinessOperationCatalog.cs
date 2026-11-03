@@ -21,14 +21,14 @@ public static partial class BusinessOperationCatalog
 {
     public static readonly IReadOnlyList<McpToolDefinition> ToolDefinitions =
     [
-        new("get_version", "Consulte la version installée et le commit du nœud serveur interrogé.",
+        new("get_version", "Consulte la version installée et le commit du worker serveur interrogé.",
             new { type = "object", properties = new { }, required = Array.Empty<string>() }),
-        new("get_updates", "Consulte les notes de version et la disponibilité d’une mise à jour pour ce nœud.",
+        new("get_updates", "Consulte les notes de version et la disponibilité d’une mise à jour pour ce worker.",
             new { type = "object", properties = new { }, required = Array.Empty<string>() }),
         // --- 1. BIBLIOTHÈQUES & SANTÉ DU CLUSTER ---
         new(
             "get_libraries_overview",
-            "Obtient une vue d'ensemble complète et consolidée de toutes les bibliothèques multimédias du cluster (flows associés, modes d'accès par nœud, état des scans et compteurs de fichiers).",
+            "Obtient une vue d'ensemble complète et consolidée de toutes les bibliothèques multimédias du central (flows associés, modes d'accès par worker, état des scans et compteurs de fichiers).",
             new { type = "object", properties = new { }, required = Array.Empty<string>() }
         ),
         new("list_libraries", "Liste les bibliothèques, leur activation et les flux qui leur sont affectés.",
@@ -39,7 +39,7 @@ public static partial class BusinessOperationCatalog
             new { type = "object", properties = new { libraryId = new { type = "string" }, name = new { type = "string" } }, required = new[] { "libraryId", "name" } }),
         new("delete_library", "Supprime la définition d’une bibliothèque, sans supprimer les fichiers média. Nécessite les droits administrateur.",
             new { type = "object", properties = new { libraryId = new { type = "string" } }, required = new[] { "libraryId" } }),
-        new("get_library_node_access", "Consulte les droits et chemins locaux déclarés pour chaque nœud d’une bibliothèque.",
+        new("get_library_worker_access", "Consulte les droits et chemins locaux déclarés pour chaque worker d’une bibliothèque.",
             new { type = "object", properties = new { libraryId = new { type = "string" } }, required = new[] { "libraryId" } }),
         new("get_library_workflow", "Consulte le flow affecté, l’état de découverte et les fichiers détectés d’une bibliothèque.",
             new { type = "object", properties = new { libraryId = new { type = "string" }, search = new { type = "string" }, limit = new { type = "integer" },
@@ -49,21 +49,21 @@ public static partial class BusinessOperationCatalog
         new("save_library_processing", "Configure la surveillance automatique et les limites de traitement d’une bibliothèque. Nécessite les droits administrateur.",
             new { type = "object", additionalProperties = false, properties = new { libraryId = new { type = "string", format = "uuid" },
                 watchEnabled = new { type = "boolean" }, scanIntervalSeconds = new { type = "integer", minimum = 15, maximum = 86400 },
-                maxConcurrentTasks = new { type = new[] { "integer", "null" }, minimum = 1, maximum = 1000 }, nodeLimits = new { type = "array",
-                maxItems = 1000, items = new { type = "object", additionalProperties = false, properties = new { nodeId = new { type = "string",
-                format = "uuid" }, maxConcurrentTasks = new { type = "integer", minimum = 1, maximum = 1000 } }, required = new[] { "nodeId",
+                maxConcurrentTasks = new { type = new[] { "integer", "null" }, minimum = 1, maximum = 1000 }, workerLimits = new { type = "array",
+                maxItems = 1000, items = new { type = "object", additionalProperties = false, properties = new { workerId = new { type = "string",
+                format = "uuid" }, maxConcurrentTasks = new { type = "integer", minimum = 1, maximum = 1000 } }, required = new[] { "workerId",
                 "maxConcurrentTasks" } } }, expectedRevision = new { type = "integer", minimum = 0 } }, required = new[] { "libraryId", "watchEnabled",
-                "scanIntervalSeconds", "nodeLimits", "expectedRevision" } }),
-        new("configure_library_node_access",
-            "Configure les modes d’accès direct, indisponible ou par transfert, avec les droits de lecture et d’écriture par nœud. Nécessite les droits administrateur.",
+                "scanIntervalSeconds", "workerLimits", "expectedRevision" } }),
+        new("configure_library_worker_access",
+            "Configure les modes d’accès direct, indisponible ou par transfert, avec les droits de lecture et d’écriture par worker. Nécessite les droits administrateur.",
             new { type = "object", additionalProperties = false, properties = new { libraryId = new { type = "string", format = "uuid" },
-                nodes = new { type = "array", maxItems = 2048,
-                description = "Accès par nœud : nodeId, mode (direct|unsupported|transfer), localPath, canRead, canWrite, transferSourceNodeId, isEnabled.",
-                items = new { type = "object", additionalProperties = false, properties = new { nodeId = new { type = "string", format = "uuid" },
+                workers = new { type = "array", maxItems = 2048,
+                description = "Accès par worker : workerId, mode (direct|unsupported|transfer), localPath, canRead, canWrite, transferSourceWorkerId, isEnabled.",
+                items = new { type = "object", additionalProperties = false, properties = new { workerId = new { type = "string", format = "uuid" },
                 mode = new { type = "string", @enum = new[] { "direct", "unsupported", "transfer" } }, localPath = new { type = new[] { "string", "null" },
                 maxLength = 4096 }, canRead = new { type = "boolean" }, canWrite = new { type = "boolean" },
-                transferSourceNodeId = new { type = new[] { "string", "null" }, format = "uuid" }, isEnabled = new { type = "boolean" } },
-                required = new[] { "nodeId", "mode", "canRead", "canWrite" } } } }, required = new[] { "libraryId", "nodes" } }),
+                transferSourceWorkerId = new { type = new[] { "string", "null" }, format = "uuid" }, isEnabled = new { type = "boolean" } },
+                required = new[] { "workerId", "mode", "canRead", "canWrite" } } } }, required = new[] { "libraryId", "workers" } }),
         new("set_library_activation", "Active ou désactive une bibliothèque. Nécessite les droits administrateur.",
             new { type = "object", properties = new { libraryId = new { type = "string" }, isActive = new { type = "boolean" } }, required = new[] { "libraryId", "isActive" } }),
         new("assign_library_flow", "Affecte ou retire une version publiée d’un flow à une bibliothèque. Nécessite les droits administrateur.",
@@ -72,15 +72,15 @@ public static partial class BusinessOperationCatalog
         new("request_library_discovery", "Demande une découverte des fichiers d’une bibliothèque active. Nécessite les droits administrateur.",
             new { type = "object", properties = new { libraryId = new { type = "string" } }, required = new[] { "libraryId" } }),
         new(
-            "list_nodes",
-            "Liste tous les nœuds du cluster, leurs rôles (serveur, worker), état de présence (en ligne/hors ligne) et capacités d'encodage.",
+            "list_workers",
+            "Liste tous les workers du central, leurs rôles (serveur, worker), état de présence (en ligne/hors ligne) et capacités d'encodage.",
             new { type = "object", properties = new { }, required = Array.Empty<string>() }
         ),
-        new("list_node_groups", "Liste les groupes de nœuds et leurs critères, étiquettes et membres.",
+        new("list_worker_groups", "Liste les groupes de workers et leurs critères, étiquettes et membres.",
             new { type = "object", properties = new { }, required = Array.Empty<string>() }),
-        new("get_node_group", "Consulte les critères et membres d’un groupe de nœuds.",
+        new("get_worker_group", "Consulte les critères et membres d’un groupe de workers.",
             new { type = "object", properties = new { id = new { type = "string" } }, required = new[] { "id" } }),
-        new("save_node_group", "Crée ou modifie un groupe manuel ou automatique. Nécessite les droits administrateur.",
+        new("save_worker_group", "Crée ou modifie un groupe manuel ou automatique. Nécessite les droits administrateur.",
             new { type = "object", additionalProperties = false, properties = new { id = new { type = "string", format = "uuid" }, name = new { type = "string",
                 minLength = 1, maxLength = 128 }, description = new { type = "string", maxLength = 2000 }, mode = new { type = "string",
                 @enum = new[] { "manual", "automatic" } }, criteria = new { type = "object", additionalProperties = false,
@@ -90,27 +90,27 @@ public static partial class BusinessOperationCatalog
                 maxItems = 128, items = new { type = "string", maxLength = 128 } }, minimumConcurrentTasks = new { type = new[] { "integer", "null" },
                 minimum = 1 }, minimumProcessorCount = new { type = new[] { "integer", "null" }, minimum = 1 }, requiredEncoders = new { type = "array",
                 maxItems = 128, items = new { type = "string", maxLength = 128 } } } }, labels = new { type = "object", maxProperties = 128,
-                additionalProperties = new { type = new[] { "string", "null" }, maxLength = 1024 } }, nodeIds = new { type = "array", maxItems = 2048,
-                items = new { type = "string", format = "uuid" } } }, required = new[] { "name", "description", "mode", "criteria", "labels", "nodeIds" } }),
-        new("delete_node_group", "Supprime un groupe non utilisé par un flow. Nécessite les droits administrateur.",
+                additionalProperties = new { type = new[] { "string", "null" }, maxLength = 1024 } }, workerIds = new { type = "array", maxItems = 2048,
+                items = new { type = "string", format = "uuid" } } }, required = new[] { "name", "description", "mode", "criteria", "labels", "workerIds" } }),
+        new("delete_worker_group", "Supprime un groupe non utilisé par un flow. Nécessite les droits administrateur.",
             new { type = "object", properties = new { id = new { type = "string" } }, required = new[] { "id" } }),
-        new("get_node_activity", "Consulte la capacité, la charge et l’activité récente d’un nœud.",
-            new { type = "object", properties = new { nodeId = new { type = "string" } }, required = new[] { "nodeId" } }),
-        new("get_node_identity", "Consulte le nom, les étiquettes et les groupes effectifs d’un nœud.",
-            new { type = "object", properties = new { nodeId = new { type = "string" } }, required = new[] { "nodeId" } }),
-        new("set_node_draining", "Demande ou annule la vidange d’un nœud pour empêcher les nouvelles affectations pendant une maintenance. Nécessite les droits administrateur.",
-            new { type = "object", properties = new { nodeId = new { type = "string" }, draining = new { type = "boolean" } }, required = new[] { "nodeId", "draining" } }),
-        new("get_node_processing", "Consulte la capacité de traitement et la plage horaire d’un nœud.",
-            new { type = "object", properties = new { nodeId = new { type = "string" } }, required = new[] { "nodeId" } }),
-        new("save_node_processing", "Configure la capacité concurrente et la plage horaire d’un nœud. Nécessite les droits administrateur.",
-            new { type = "object", additionalProperties = false, properties = new { nodeId = new { type = "string", format = "uuid" },
+        new("get_worker_activity", "Consulte la capacité, la charge et l’activité récente d’un worker.",
+            new { type = "object", properties = new { workerId = new { type = "string" } }, required = new[] { "workerId" } }),
+        new("get_worker_identity", "Consulte le nom, les étiquettes et les groupes effectifs d’un worker.",
+            new { type = "object", properties = new { workerId = new { type = "string" } }, required = new[] { "workerId" } }),
+        new("set_worker_draining", "Demande ou annule la vidange d’un worker pour empêcher les nouvelles affectations pendant une maintenance. Nécessite les droits administrateur.",
+            new { type = "object", properties = new { workerId = new { type = "string" }, draining = new { type = "boolean" } }, required = new[] { "workerId", "draining" } }),
+        new("get_worker_processing", "Consulte la capacité de traitement et la plage horaire d’un worker.",
+            new { type = "object", properties = new { workerId = new { type = "string" } }, required = new[] { "workerId" } }),
+        new("save_worker_processing", "Configure la capacité concurrente et la plage horaire d’un worker. Nécessite les droits administrateur.",
+            new { type = "object", additionalProperties = false, properties = new { workerId = new { type = "string", format = "uuid" },
                 maxConcurrentTasks = new { type = new[] { "integer", "null" }, minimum = 1, maximum = 1000 }, schedule = new { type = new[] { "object",
                 "null" }, additionalProperties = false, properties = new { enabled = new { type = "boolean" }, timeZone = new { type = "string", minLength = 1,
                 maxLength = 64 }, slots = new { type = "string", minLength = 672, maxLength = 672, pattern = "^[01]{672}$" } }, required = new[] { "enabled",
-                "timeZone", "slots" } }, expectedRevision = new { type = "integer", minimum = 0 } }, required = new[] { "nodeId", "expectedRevision" } }),
-        new("save_node_identity", "Modifie le nom convivial et les étiquettes déclarées d’un nœud. Nécessite les droits administrateur.",
-            new { type = "object", properties = new { nodeId = new { type = "string" }, displayName = new { type = "string" },
-                labels = new { type = "object" } }, required = new[] { "nodeId", "labels" } }),
+                "timeZone", "slots" } }, expectedRevision = new { type = "integer", minimum = 0 } }, required = new[] { "workerId", "expectedRevision" } }),
+        new("save_worker_identity", "Modifie le nom convivial et les étiquettes déclarées d’un worker. Nécessite les droits administrateur.",
+            new { type = "object", properties = new { workerId = new { type = "string" }, displayName = new { type = "string" },
+                labels = new { type = "object" } }, required = new[] { "workerId", "labels" } }),
         new(
             "list_executions",
             "Liste les exécutions de traitement récentes ou filtrées par état (queued, running, failed, completed).",
@@ -140,7 +140,7 @@ public static partial class BusinessOperationCatalog
 
         new(
             "get_system_logs",
-            "Consulte les journaux système et nœuds récents pour analyser les incidents, pannes matérielles, erreurs de plugins ou avertissements du cluster.",
+            "Consulte les journaux système et workers récents pour analyser les incidents, pannes matérielles, erreurs de plugins ou avertissements du central.",
             new
             {
                 type = "object",
@@ -149,10 +149,10 @@ public static partial class BusinessOperationCatalog
                     min_level = new { type = "string",
                         description = "Sévérité minimale des logs retournés (Trace, Debug, Information, Warning, Error, Critical). Défaut: Warning.",
                         @default = "Warning" },
-                    category = new { type = "string", description = "Préfixe de catégorie de log (ex. 'Encoding.NodeAgent', 'Encoding.Plugins')." },
+                    category = new { type = "string", description = "Préfixe de catégorie de log (ex. 'Encoding.WorkerAgent', 'Encoding.Plugins')." },
                     search = new { type = "string", description = "Recherche textuelle dans le message ou l'exception du log." },
                     limit = new { type = "integer", description = "Nombre maximal d'entrées (défaut: 50, max: 200).", @default = 50 },
-                    node_id = new { type = "string", description = "Identifiant UUID optionnel du nœud concerné." }
+                    worker_id = new { type = "string", description = "Identifiant UUID optionnel du worker concerné." }
                 },
                 required = Array.Empty<string>()
             }
@@ -166,7 +166,7 @@ public static partial class BusinessOperationCatalog
         ),
         new(
             "list_flows",
-            "Liste tous les flows configurés dans le cluster avec leurs versions publiées, leur type et statut de brouillon.",
+            "Liste tous les flows configurés dans le central avec leurs versions publiées, leur type et statut de brouillon.",
             new { type = "object", properties = new { }, required = Array.Empty<string>() }
         ),
         new(
@@ -232,7 +232,7 @@ public static partial class BusinessOperationCatalog
         ),
         new(
             "delete_flow",
-            "Supprime un flow du cluster (suppression logique préservant l'audit s'il a des versions publiées, définitive pour un brouillon). Nécessite les droits administrateur.",
+            "Supprime un flow du central (suppression logique préservant l'audit s'il a des versions publiées, définitive pour un brouillon). Nécessite les droits administrateur.",
             new
             {
                 type = "object",
@@ -247,7 +247,7 @@ public static partial class BusinessOperationCatalog
         // --- 3. SCRIPTS (JAVASCRIPT / PYTHON) ---
         new(
             "list_scripts",
-            "Liste tous les scripts partagés réutilisables du cluster avec leur langage (javascript, python) et versions publiées.",
+            "Liste tous les scripts partagés réutilisables du central avec leur langage (javascript, python) et versions publiées.",
             new { type = "object", properties = new { }, required = Array.Empty<string>() }
         ),
         new(
@@ -326,7 +326,7 @@ public static partial class BusinessOperationCatalog
         // --- 4. PROFILS D'ENCODAGE ---
         new(
             "list_encoding_profiles",
-            "Liste tous les profils de qualité d'encodage vidéo configurés dans le cluster.",
+            "Liste tous les profils de qualité d'encodage vidéo configurés dans le central.",
             new { type = "object", properties = new { }, required = Array.Empty<string>() }
         ),
         new(
@@ -395,7 +395,7 @@ public static partial class BusinessOperationCatalog
         // --- 5. MODÈLES DE FLOWS (TEMPLATES) ---
         new(
             "list_templates",
-            "Liste tous les modèles de flows réutilisables du cluster.",
+            "Liste tous les modèles de flows réutilisables du central.",
             new { type = "object", properties = new { }, required = Array.Empty<string>() }
         ),
         new(
@@ -431,7 +431,7 @@ public static partial class BusinessOperationCatalog
         // --- 6. PACKS DE COMPOSANTS ---
         new(
             "list_component_packs",
-            "Liste tous les packs de composants (macro-composants réutilisables) disponibles dans le cluster.",
+            "Liste tous les packs de composants (macro-composants réutilisables) disponibles dans le central.",
             new { type = "object", properties = new { }, required = Array.Empty<string>() }
         ),
         new(
@@ -523,7 +523,7 @@ public static partial class BusinessOperationCatalog
         // --- 8. OUTILS MÉDIA & VALIDATION IA ---
         new(
             "list_media_tools",
-            "Liste tous les outils média reconnus par le cluster (FFmpeg, FFprobe, MKVToolNix, MediaInfo, ImageMagick, Python, JS), leurs sous-commandes et leurs rôles.",
+            "Liste tous les outils média reconnus par le central (FFmpeg, FFprobe, MKVToolNix, MediaInfo, ImageMagick, Python, JS), leurs sous-commandes et leurs rôles.",
             new { type = "object", properties = new { }, required = Array.Empty<string>() }
         ),
         new(
@@ -541,7 +541,7 @@ public static partial class BusinessOperationCatalog
         ),
         new(
             "validate_tool_definition",
-            "Valide un descripteur déclaratif tool.json pour l'intégration sécurisée d'un nouvel outil personnalisé au cluster (architecture 0064).",
+            "Valide un descripteur déclaratif tool.json pour l'intégration sécurisée d'un nouvel outil personnalisé au central (architecture 0064).",
             new
             {
                 type = "object",

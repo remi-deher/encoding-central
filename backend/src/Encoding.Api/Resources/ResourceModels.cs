@@ -16,7 +16,7 @@ public sealed record AddResourceVersionRequest(IReadOnlyList<ResourceFileReferen
 
 public sealed record UpdateResourceRequest(string Name, string Description);
 
-public sealed record ResourceUsage(Guid FlowId, string FlowName, int FlowVersion, string NodeId, string? NodeName);
+public sealed record ResourceUsage(Guid FlowId, string FlowName, int FlowVersion, string WorkerId, string? WorkerName);
 
 /// <summary>Erreur de validation d'une ressource, dont le message est affiché tel quel.</summary>
 public sealed class ResourceException(string message) : Exception(message);

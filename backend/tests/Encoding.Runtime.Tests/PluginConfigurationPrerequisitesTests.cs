@@ -20,7 +20,7 @@ public sealed class PluginConfigurationPrerequisitesTests
             [new("guard", "Guard", reference, new Dictionary<string,JsonElement>())], []);
         var configurations = new Dictionary<string,IReadOnlyDictionary<string,JsonElement>>();
         var missing = PluginConfigurationPrerequisites.FindMissing(flow, registry.Plugins, configurations);
-        Assert.Contains(missing, item => item.NodeId == "guard" && item.FieldId == "baseUrl");
+        Assert.Contains(missing, item => item.WorkerId == "guard" && item.FieldId == "baseUrl");
         Assert.Contains(missing, item => item.FieldId == "apiKey");
         configurations["plex"] = new Dictionary<string,JsonElement> {
             ["baseUrl"] = JsonSerializer.SerializeToElement("http://synthetic.invalid"),

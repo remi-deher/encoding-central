@@ -15,7 +15,7 @@ describe('LoginPageComponent', () => {
         { provide: NotificationService, useValue: { show } },
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: convertToParamMap({ returnUrl: '/nodes' }) } },
+          useValue: { snapshot: { queryParamMap: convertToParamMap({ returnUrl: '/workers' }) } },
         },
       ],
     });
@@ -49,7 +49,7 @@ describe('LoginPageComponent', () => {
     fill('password', 'secret');
     await submit();
     expect(login).toHaveBeenCalledWith('remi', 'secret');
-    expect(navigateByUrl).toHaveBeenCalledWith('/nodes');
+    expect(navigateByUrl).toHaveBeenCalledWith('/workers');
   });
 
   it('notifies and stays on the page when the login fails', async () => {

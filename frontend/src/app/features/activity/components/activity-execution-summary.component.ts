@@ -175,7 +175,7 @@ function stepDuration(step: ExecutionPipelineStep): string {
                 </div>
               </div>
               <div class="field-item">
-                <span class="field-label">Nœud / Worker</span>
+                <span class="field-label">Worker / Worker</span>
                 <span class="field-value">{{ workerName() }}</span>
               </div>
               <div class="field-item full-row">
@@ -885,7 +885,7 @@ export class ActivityExecutionSummaryComponent {
   });
 
   protected readonly workerName = computed(() => {
-    return this.execution()?.node || this.file()?.node || '—';
+    return this.execution()?.worker || this.file()?.worker || '—';
   });
 
   protected readonly executionId = computed(() => {

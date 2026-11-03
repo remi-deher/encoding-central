@@ -8,7 +8,7 @@ using Encoding.Api.Infrastructure;
 using Encoding.Api.Infrastructure.Data;
 using Encoding.Api.Infrastructure.Data.Sqlite;
 using Encoding.Api.Libraries;
-using Encoding.Api.Nodes;
+using Encoding.Api.Workers;
 using Encoding.Api.Plugins;
 using Encoding.Contracts.Flows;
 using Encoding.Contracts.Libraries;
@@ -49,22 +49,22 @@ internal static class TriggerTests
     {
         var registry = StoreCatalogFixture.Create();
         var validator = new FlowDefinitionValidator(registry);
-        var presence = new NodePresenceOptions(TimeSpan.FromHours(1));
+        var presence = new WorkerPresenceOptions(TimeSpan.FromHours(1));
         var workflow = new LibraryWorkflowRepository(db, validator, presence);
         var configurations = new PluginConfigurationRepository(db, DataProtectionProvider.Create(new DirectoryInfo(Path.Combine(directory, "keys"))));
         var triggers = new IntegrationTriggerRepository(db);
         var service = new IntegrationTriggerService(triggers, workflow, NullLogger<IntegrationTriggerService>.Instance);
 
-        var node = Guid.NewGuid();
+        var worker = Guid.NewGuid();
         var library = Guid.NewGuid();
         var token = "fixture-node-token-is-long-enough-for-authentication";
         await using (var setup = db.CreateCommand("""
-            INSERT INTO cluster_nodes(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at,node_token_hash) VALUES(@node,'scanner',ARRAY['worker'],1,'[]'::jsonb,clock_timestamp(),@token);
+            INSERT INTO workers(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at,worker_token_hash) VALUES(@node,'scanner',ARRAY['worker'],1,'[]'::jsonb,clock_timestamp(),@token);
             INSERT INTO libraries(id,name) VALUES(@library,'Séries');
-            INSERT INTO library_node_accesses(library_id,node_id,mode,local_path,can_read,can_write) VALUES(@library,@node,'direct',@root,true,true);
+            INSERT INTO library_worker_accesses(library_id,worker_id,mode,local_path,can_read,can_write) VALUES(@library,@node,'direct',@root,true,true);
             """))
         {
-            setup.Parameters.AddWithValue("node", node);
+            setup.Parameters.AddWithValue("node", worker);
             setup.Parameters.AddWithValue("library", library);
             setup.Parameters.AddWithValue("root", directory);
             setup.Parameters.AddWithValue("token", SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
@@ -137,8 +137,8 @@ internal static class TriggerTests
         Check(await State(db) == "pending" && await ScalarAsync(db, "SELECT count(*) FROM library_scans WHERE library_id=@id AND state IN('queued','running')", library) == 1, "A scan is requested and the request keeps waiting.");
         Check(await ScalarAsync(db, "SELECT count(*) FROM executions") == 0, "No execution exists before the file is discovered.");
 
-        // Un nœud en accès direct découvre la bibliothèque (chemin réel de la découverte), sans le fichier attendu.
-        await CompleteScanAsync(workflow, node, []);
+        // Un worker en accès direct découvre la bibliothèque (chemin réel de la découverte), sans le fichier attendu.
+        await CompleteScanAsync(workflow, worker, []);
         await db.CreateCommand("UPDATE integration_trigger_requests SET claimed_until=NULL").ExecuteNonQueryAsync();
         await service.ProcessAsync(CancellationToken.None);
         Check(await State(db) == "skipped", "A discovery that does not contain the file ends the request with an explicit reason.");
@@ -147,7 +147,7 @@ internal static class TriggerTests
         // Même import, cette fois présent dans la découverte.
         await Post("sonarr", Import("/tv/Show/S01/e1.mkv"));
         await service.ProcessAsync(CancellationToken.None);
-        await CompleteScanAsync(workflow, node, [new("Show/S01/e1.mkv", 1234, DateTimeOffset.UtcNow.AddMinutes(-5))]);
+        await CompleteScanAsync(workflow, worker, [new("Show/S01/e1.mkv", 1234, DateTimeOffset.UtcNow.AddMinutes(-5))]);
         await db.CreateCommand("UPDATE integration_trigger_requests SET claimed_until=NULL").ExecuteNonQueryAsync();
         await service.ProcessAsync(CancellationToken.None);
         Check(await State(db) == "queued" && await ScalarAsync(db, "SELECT count(*) FROM executions") == 1, "A discovered file creates the execution of the assigned flow.");
@@ -157,7 +157,7 @@ internal static class TriggerTests
         // Une livraison tardive du même fichier inchangé ne retraite pas la même empreinte.
         await Post("sonarr", Import("/tv/Show/S01/e1.mkv"));
         await service.ProcessAsync(CancellationToken.None);
-        await CompleteScanAsync(workflow, node, [new("Show/S01/e1.mkv", 1234, DateTimeOffset.UtcNow.AddMinutes(-5))]);
+        await CompleteScanAsync(workflow, worker, [new("Show/S01/e1.mkv", 1234, DateTimeOffset.UtcNow.AddMinutes(-5))]);
         await db.CreateCommand("UPDATE integration_trigger_requests SET claimed_until=NULL").ExecuteNonQueryAsync();
         await service.ProcessAsync(CancellationToken.None);
         Check(await ScalarAsync(db, "SELECT count(*) FROM executions") == 1, "The same file fingerprint is not processed twice.");
@@ -189,10 +189,10 @@ internal static class TriggerTests
         Console.WriteLine("PASS: webhook authentication, idempotence, scan-gated execution creation, receipts, multi-server claims and expiry.");
     }
 
-    private static async Task CompleteScanAsync(LibraryWorkflowRepository workflow, Guid node, DiscoveredLibraryFile[] files)
+    private static async Task CompleteScanAsync(LibraryWorkflowRepository workflow, Guid worker, DiscoveredLibraryFile[] files)
     {
-        var lease = await workflow.ClaimScanAsync(node, CancellationToken.None) ?? throw new InvalidOperationException("A scan must be claimable by the direct-access node.");
-        Check(await workflow.CompleteScanAsync(lease.Id, node, new(lease.Epoch, files, null), CancellationToken.None), "The node completes its discovery.");
+        var lease = await workflow.ClaimScanAsync(worker, CancellationToken.None) ?? throw new InvalidOperationException("A scan must be claimable by the direct-access node.");
+        Check(await workflow.CompleteScanAsync(lease.Id, worker, new(lease.Epoch, files, null), CancellationToken.None), "The node completes its discovery.");
     }
 
     private static FlowNodeDefinition Node(FlowComponentRegistry registry, string id, string componentId)

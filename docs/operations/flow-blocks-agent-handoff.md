@@ -6,7 +6,7 @@ Les cinq lots sont décrits dans [fiche ui](../architecture/domains/ui.md). La s
 
 Les scénarios de ressources couvrent extraction réelle, stockage durable, reprise après relais, consommation sur un autre worker, référence absente sur une branche, référence future et empreinte invalide. Aucun média utilisateur n'est utilisé.
 
-Le test de restauration du cluster attend désormais l'échec prévu de la tentative dont le worker ne renouvelle plus le bail. Il ne suppose plus que toute la maintenance se termine avant les 60 secondes du bail. Les garanties du runtime ne changent pas.
+Le test de restauration du central attend désormais l'échec prévu de la tentative dont le worker ne renouvelle plus le bail. Il ne suppose plus que toute la maintenance se termine avant les 60 secondes du bail. Les garanties du runtime ne changent pas.
 
 Les commandes de vérification restent :
 

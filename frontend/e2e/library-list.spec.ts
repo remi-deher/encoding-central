@@ -51,7 +51,7 @@ test('the library list shows one row per library with state tags and actions', a
   const rows = page.locator('.resource-item');
   await expect(rows).toHaveCount(2);
   await expect(rows.nth(0)).toContainText('Films');
-  await expect(rows.nth(1)).toContainText('Aucun nœud n’a accès');
+  await expect(rows.nth(1)).toContainText('Aucun worker n’a accès');
   await expect(rows.nth(1)).toContainText('Désactivée');
   await expect(page.getByRole('button', { name: 'Plus d’actions pour Films' })).toBeVisible();
   const overflow = await page.evaluate(
