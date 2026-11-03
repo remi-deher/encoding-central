@@ -9,7 +9,7 @@ import { FileDownload } from '../../shared/services/file-download';
 import { NotificationService } from '../../shared/services/notification.service';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FlowValidation } from '../../shared/services/flow-validation';
-import { map, catchError, of, timer, switchMap, merge, Subject } from 'rxjs';
+import { map, catchError, of, switchMap, merge, Subject } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import {
   ChangeDetectionStrategy,
@@ -54,6 +54,7 @@ import {
   PageShellContextService,
   PageShellSearchResult,
 } from '../../core/layout/page-shell-context';
+import { LiveUpdates } from '../../shared/services/live-updates';
 
 interface FlowRecord extends DataTableRow {
   readonly id: string;
@@ -557,8 +558,9 @@ export class FlowCatalogPageComponent {
   }
   private readonly templates = inject(FlowTemplates);
   private readonly componentPacks = inject(FlowComponentPacks);
+  private readonly live = inject(LiveUpdates);
   private readonly catalog = toSignal(
-    merge(timer(0, 5000), this.refreshCatalog).pipe(
+    merge(this.live.drive(['flows']), this.refreshCatalog).pipe(
       switchMap(() =>
         this.api.list().pipe(
           map((flows) => ({ state: 'ready' as const, flows })),

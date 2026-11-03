@@ -62,4 +62,29 @@ describe('LiveUpdates', () => {
     expect(loads).toHaveBeenCalledTimes(2);
     subscription.unsubscribe();
   });
+
+  it('falls back to a slow reload only while the stream is silent', () => {
+    const live = TestBed.inject(LiveUpdates);
+    const loads = vi.fn();
+    const subscription = live.drive(['workers'], { quietMs: 10_000 }).subscribe(loads);
+    const source = FakeEventSource.instances[0];
+    source.emit('ping', {});
+    vi.advanceTimersByTime(10_000);
+    expect(loads).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(40_000);
+    expect(loads.mock.calls.length).toBeGreaterThan(1);
+    subscription.unsubscribe();
+  });
+
+  it('keeps a permanent slow refresh for state no call changes', () => {
+    const live = TestBed.inject(LiveUpdates);
+    const loads = vi.fn();
+    const subscription = live
+      .drive(['flows'], { quietMs: 600_000, refreshMs: 30_000 })
+      .subscribe(loads);
+    FakeEventSource.instances[0].emit('ready', {});
+    vi.advanceTimersByTime(65_000);
+    expect(loads).toHaveBeenCalledTimes(3);
+    subscription.unsubscribe();
+  });
 });

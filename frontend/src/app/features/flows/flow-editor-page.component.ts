@@ -3,7 +3,7 @@ import { DetailDrawerComponent } from '../../shared/ui/detail-drawer/detail-draw
 import { MatButtonModule } from '@angular/material/button';
 import { FlowComponentDrop, FlowPaletteDrop } from '../../shared/ui/flow-palette-drag';
 import { toObservable, takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { timer, switchMap, catchError, of, from, firstValueFrom } from 'rxjs';
+import { switchMap, catchError, of, from, firstValueFrom } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FlowValidation } from '../../shared/services/flow-validation';
 import {
@@ -63,6 +63,7 @@ import {
   FlowSimulationTrayComponent,
   FlowValidationIssue,
 } from './editor/flow-simulation-tray.component';
+import { LiveUpdates } from '../../shared/services/live-updates';
 
 const TYPE_OPTIONS = [
   { value: 'video', label: 'Vidéo' },
@@ -108,6 +109,7 @@ export class FlowEditorPageComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly notifications = inject(NotificationService);
   private readonly serverValidation = inject(FlowValidation);
+  private readonly live = inject(LiveUpdates);
   private readonly templates = inject(FlowTemplates);
   private readonly editorRouter = inject(Router);
   private readonly packApi = inject(FlowComponentPacks);
@@ -382,14 +384,16 @@ export class FlowEditorPageComponent {
       .pipe(
         switchMap(({ version, draft }) =>
           version > 0 || draft !== undefined
-            ? timer(0, 5000).pipe(
-                switchMap(() =>
-                  (draft !== undefined
-                    ? from(this.serverValidation.get(this.validationFlowId))
-                    : this.serverValidation.versionStatus(this.validationFlowId, version)
-                  ).pipe(catchError(() => of(null))),
-                ),
-              )
+            ? this.live
+                .drive(['flows'], { refreshMs: 15_000 })
+                .pipe(
+                  switchMap(() =>
+                    (draft !== undefined
+                      ? from(this.serverValidation.get(this.validationFlowId))
+                      : this.serverValidation.versionStatus(this.validationFlowId, version)
+                    ).pipe(catchError(() => of(null))),
+                  ),
+                )
             : of(null),
         ),
         takeUntilDestroyed(),

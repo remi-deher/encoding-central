@@ -6,11 +6,12 @@ using Encoding.WorkerAgent.Services;
 namespace Encoding.WorkerAgent.Runtime;
 
 public sealed class RuntimeTransferService(WorkerAgentOptions options,WorkerIdentityStore identities,MediaScanner scanner,PublicationGuardRunner guards,
-    ILocalPublicationArtifactStore localArtifacts,ILogger<RuntimeTransferService> logger) : BackgroundService
+    ILocalPublicationArtifactStore localArtifacts,WorkerWakeSignal wake,ILogger<RuntimeTransferService> logger) : BackgroundService
 {
     private readonly ConcurrentDictionary<Guid,Task> active=new();
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
+        var waiter=wake.CreateWaiter();
         try
         {
             while(!ct.IsCancellationRequested)
@@ -32,8 +33,8 @@ public sealed class RuntimeTransferService(WorkerAgentOptions options,WorkerIden
                                 {
                                     if(active.Count>=Math.Max(1,options.MaxConcurrentTasks)||active.ContainsKey(transfer.ExecutionId)) continue;
                                     var boundUrl=serverUrl;
-                                    var task=Task.Run(async()=> { using var transferClient=new RuntimeClient(identity,boundUrl); await TransferAsync(transfer,
-                                        transferClient,ct); },CancellationToken.None);
+                                    var task=Task.Run(async()=> { try { using var transferClient=new RuntimeClient(identity,boundUrl); await TransferAsync(transfer,
+                                        transferClient,ct); } finally { wake.Pulse(); } },CancellationToken.None);
                                     active.TryAdd(transfer.ExecutionId,task);
                                 }
                             }
@@ -44,7 +45,7 @@ public sealed class RuntimeTransferService(WorkerAgentOptions options,WorkerIden
                 }
                 catch(OperationCanceledException) when(ct.IsCancellationRequested) { break; }
                 catch(Exception exception) { logger.LogWarning("Canal de transfert momentanément indisponible : {Type}.",exception.GetType().Name); }
-                await Task.Delay(TimeSpan.FromSeconds(2),ct);
+                await waiter.WaitAsync(2000,ct);
             }
         }
         catch(OperationCanceledException) when(ct.IsCancellationRequested) { }

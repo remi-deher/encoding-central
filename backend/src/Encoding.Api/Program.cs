@@ -123,6 +123,7 @@ builder.Services.AddSingleton<AiQuotaService>();
 builder.Services.AddSingleton<AiModelCatalogService>();
 builder.Services.AddSingleton<AiCentralStore>();
 builder.Services.AddSingleton<AiCentralService>();
+builder.Services.AddSingleton<AiActivityBroadcaster>();
 builder.Services.AddSingleton<AiAssistantSupportService>();
 builder.Services.AddSingleton<AiAssistantConversationsService>();
 builder.Services.AddSingleton<AiAssistantActionsService>();
@@ -207,6 +208,7 @@ app.UseStaticFiles();
 if (!app.Services.GetRequiredService<Encoding.Api.Auth.AuthOptions>().Enabled)
     app.Logger.LogWarning("Auth:Enabled=false : toute requête est traitée comme administrateur, MCP et API de gestion compris. À réserver au développement.");
 app.UseClusterAuthentication();
+app.UseInterfaceLiveNotifications();
 app.MapAuthEndpoints();
 app.MapApiTokenEndpoints();
 app.MapNetworkSettingsEndpoints();

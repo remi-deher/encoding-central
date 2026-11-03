@@ -34,7 +34,8 @@ public sealed class AiAssistantSupportService(
     WorkerPresenceOptions workerPresence,
     McpService mcp,
     IDataProtectionProvider protection,
-    FlowTemplateRepository? flowTemplates = null)
+    FlowTemplateRepository? flowTemplates = null,
+    AiActivityBroadcaster? activityStream = null)
 {
     public AiCentralStore Store => store;
     public AiCentralService Central => cluster;
@@ -287,9 +288,12 @@ public sealed class AiAssistantSupportService(
 
     public const string ActivityPrefix = "assistant/activity/";
 
-    public Task SaveActivityAsync(string ownerId, AiAssistantActivity activity, CancellationToken ct) =>
-        store.SaveAsync(ActivityPrefix + ownerId + "/" + activity.RequestId.ToString("N"),
+    public async Task SaveActivityAsync(string ownerId, AiAssistantActivity activity, CancellationToken ct)
+    {
+        await store.SaveAsync(ActivityPrefix + ownerId + "/" + activity.RequestId.ToString("N"),
             new StoredActivity(ownerId, activity), ct);
+        activityStream?.Publish();
+    }
 
     public static string CategorizeException(Exception error) => error switch
     {

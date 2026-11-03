@@ -36,6 +36,16 @@ L'observateur de présence existe parce que « en ligne » se calcule **à la le
 - `/api/v1/activity/stream` (activité des bibliothèques).
 - `/api/v1/system/logs/stream` (journaux système).
 
+## Ajouts de la PR #3 (branche `ao/sse-instead-polling/sse-live`)
+
+- **Sujets** : `flows`, `plugins`, `settings` (publiés par `InterfaceLiveNotifier` après toute mutation réussie des routes correspondantes) et `execution-logs` (journaux de commandes). Workers, bibliothèques et exécutions gardent leurs sources ci-dessus.
+- **Écrans passés sur SSE** : Bibliothèques (3 sondages), catalogue et éditeur de flows, accueil (exécutions), `flow-details`. `drive()` accepte `{ quietMs, refreshMs }`.
+- **Workers** : `GET /api/v1/runtime/workers/{id}/wake` réveille les boucles de l'agent (claim, scans, remplacements, parcours de dossiers, transferts) ; le claim reste un POST transactionnel. Voir [runtime](domains/runtime.md) et l'[ADR 0041](adr/0041-sse-a-la-place-du-sondage.md).
+- **Attentes de flow** : `ExecutionWaitService` dort jusqu'à la prochaine échéance réelle au lieu d'un passage toutes les 5 s.
+- **Assistant IA** : `GET /api/v1/tools/ai/assistant/activity/{requestId}/stream` (repli sur l'interrogation).
+- **Tests backend** : le diffuseur, la table route → sujet et le signal de réveil sont couverts (`InterfaceLiveTests`) ; l'observateur de présence ne l'est toujours pas.
+- Les lignes de ces écrans dans les tableaux ci-dessous sont donc **faites** ; restent le suivi des exécutions (`execution-tracking`, `execution-detail-polling`), l'activité et les écrans IA/système (état externe).
+
 ## Polling qui reste
 
 Relevé par recherche de `timer(`, `interval(` et `setInterval(` dans `frontend/src` (hors tests).

@@ -56,6 +56,8 @@ builder.Services.AddSingleton<MediaActions>();
 builder.Services.AddSingleton<LocalPublicationArtifactStore>();
 builder.Services.AddSingleton<ILocalPublicationArtifactStore>(provider => provider.GetRequiredService<LocalPublicationArtifactStore>());
 builder.Services.AddSingleton<RuntimeFlowRunner>();
+builder.Services.AddSingleton<WorkerWakeSignal>();
+builder.Services.AddHostedService<WorkerWakeListener>();
 builder.Services.AddHostedService<RuntimeTransferService>();
 builder.Services.AddHostedService<WorkspaceCleanupService>();
 builder.Services.AddHostedService<SourceReplacementService>();

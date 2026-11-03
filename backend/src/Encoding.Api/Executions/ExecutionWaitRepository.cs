@@ -85,6 +85,28 @@ public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresen
         await tx.CommitAsync(ct); return true;
     }
 
+    /// <summary>
+    /// Délai avant la prochaine attente à évaluer (minuteur, sonde, échéance), ou null s'il n'y en a aucune.
+    /// Lecture seule : le service dort jusque-là au lieu de repasser à intervalle fixe.
+    /// </summary>
+    public async Task<TimeSpan?> NextDueInAsync(CancellationToken ct)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var next = Sql.Command("""
+            SELECT MIN(x.next_check_at) FROM execution_waits x JOIN executions e ON e.id=x.execution_id
+            WHERE x.state='waiting' AND e.state='running'
+            """, connection);
+        var due = await next.ExecuteScalarAsync(ct) switch
+        {
+            DateTimeOffset value => value,
+            DateTime value => new DateTimeOffset(DateTime.SpecifyKind(value, DateTimeKind.Utc)),
+            string value when DateTimeOffset.TryParse(value, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal, out var parsed) => parsed,
+            _ => (DateTimeOffset?)null,
+        };
+        return due is null ? null : due.Value - DateTimeOffset.UtcNow;
+    }
+
     /// <summary>Évalue les attentes dues. Chaque décision est prise une seule fois (verrou de ligne, SKIP LOCKED) quel que soit le nombre de serveurs.</summary>
     public async Task<int> ProcessDueAsync(CancellationToken ct)
     {
@@ -199,21 +221,39 @@ public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresen
     }
 }
 
-/// <summary>Évalue périodiquement les attentes dues sur chaque serveur ; sans état local, donc sans point de défaillance unique.</summary>
-public sealed class ExecutionWaitService(ExecutionWaitRepository waits,ILogger<ExecutionWaitService> logger) : BackgroundService
+/// <summary>
+/// Évalue les attentes dues. Le service dort jusqu'à la prochaine échéance connue (minuteur, sonde, délai maximal) et se réveille plus tôt
+/// quand une exécution, un worker ou une bibliothèque change (état d'un worker, charge, fin d'exécution) : plus de passage à vide toutes les 5 s.
+/// Sans état local ; chaque décision reste prise une seule fois par verrou de ligne.
+/// </summary>
+public sealed class ExecutionWaitService(ExecutionWaitRepository waits,IServiceProvider services,ILogger<ExecutionWaitService> logger) : BackgroundService
 {
+    /// <summary>Filet de sécurité : borne la perte d'un signal ou une échéance posée sans passer par une mutation de l'API.</summary>
+    private static readonly TimeSpan SafetyNet=TimeSpan.FromSeconds(30);
+    /// <summary>Plancher : une attente qui reste due sans pouvoir être résolue ne doit pas faire tourner le service à vide.</summary>
+    private static readonly TimeSpan Floor=TimeSpan.FromSeconds(1);
+
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
+        var executions=services.GetService<ExecutionStreamBroadcaster>();
+        var live=services.GetService<Encoding.Api.Infrastructure.InterfaceLiveBroadcaster>();
+        var cursor=executions is not null&&live is not null?new Encoding.Api.Infrastructure.WakeCursor(executions,live):null;
         while(!ct.IsCancellationRequested)
         {
+            var sleep=SafetyNet;
             try
             {
-
                 await waits.ProcessDueAsync(ct);
+                if(await waits.NextDueInAsync(ct) is {} until) sleep=until<Floor?Floor:until<SafetyNet?until:SafetyNet;
             }
             catch(OperationCanceledException) when(ct.IsCancellationRequested) { break; }
-            catch(Exception exception) { logger.LogWarning("Évaluation des attentes momentanément indisponible : {Type}.",exception.GetType().Name); }
-            try { await Task.Delay(TimeSpan.FromSeconds(5),ct); } catch(OperationCanceledException) when(ct.IsCancellationRequested) { break; }
+            catch(Exception exception) { logger.LogWarning("Évaluation des attentes momentanément indisponible : {Type}.",exception.GetType().Name); sleep=TimeSpan.FromSeconds(5); }
+            try
+            {
+                if(cursor is null) await Task.Delay(sleep<TimeSpan.FromSeconds(5)?sleep:TimeSpan.FromSeconds(5),ct);
+                else await cursor.WaitAsync(sleep,ct);
+            }
+            catch(OperationCanceledException) when(ct.IsCancellationRequested) { break; }
         }
     }
 }

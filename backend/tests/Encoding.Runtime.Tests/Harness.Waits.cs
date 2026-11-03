@@ -67,7 +67,10 @@ internal static partial class Harness
             foreach(var worker in new[]{a,b,c}) Check(await runtime.ClaimAsync(worker,CancellationToken.None) is null,"No worker can claim a waiting execution.");
             await Waits.ProcessDueAsync(CancellationToken.None);
             Check(await runtime.ClaimAsync(b,CancellationToken.None) is null,"A timer that is not due does not wake the execution.");
+            var untilDue=await Waits.NextDueInAsync(CancellationToken.None);
+            Check(untilDue is { } remaining && remaining>TimeSpan.Zero && remaining<=TimeSpan.FromMinutes(31),"The service sleeps until the timer is due instead of polling.");
             await AgeWaitAsync(id,"due_at");
+            Check(await Waits.NextDueInAsync(CancellationToken.None) is { } overdue && overdue<=TimeSpan.Zero,"An overdue wait is reported as due now.");
             Check(await Waits.ProcessDueAsync(CancellationToken.None)>=1,"The due timer is evaluated.");
             var resumed=await runtime.ClaimAsync(c,CancellationToken.None)??throw new InvalidOperationException("The woken execution must be claimable.");
             Check(resumed.ExecutionId==id && resumed.Checkpoint?.NextNodeId=="end" && resumed.Probe is null && resumed.Epoch>lease.Epoch,"The flow resumes at the step after the block under a new epoch.");

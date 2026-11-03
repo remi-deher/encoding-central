@@ -1,7 +1,7 @@
 using System.Data.Common;
 
 namespace Encoding.Api.Libraries;
-public sealed class LibraryMonitoringService(DbDataSource dataSource,LibraryWorkflowRepository workflow,ILogger<LibraryMonitoringService> logger):BackgroundService
+public sealed class LibraryMonitoringService(DbDataSource dataSource,LibraryWorkflowRepository workflow,Encoding.Api.Infrastructure.InterfaceLiveBroadcaster live,ILogger<LibraryMonitoringService> logger):BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
@@ -20,7 +20,8 @@ public sealed class LibraryMonitoringService(DbDataSource dataSource,LibraryWork
                   AND NOT EXISTS(SELECT 1 FROM library_scans s WHERE s.library_id=l.id AND s.created_at>clock_timestamp()-make_interval(secs=>COALESCE(p.scan_interval_seconds,60)))
                   ON CONFLICT DO NOTHING
                   """);
-                await cmd.ExecuteNonQueryAsync(ct);
+                // Une demande de scan née ici n'a pas de requête HTTP derrière elle : on la signale, sinon les workers ne la verraient qu'à leur filet de sécurité.
+                if(await cmd.ExecuteNonQueryAsync(ct)>0) live.Publish("libraries");
                 await using var libraries=dataSource.CreateCommand("SELECT l.id FROM libraries l JOIN library_flow_assignments a ON a.library_id=l.id LEFT JOIN library_processing_settings p ON p.library_id=l.id WHERE l.is_active AND COALESCE(p.watch_enabled,true)");
                 var ids=new List<Guid>();
                 await using(var r=await libraries.ExecuteReaderAsync(ct)){while(await r.ReadAsync(ct))ids.Add(r.GetGuid(0));}

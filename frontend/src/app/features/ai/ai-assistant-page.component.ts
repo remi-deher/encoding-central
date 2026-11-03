@@ -35,6 +35,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDialog } from '@angular/material/dialog';
 import {
+  AiAssistantActivity,
   AiAssistantConversation,
   AiAssistantConversationSearchResult,
   AiAssistantConversationDetail,
@@ -252,6 +253,7 @@ export class AiAssistantPageComponent implements OnDestroy {
   protected readonly previewLoading = signal(false);
   protected readonly previewError = signal<string | null>(null);
   private progressPollTimer: ReturnType<typeof setTimeout> | null = null;
+  private progressStream: Subscription | null = null;
   protected readonly hasFlowContext = computed(() => {
     const conversation = this.detail()?.conversation;
     return (
@@ -888,8 +890,13 @@ export class AiAssistantPageComponent implements OnDestroy {
           if (detail.pendingTurn.isRunning) {
             this.pendingPrompt.set(detail.pendingTurn.userPrompt);
             this.sending.set(true);
-            this.pollPendingConversation(id, detail.pendingTurn.requestId);
-            this.pollRequestProgress(detail.pendingTurn.requestId);
+            const pendingRequestId = detail.pendingTurn.requestId;
+            // Le flux annonce la fin de la demande : on relit la conversation alors, avec un filet de 15 s si rien ne vient.
+            this.pollPendingConversation(id, pendingRequestId, 15_000, 15_000);
+            this.pollRequestProgress(pendingRequestId, {
+              onEnded: () => this.pollPendingConversation(id, pendingRequestId, 300, 1_000),
+              onFallback: () => this.pollPendingConversation(id, pendingRequestId, 2_000, 2_000),
+            });
           } else {
             this.pendingPrompt.set(detail.pendingTurn.userPrompt);
             this.sending.set(false);
@@ -1221,17 +1228,37 @@ export class AiAssistantPageComponent implements OnDestroy {
     this.previewError.set(null);
   }
 
-  private pollRequestProgress(requestId: string): void {
+  /**
+   * Suit la progression par SSE ; l'interrogation d'autrefois ne sert que si le flux ne peut pas s'ouvrir.
+   * `onEnded` est appelé quand le serveur annonce la fin de la demande, `onFallback` quand on retombe sur l'interrogation.
+   */
+  private pollRequestProgress(
+    requestId: string,
+    handlers: { onEnded?: () => void; onFallback?: () => void } = {},
+  ): void {
     this.stopProgressPolling();
+    this.progressStream = this.aiTools.streamAssistantActivity(requestId).subscribe({
+      next: (activity) => this.showRequestProgress(activity),
+      complete: () => handlers.onEnded?.(),
+      error: () => {
+        handlers.onFallback?.();
+        this.pollRequestProgressByTimer(requestId);
+      },
+    });
+  }
+
+  private showRequestProgress(activity: AiAssistantActivity): void {
+    this.requestProgress.set(activity.progress ?? activity.status);
+    this.requestProgressDetail.set(
+      activity.progressDetail ?? this.progressLabel(activity.progress ?? activity.status),
+    );
+  }
+
+  private pollRequestProgressByTimer(requestId: string): void {
     const poll = () =>
       this.aiTools.getAssistantActivity(requestId).subscribe({
         next: (activity) => {
-          if (activity) {
-            this.requestProgress.set(activity.progress ?? activity.status);
-            this.requestProgressDetail.set(
-              activity.progressDetail ?? this.progressLabel(activity.progress ?? activity.status),
-            );
-          }
+          if (activity) this.showRequestProgress(activity);
           if (this.sending() && this.requestId === requestId)
             this.progressPollTimer = window.setTimeout(poll, activity ? 900 : 500);
         },
@@ -1244,6 +1271,8 @@ export class AiAssistantPageComponent implements OnDestroy {
   }
 
   private stopProgressPolling(): void {
+    this.progressStream?.unsubscribe();
+    this.progressStream = null;
     if (this.progressPollTimer !== null) clearTimeout(this.progressPollTimer);
     this.progressPollTimer = null;
   }
@@ -1421,7 +1450,13 @@ export class AiAssistantPageComponent implements OnDestroy {
     });
   }
 
-  private pollPendingConversation(conversationId: string, requestId: string): void {
+  private pollPendingConversation(
+    conversationId: string,
+    requestId: string,
+    firstDelayMs: number,
+    repeatDelayMs: number,
+  ): void {
+    if (this.pendingPollTimer !== null) clearTimeout(this.pendingPollTimer);
     this.pendingPollTimer = window.setTimeout(() => {
       this.pendingPollTimer = null;
       if (
@@ -1448,7 +1483,7 @@ export class AiAssistantPageComponent implements OnDestroy {
             return;
           }
           if (detail.pendingTurn?.requestId === requestId && detail.pendingTurn.isRunning) {
-            this.pollPendingConversation(conversationId, requestId);
+            this.pollPendingConversation(conversationId, requestId, repeatDelayMs, repeatDelayMs);
           } else {
             this.sending.set(false);
             this.pendingPrompt.set(detail.pendingTurn?.userPrompt ?? this.prompt());
@@ -1459,9 +1494,10 @@ export class AiAssistantPageComponent implements OnDestroy {
             );
           }
         },
-        error: () => this.pollPendingConversation(conversationId, requestId),
+        error: () =>
+          this.pollPendingConversation(conversationId, requestId, repeatDelayMs, repeatDelayMs),
       });
-    }, 2000);
+    }, firstDelayMs);
   }
 
   private errorText(error: HttpErrorResponse, fallback: string): string {
