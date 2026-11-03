@@ -331,9 +331,7 @@ public sealed partial class RuntimeRepository
                     originalAccess.Parameters.AddWithValue("library",item.Library); originalAccess.Parameters.AddWithValue("source",originalSource);
                     originalAccess.Parameters.AddWithValue("write",needsWrite); originalAccess.Parameters.AddWithValue("offlineAgo", -presence.OfflineAfter);
                     if(await originalAccess.ScalarBoolAsync(ct)) { source=originalSource; if(source!=worker) root=null; }
-                    // Après la perte d'un worker, l'accès d'origine peut être le worker perdu lui-même (accès direct sur chaque worker) :
-                    // la reprise utilise alors l'accès propre du worker qui la reçoit, déjà résolu ci-dessus.
-                    else if(!item.Selector.IsResume) continue;
+                    else continue;
                 }
             }
             var pluginSettings=item.Settings is {} savedSettings?pluginConfigurations.ReadSnapshot(savedSettings)
