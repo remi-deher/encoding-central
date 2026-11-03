@@ -11,9 +11,9 @@ public sealed class LibraryRepository(DbDataSource dataSource)
     {
         const string sql = """
             SELECT l.id, l.name, l.created_at,
-                   count(a.worker_id) FILTER (WHERE a.is_enabled AND a.mode <> 'unsupported')::integer,
-                   count(a.worker_id) FILTER (WHERE a.is_enabled AND a.mode = 'direct')::integer,
-                   count(a.worker_id) FILTER (WHERE a.is_enabled AND a.mode = 'transfer')::integer,
+                   count(a.worker_id) FILTER (WHERE a.is_enabled AND a.mode <> 'unsupported'),
+                   count(a.worker_id) FILTER (WHERE a.is_enabled AND a.mode = 'direct'),
+                   count(a.worker_id) FILTER (WHERE a.is_enabled AND a.mode = 'transfer'),
                    l.is_active,
                    (SELECT v.definition->>'name' FROM library_flow_assignments f JOIN flow_versions v ON v.flow_id=f.flow_id AND v.version=f.flow_version WHERE f.library_id=l.id),
                    (SELECT f.flow_version FROM library_flow_assignments f WHERE f.library_id=l.id)
@@ -36,7 +36,7 @@ public sealed class LibraryRepository(DbDataSource dataSource)
         const string sql = """
             INSERT INTO libraries (name) VALUES (@name)
             ON CONFLICT (name) DO NOTHING
-            RETURNING id, name, created_at, 0::integer, 0::integer, 0::integer, is_active
+            RETURNING id, name, created_at, 0, 0, 0, is_active
             """;
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var command = Sql.Command(sql, connection);
@@ -50,7 +50,7 @@ public sealed class LibraryRepository(DbDataSource dataSource)
         const string sql = """
             UPDATE libraries SET name = @name
             WHERE id = @id
-            RETURNING id, name, created_at, 0::integer, 0::integer, 0::integer, is_active
+            RETURNING id, name, created_at, 0, 0, 0, is_active
             """;
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var command = Sql.Command(sql, connection);
@@ -111,9 +111,9 @@ public sealed class LibraryRepository(DbDataSource dataSource)
     {
         const string sql = """
             SELECT l.id, l.name, l.created_at,
-                   count(a.worker_id) FILTER (WHERE a.is_enabled AND a.mode <> 'unsupported')::integer,
-                   count(a.worker_id) FILTER (WHERE a.is_enabled AND a.mode = 'direct')::integer,
-                   count(a.worker_id) FILTER (WHERE a.is_enabled AND a.mode = 'transfer')::integer,
+                   count(a.worker_id) FILTER (WHERE a.is_enabled AND a.mode <> 'unsupported'),
+                   count(a.worker_id) FILTER (WHERE a.is_enabled AND a.mode = 'direct'),
+                   count(a.worker_id) FILTER (WHERE a.is_enabled AND a.mode = 'transfer'),
                    l.is_active,
                    (SELECT v.definition->>'name' FROM library_flow_assignments f JOIN flow_versions v ON v.flow_id=f.flow_id AND v.version=f.flow_version WHERE f.library_id=l.id),
                    (SELECT f.flow_version FROM library_flow_assignments f WHERE f.library_id=l.id)
@@ -140,15 +140,15 @@ public sealed class LibraryRepository(DbDataSource dataSource)
                    (SELECT v.definition->>'name' FROM library_flow_assignments f JOIN flow_versions v ON v.flow_id=f.flow_id AND v.version=f.flow_version WHERE f.library_id=l.id),
                    (SELECT f.flow_version FROM library_flow_assignments f WHERE f.library_id=l.id),
                    (SELECT f.flow_id FROM library_flow_assignments f WHERE f.library_id=l.id),
-                   count(DISTINCT a.worker_id) FILTER (WHERE a.is_enabled AND a.mode <> 'unsupported')::integer,
-                   count(DISTINCT a.worker_id) FILTER (WHERE a.is_enabled AND a.mode = 'direct')::integer,
+                   count(DISTINCT a.worker_id) FILTER (WHERE a.is_enabled AND a.mode <> 'unsupported'),
+                   count(DISTINCT a.worker_id) FILTER (WHERE a.is_enabled AND a.mode = 'direct'),
                    COALESCE(p.watch_enabled, true),
                    COALESCE(p.scan_interval_seconds, 3600),
-                   (SELECT count(*) FROM library_media m WHERE m.library_id = l.id)::integer,
-                   (SELECT count(*) FROM executions e WHERE e.library_name = l.name AND e.state = 'queued')::integer,
-                   (SELECT count(*) FROM executions e WHERE e.library_name = l.name AND e.state = 'running')::integer,
-                   (SELECT count(*) FROM executions e WHERE e.library_name = l.name AND e.state = 'completed')::integer,
-                   (SELECT count(*) FROM executions e WHERE e.library_name = l.name AND e.state = 'failed')::integer
+                   (SELECT count(*) FROM library_media m WHERE m.library_id = l.id),
+                   (SELECT count(*) FROM executions e WHERE e.library_name = l.name AND e.state = 'queued'),
+                   (SELECT count(*) FROM executions e WHERE e.library_name = l.name AND e.state = 'running'),
+                   (SELECT count(*) FROM executions e WHERE e.library_name = l.name AND e.state = 'completed'),
+                   (SELECT count(*) FROM executions e WHERE e.library_name = l.name AND e.state = 'failed')
             FROM libraries l
             LEFT JOIN library_worker_accesses a ON a.library_id = l.id
             LEFT JOIN library_processing_settings p ON p.library_id = l.id

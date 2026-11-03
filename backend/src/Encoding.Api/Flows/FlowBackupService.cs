@@ -34,16 +34,16 @@ public sealed class FlowBackupService(DbDataSource dataSource, IConfiguration co
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         Guid id; int version; string document;
         var select=draft ? """
-            SELECT b.flow_id,b.revision,b.definition::text FROM flow_draft_backups b WHERE b.next_attempt_at<=clock_timestamp()
-            ORDER BY b.next_attempt_at,b.flow_id,b.revision LIMIT 1 FOR UPDATE OF b SKIP LOCKED
+            SELECT b.flow_id,b.revision,b.definition FROM flow_draft_backups b WHERE b.next_attempt_at<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
+            ORDER BY b.next_attempt_at,b.flow_id,b.revision LIMIT 1
             """ : """
-            SELECT b.flow_id,b.version,v.definition::text FROM flow_backup_jobs b
+            SELECT b.flow_id,b.version,v.definition FROM flow_backup_jobs b
             JOIN flow_versions v ON v.flow_id=b.flow_id AND v.version=b.version
-            WHERE b.next_attempt_at <= clock_timestamp() ORDER BY b.next_attempt_at,b.flow_id,b.version
-            LIMIT 1 FOR UPDATE OF b SKIP LOCKED
+            WHERE b.next_attempt_at <= (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') ORDER BY b.next_attempt_at,b.flow_id,b.version
+            LIMIT 1
             """;
         // Read-only admission hint. Reread under the transaction before claiming the job.
-        await using (var available = Sql.Command(select.Replace(" FOR UPDATE OF b SKIP LOCKED", "", StringComparison.Ordinal), connection))
+        await using (var available = Sql.Command(select, connection))
         await using (var reader = await available.ExecuteReaderAsync(ct))
             if (!await reader.ReadAsync(ct)) return false;
         await using var tx = await connection.BeginTransactionAsync(ct);
@@ -62,7 +62,7 @@ public sealed class FlowBackupService(DbDataSource dataSource, IConfiguration co
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         { status="failed"; logger.LogWarning(exception,"Sauvegarde impossible pour le flow {FlowId}, version {Version}.",id,version); }
         var table=draft?"flow_draft_backups":"flow_backup_jobs"; var number=draft?"revision":"version";
-        await using var update=Sql.Command($"UPDATE {table} SET status=@status,checked_at=clock_timestamp(),next_attempt_at=clock_timestamp()+@delay WHERE flow_id=@id AND {number}=@version",
+        await using var update=Sql.Command($"UPDATE {table} SET status=@status,checked_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),next_attempt_at=(strftime('%Y-%m-%d %H:%M:%f', 'now', @delay) || '000Z') WHERE flow_id=@id AND {number}=@version",
             connection,tx);
         update.Parameters.AddWithValue("id",id); update.Parameters.AddWithValue("version",version);
         update.Parameters.AddWithValue("status",status); update.Parameters.AddWithValue("delay",status=="ready" ? TimeSpan.FromMinutes(10) : TimeSpan.FromSeconds(30));

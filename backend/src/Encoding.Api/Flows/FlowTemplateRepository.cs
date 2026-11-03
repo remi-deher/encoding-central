@@ -17,7 +17,7 @@ public sealed class FlowTemplateRepository(
     {
         await using var command = dataSource.CreateCommand("""
             SELECT id,name,description,media_type,source_flow_id,source_version,source_flow_name,
-                   jsonb_array_length(definition->'nodes'),created_at,revision,configuration
+                   json_array_length(definition->'nodes'),created_at,revision,configuration
             FROM flow_templates ORDER BY lower(name),id
             """);
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -36,7 +36,7 @@ public sealed class FlowTemplateRepository(
     {
         await using var command = dataSource.CreateCommand("""
             SELECT id,name,description,media_type,source_flow_id,source_version,source_flow_name,
-                   jsonb_array_length(definition->'nodes'),created_at,revision,definition::text,configuration
+                   json_array_length(definition->'nodes'),created_at,revision,definition,configuration
             FROM flow_templates WHERE id=@id
             """);
         command.Parameters.AddWithValue("id", id);

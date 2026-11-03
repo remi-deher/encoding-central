@@ -46,7 +46,7 @@ public sealed class RuntimeQueryPlanTests(ITestOutputHelper output)
     public async Task LoadQueriesUseACoveringIndexInsteadOfScanningAllWork(string column, string index)
     {
         await using var database = await CreateAsync();
-        var sql = $"SELECT count(*) FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.{column}=@id AND w.lease_until>clock_timestamp() AND e.state IN ('running','cancelling')";
+        var sql = $"SELECT count(*) FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.{column}=@id AND w.lease_until>(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') AND e.state IN ('running','cancelling')";
         var after = await PlanAsync(database, sql);
         Assert.Contains(after, line => line.Contains("COVERING INDEX " + index, StringComparison.Ordinal));
         Assert.DoesNotContain(after, line => line.Contains("SCAN w", StringComparison.Ordinal));

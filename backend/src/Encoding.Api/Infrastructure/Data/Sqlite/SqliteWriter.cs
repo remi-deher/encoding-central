@@ -26,6 +26,11 @@ public sealed class SqliteWriteUnavailableException(string reason)
 /// <summary>
 /// Local transaction admission queue. The admitted caller owns the writer until commit/rollback;
 /// no caller code is replayed, and cancellation of a waiter never cancels an admitted transaction.
+/// Serialization contract for repositories: SQLite has no row locks, so the SQL never uses <c>FOR UPDATE</c>
+/// or <c>SKIP LOCKED</c>. A read-then-write sequence is made atomic by running it in one write transaction (admitted here,
+/// opened with BEGIN IMMEDIATE): no other writer of the central can interleave, so a "claim" cannot be taken twice.
+/// A read that must stay consistent without writing uses <see cref="System.Data.IsolationLevel.Snapshot"/> (deferred, query-only).
+/// Any new code that relies on reading and then writing outside such a transaction is a bug. See ADR 0042.
 /// </summary>
 public sealed class SqliteWriter
 {

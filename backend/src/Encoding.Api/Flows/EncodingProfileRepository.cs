@@ -12,7 +12,7 @@ public sealed class EncodingProfileRepository(DbDataSource dataSource)
         var profiles = new List<EncodingProfileSummary> { BuiltInSummary };
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using (var command = Sql.Command("""
-            SELECT id,draft_revision,draft_name,draft_description,published_version,jsonb_array_length(draft_targets),updated_at
+            SELECT id,draft_revision,draft_name,draft_description,published_version,json_array_length(draft_targets),updated_at
             FROM encoding_profiles ORDER BY lower(draft_name),id
             """, connection))
         {
@@ -23,7 +23,7 @@ public sealed class EncodingProfileRepository(DbDataSource dataSource)
         var versions = new Dictionary<Guid, List<EncodingProfileVersionSummary>>();
         await using (var command = Sql.Command("""
             SELECT profile_id,version,name,description,created_at FROM encoding_profile_versions
-            WHERE profile_id=ANY(@ids) ORDER BY version DESC
+            WHERE profile_id IN (SELECT value FROM json_each(@ids)) ORDER BY version DESC
             """, connection))
         {
             command.Parameters.AddWithValue("ids", profiles.Where(profile => !profile.IsBuiltIn).Select(profile => profile.Id).ToArray());
@@ -47,7 +47,7 @@ public sealed class EncodingProfileRepository(DbDataSource dataSource)
         EncodingProfileSummary summary;
         EncodingProfileDraft draft;
         await using (var command = Sql.Command("""
-            SELECT id,draft_revision,draft_name,draft_description,published_version,jsonb_array_length(draft_targets),updated_at,draft_targets::text
+            SELECT id,draft_revision,draft_name,draft_description,published_version,json_array_length(draft_targets),updated_at,draft_targets
             FROM encoding_profiles WHERE id=@id
             """, connection))
         {
@@ -68,7 +68,7 @@ public sealed class EncodingProfileRepository(DbDataSource dataSource)
             return new(id, 1, profile.Name, profile.Description, profile.Targets, DateTimeOffset.UnixEpoch);
         }
         await using var command = dataSource.CreateCommand("""
-            SELECT profile_id,version,name,description,targets::text,created_at
+            SELECT profile_id,version,name,description,targets,created_at
             FROM encoding_profile_versions WHERE profile_id=@id AND version=@version
             """);
         command.Parameters.AddWithValue("id", id);
@@ -93,7 +93,7 @@ public sealed class EncodingProfileRepository(DbDataSource dataSource)
     {
         await using var command = dataSource.CreateCommand("""
             UPDATE encoding_profiles SET draft_revision=draft_revision+1,draft_name=@name,
-                draft_description=@description,draft_targets=@targets,updated_at=now()
+                draft_description=@description,draft_targets=@targets,updated_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
             WHERE id=@id AND draft_revision=@revision
             """);
         AddDraft(command, request.Draft);
@@ -111,8 +111,8 @@ public sealed class EncodingProfileRepository(DbDataSource dataSource)
         IReadOnlyList<EncodingProfileTarget> targets;
         int version;
         await using (var read = Sql.Command("""
-            SELECT draft_name,draft_description,draft_targets::text,published_version
-            FROM encoding_profiles WHERE id=@id AND draft_revision=@revision FOR UPDATE
+            SELECT draft_name,draft_description,draft_targets,published_version
+            FROM encoding_profiles WHERE id=@id AND draft_revision=@revision
             """, connection, transaction))
         {
             read.Parameters.AddWithValue("id", id);
@@ -136,7 +136,7 @@ public sealed class EncodingProfileRepository(DbDataSource dataSource)
             insert.Parameters.AddWithValue("targets", SqlKind.Json, JsonSerializer.Serialize(targets, FlowRepository.JsonOptions));
             await insert.ExecuteNonQueryAsync(ct);
         }
-        await using (var update = Sql.Command("UPDATE encoding_profiles SET published_version=@version,updated_at=now() WHERE id=@id", connection, transaction))
+        await using (var update = Sql.Command("UPDATE encoding_profiles SET published_version=@version,updated_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') WHERE id=@id", connection, transaction))
         {
             update.Parameters.AddWithValue("id", id);
             update.Parameters.AddWithValue("version", version);

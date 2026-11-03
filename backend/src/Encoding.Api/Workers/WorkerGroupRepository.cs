@@ -44,7 +44,7 @@ public sealed class WorkerGroupRepository(DbDataSource dataSource)
         await using var tx = await c.BeginTransactionAsync(ct);
         var groupId = id ?? Guid.NewGuid();
         var upsert = id.HasValue ? """
-            UPDATE worker_groups SET name=@name,description=@description,mode=@mode,criteria=@criteria,labels=@labels,updated_at=clock_timestamp()
+            UPDATE worker_groups SET name=@name,description=@description,mode=@mode,criteria=@criteria,labels=@labels,updated_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
             WHERE id=@id RETURNING id
             """ : """
             INSERT INTO worker_groups(id,name,description,mode,criteria,labels)
@@ -87,14 +87,14 @@ public sealed class WorkerGroupRepository(DbDataSource dataSource)
     {
         await using var c = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await c.BeginTransactionAsync(ct);
-        await using (var exists = Sql.Command("SELECT 1 FROM worker_groups WHERE id=@id FOR UPDATE", c, tx))
+        await using (var exists = Sql.Command("SELECT 1 FROM worker_groups WHERE id=@id", c, tx))
         {
             exists.Parameters.AddWithValue("id", id);
             if (await exists.ExecuteScalarAsync(ct) is null) return "missing";
         }
         const string usage = """
-            SELECT EXISTS(SELECT 1 FROM flow_versions WHERE definition::text LIKE '%' || @id || '%')
-                OR EXISTS(SELECT 1 FROM flow_drafts WHERE definition::text LIKE '%' || @id || '%')
+            SELECT EXISTS(SELECT 1 FROM flow_versions WHERE definition LIKE '%' || @id || '%')
+                OR EXISTS(SELECT 1 FROM flow_drafts WHERE definition LIKE '%' || @id || '%')
             """;
         await using (var used = Sql.Command(usage, c, tx))
         {

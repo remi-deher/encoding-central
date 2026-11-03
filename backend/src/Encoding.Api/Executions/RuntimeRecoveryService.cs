@@ -35,8 +35,8 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
     private static readonly TimeSpan FreshPlacementGrace=TimeSpan.FromMinutes(2);
 
     private static readonly string ExpiredWorkPredicate = $"""
-        ((e.state='cancelling' AND (w.lease_until IS NULL OR w.lease_until<=clock_timestamp()))
-        OR (e.state='running' AND w.worker_id IS NOT NULL AND w.lease_until IS NOT NULL AND w.lease_until<=clock_timestamp()))
+        ((e.state='cancelling' AND (w.lease_until IS NULL OR w.lease_until<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')))
+        OR (e.state='running' AND w.worker_id IS NOT NULL AND w.lease_until IS NOT NULL AND w.lease_until<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')))
         """;
 
     private async Task<bool> HasExpiredWorkAsync(CancellationToken ct)
@@ -60,13 +60,13 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
         await RuntimeRepository.FailUnavailableSourcesAsync(c, tx, offlineAfter, ct);
         var expired=new List<(Guid Id,Guid? Worker,int Revision,string State,int Attempt,string Flow,bool HasNonIdempotentStep,bool Uncertain,bool Waiting,int Resumes)>();
         await using(var cmd=Sql.Command($"""
-          SELECT e.id,e.worker_id,e.revision,e.state,e.attempt,e.flow_definition::text,
+          SELECT e.id,e.worker_id,e.revision,e.state,e.attempt,e.flow_definition,
             EXISTS(SELECT 1 FROM execution_steps s WHERE s.execution_id=e.id AND NOT s.idempotent),
             EXISTS(SELECT 1 FROM execution_steps s WHERE s.execution_id=e.id AND s.completed_at IS NULL AND NOT s.idempotent),
             EXISTS(SELECT 1 FROM execution_waits x WHERE x.execution_id=e.id AND x.state='waiting'),w.resume_count
           FROM executions e JOIN execution_work w ON w.execution_id=e.id
           WHERE {ExpiredWorkPredicate}
-          ORDER BY e.updated_at LIMIT 100 FOR UPDATE OF e,w SKIP LOCKED
+          ORDER BY e.updated_at LIMIT 100
           """,c,tx))
         await using(var r=await cmd.ExecuteReaderAsync(ct))
         { while(await r.ReadAsync(ct)) expired.Add((r.GetGuid(0),r.IsDBNull(1)?null:r.GetGuid(1),r.GetInt32(2),r.GetString(3),r.GetInt32(4),r.GetString(5),
@@ -128,7 +128,7 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
         if(!await ExecutionRepository.RecordInTransactionAsync(id,new(Guid.NewGuid(),revision,"running",worker,null,detail),c,tx,ct)) return false;
         // La destination du dernier relais (worker, groupe, étiquettes) reste la règle de la reprise : un encodage confié à .51 ne reprend pas ailleurs.
         RuntimeHandoffSelector? previousSelector=null;
-        await using(var read=Sql.Command("SELECT handoff_selector::text FROM execution_work WHERE execution_id=@id",c,tx))
+        await using(var read=Sql.Command("SELECT handoff_selector FROM execution_work WHERE execution_id=@id",c,tx))
         {
             read.Parameters.AddWithValue("id",id);
             if(await read.ExecuteScalarAsync(ct) is string stored) previousSelector=JsonSerializer.Deserialize<RuntimeHandoffSelector>(stored,Json);
@@ -137,7 +137,7 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
         await using var yield=Sql.Command("""
           UPDATE execution_work SET handoff_pending=true,handoff_selector=@selector,previous_worker_id=@worker,
             worker_id=NULL,lease_until=NULL,lease_epoch=lease_epoch+1,resume_count=resume_count+1 WHERE execution_id=@id;
-          UPDATE media_reservations SET lease_epoch=(SELECT lease_epoch FROM execution_work WHERE execution_id=@id),lease_until='infinity'::timestamptz WHERE execution_id=@id;
+          UPDATE media_reservations SET lease_epoch=(SELECT lease_epoch FROM execution_work WHERE execution_id=@id),lease_until='9999-12-31 23:59:59.999999Z' WHERE execution_id=@id;
           DELETE FROM disk_locks WHERE execution_id=@id;
           """,c,tx);
         yield.Parameters.AddWithValue("id",id); yield.Parameters.AddWithValue("worker",worker.Value);
@@ -154,15 +154,15 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
             Guid Library,Guid? Source,string? Checkpoint,DateTimeOffset Updated,FlowPlacementPlan? Plan)>();
         await using(var c=await dataSource.OpenConnectionAsync(ct))
         await using(var cmd=Sql.Command($"""
-          SELECT e.id,e.worker_id,e.revision,e.state,e.flow_definition::text,COALESCE(w.handoff_selector::text,''),
+          SELECT e.id,e.worker_id,e.revision,e.state,e.flow_definition,COALESCE(w.handoff_selector,''),
             w.previous_worker_id,w.library_id,w.source_worker_id,
-            (SELECT checkpoint::text FROM execution_steps s WHERE s.execution_id=e.id AND s.completed_at IS NOT NULL ORDER BY s.completed_revision DESC LIMIT 1),e.updated_at,w.placement_plan::text
+            (SELECT checkpoint FROM execution_steps s WHERE s.execution_id=e.id AND s.completed_at IS NOT NULL ORDER BY s.completed_revision DESC LIMIT 1),e.updated_at,w.placement_plan
           FROM executions e JOIN execution_work w ON w.execution_id=e.id
-          WHERE w.worker_id IS NULL AND w.available_at<=clock_timestamp()
+          WHERE w.worker_id IS NULL AND w.available_at<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
             AND (w.handoff_selector IS NOT NULL
                   AND ((e.state='running' AND w.handoff_pending) OR (e.state='queued' AND e.retry_of IS NOT NULL))
               OR w.handoff_selector IS NULL AND e.state='queued' AND e.retry_of IS NULL AND w.lease_until IS NULL
-                  AND e.queued_at<clock_timestamp()-make_interval(secs=>@freshGrace))
+                  AND e.queued_at<(strftime('%Y-%m-%d %H:%M:%f', 'now', '-' || (@freshGrace) || ' seconds') || '000Z'))
           ORDER BY e.updated_at LIMIT 100
           """,c))
         {
@@ -210,17 +210,17 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
         var candidates=new List<(Guid Id,WorkerToolCapability[] Capabilities,int Capacity,bool ScheduleEnabled,string? Timezone,string? Slots,WorkerInventory? Inventory)>();
         await using(var c=await dataSource.OpenConnectionAsync(ct))
         await using(var cmd=Sql.Command("""
-          SELECT n.id,n.capabilities::text,
+          SELECT n.id,n.capabilities,
             COALESCE((SELECT p.max_concurrent_tasks FROM worker_processing_settings p WHERE p.worker_id=n.id),n.max_concurrent_tasks),
             COALESCE((SELECT p.schedule_enabled FROM worker_processing_settings p WHERE p.worker_id=n.id),false),
             (SELECT p.schedule_timezone FROM worker_processing_settings p WHERE p.worker_id=n.id AND p.schedule_enabled),
-            (SELECT p.schedule_slots FROM worker_processing_settings p WHERE p.worker_id=n.id AND p.schedule_enabled),n.inventory::text
-          FROM workers n WHERE n.deleted_at IS NULL AND n.accepts_work AND 'worker'=ANY(n.roles)
+            (SELECT p.schedule_slots FROM worker_processing_settings p WHERE p.worker_id=n.id AND p.schedule_enabled),n.inventory
+          FROM workers n WHERE n.deleted_at IS NULL AND n.accepts_work AND EXISTS(SELECT 1 FROM json_each(n.roles) WHERE value = 'worker')
             AND (@fresh OR NOT n.draining AND NOT n.quarantined) AND n.incompatible_reason IS NULL
-            AND n.last_seen_at>clock_timestamp()-@offline
+            AND n.last_seen_at>(strftime('%Y-%m-%d %H:%M:%f', 'now', @offlineAgo) || '000Z')
           """,c))
         {
-            cmd.Parameters.AddWithValue("offline",offline); cmd.Parameters.AddWithValue("fresh",fresh);
+            cmd.Parameters.AddWithValue("offlineAgo", -offline); cmd.Parameters.AddWithValue("fresh",fresh);
             await using var r=await cmd.ExecuteReaderAsync(ct);
             while(await r.ReadAsync(ct)) candidates.Add((r.GetGuid(0),JsonSerializer.Deserialize<WorkerToolCapability[]>(r.GetString(1),Json)??[],r.GetInt32(2),r.GetBoolean(3),
                 r.IsDBNull(4)?null:r.GetString(4),r.IsDBNull(5)?null:r.GetString(5),r.IsDBNull(6)?null:JsonSerializer.Deserialize<WorkerInventory>(r.GetString(6),Json)));
@@ -250,12 +250,12 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
                 WHERE a.library_id=@library AND a.worker_id=@worker AND a.is_enabled AND a.can_read
                   AND ((a.mode='direct' AND a.local_path IS NOT NULL AND (NOT @write OR a.can_write))
                     OR (a.mode='transfer' AND s.mode='direct' AND s.is_enabled AND s.can_read AND (NOT @write OR s.can_write)
-                        AND sn.deleted_at IS NULL AND sn.last_seen_at>clock_timestamp()-@offline))
-                  AND n.deleted_at IS NULL AND n.last_seen_at>clock_timestamp()-@offline)
+                        AND sn.deleted_at IS NULL AND sn.last_seen_at>(strftime('%Y-%m-%d %H:%M:%f', 'now', @offlineAgo) || '000Z')))
+                  AND n.deleted_at IS NULL AND n.last_seen_at>(strftime('%Y-%m-%d %H:%M:%f', 'now', @offlineAgo) || '000Z'))
               """,c))
             {
                 access.Parameters.AddWithValue("library",item.Library);access.Parameters.AddWithValue("worker",candidate.Id);
-                access.Parameters.AddWithValue("write",needsWrite);access.Parameters.AddWithValue("offline",offline);
+                access.Parameters.AddWithValue("write",needsWrite);access.Parameters.AddWithValue("offlineAgo", -offline);
                 if(!await access.ScalarBoolAsync(ct)) continue;
             }
             if(item.Source is {} originalSource)
@@ -264,10 +264,10 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
                   SELECT EXISTS(SELECT 1 FROM library_worker_accesses a JOIN workers n ON n.id=a.worker_id
                     WHERE a.library_id=@library AND a.worker_id=@source AND a.mode='direct' AND a.is_enabled AND a.can_read
                       AND (NOT @write OR a.can_write) AND a.local_path IS NOT NULL AND n.deleted_at IS NULL
-                      AND n.last_seen_at>clock_timestamp()-@offline)
+                      AND n.last_seen_at>(strftime('%Y-%m-%d %H:%M:%f', 'now', @offlineAgo) || '000Z'))
                   """,c);
                 original.Parameters.AddWithValue("library",item.Library);original.Parameters.AddWithValue("source",originalSource);
-                original.Parameters.AddWithValue("write",needsWrite);original.Parameters.AddWithValue("offline",offline);
+                original.Parameters.AddWithValue("write",needsWrite);original.Parameters.AddWithValue("offlineAgo", -offline);
                 if(!await original.ScalarBoolAsync(ct)) continue;
             }
             return true;

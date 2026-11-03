@@ -19,13 +19,12 @@ public sealed class ArtifactRetention(DbDataSource dataSource, RuntimeArtifactSt
         JOIN execution_work w ON w.execution_id = e.id
         WHERE w.artifacts_purged_at IS NULL
           AND e.finished_at IS NOT NULL
-          AND ((e.state IN ('succeeded','cancelled') AND e.finished_at < clock_timestamp() - make_interval(days => @days))
-            OR (e.state = 'failed' AND e.finished_at < clock_timestamp() - make_interval(days => @failedDays)))
+          AND ((e.state IN ('succeeded','cancelled') AND e.finished_at < (strftime('%Y-%m-%d %H:%M:%f', 'now', '-' || (@days) || ' days') || '000Z'))
+            OR (e.state = 'failed' AND e.finished_at < (strftime('%Y-%m-%d %H:%M:%f', 'now', '-' || (@failedDays) || ' days') || '000Z')))
           AND NOT (e.state = 'succeeded' AND w.publication_requested AND w.published_path IS NULL)
           AND NOT EXISTS (SELECT 1 FROM media_reservations r WHERE r.execution_id = e.id)
         ORDER BY e.finished_at, e.id
         LIMIT @batch
-        FOR UPDATE OF w SKIP LOCKED
         """;
 
     public async Task<RetentionResult> RunOnceAsync(CancellationToken cancellationToken)
@@ -54,7 +53,7 @@ public sealed class ArtifactRetention(DbDataSource dataSource, RuntimeArtifactSt
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
-                await using var mark = Sql.Command("UPDATE execution_work SET artifacts_purged_at = clock_timestamp() WHERE execution_id = @id", connection, transaction);
+                await using var mark = Sql.Command("UPDATE execution_work SET artifacts_purged_at = (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') WHERE execution_id = @id", connection, transaction);
                 mark.Parameters.AddWithValue("id", id);
                 await mark.ExecuteNonQueryAsync(cancellationToken);
             }

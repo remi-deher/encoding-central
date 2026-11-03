@@ -35,10 +35,10 @@ public sealed class IntegrationTriggerRepository(DbDataSource dataSource)
     public async Task<IReadOnlyList<IntegrationTriggerRequest>> ClaimAsync(int limit, CancellationToken ct)
     {
         await using var command = dataSource.CreateCommand("""
-            UPDATE integration_trigger_requests SET state='processing',claimed_until=clock_timestamp()+@claim
+            UPDATE integration_trigger_requests SET state='processing',claimed_until=(strftime('%Y-%m-%d %H:%M:%f', 'now', @claim) || '000Z')
             WHERE id IN(SELECT id FROM integration_trigger_requests
-                        WHERE state IN('pending','processing') AND (claimed_until IS NULL OR claimed_until<=clock_timestamp())
-                        ORDER BY requested_at LIMIT @limit FOR UPDATE SKIP LOCKED)
+                        WHERE state IN('pending','processing') AND (claimed_until IS NULL OR claimed_until<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'))
+                        ORDER BY requested_at LIMIT @limit)
             RETURNING id,plugin_id,library_id,relative_path,requested_at
             """);
         command.Parameters.AddWithValue("claim", ClaimDuration);
@@ -54,7 +54,7 @@ public sealed class IntegrationTriggerRepository(DbDataSource dataSource)
     public async Task ReleaseAsync(Guid id, TimeSpan retryAfter, CancellationToken ct)
     {
         await using var command = dataSource.CreateCommand(
-            "UPDATE integration_trigger_requests SET state='pending',claimed_until=clock_timestamp()+@retry WHERE id=@id AND state='processing'");
+            "UPDATE integration_trigger_requests SET state='pending',claimed_until=(strftime('%Y-%m-%d %H:%M:%f', 'now', @retry) || '000Z') WHERE id=@id AND state='processing'");
         command.Parameters.AddWithValue("id", id);
         command.Parameters.AddWithValue("retry", retryAfter);
         await command.ExecuteNonQueryAsync(ct);
@@ -63,7 +63,7 @@ public sealed class IntegrationTriggerRepository(DbDataSource dataSource)
     public async Task CompleteAsync(Guid id, string state, string detail, CancellationToken ct)
     {
         await using var command = dataSource.CreateCommand(
-            "UPDATE integration_trigger_requests SET state=@state,detail=@detail,claimed_until=NULL,completed_at=clock_timestamp() WHERE id=@id AND state='processing'");
+            "UPDATE integration_trigger_requests SET state=@state,detail=@detail,claimed_until=NULL,completed_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') WHERE id=@id AND state='processing'");
         command.Parameters.AddWithValue("id", id);
         command.Parameters.AddWithValue("state", state);
         command.Parameters.AddWithValue("detail", detail);

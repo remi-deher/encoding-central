@@ -35,7 +35,7 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
         }
         var searchFilter=normalizedSearch is not null?" AND lower(relative_path) LIKE @search":string.Empty;
         int totalFiles;
-        await using(var countCmd=dataSource.CreateCommand($"SELECT count(*)::integer FROM library_media WHERE library_id=@id{searchFilter}"))
+        await using(var countCmd=dataSource.CreateCommand($"SELECT count(*) FROM library_media WHERE library_id=@id{searchFilter}"))
         {
             countCmd.Parameters.AddWithValue("id",library);
             if(normalizedSearch is not null) countCmd.Parameters.AddWithValue("search",$"%{normalizedSearch}%");
@@ -64,7 +64,7 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
         if((await current.ScalarInt32Async(ct) ?? 0)!=request.ExpectedRevision) return false;
         if(request.FlowId is {} flow)
         {
-            await using var version=Sql.Command("SELECT definition::text FROM flow_versions WHERE flow_id=@flow AND version=@version",c,tx);
+            await using var version=Sql.Command("SELECT definition FROM flow_versions WHERE flow_id=@flow AND version=@version",c,tx);
             version.Parameters.AddWithValue("flow",flow); version.Parameters.AddWithValue("version",request.Version!.Value);
             if(await version.ExecuteScalarAsync(ct) is not string document || !validator.Validate(JsonSerializer.Deserialize<FlowDefinition>(document,Json)!).IsValid) return false;
             await using var save=Sql.Command("INSERT INTO library_flow_assignments(library_id,flow_id,flow_version,revision) VALUES(@id,@flow,@version,@revision) ON CONFLICT(library_id) DO UPDATE SET flow_id=@flow,flow_version=@version,revision=@revision",
@@ -92,7 +92,7 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
     private async Task<bool> RetargetPendingAsync(Guid library,FlowDefinition flow,string document,DbConnection c,DbTransaction tx,CancellationToken ct)
     {
         var moved=new List<(Guid Id,int Revision)>();
-        await using(var update=Sql.Command($"UPDATE executions SET flow_name=@name,flow_version=@version,flow_definition=@definition,detail=@detail,updated_at=clock_timestamp(),revision=revision+1 WHERE state='queued' AND (flow_name<>@name OR flow_version<>@version) AND flow_definition->>'mediaType'=@mediaType AND id IN(SELECT execution_id FROM execution_work WHERE library_id=@library) AND NOT EXISTS(SELECT 1 FROM execution_steps s WHERE s.execution_id=executions.id) RETURNING id,revision",
+        await using(var update=Sql.Command($"UPDATE executions SET flow_name=@name,flow_version=@version,flow_definition=@definition,detail=@detail,updated_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),revision=revision+1 WHERE state='queued' AND (flow_name<>@name OR flow_version<>@version) AND flow_definition->>'mediaType'=@mediaType AND id IN(SELECT execution_id FROM execution_work WHERE library_id=@library) AND NOT EXISTS(SELECT 1 FROM execution_steps s WHERE s.execution_id=executions.id) RETURNING id,revision",
             c,tx))
         {
             update.Parameters.AddWithValue("name",flow.Name); update.Parameters.AddWithValue("version",flow.Version); update.Parameters.AddWithValue("definition",SqlKind.Json,document);
@@ -109,7 +109,7 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
     }
     private static async Task<bool> LockLibraryAsync(Guid id,DbConnection c,DbTransaction tx,CancellationToken ct)
     {
-        await using var cmd=Sql.Command("SELECT id FROM libraries WHERE id=@id AND NOT is_deleted FOR UPDATE",c,tx);
+        await using var cmd=Sql.Command("SELECT id FROM libraries WHERE id=@id AND NOT is_deleted",c,tx);
         cmd.Parameters.AddWithValue("id",id); return await cmd.ScalarGuidAsync(ct) is not null;
     }
     public async Task<Guid?> RequestScanAsync(Guid library,CancellationToken ct)
@@ -134,14 +134,14 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
           SELECT s.id,s.library_id,s.epoch,a.local_path,s.media_type FROM library_scans s
           JOIN libraries l ON l.id=s.library_id AND l.is_active
           JOIN library_worker_accesses a ON a.library_id=s.library_id AND a.worker_id=@node AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.local_path IS NOT NULL
-          JOIN workers n ON n.id=a.worker_id AND n.deleted_at IS NULL AND n.accepts_work AND n.last_seen_at>clock_timestamp()-@offline
-          WHERE s.state IN ('queued','running') AND (s.lease_until IS NULL OR s.lease_until<=clock_timestamp())
-          ORDER BY s.created_at LIMIT 1 FOR UPDATE OF s SKIP LOCKED
+          JOIN workers n ON n.id=a.worker_id AND n.deleted_at IS NULL AND n.accepts_work AND n.last_seen_at>(strftime('%Y-%m-%d %H:%M:%f', 'now', @offlineAgo) || '000Z')
+          WHERE s.state IN ('queued','running') AND (s.lease_until IS NULL OR s.lease_until<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'))
+          ORDER BY s.created_at LIMIT 1
           """,c,tx);
-        cmd.Parameters.AddWithValue("node",worker); cmd.Parameters.AddWithValue("offline",presence.OfflineAfter);
+        cmd.Parameters.AddWithValue("node",worker); cmd.Parameters.AddWithValue("offlineAgo", -presence.OfflineAfter);
         await using var r=await cmd.ExecuteReaderAsync(ct); if(!await r.ReadAsync(ct)) return null;
         var lease=new LibraryScanLease(r.GetGuid(0),r.GetGuid(1),checked(r.GetInt64(2)+1),r.GetString(3),r.GetString(4)); await r.DisposeAsync();
-        await using var update=Sql.Command("UPDATE library_scans SET worker_id=@node,source_root=@root,epoch=@epoch,state='running',lease_until=clock_timestamp()+interval '180 seconds',detail='Découverte des fichiers en cours.' WHERE id=@id",
+        await using var update=Sql.Command("UPDATE library_scans SET worker_id=@node,source_root=@root,epoch=@epoch,state='running',lease_until=(strftime('%Y-%m-%d %H:%M:%f', 'now', '+180 seconds') || '000Z'),detail='Découverte des fichiers en cours.' WHERE id=@id",
             c,tx);
         update.Parameters.AddWithValue("root",lease.Root); update.Parameters.AddWithValue("id",lease.Id); update.Parameters.AddWithValue("node",worker);
             update.Parameters.AddWithValue("epoch",lease.Epoch);
@@ -150,8 +150,8 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
     public async Task<bool> RenewScanAsync(Guid id,Guid worker,long epoch,CancellationToken ct)
     {
         await using var cmd=dataSource.CreateCommand("""
-          UPDATE library_scans s SET lease_until=clock_timestamp()+interval '180 seconds'
-          WHERE s.id=@id AND s.worker_id=@node AND s.epoch=@epoch AND s.state='running' AND s.lease_until>clock_timestamp()
+          UPDATE library_scans AS s SET lease_until=(strftime('%Y-%m-%d %H:%M:%f', 'now', '+180 seconds') || '000Z')
+          WHERE s.id=@id AND s.worker_id=@node AND s.epoch=@epoch AND s.state='running' AND s.lease_until>(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
           AND EXISTS(SELECT 1 FROM library_worker_accesses a JOIN libraries l ON l.id=a.library_id WHERE a.library_id=s.library_id AND a.worker_id=@node AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.local_path=s.source_root AND l.is_active)
           """);
         cmd.Parameters.AddWithValue("id",id); cmd.Parameters.AddWithValue("node",worker); cmd.Parameters.AddWithValue("epoch",epoch);
@@ -167,8 +167,7 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
           SELECT s.library_id,s.media_type FROM library_scans s
           JOIN library_worker_accesses a ON a.library_id=s.library_id AND a.worker_id=@node AND a.mode='direct' AND a.is_enabled AND a.can_read AND a.local_path=s.source_root
           JOIN libraries l ON l.id=s.library_id AND l.is_active
-          WHERE s.id=@id AND s.worker_id=@node AND s.epoch=@epoch AND s.state='running' AND s.lease_until>clock_timestamp()
-          FOR UPDATE OF s
+          WHERE s.id=@id AND s.worker_id=@node AND s.epoch=@epoch AND s.state='running' AND s.lease_until>(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
           """,c,tx);
         cmd.Parameters.AddWithValue("id",id); cmd.Parameters.AddWithValue("node",worker); cmd.Parameters.AddWithValue("epoch",request.Epoch);
         await using var r=await cmd.ExecuteReaderAsync(ct); if(!await r.ReadAsync(ct)) return false;
@@ -199,14 +198,14 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
                   INSERT INTO library_media(id,library_id,relative_path,byte_length,modified_at,scan_id)
                   VALUES {string.Join(",", values)}
                   ON CONFLICT(library_id,relative_path) DO UPDATE
-                  SET stable_since=CASE WHEN library_media.byte_length=EXCLUDED.byte_length AND library_media.modified_at=EXCLUDED.modified_at THEN library_media.stable_since ELSE clock_timestamp() END,byte_length=EXCLUDED.byte_length,modified_at=EXCLUDED.modified_at,scan_id=EXCLUDED.scan_id
+                  SET stable_since=CASE WHEN library_media.byte_length=EXCLUDED.byte_length AND library_media.modified_at=EXCLUDED.modified_at THEN library_media.stable_since ELSE (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') END,byte_length=EXCLUDED.byte_length,modified_at=EXCLUDED.modified_at,scan_id=EXCLUDED.scan_id
                   """;
                 await save.ExecuteNonQueryAsync(ct);
             }
             await using var remove=Sql.Command("DELETE FROM library_media WHERE library_id=@library AND scan_id<>@scan",c,tx);
             remove.Parameters.AddWithValue("library",library); remove.Parameters.AddWithValue("scan",id); await remove.ExecuteNonQueryAsync(ct);
         }
-        await using var done=Sql.Command("UPDATE library_scans SET state=@state,detail=@detail,completed_at=clock_timestamp(),lease_until=NULL WHERE id=@id AND lease_until>clock_timestamp()",c,tx);
+        await using var done=Sql.Command("UPDATE library_scans SET state=@state,detail=@detail,completed_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),lease_until=NULL WHERE id=@id AND lease_until>(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')",c,tx);
         done.Parameters.AddWithValue("id",id); done.Parameters.AddWithValue("state",request.Error is null?"completed":"failed");
         done.Parameters.AddWithValue("detail",request.Error??$"{files.Length} fichier(s) détecté(s).");
         if(await done.ExecuteNonQueryAsync(ct)!=1) return false; await tx.CommitAsync(ct); return true;
@@ -226,7 +225,7 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
         if(!automatic && (ids.Count is <1 or >10000 || ids.Distinct().Count()!=ids.Count)) return null;
         await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
         if(!await LockLibraryAsync(library,c,tx,ct)) return null;
-        await using var assignment=Sql.Command("SELECT v.definition::text FROM library_flow_assignments a JOIN flow_versions v ON v.flow_id=a.flow_id AND v.version=a.flow_version WHERE a.library_id=@id AND (@revision IS NULL OR a.revision=@revision) AND EXISTS(SELECT 1 FROM libraries l WHERE l.id=a.library_id AND l.is_active)",
+        await using var assignment=Sql.Command("SELECT v.definition FROM library_flow_assignments a JOIN flow_versions v ON v.flow_id=a.flow_id AND v.version=a.flow_version WHERE a.library_id=@id AND (@revision IS NULL OR a.revision=@revision) AND EXISTS(SELECT 1 FROM libraries l WHERE l.id=a.library_id AND l.is_active)",
             c,tx);
         assignment.Parameters.AddWithValue("id",library); assignment.Parameters.AddWithValue("revision",SqlKind.Integer,(object?)assignmentRevision??DBNull.Value);
         if(await assignment.ExecuteScalarAsync(ct) is not string json) return null;
@@ -238,7 +237,7 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
             if(!await ServesLibraryAutomaticallyAsync(library,c,tx,ct))return null;
         }
         var files=new List<(Guid Id,string Path,long Bytes,DateTimeOffset Modified)>();
-        await using(var select=Sql.Command("SELECT m.id,m.relative_path,m.byte_length,m.modified_at FROM library_media m WHERE m.library_id=@library           AND (NOT @automatic AND m.id=ANY(@ids) AND (NOT @skipReceipted OR NOT EXISTS(SELECT 1 FROM library_processing_receipts r WHERE r.library_id=m.library_id AND r.file_id=m.id AND r.flow_id=@flow AND r.flow_version=@version AND r.byte_length=m.byte_length AND r.modified_at=m.modified_at)) OR @automatic AND m.stable_since<=clock_timestamp()-interval '30 seconds' AND m.modified_at<=clock_timestamp()-interval '30 seconds'           AND NOT EXISTS(SELECT 1 FROM library_processing_receipts r WHERE r.library_id=m.library_id AND r.file_id=m.id AND r.flow_id=@flow AND r.flow_version=@version AND r.byte_length=m.byte_length AND r.modified_at=m.modified_at) AND NOT EXISTS(SELECT 1 FROM media_replacement_marks k WHERE k.library_id=m.library_id AND k.relative_path=m.relative_path AND k.byte_length=m.byte_length AND k.modified_at=m.modified_at))           ORDER BY m.relative_path LIMIT 10000",
+        await using(var select=Sql.Command("SELECT m.id,m.relative_path,m.byte_length,m.modified_at FROM library_media m WHERE m.library_id=@library           AND (NOT @automatic AND m.id IN (SELECT value FROM json_each(@ids)) AND (NOT @skipReceipted OR NOT EXISTS(SELECT 1 FROM library_processing_receipts r WHERE r.library_id=m.library_id AND r.file_id=m.id AND r.flow_id=@flow AND r.flow_version=@version AND r.byte_length=m.byte_length AND r.modified_at=m.modified_at)) OR @automatic AND m.stable_since<=(strftime('%Y-%m-%d %H:%M:%f', 'now', '-30 seconds') || '000Z') AND m.modified_at<=(strftime('%Y-%m-%d %H:%M:%f', 'now', '-30 seconds') || '000Z')           AND NOT EXISTS(SELECT 1 FROM library_processing_receipts r WHERE r.library_id=m.library_id AND r.file_id=m.id AND r.flow_id=@flow AND r.flow_version=@version AND r.byte_length=m.byte_length AND r.modified_at=m.modified_at) AND NOT EXISTS(SELECT 1 FROM media_replacement_marks k WHERE k.library_id=m.library_id AND k.relative_path=m.relative_path AND k.byte_length=m.byte_length AND k.modified_at=m.modified_at))           ORDER BY m.relative_path LIMIT 10000",
             c,tx))
         {
             select.Parameters.AddWithValue("automatic",automatic);select.Parameters.AddWithValue("skipReceipted",skipReceipted);
@@ -276,7 +275,7 @@ public sealed class LibraryWorkflowRepository(DbDataSource dataSource,FlowDefini
         if(worker is not {} resolvedWorker) return true;
         if(localWorker?.WorkerId is null) await localWorker!.RegisterAsync(resolvedWorker,ct);
         await using var access=Sql.Command("""
-          SELECT EXISTS(SELECT 1 FROM library_worker_accesses a JOIN workers n ON n.id=a.worker_id AND n.deleted_at IS NULL AND 'server'=ANY(n.roles)
+          SELECT EXISTS(SELECT 1 FROM library_worker_accesses a JOIN workers n ON n.id=a.worker_id AND n.deleted_at IS NULL AND EXISTS(SELECT 1 FROM json_each(n.roles) WHERE value = 'server')
                         WHERE a.library_id=@library AND a.mode='direct' AND a.is_enabled AND a.can_read),
                  EXISTS(SELECT 1 FROM library_worker_accesses a WHERE a.library_id=@library AND a.worker_id=@node AND a.mode='direct' AND a.is_enabled AND a.can_read)
           """,c,tx);

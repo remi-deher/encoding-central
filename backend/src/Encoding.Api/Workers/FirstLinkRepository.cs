@@ -14,7 +14,7 @@ public sealed class FirstLinkRepository(DbDataSource dataSource)
 
     public async Task<FirstLinkResponse> GetAsync(CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("SELECT expires_at FROM first_link_acceptance WHERE expires_at > clock_timestamp()");
+        await using var command = dataSource.CreateCommand("SELECT expires_at FROM first_link_acceptance WHERE expires_at > (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')");
         return await command.ScalarInstantAsync(ct) is {} expiresAt
             ? new FirstLinkResponse(true, new DateTimeOffset(DateTime.SpecifyKind(expiresAt, DateTimeKind.Utc)))
             : new FirstLinkResponse(false, null);
@@ -23,7 +23,7 @@ public sealed class FirstLinkRepository(DbDataSource dataSource)
     public async Task<FirstLinkResponse> EnableAsync(int minutes, string administrator, CancellationToken ct)
     {
         await using var command = dataSource.CreateCommand("""
-            INSERT INTO first_link_acceptance(id, expires_at, enabled_by) VALUES (true, clock_timestamp() + @minutes * interval '1 minute', @by)
+            INSERT INTO first_link_acceptance(id, expires_at, enabled_by) VALUES (true, (strftime('%Y-%m-%d %H:%M:%f', 'now', '+' || (@minutes) || ' minutes') || '000Z'), @by)
             ON CONFLICT (id) DO UPDATE SET expires_at = EXCLUDED.expires_at, enabled_by = EXCLUDED.enabled_by
             RETURNING expires_at
             """);
@@ -42,7 +42,7 @@ public sealed class FirstLinkRepository(DbDataSource dataSource)
     /// <summary>Consomme le mode de façon atomique : une seule demande l'obtient, même si plusieurs serveurs la reçoivent en même temps.</summary>
     public async Task<string?> TryConsumeAsync(CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("DELETE FROM first_link_acceptance WHERE expires_at > clock_timestamp() RETURNING enabled_by");
+        await using var command = dataSource.CreateCommand("DELETE FROM first_link_acceptance WHERE expires_at > (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') RETURNING enabled_by");
         return await command.ExecuteScalarAsync(ct) as string;
     }
 }
