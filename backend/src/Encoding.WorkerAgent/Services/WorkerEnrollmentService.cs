@@ -35,7 +35,7 @@ public sealed class WorkerEnrollmentService(
             DisplayName: effectiveDisplayName,
             Version: AppVersion.Current);
 
-        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        using var client = WorkerCentralHttp.Create(TimeSpan.FromSeconds(10));
         using var message = new HttpRequestMessage(HttpMethod.Post, new Uri(new Uri(central.ApiBaseUrl), "api/v1/workers/enroll"))
         {
             Content = JsonContent.Create(request, options: AgentJson.Options)
@@ -110,7 +110,7 @@ public sealed class WorkerEnrollmentService(
     {
         try
         {
-            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            using var client = WorkerCentralHttp.Create(TimeSpan.FromSeconds(10));
             using var message = new HttpRequestMessage(HttpMethod.Post, new Uri(new Uri(identity.ApiBaseUrl!), $"api/v1/workers/{identity.Id:D}/leave"));
             message.Headers.Add("X-Node-Token", identity.WorkerToken);
             using var response = await client.SendAsync(message, cancellationToken);
@@ -170,7 +170,7 @@ public sealed class WorkerEnrollmentService(
             Version: AppVersion.Current),
             pending.PairingKey!);
 
-        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        using var client = WorkerCentralHttp.Create(TimeSpan.FromSeconds(10));
         HttpResponseMessage response;
         try
         {

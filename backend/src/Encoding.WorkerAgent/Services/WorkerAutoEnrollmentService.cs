@@ -24,14 +24,17 @@ public sealed class WorkerAutoEnrollmentService(
         if (options.AutomaticEnrollmentEnabled) logger.LogInformation("L’acceptation automatique est activée ; un seul central détecté sera accepté automatiquement.");
         while (!stoppingToken.IsCancellationRequested)
         {
+            var delay = TimeSpan.FromSeconds(5);
             try
             {
                 var identity = await identityStore.GetAsync(stoppingToken);
+                // Une fois enrôlé, il n'y a plus rien à rejoindre : la boucle ne fait que surveiller une identité retirée.
+                if (identity.IsEnrolled) delay = WorkerPacing.EnrolledPollInterval;
                 var hasActivePairing = identity.PairingExpiresAt > DateTimeOffset.UtcNow
                     && !string.IsNullOrWhiteSpace(identity.PairingKey);
                 if (hasActivePairing)
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+                    await Task.Delay(delay, stoppingToken);
                     continue;
                 }
                 var centrals = discovery.List();
@@ -59,7 +62,7 @@ public sealed class WorkerAutoEnrollmentService(
                 logger.LogWarning(exception, "L’enrôlement automatique n’a pas abouti ; une nouvelle tentative sera faite.");
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+            await Task.Delay(delay, stoppingToken);
         }
     }
 

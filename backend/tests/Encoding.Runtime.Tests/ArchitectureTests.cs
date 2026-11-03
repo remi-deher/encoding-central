@@ -59,7 +59,6 @@ public sealed partial class ArchitectureTests
     [
         "Encoding.Api/Mcp/McpCommand.cs",
         "Encoding.WorkerAgent/Services/WorkerCentralDiscovery.cs",
-        "Encoding.WorkerAgent/Services/WorkerEnrollmentService.cs",
     ];
 
     [Fact]
@@ -128,7 +127,8 @@ public sealed partial class ArchitectureTests
     {
         var offenders = AllowedProjectReferences.Keys.SelectMany(SourceFiles)
             .Where(file => Regex.IsMatch(File.ReadAllText(file), @"\bnew\s+HttpClient\b"))
-            .Select(Relative).Except(HttpClientConstructionDebt).ToArray();
+            .Select(Relative).Except(HttpClientConstructionDebt)
+            .Except(["Encoding.WorkerAgent/Services/WorkerCentralHttp.cs"]).ToArray();
         Assert.True(offenders.Length == 0, "new HttpClient() hors fabrique allow-listée : " + string.Join(", ", offenders));
         var stale = HttpClientConstructionDebt.Where(relative =>
         {

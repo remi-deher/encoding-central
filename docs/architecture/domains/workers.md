@@ -74,3 +74,9 @@ Dans **Ce worker** comme dans **Central**, l'icône correspond à l'environnemen
 
 ## Documents opérationnels
 `docs/operations/release.md`, `docs/operations/backup-restore.md`, `backend/README.md`, `backend/docker-compose.central.yml`.
+
+### Continuité du lien au central
+- Le heartbeat ne transmet plus `MasterUrl` et ne peut pas réécrire le central d'enrôlement. Les adresses découvertes restent des candidats d'enrôlement ; le jeton existant est envoyé uniquement à `ApiBaseUrl`.
+- Reconnexion SSE : plafond exponentiel de 1 à 60 s avec jitter complet, réinitialisé après 30 s stables ; `retry:` est pris en compte dans cette borne. Un silence de 45 s ferme le flux. Le modèle SSE et filet de 30 s reste inchangé.
+- Le central ne garde qu'un flux de réveil par worker : une nouvelle connexion ferme l'ancienne. Jeton et existence sont revérifiés toutes les 15 s, même pendant des réveils fréquents.
+- Heartbeat : jitter ±10 %. Découverte et auto-enrôlement passent à cinq minutes une fois le worker enrôlé.

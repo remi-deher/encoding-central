@@ -12,7 +12,7 @@ public sealed class WorkerHeartbeatService(
     WorkerEnrollmentService enrollment,
     ILogger<WorkerHeartbeatService> logger) : BackgroundService
 {
-    private readonly HttpClient httpClient = new() { Timeout = TimeSpan.FromSeconds(10) };
+    private readonly HttpClient httpClient = WorkerCentralHttp.Create(TimeSpan.FromSeconds(10));
     // Propre à ce processus : deux processus qui partagent la même identité sont reconnus par leurs nonces qui se relaient (0041).
     private readonly string sessionNonce = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(8));
     private WorkerLifecycle? lastLifecycle;
@@ -67,8 +67,6 @@ public sealed class WorkerHeartbeatService(
                                     await identityStore.MarkEnrolledAsync(stoppingToken);
                                     logger.LogInformation("L’enrôlement en attente du worker {NodeId} a été confirmé par le central.", identity.Id);
                                 }
-                                if (!string.IsNullOrWhiteSpace(worker?.MasterUrl))
-                                    await identityStore.UpdateMasterUrlAsync(worker.MasterUrl, stoppingToken);
 
                                 logger.LogDebug("Heartbeat envoyé pour le worker {NodeId} vers {ServerUrl}.", identity.Id, serverUrl);
                                 ReportLifecycle(worker);
@@ -94,7 +92,7 @@ public sealed class WorkerHeartbeatService(
                 logger.LogWarning(exception, "Le heartbeat a dépassé son délai ; nouvel essai au prochain cycle.");
             }
 
-            await Task.Delay(options.HeartbeatInterval, stoppingToken);
+            await Task.Delay(WorkerPacing.Jitter(options.HeartbeatInterval, WorkerPacing.HeartbeatJitter), stoppingToken);
         }
     }
 

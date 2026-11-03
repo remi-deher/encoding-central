@@ -15,7 +15,7 @@ public sealed class PluginSyncService(WorkerAgentOptions options, WorkerIdentity
 {
     private sealed record Listed(string Id, string Version, string Sha256);
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(60);
-    private readonly HttpClient http = new() { Timeout = TimeSpan.FromMinutes(2) };
+    private readonly HttpClient http = WorkerCentralHttp.Create(TimeSpan.FromMinutes(2));
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
