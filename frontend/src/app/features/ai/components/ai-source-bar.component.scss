@@ -1,0 +1,21 @@
+.source-bar {
+  padding-bottom: var(--space-2);
+  overflow-x: hidden;
+}
+.source-bar mat-chip-set {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.source-bar mat-chip {
+  max-width: 100%;
+}
+.source-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 100%;
+}
+.source-item > button {
+  flex: 0 0 40px;
+}

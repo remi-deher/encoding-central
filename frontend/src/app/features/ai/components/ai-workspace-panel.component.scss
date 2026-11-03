@@ -1,0 +1,116 @@
+.preview-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.preview-panel__header h2 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--font-title-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-files {
+  display: grid;
+  gap: var(--space-3);
+}
+.workspace-resource {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-xl);
+  background: var(--surface-container);
+}
+.workspace-resource mat-form-field {
+  width: 100%;
+  min-width: 0;
+}
+.workspace-resource h4 {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-label);
+}
+.resource-select-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  min-width: 0;
+  gap: var(--space-2);
+}
+.selected-resource {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+  padding-inline-start: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-container-high);
+  font-size: var(--font-label);
+}
+.workspace-files__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.workspace-files h3 {
+  margin: 0;
+  font-size: var(--font-title-sm);
+}
+.workspace-files p {
+  margin: var(--space-1) 0 0;
+}
+.workspace-file-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.workspace-file-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--surface-container-high);
+}
+.workspace-file-list li > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.muted {
+  color: var(--text-muted);
+  font-size: var(--font-label);
+  line-height: 1.5;
+}
+.read-tool-picker {
+  width: 100%;
+}
+.error-message {
+  margin-block: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--warning-soft);
+  color: var(--text-primary);
+  font-size: var(--font-label);
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

@@ -1,0 +1,183 @@
+<header class="preview-panel__header">
+  <h2>{{ context.previewFlow() ? context.previewTitle() : 'Espace de travail' }}</h2>
+  <button
+    mat-icon-button
+    type="button"
+    aria-label="Fermer l’espace de travail"
+    (click)="context.closePreview()"
+  >
+    ×
+  </button>
+</header>
+@if (!context.previewFlow()) {
+  <section class="workspace-files" aria-label="Fichiers joints au prochain message">
+    <section class="workspace-resource" aria-label="Joindre une ressource">
+      <div class="workspace-files__heading">
+        <div>
+          <h3>Joindre une ressource</h3>
+          <p class="muted">
+            Ajoutez un flow, une exécution, un worker ou une bibliothèque au contexte.
+          </p>
+        </div>
+      </div>
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" floatLabel="always">
+        <mat-label>Type de ressource</mat-label>
+        <mat-select
+          [ngModel]="context.selectedResourceType()"
+          (ngModelChange)="context.selectResourceType($event)"
+        >
+          <mat-option value="flow">Flows</mat-option>
+          <mat-option value="execution">Exécutions</mat-option>
+          <mat-option value="node">Workers</mat-option>
+          <mat-option value="library">Bibliothèques</mat-option>
+        </mat-select>
+      </mat-form-field>
+      <div class="resource-select-row">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" floatLabel="always">
+          <mat-label>Ressource</mat-label>
+          <mat-select
+            [ngModel]="context.selectedResourceId()"
+            (ngModelChange)="context.selectedResourceId.set($event)"
+          >
+            @for (resource of context.resourceOptions(); track resource.id) {
+              <mat-option [value]="resource.id">{{ resource.label }}</mat-option>
+            }
+          </mat-select>
+          @if (!context.resourceOptions().length) {
+            <mat-hint>Aucune ressource disponible</mat-hint>
+          }
+        </mat-form-field>
+        <button
+          matButton="tonal"
+          type="button"
+          [disabled]="
+            !context.selectedResourceId() ||
+            conversations.sending() ||
+            context.updatingSources()
+          "
+          (click)="context.addResourceToContext()"
+        >
+          Joindre
+        </button>
+      </div>
+      @if (context.selectedResource(); as resource) {
+        <div class="selected-resource">
+          <span>{{ resource.label }}</span>
+          <button
+            mat-icon-button
+            type="button"
+            aria-label="Retirer la ressource"
+            (click)="context.removeSelectedResource()"
+          >
+            ×
+          </button>
+        </div>
+      }
+      @if (conversations.detail(); as resourceDetail) {
+        @if (conversations.visibleConversationSources(resourceDetail.conversation).length) {
+          <h4>Ressources jointes</h4>
+          <ul class="workspace-file-list">
+            @for (
+              source of conversations.visibleConversationSources(resourceDetail.conversation);
+              track source.kind + source.resourceId
+            ) {
+              <li>
+                <span aria-hidden="true"><app-icon name="outward" /></span
+                ><span>{{ source.label }}</span>
+              </li>
+            }
+          </ul>
+        }
+      }
+    </section>
+    <section class="workspace-resource" aria-label="Outils de lecture">
+      <div class="workspace-files__heading">
+        <div>
+          <h3>Outils de lecture</h3>
+          <p class="muted">Choisissez les informations à récupérer pour le prochain message.</p>
+        </div>
+      </div>
+      <mat-form-field class="read-tool-picker" appearance="outline" subscriptSizing="dynamic">
+        <mat-label>Outils de lecture pour ce message</mat-label>
+        <mat-select
+          name="readTools"
+          multiple
+          [ngModel]="context.selectedReadTools()"
+          (ngModelChange)="context.setSelectedReadTools($event)"
+        >
+          @for (tool of context.readTools; track tool.name) {
+            <mat-option
+              [value]="tool.name"
+              [disabled]="tool.name === 'get_flow' && !context.hasFlowContext()"
+              >{{ tool.label }}</mat-option
+            >
+          }
+        </mat-select>
+        <mat-hint
+          >Jusqu’à trois outils ; l’assistant peut aussi choisir un outil adapté. Les résultats
+          seront cités.</mat-hint
+        >
+      </mat-form-field>
+    </section>
+    <div class="workspace-files__heading">
+      <div>
+        <h3>Fichiers</h3>
+        <p class="muted">
+          Ajoutez des fichiers de configuration, flows, scripts ou sous-titres.
+        </p>
+      </div>
+      <button
+        matButton="tonal"
+        type="button"
+        [disabled]="conversations.sending() || conversations.hasPendingRequest()"
+        (click)="assistantFileInput.click()"
+      >
+        Ajouter
+      </button>
+    </div>
+    <input
+      #assistantFileInput
+      class="visually-hidden"
+      type="file"
+      multiple
+      [accept]="context.fileAccept"
+      aria-label="Choisir des fichiers texte à joindre"
+      (change)="context.selectAttachments($event)"
+    />
+    @if (context.attachments().length) {
+      <ul class="workspace-file-list">
+        @for (file of context.attachments(); track file.name) {
+          <li>
+            <span aria-hidden="true">📄</span>
+            <span>{{ file.name }}</span>
+            <button
+              mat-icon-button
+              type="button"
+              [disabled]="conversations.sending() || conversations.hasPendingRequest()"
+              [attr.aria-label]="'Retirer ' + file.name"
+              (click)="context.removeAttachment(file.name)"
+            >
+              ×
+            </button>
+          </li>
+        }
+      </ul>
+    } @else {
+      <p class="muted">
+        Aucun fichier joint. Limite : 8 Mo par fichier, 16 Mo au total (5 fichiers maximum).
+      </p>
+    }
+    <p class="muted">
+      Formats texte pris en charge : JSON/YAML/XML, SRT/ASS/SSA/VTT, flows, logs, scripts et
+      configurations.
+    </p>
+    <p class="muted">Les fichiers seront transmis au modèle avec votre prochain message.</p>
+  </section>
+}
+@if (context.previewLoading()) {
+  <p class="muted" role="status"><mat-spinner diameter="20" /> Chargement de l’aperçu…</p>
+} @else if (context.previewError(); as error) {
+  <p class="error-message" role="alert">{{ error }}</p>
+} @else if (context.previewFlow(); as flow) {
+  <app-flow-preview [flow]="flow" [components]="context.previewComponents()" mode="flow" />
+}
