@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { debounceTime, filter, map, merge, Observable, of, share, timer } from 'rxjs';
 
-export type LiveTopic = 'executions' | 'nodes' | 'libraries' | 'plugins';
+export type LiveTopic = 'executions' | 'workers' | 'libraries' | 'plugins';
 
 /**
  * Une connexion pour toute l'interface. Le serveur nomme le sujet modifié.

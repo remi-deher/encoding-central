@@ -74,6 +74,7 @@ builder.Services.AddHttpClient("release-updates", client =>
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Encoding-UpdateChecker/1.0");
 });
 builder.Services.AddSingleton<ExecutionStreamBroadcaster>();
+builder.Services.AddSingleton<Encoding.Api.Infrastructure.InterfaceLiveBroadcaster>();
 builder.Services.AddSingleton<ExecutionRepository>();
 builder.Services.AddSingleton<FlowComponentRegistry>();
 builder.Services.AddSingleton<Encoding.Api.Plugins.CentralExtensionActivationState>();
@@ -174,6 +175,7 @@ builder.Services.AddSingleton<RegisterRepository>();
 builder.Services.AddHostedService<CentralDiscoveryPublisher>();
 builder.Services.AddSingleton<RuntimeExecutionCoordinator>();
 builder.Services.AddSingleton<WorkerManagementService>();
+builder.Services.AddHostedService<Encoding.Api.Workers.WorkerPresenceWatcher>();
 builder.Services.AddSingleton<FlowCoordinatorService>();
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
@@ -235,6 +237,7 @@ app.MapWorkerEndpoints();
 app.MapWorkerGroupEndpoints();
 app.MapLocalWorkerEndpoints();
 app.MapExecutionEndpoints();
+Encoding.Api.Infrastructure.InterfaceLiveEndpoints.MapInterfaceLiveEndpoints(app);
 app.MapGet("/api/v1/system/version", (Encoding.Api.Updates.ReleaseService releases) =>
     Results.Ok(new { version = releases.Installed.Version, commit = releases.Installed.Commit }));
 app.MapGet("/api/v1/system/updates", (Encoding.Api.Updates.ReleaseService releases, CancellationToken ct) =>

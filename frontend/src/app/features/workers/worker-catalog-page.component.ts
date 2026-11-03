@@ -36,6 +36,7 @@ import { ConfirmationDialogComponent } from '../../shared/ui/confirmation-dialog
 import { DrawerActionButtonComponent } from '../../shared/ui/drawer-action-button/drawer-action-button.component';
 import { DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
+import { LiveUpdates } from '../../shared/services/live-updates';
 import { AuthService } from '../../core/auth/auth.service';
 import {
   ChangeDetectionStrategy,
@@ -242,6 +243,7 @@ export class WorkerCatalogPageComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly pageShellContext = inject(PageShellContextService);
   private readonly http = inject(HttpClient);
+  private readonly live = inject(LiveUpdates);
   private readonly clusterApi = inject(CentralApi);
   private readonly dialog = inject(MatDialog);
   private readonly notifications = inject(NotificationService);
@@ -1775,7 +1777,10 @@ export class WorkerCatalogPageComponent {
     void this.loadGroups();
     this.installProcessingSettingsEffect();
     this.loadLibraryAccessSummary();
-    timer(0, 10_000)
+    // La liste des workers suit le flux SSE du central (sujet « workers ») : rechargée à l'ouverture,
+    // puis à chaque changement annoncé, sans attendre ni recharger la page.
+    this.live
+      .drive(['workers'])
       .pipe(
         switchMap(() =>
           forkJoin({
@@ -1783,9 +1788,6 @@ export class WorkerCatalogPageComponent {
             pending: this.http.get<readonly PendingWorkerEnrollmentResponse[]>(
               '/api/v1/workers/enrollment-requests',
             ),
-            activity: this.http
-              .get<Readonly<Record<string, number>>>('/api/v1/workers/activity')
-              .pipe(catchError(() => of(null))),
           }).pipe(
             catchError(() => {
               this.loadState.set(this.nodes().length ? 'ready' : 'error');
@@ -1795,14 +1797,24 @@ export class WorkerCatalogPageComponent {
         ),
         takeUntilDestroyed(),
       )
-      .subscribe(({ nodes, pending, activity }) => {
-        if (activity) {
-          this.activeTasks.set(activity);
-          this.activityLoaded.set(true);
-        }
+      .subscribe(({ nodes, pending }) => {
         this.nodes.set(nodes);
         this.pendingEnrollments.set(pending);
         this.loadState.set('ready');
+      });
+    // Le nombre de tâches actives suit les exécutions, qui n'émettent pas sur ce sujet : relevé à intervalle.
+    timer(0, 10_000)
+      .pipe(
+        switchMap(() =>
+          this.http
+            .get<Readonly<Record<string, number>>>('/api/v1/workers/activity')
+            .pipe(catchError(() => EMPTY)),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe((activity) => {
+        this.activeTasks.set(activity);
+        this.activityLoaded.set(true);
       });
   }
 
