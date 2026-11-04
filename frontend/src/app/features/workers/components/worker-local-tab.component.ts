@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { catchError, exhaustMap, of, switchMap } from 'rxjs';
 import { LiveUpdates } from '../../../shared/services/live-updates';
@@ -39,6 +39,7 @@ import { nodeOverviewHardware, nodeOverviewLibraries } from '../worker-catalog.u
       [meta]="localOverviewMeta()"
       [notices]="localSheet().notices"
       [sections]="localOverviewSections()"
+      [showLibraries]="showLibraries()"
       [libraries]="localOverviewLibraries()"
       [libraryAccessState]="libraryAccessState()"
       (actionSelected)="onLocalSheetAction($event)"
@@ -47,6 +48,8 @@ import { nodeOverviewHardware, nodeOverviewLibraries } from '../worker-catalog.u
   `,
 })
 export class WorkerLocalTabComponent {
+  /** Faux sur l'image worker : les accès aux bibliothèques relèvent du central. */
+  readonly showLibraries = input(true);
   private readonly http = inject(HttpClient);
   private readonly live = inject(LiveUpdates);
   readonly data = inject(WorkerDataStore);

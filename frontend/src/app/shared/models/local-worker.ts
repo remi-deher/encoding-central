@@ -65,3 +65,32 @@ export interface LocalWorkerPairing {
   readonly expiresAt: string;
   readonly verificationCode?: string | null;
 }
+
+/** Élément Store désiré ou appliqué (`GET /api/v1/workers/{id}/store-state`, lecture seule). */
+export interface LocalStoreItem {
+  readonly kind: string;
+  readonly id: string;
+  readonly version: string;
+  readonly platform?: string | null;
+  readonly sha256?: string;
+}
+
+export interface LocalStoreAppliedItem extends LocalStoreItem {
+  readonly status: string;
+  readonly errorCode?: string | null;
+}
+
+/** État de synchronisation Store de ce worker : ce que le central demande et ce que le worker a appliqué. */
+export interface LocalWorkerStoreState {
+  readonly workerId: string;
+  readonly desired: {
+    readonly revision: number;
+    readonly items: readonly LocalStoreItem[];
+    readonly updatedAt?: string | null;
+  };
+  readonly applied: {
+    readonly revision: number;
+    readonly items: readonly LocalStoreAppliedItem[];
+    readonly reportedAt?: string | null;
+  };
+}
