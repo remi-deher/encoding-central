@@ -519,6 +519,9 @@ export class ActivityPageComponent {
       if (!executionId) {
         this.requestedExecutionId = null;
         if (this.selectedFile()?.executionId) this.clearSelectedExecution();
+      } else if (executionId === this.selectedFile()?.executionId) {
+        // Lien posé par l'ouverture du tiroir elle-même : déjà affiché, rien à valider ni à rouvrir.
+        this.requestedExecutionId = executionId;
       } else if (!isExecutionId(executionId)) {
         this.requestedExecutionId = null;
         this.clearExecutionQueryParam();
