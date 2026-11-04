@@ -7,18 +7,18 @@ Avec .NET 10, le profil local par défaut exécute les scénarios Launcher/Plugi
 ```sh
 nice -n 19 dotnet run --project backend/tests/Encoding.Launcher.Tests --configuration Release
 nice -n 19 dotnet run --project backend/tests/Encoding.Plugins.Tests --configuration Release
-nice -n 19 dotnet test backend/tests/Encoding.Runtime.Tests --configuration Release --filter "FullyQualifiedName~ExecutionStatesTests"
+nice -n 19 dotnet test backend/tests/Encoding.Runtime.Tests --configuration Release --filter "FullyQualifiedName~ExecutionStatesTests&Category!=Stress&Category!=ContentionLoad"
 ```
 
 Remplacer `ExecutionStatesTests` par la classe Runtime liée au changement (périmètre minimal, économie CPU : voir TEST_RULES.md, section 8).
 
-Pour une modification Runtime et avant une PR, lancer toute la suite Runtime hors Stress, une seule fois :
+Pour une modification Runtime et avant une PR, lancer toute la suite Runtime hors Stress et contention de charge, une seule fois :
 
 ```sh
-nice -n 19 dotnet test backend/tests/Encoding.Runtime.Tests --configuration Release --filter "Category!=Stress"
+nice -n 19 dotnet test backend/tests/Encoding.Runtime.Tests --configuration Release --filter "Category!=Stress&Category!=ContentionLoad"
 ```
 
-La suite utilise xUnit (`dotnet test`). Les scénarios de base s’exécutent toujours sur SQLite. FFmpeg, ffprobe et MediaInfo sont nécessaires aux scénarios média ; `backend/tests/Dockerfile` fournit le SDK et ces outils. La CI exécute également la suite Runtime hors Stress, exige les outils média, collecte la couverture et conserve les résultats `.trx`.
+La suite utilise xUnit (`dotnet test`). Les scénarios de base s’exécutent toujours sur SQLite. FFmpeg, ffprobe et MediaInfo sont nécessaires aux scénarios média ; `backend/tests/Dockerfile` fournit le SDK et ces outils. La CI de promotion exécute la suite Runtime hors Stress, y compris la contention de charge, exige les outils média, collecte la couverture et conserve les résultats `.trx`.
 
 Depuis la racine du dépôt, avec Docker (reproduit la suite complète de la CI — réservé à la CI, pas une vérification locale par défaut) :
 
@@ -61,6 +61,6 @@ Les tests des plugins Python et du SDK sont maintenus dans le dépôt public Enc
 
 ## Charge et contention SQLite
 
-`LoadContentionTests` tourne à chaque PR (quelques secondes) : une lecture cohérente (`Snapshot`) ne bloque jamais un écrivain, heartbeats, aperçu des exécutions et récupération partagent une grosse file sans erreur `database is locked`, et un heartbeat retardé ne fait échouer aucune exécution en file alors qu'un nœud réellement perdu le fait. Les bornes de latence sont larges : elles détectent une régression, pas une performance précise.
+`LoadContentionTests` tourne dans le job `backend-runtime-tests` de la PR de promotion vers `main` : une lecture cohérente (`Snapshot`) ne bloque jamais un écrivain, heartbeats, aperçu des exécutions et récupération partagent une grosse file sans erreur `database is locked`, et un heartbeat retardé ne fait échouer aucune exécution en file alors qu'un nœud réellement perdu le fait. Le scénario de charge mixte (`Category=ContentionLoad`) reste réservé à la CI : 3 000 exécutions, six heartbeats, trois aperçus et une récupération pendant 8 secondes. Les deux autres tests de la classe restent accessibles localement avec le filtre léger. Les bornes de latence sont larges : elles détectent une régression, pas une performance précise.
 
 `LoadStressTests` (`Category=Stress`) est exclu des PR et lancé chaque nuit par `.github/workflows/stress.yml` (ou à la demande) : 20 000 exécutions, 30 nœuds, 60 s par défaut (`ENCODING_STRESS_EXECUTIONS`, `ENCODING_STRESS_NODES`, `ENCODING_STRESS_SECONDS`). **CI uniquement, sans exception locale** (TEST_RULES.md, section 8).

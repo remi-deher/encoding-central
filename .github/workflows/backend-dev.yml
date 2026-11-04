@@ -52,6 +52,8 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      - name: Check documented local runtime filters
+        run: node --test backend/tests/local-profile.test.mjs
       - run: dotnet restore backend/Encoding.sln
       - run: dotnet build backend/Encoding.sln --configuration Release --no-restore -warnaserror
       - name: Architecture and SQL prepare tests only

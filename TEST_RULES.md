@@ -58,7 +58,7 @@ Ces règles sont obligatoires pour les changements du projet. Les tests doivent 
 
 ## 8. Profil de vérifications locales et charges lourdes réservées à la CI
 
-Pour le backend .NET, le profil courant exécute les scénarios Launcher et Plugins et cible dans Runtime les tests liés au changement. Pour les changements Runtime et avant une PR, élargir une fois à toute la suite Runtime hors Stress. Les tests Stress restent strictement réservés à la CI. Les clusters multi-processus et Docker restent réservés à la CI par défaut, avec une exécution locale ponctuelle uniquement si elle est explicitement demandée et que les prérequis sont disponibles.
+Pour le backend .NET, le profil courant exécute les scénarios Launcher et Plugins et cible dans Runtime les tests liés au changement. Pour les changements Runtime et avant une PR, élargir une fois à toute la suite Runtime hors Stress et contention de charge. Les tests Stress restent strictement réservés à la CI. Les clusters multi-processus et Docker restent réservés à la CI par défaut, avec une exécution locale ponctuelle uniquement si elle est explicitement demandée et que les prérequis sont disponibles.
 
 **Léger — autorisé en local :**
 
@@ -69,7 +69,7 @@ Pour le backend .NET, le profil courant exécute les scénarios Launcher et Plug
   ```sh
   nice -n 19 dotnet run --project backend/tests/Encoding.Launcher.Tests --configuration Release
   nice -n 19 dotnet run --project backend/tests/Encoding.Plugins.Tests --configuration Release
-  nice -n 19 dotnet test backend/tests/Encoding.Runtime.Tests --configuration Release --filter "FullyQualifiedName~ExecutionStatesTests"
+  nice -n 19 dotnet test backend/tests/Encoding.Runtime.Tests --configuration Release --filter "FullyQualifiedName~ExecutionStatesTests&Category!=Stress&Category!=ContentionLoad"
   ```
 
   Remplacer `ExecutionStatesTests` par la classe liée au comportement modifié.
@@ -79,16 +79,17 @@ Pour le backend .NET, le profil courant exécute les scénarios Launcher et Plug
 
 1. **Format** : jamais `dotnet format` sur `Encoding.sln` pendant le travail courant. Utiliser `dotnet format <projet.csproj> --verify-no-changes --no-restore --include <fichiers modifiés>`.
 2. **Build** : seulement les projets touchés, `dotnet build <projet.csproj> --no-restore`, pas la solution.
-3. **Tests** : d’abord ceux liés aux fichiers modifiés, `dotnet test <projet.Tests.csproj> --no-build --filter "FullyQualifiedName~<Classe ou namespace>"`.
-4. **Élargissement** (projet entier, puis solution) seulement si : un contrat partagé est modifié (interface, DTO, classe de base, configuration commune, `Directory.Build.props`, package) ; les tests ciblés échouent d’une façon qui suggère un impact plus large ; pour une modification Runtime avant PR (suite Runtime hors Stress, une fois) ; ou pour l’ultime vérification avant livraison finale (**une seule fois**, pas à chaque itération). Dire explicitement pourquoi. La suite backend complète non filtrée et les tests lourds restent réservés à la CI.
+3. **Tests** : d’abord ceux liés aux fichiers modifiés, `dotnet test <projet.Tests.csproj> --no-build --filter "FullyQualifiedName~<Classe ou namespace>&Category!=Stress&Category!=ContentionLoad"`.
+4. **Élargissement** (projet entier, puis solution) seulement si : un contrat partagé est modifié (interface, DTO, classe de base, configuration commune, `Directory.Build.props`, package) ; les tests ciblés échouent d’une façon qui suggère un impact plus large ; pour une modification Runtime avant PR (suite Runtime hors Stress et contention de charge, une fois) ; ou pour l’ultime vérification avant livraison finale (**une seule fois**, pas à chaque itération). Dire explicitement pourquoi. La suite backend complète non filtrée et les tests lourds restent réservés à la CI.
 5. **Frontend Angular** : `ng lint --lint-file-patterns <fichiers>`, `ng test --include <spec>`, et seulement les specs Playwright concernées.
 6. **Commandes lourdes** (build, format, test) avec `nice -n 19`, **jamais en parallèle** entre elles : un seul build / format / test à la fois par session.
 7. **Rapport final** : indiquer le périmètre vérifié (fichiers, projets, tests) et la justification de chaque élargissement.
 
 **Réservé à la CI par défaut :**
 
-- Seule exception légère en CI sur `dev` : le workflow `backend-dev.yml` (job `backend-dev-fast`) compile avec `-warnaserror` et n'exécute que `ArchitectureTests` sur les PR et push vers `dev`.
+- Seule exception légère en CI sur `dev` : le workflow `backend-dev.yml` (job `backend-dev-fast`) compile avec `-warnaserror` et n'exécute que `ArchitectureTests` et `SqlStatementsPrepareTests` ainsi que le contrôle léger des filtres documentés sur les PR et push vers `dev`.
 - Suite backend complète non filtrée (outils média exigés via `ENCODING_TEST_REQUIRE_MEDIA_TOOLS=1`, collecte de couverture, artefacts `.trx`) : job `backend-runtime-tests` de `.github/workflows/backend.yml`.
+- Contention de charge `Category=ContentionLoad` : scénario mixte de `LoadContentionTests`, exécuté par `backend-runtime-tests` sur la PR de promotion ; exclure ce scénario des vérifications locales. Les autres tests de la classe restent accessibles localement.
 - Tests de stress `Category=Stress` (`LoadStressTests`, variables `ENCODING_STRESS_EXECUTIONS` / `ENCODING_STRESS_NODES` / `ENCODING_STRESS_SECONDS`) : workflow `.github/workflows/stress.yml` (nightly + manuel), exclu des PR par le filtre `Category!=Stress`. **CI uniquement, sans exception locale.**
 - Tests multi-processus réels (`WorkerProcessLossTests`, `ENCODING_TEST_MULTIPROCESS=1` : vrai serveur, vrais workers, SIGKILL en plein encodage, plusieurs minutes) : job `backend-multiprocess-tests`.
 - Tests cluster Docker (`DockerCentralTests`, `ENCODING_TEST_DOCKER=1` + `ENCODING_TEST_CENTRAL_IMAGE` / `ENCODING_TEST_WORKER_IMAGE` construites) : job `backend-docker-cluster-tests`.
@@ -97,6 +98,6 @@ Pour le backend .NET, le profil courant exécute les scénarios Launcher et Plug
 - Confinement réel du bac à sable (`ProcessSandboxNativeTests` : Landlock, seccomp, réseau TCP/UDP en bouclage, `/proc`) : job `ai-cli-native` avec `ENCODING_TEST_LANDLOCK=1`, qui rend l'indisponibilité du noyau bloquante. Sans cette variable le test s'exécute quand le poste le permet (léger, aucun accès réseau public) et s'ignore sinon ; les règles pures (`ProcessSandboxRulesTests`) tournent partout.
 - E2E lourds, scénarios multi-workers complets et traitements longs : workflows GitHub Actions adaptés.
 
-Ces tests lourds sont ignorés par défaut (xUnit `Skip`) tant que leurs variables `ENCODING_TEST_*` ne sont pas définies. Ne définissez pas ces variables dans le profil courant. `Category=Stress` ne doit jamais être lancé localement. Lorsque c’est possible, les commandes locales et la CI utilisent les mêmes filtres ; la CI reste l’autorité pour la couverture complète.
+Les tests conditionnés par les variables `ENCODING_TEST_*` sont ignorés par défaut (xUnit `Skip`) tant que ces variables ne sont pas définies. Les catégories Stress et ContentionLoad nécessitent les filtres locaux indiqués ci-dessus. Ne définissez pas ces variables dans le profil courant. `Category=Stress` et `Category=ContentionLoad` ne doivent pas être lancés localement. Lorsque c’est possible, les commandes locales et la CI utilisent les mêmes filtres ; la CI reste l’autorité pour la couverture complète.
 
 Le workflow `cluster-two-server-measurements` référence `MeasuresTwoServerOwnershipLoad` (7 000 tâches), mais le test correspondant est absent du code présent. Le filtre CI n'a pas été modifié et cette mesure n'est pas comptée comme une validation disponible.
