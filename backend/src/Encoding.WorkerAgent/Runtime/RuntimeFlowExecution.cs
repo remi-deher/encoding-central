@@ -15,7 +15,7 @@ internal sealed partial class RuntimeFlowExecution(WorkerAgentOptions options, M
     LocalPublicationArtifactStore localPublicationArtifacts, ILogger logger, RuntimeLease lease, RuntimeClient client,
     CancellationToken stoppingToken, TimeProvider? timeProvider = null) : IDisposable
 {
-    private readonly RuntimeCommandCapture commandCapture = RuntimeCommandCapture.Begin(lease.ExecutionId);
+    private readonly RuntimeCommandCapture commandCapture = RuntimeCommandCapture.Begin(lease.ExecutionId, lease.Epoch);
     private readonly CancellationTokenSource job = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
     private readonly SemaphoreSlim leaseGate = new(1, 1);
     private readonly string directory = Path.Combine(options.DataDirectory, "executions", lease.ExecutionId.ToString("D"), lease.Epoch.ToString(System.Globalization.CultureInfo.InvariantCulture));

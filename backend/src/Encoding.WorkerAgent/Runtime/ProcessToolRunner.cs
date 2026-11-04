@@ -39,6 +39,16 @@ public sealed class ProcessToolRunner : IProcessToolRunner
             argumentList = prefix.Concat(argumentList).ToList();
             executable = host;
         }
+        var ffmpegProgress = !sandbox && Path.GetFileNameWithoutExtension(executable).Equals("ffmpeg", StringComparison.OrdinalIgnoreCase)
+            && argumentList.Contains("-i", StringComparer.Ordinal) && argumentList.Count > 1
+            // Une sortie vers stdout (« - » ou « pipe: ») serait mêlée aux lignes de progression.
+            && argumentList[^1] is not "-" && !argumentList[^1].StartsWith("pipe:", StringComparison.Ordinal);
+        if (ffmpegProgress && !argumentList.Contains("-progress", StringComparer.Ordinal))
+        {
+            argumentList.InsertRange(argumentList.Count - 1, ["-progress", "pipe:1", "-nostats"]);
+        }
+        trackProgress |= ffmpegProgress;
+        var protocolOutput = input is not null || ffmpegProgress;
 
         var info = new ProcessStartInfo(executable)
         {
@@ -65,7 +75,7 @@ public sealed class ProcessToolRunner : IProcessToolRunner
         deadline.CancelAfter(timeout);
         using var process = Process.Start(info) ?? throw new IOException("Le processus ne peut pas démarrer.");
         var commandId = Guid.NewGuid();
-        RuntimeCommandCapture.Record(executable, argumentList, "", "", null, startedAt, null, false, input is not null, commandId);
+        RuntimeCommandCapture.Record(executable, argumentList, "", "", null, startedAt, null, false, protocolOutput, commandId);
         var outputLog = new StringBuilder();
         var errorLog = new StringBuilder();
         var truncated = false;
@@ -85,6 +95,7 @@ public sealed class ProcessToolRunner : IProcessToolRunner
         async Task<string> ReadAsync(StreamReader reader, bool collectOutput, StringBuilder captured)
         {
             var result = new StringBuilder();
+            var line = new StringBuilder();
             var buffer = new char[4096];
             int count;
             while ((count = await reader.ReadAsync(buffer, deadline.Token)) > 0)
@@ -92,6 +103,26 @@ public sealed class ProcessToolRunner : IProcessToolRunner
                 var take = Math.Min(count, Math.Max(0, CapturedLogLimit - captured.Length));
                 if (take > 0) captured.Append(buffer, 0, take);
                 if (take < count) truncated = true;
+                for (var index = 0; index < count; index++)
+                {
+                    var character = buffer[index];
+                    if (character == '\n')
+                    {
+                        var value = line.ToString().TrimEnd('\r');
+                        // stdout protocolaire (JSON de plugin, lignes -progress de ffmpeg) : jamais diffusé tel quel.
+                        if (!(collectOutput && protocolOutput))
+                            RuntimeCommandCapture.RecordLine(commandId, collectOutput ? "stdout" : "stderr", value);
+                        if (ffmpegProgress && collectOutput && value.StartsWith("out_time_us=", StringComparison.Ordinal)
+                            && long.TryParse(value.AsSpan("out_time_us=".Length), System.Globalization.NumberStyles.None,
+                                System.Globalization.CultureInfo.InvariantCulture, out var outTimeUs))
+                            RuntimeCommandCapture.RecordProgress(commandId,
+                                progressDurationSeconds is > 0 ? Math.Clamp(outTimeUs / 1_000_000d / progressDurationSeconds.Value * 100, 0, 100) : null,
+                                null, (long)(DateTimeOffset.UtcNow - startedAt).TotalMilliseconds);
+                        line.Clear();
+                    }
+                    else if (line.Length < CapturedLogLimit) line.Append(character);
+                    else truncated = true;
+                }
                 if (trackProgress && collectOutput)
                 {
                     if (captured.Length >= CapturedLogLimit)
@@ -99,7 +130,7 @@ public sealed class ProcessToolRunner : IProcessToolRunner
                         captured.Append(buffer, 0, count);
                         if (captured.Length > CapturedLogLimit) captured.Remove(0, captured.Length - CapturedLogLimit);
                     }
-                    RuntimeCommandCapture.Record(executable, argumentList, captured.ToString(), "", null, startedAt, null, truncated, input is not null, commandId, Progress());
+                    RuntimeCommandCapture.Record(executable, argumentList, captured.ToString(), "", null, startedAt, null, truncated, protocolOutput, commandId, Progress());
                     continue;
                 }
                 if (!collectOutput) continue;
@@ -110,6 +141,7 @@ public sealed class ProcessToolRunner : IProcessToolRunner
                 }
                 result.Append(buffer, 0, count);
             }
+            if (line.Length > 0 && !(collectOutput && protocolOutput)) RuntimeCommandCapture.RecordLine(commandId, collectOutput ? "stdout" : "stderr", line.ToString());
             return result.ToString();
         }
 
@@ -138,7 +170,7 @@ public sealed class ProcessToolRunner : IProcessToolRunner
             try { await Task.WhenAll(new[] { output, errors }.Where(task => task is not null).Select(task => task!)); }
             catch (Exception) when (deadline.IsCancellationRequested) { }
             RuntimeCommandCapture.Record(executable, argumentList, outputLog.ToString(), errorLog.ToString(),
-                exitCode, startedAt, process.HasExited ? DateTimeOffset.UtcNow : null, truncated, input is not null, commandId, Progress());
+                exitCode, startedAt, process.HasExited ? DateTimeOffset.UtcNow : null, truncated, protocolOutput, commandId, Progress());
         }
     }
 

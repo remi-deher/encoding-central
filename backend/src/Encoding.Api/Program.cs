@@ -76,6 +76,9 @@ builder.Services.AddHttpClient("release-updates", client =>
 builder.Services.AddSingleton<ExecutionStreamBroadcaster>();
 builder.Services.AddSingleton<Encoding.Api.Infrastructure.InterfaceLiveBroadcaster>();
 builder.Services.AddSingleton<RuntimeWakeStreams>();
+builder.Services.AddSingleton<ExecutionTelemetryHub>();
+builder.Services.AddSingleton<IExecutionTelemetry>(services => services.GetRequiredService<ExecutionTelemetryHub>());
+builder.Services.AddSingleton<IWorkerLeaseLookup, SqlWorkerLeaseLookup>();
 builder.Services.AddSingleton<ExecutionRepository>();
 builder.Services.AddSingleton<FlowComponentRegistry>();
 builder.Services.AddSingleton<Encoding.Api.Plugins.CentralExtensionActivationState>();
@@ -207,6 +210,7 @@ await app.Services.GetRequiredService<Encoding.Api.Plugins.CentralExtensionActiv
 app.UseRequestObservability();
 app.UseTrustedProxies();
 app.UseSecurityHeaders();
+app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = RuntimeWakeStreams.Heartbeat });
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
@@ -245,6 +249,7 @@ app.MapWorkerEndpoints();
 app.MapWorkerGroupEndpoints();
 app.MapLocalWorkerEndpoints();
 app.MapExecutionEndpoints();
+app.MapExecutionTelemetryEndpoints();
 Encoding.Api.Infrastructure.InterfaceLiveEndpoints.MapInterfaceLiveEndpoints(app);
 app.MapGet("/api/v1/system/version", (Encoding.Api.Updates.ReleaseService releases) =>
     Results.Ok(new { version = releases.Installed.Version, commit = releases.Installed.Commit }));

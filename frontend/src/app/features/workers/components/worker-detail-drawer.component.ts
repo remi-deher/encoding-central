@@ -15,6 +15,7 @@ import { WorkerDataStore } from '../worker-data.store';
 import { WorkerDetailStore } from '../worker-detail.store';
 import { WorkerMembersStore } from '../worker-members.store';
 import { WorkerProcessingStore } from '../worker-processing.store';
+import { WorkerRunningTasksComponent } from './worker-running-tasks.component';
 
 /** Contenu du tiroir de fiche d’un worker membre du central (onglets Général à Journaux). */
 @Component({
@@ -33,6 +34,7 @@ import { WorkerProcessingStore } from '../worker-processing.store';
     RecordFormComponent,
     WeeklyScheduleFormComponent,
     SystemLogViewerComponent,
+    WorkerRunningTasksComponent,
   ],
   templateUrl: './worker-detail-drawer.component.html',
   styleUrl: './worker-detail-drawer.component.scss',

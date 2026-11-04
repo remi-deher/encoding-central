@@ -127,6 +127,10 @@ function baseName(path: string): string {
   return path.split(/[\\/]/).pop() || path;
 }
 
+function isExecutionId(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-activity-page',
@@ -166,6 +170,7 @@ export class ActivityPageComponent {
   private readonly dialog = inject(MatDialog);
   private readonly notifications = inject(NotificationService);
   private readonly destroyRef = inject(DestroyRef);
+  private requestedExecutionId: string | null = null;
 
   protected readonly statuses = ACTIVITY_STATUSES;
   protected readonly status = signal<LibraryActivityStatus>(
@@ -510,6 +515,17 @@ export class ActivityPageComponent {
       if (flow !== this.flowFilter()) this.flowFilter.set(flow);
       const node = params.get('node');
       if (node !== this.nodeFilter()) this.nodeFilter.set(node);
+      const executionId = params.get('execution');
+      if (!executionId) {
+        this.requestedExecutionId = null;
+        if (this.selectedFile()?.executionId) this.clearSelectedExecution();
+      } else if (!isExecutionId(executionId)) {
+        this.requestedExecutionId = null;
+        this.clearExecutionQueryParam();
+      } else if (executionId !== this.requestedExecutionId) {
+        this.requestedExecutionId = executionId;
+        this.openExecutionFromLink(executionId);
+      }
     });
   }
 
@@ -603,6 +619,7 @@ export class ActivityPageComponent {
     this.selectedExecution.set(null);
     this.selectedDetailTab.set(0);
     this.executionLoading.set(Boolean(file.executionId));
+    this.syncExecutionQueryParam(file.executionId);
     if (!file.executionId) return;
     this.tracking
       .execution(file.executionId)
@@ -618,9 +635,90 @@ export class ActivityPageComponent {
   }
 
   protected close(): void {
+    this.clearSelectedExecution();
+    this.syncExecutionQueryParam(null);
+  }
+
+  private clearSelectedExecution(): void {
     this.selectedFile.set(null);
     this.selectedExecution.set(null);
     this.executionLoading.set(false);
+  }
+
+  private openExecutionFromLink(executionId: string): void {
+    if (this.selectedFile()?.executionId === executionId) return;
+    const file = this.files().find((item) => item.executionId === executionId);
+    if (file) {
+      this.open(file);
+      return;
+    }
+    this.tracking.execution(executionId).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      catchError(() => of(null)),
+    ).subscribe((execution) => {
+      if (this.requestedExecutionId !== executionId) return;
+      if (!execution) {
+        this.clearSelectedExecution();
+        this.clearExecutionQueryParam();
+        return;
+      }
+      const syntheticFile = this.fileForExecution(execution);
+      this.selectedFile.set(syntheticFile);
+      this.selectedExecution.set(execution);
+      this.executionLoading.set(false);
+      this.selectedDetailTab.set(0);
+    });
+  }
+
+  private fileForExecution(execution: ExecutionResponse): LibraryActivityFile {
+    const status: LibraryActivityStatus = execution.state === 'succeeded'
+      ? 'done'
+      : execution.state === 'failed'
+        ? 'failed'
+        : execution.state === 'cancelled'
+          ? 'cancelled'
+          : execution.state === 'deferred'
+            ? 'untreated'
+            : 'active';
+    return {
+      id: execution.id,
+      libraryId: execution.libraryId ?? '',
+      library: execution.library,
+      relativePath: execution.media,
+      bytes: 0,
+      modifiedAt: execution.updatedAt,
+      libraryActive: true,
+      flow: execution.flow,
+      flowVersion: execution.flowVersion,
+      status,
+      executionId: execution.id,
+      executionState: execution.state,
+      detail: execution.detail,
+      workerId: execution.workerId,
+      worker: execution.worker,
+      progress: execution.progress,
+      updatedAt: execution.updatedAt,
+    };
+  }
+
+  private syncExecutionQueryParam(executionId: string | null): void {
+    if (this.route.snapshot.queryParamMap.get('execution') === executionId) return;
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { execution: executionId },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+  }
+
+  private clearExecutionQueryParam(): void {
+    if (!this.route.snapshot.queryParamMap.get('execution')) return;
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { execution: null },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
   }
 
   protected rowTime(file: LibraryActivityFile): string {
@@ -823,6 +921,7 @@ export class ActivityPageComponent {
         library: this.libraryFilter(),
         flow: this.flowFilter(),
         node: this.nodeFilter(),
+        execution: null,
         type: null,
         request: null,
       },

@@ -37,8 +37,10 @@ internal sealed partial class RuntimeFlowExecution
             job.Token.ThrowIfCancellationRequested(); var node = lease.Flow.Nodes.Single(n => n.Id == state.Next);
             state.ActiveBlock = node.Id;
             var started = (await client.PostAsync<StartedRuntimeStep>($"executions/{lease.ExecutionId:D}/steps/start", new StartRuntimeStep(lease.Epoch, node.Id), job.Token))!;
+            commandCapture.EmitStep(node.Id, WorkerStepStates.Started);
             if (started.Completed is { } completed)
             {
+                commandCapture.EmitStep(node.Id, WorkerStepStates.Completed);
                 state.Context = completed.Context;
                 state.Variables = new(state.Context.Variables);
                 state.Next = completed.NextNodeId;
@@ -48,12 +50,23 @@ internal sealed partial class RuntimeFlowExecution
                 state.Materialized = false;
                 continue;
             }
-            using var commandStep = commandCapture.BeginStep(node.Id, started.InvocationId);
+            using var commandStep = commandCapture.BeginStep(node.Id, started.InvocationId, lease.Epoch);
             state.Terminal = null;
             var step = new StepContext(node, started);
-            var executed = await ExecuteStepAsync(step);
-            if (executed.Kind == StepOutcomeKind.Fail) return executed;
+            StepOutcome executed;
+            try { executed = await ExecuteStepAsync(step); }
+            catch
+            {
+                commandCapture.EmitStep(node.Id, WorkerStepStates.Failed);
+                throw;
+            }
+            if (executed.Kind == StepOutcomeKind.Fail)
+            {
+                commandCapture.EmitStep(node.Id, WorkerStepStates.Failed);
+                return executed;
+            }
             var completedStep = await CompleteStepAsync(step);
+            commandCapture.EmitStep(node.Id, WorkerStepStates.Completed);
             ApplyStepOutcome(completedStep);
             if (completedStep.StopsLocalRun) return completedStep;
         }

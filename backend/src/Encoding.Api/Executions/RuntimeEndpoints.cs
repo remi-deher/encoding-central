@@ -27,6 +27,7 @@ public static class RuntimeEndpoints
         });
 
         group.MapRuntimeWakeEndpoint();
+        group.MapWorkerSocketEndpoint();
         group.MapRuntimeDirectoryBrowserEndpoints();
         group.MapRuntimeAiEndpoints();
         group.MapRuntimeStatusAndCapacityEndpoints();
