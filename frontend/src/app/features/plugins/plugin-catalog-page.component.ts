@@ -801,6 +801,7 @@ export class PluginCatalogPageComponent {
   }
 
   protected toggleRepository(repo: StoreRepository): void {
+    if (repo.isLocked) return; // dépôt officiel : toujours activé
     void this.runStoreAction(
       () => this.extensionsService.setRepositoryEnabled(repo.id, !repo.enabled),
       repo.enabled ? 'Dépôt désactivé.' : 'Dépôt activé.',

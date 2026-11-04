@@ -48,7 +48,8 @@ public sealed partial class PluginRepositoryService(IConfiguration configuration
 
     public IReadOnlyList<PluginRepository> List()
     {
-        var saved = Read();
+        // Invariant : le dépôt officiel est toujours activé, même si une ancienne désactivation a été persistée.
+        var saved = Read().Select(item => item.IsOfficial && !item.Enabled ? item with { Enabled = true } : item).ToList();
         if (OfficialUrl is { } official && saved.All(item => !item.IsOfficial))
             saved.Insert(0, new PluginRepository("official", "Dépôt officiel", official, "", true, true, null, null, [], []));
         return saved;
@@ -123,6 +124,7 @@ public sealed partial class PluginRepositoryService(IConfiguration configuration
             var all = List().ToList();
             var index = all.FindIndex(item => item.Id == id);
             if (index < 0) return null;
+            if (all[index].IsOfficial && !enabled) throw new PluginRepositoryException("Le dépôt officiel est toujours activé : il ne peut pas être désactivé.");
             all[index] = all[index] with { Enabled = enabled };
             Write(all);
             return all[index];
@@ -138,7 +140,7 @@ public sealed partial class PluginRepositoryService(IConfiguration configuration
             var all = List().ToList();
             var target = all.SingleOrDefault(item => item.Id == id);
             if (target is null) return false;
-            if (target.IsOfficial) throw new PluginRepositoryException("Le dépôt officiel est verrouillé : désactivez-le plutôt que de le supprimer.");
+            if (target.IsOfficial) throw new PluginRepositoryException("Le dépôt officiel est verrouillé : il ne peut être ni désactivé ni supprimé.");
             all.Remove(target);
             Write(all);
             return true;

@@ -49,7 +49,10 @@ public static class PluginStoreEndpoints
             await repositories.SyncAsync(repositoryId, ct) is { } synced ? Results.Ok(Summary(synced)) : Results.NotFound()).WithName("SyncStoreRepository");
 
         store.MapPut("/repositories/{repositoryId}", async (string repositoryId, SetRepositoryEnabledRequest request, PluginRepositoryService repositories, CancellationToken ct) =>
-            await repositories.SetEnabledAsync(repositoryId, request.Enabled, ct) is { } updated ? Results.Ok(Summary(updated)) : Results.NotFound()).WithName("SetStoreRepositoryEnabled");
+        {
+            try { return await repositories.SetEnabledAsync(repositoryId, request.Enabled, ct) is { } updated ? Results.Ok(Summary(updated)) : Results.NotFound(); }
+            catch (PluginRepositoryException exception) { return Results.UnprocessableEntity(new { title = exception.Message }); }
+        }).WithName("SetStoreRepositoryEnabled");
 
         store.MapDelete("/repositories/{repositoryId}", async (string repositoryId, PluginRepositoryService repositories, CancellationToken ct) =>
         {
