@@ -104,6 +104,8 @@ export class FlowCanvasComponent {
     string,
     { duration?: string; output?: string; status?: string }
   > | null>(null);
+  /** Bloc en cours d'exécution (lecture seule) : animé tant que `prefers-reduced-motion` ne l'interdit pas. */
+  readonly activeNodeId = input<string | null>(null);
   readonly selectedNodeId = input<string | null>(null);
   readonly selectNode = output<string>();
   readonly configure = output<string>();

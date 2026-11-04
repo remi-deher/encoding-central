@@ -419,6 +419,7 @@ export interface WorkerOverviewHardware {
         }
       </div>
 
+      @if (showLibraries()) {
       <section class="node-overview-libraries" aria-label="Bibliothèques et chemins configurés">
         <header class="node-overview-libraries-heading">
           <div>
@@ -462,6 +463,7 @@ export interface WorkerOverviewHardware {
           <p class="node-overview-empty">Aucune bibliothèque configurée pour ce worker.</p>
         }
       </section>
+      }
     </article>
   `,
   styleUrls: ['./worker-overview-card.component.scss', './worker-overview-card.header.scss'],
@@ -483,6 +485,7 @@ export class WorkerOverviewCardComponent {
   readonly meta = input('');
   readonly notices = input<readonly ResourceSheetNotice[]>([]);
   readonly sections = input<readonly ResourceSheetSection[]>([]);
+  readonly showLibraries = input(true);
   readonly libraries = input<readonly WorkerOverviewLibrary[]>([]);
   readonly libraryAccessState = input<'loading' | 'ready' | 'error'>('ready');
   readonly actions = input<readonly ResourceCardAction[]>([]);

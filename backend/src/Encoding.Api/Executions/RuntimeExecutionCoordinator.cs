@@ -277,6 +277,8 @@ public sealed class RuntimeExecutionCoordinator(
             return false;
 
         await CleanupAiSubtitleSessionsAsync(executionId, null, ct);
+        // Fin du flow (pas une simple publication intermédiaire) : la télémétrie en mémoire n'a plus d'objet.
+        if (!request.ContinueFlow) Get<IExecutionTelemetry>()?.End(executionId);
         return true;
     }
 

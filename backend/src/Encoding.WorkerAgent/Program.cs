@@ -46,6 +46,7 @@ builder.Services.AddSingleton<ISystemLogWorkerContext>(sp =>
 });
 builder.Services.AddSystemLogging();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<WorkerTelemetrySink>();
 builder.Services.AddSingleton<ProcessToolRunner>();
 builder.Services.AddSingleton<IProcessToolRunner>(provider => provider.GetRequiredService<ProcessToolRunner>());
 builder.Services.AddSingleton<PluginProcessHost>();
@@ -57,6 +58,9 @@ builder.Services.AddSingleton<LocalPublicationArtifactStore>();
 builder.Services.AddSingleton<ILocalPublicationArtifactStore>(provider => provider.GetRequiredService<LocalPublicationArtifactStore>());
 builder.Services.AddSingleton<RuntimeFlowRunner>();
 builder.Services.AddSingleton<WorkerWakeSignal>();
+builder.Services.AddSingleton<WorkerSocketClient>();
+builder.Services.AddHostedService<WorkerTelemetrySink>(provider => provider.GetRequiredService<WorkerTelemetrySink>());
+builder.Services.AddHostedService<WorkerSocketClient>(provider => provider.GetRequiredService<WorkerSocketClient>());
 builder.Services.AddHostedService<WorkerWakeListener>();
 builder.Services.AddHostedService<RuntimeTransferService>();
 builder.Services.AddHostedService<WorkspaceCleanupService>();
@@ -72,12 +76,15 @@ builder.Services.AddSingleton<WorkerEnrollmentService>();
 builder.Services.AddHostedService<WorkerCentralDiscovery>(provider => provider.GetRequiredService<WorkerCentralDiscovery>());
 builder.Services.AddHostedService<WorkerAutoEnrollmentService>();
 builder.Services.AddHostedService<WorkerHeartbeatService>();
-builder.Services.AddHostedService<PluginSyncService>();
-builder.Services.AddHostedService<ToolPackageSyncService>();
+builder.Services.AddSingleton<PluginSyncService>();
+builder.Services.AddSingleton<ToolPackageSyncService>();
+builder.Services.AddHostedService<StoreSyncCoordinator>();
 builder.Services.ConfigureHttpJsonOptions(json =>
     json.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
 
 var app = builder.Build();
+// Branché dès le démarrage : sans cela, les trames d'étape partent dans le vide tant que ProcessToolRunner n'est pas résolu.
+RuntimeCommandCapture.ConfigureTelemetry(app.Services.GetRequiredService<WorkerTelemetrySink>());
 CentralUiProxy.Use(
     app,
     async context =>

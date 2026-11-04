@@ -5,6 +5,7 @@ import { catchError, EMPTY, forkJoin, of, switchMap } from 'rxjs';
 import { LiveUpdates } from '../../shared/services/live-updates';
 import { CentralApi } from '../../shared/services/central-api';
 import { NotificationService } from '../../shared/services/notification.service';
+import { ShellConfig } from '../../core/shell/shell-config';
 import { LocalWorkerController } from '../../shared/services/local-worker-controller';
 import { LibraryResponse, WorkerResponse } from '../../shared/models/central';
 import { DataTableRow } from '../../shared/ui/data-table.component';
@@ -101,7 +102,8 @@ export class WorkerDataStore {
         this.activeTasks.set(activity);
         this.activityLoaded.set(true);
       });
-    this.loadLibraryAccessSummary();
+    // L'image worker ne montre pas les bibliothèques du central.
+    if (!inject(ShellConfig).worker()) this.loadLibraryAccessSummary();
   }
 
   activityKnown(): boolean {

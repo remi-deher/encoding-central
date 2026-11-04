@@ -42,8 +42,8 @@ const applicationRoutes: Routes = [
   {
     path: 'workers',
     loadComponent: () =>
-      import('./features/workers/worker-catalog-page.component').then(
-        (module) => module.WorkerCatalogPageComponent,
+      import('./features/workers/worker-local-page.component').then(
+        (module) => module.WorkerLocalPageComponent,
       ),
     data: {
       title: 'Workers',
@@ -54,25 +54,25 @@ const applicationRoutes: Routes = [
         order: 1,
         keywords: ['workers', 'serveurs'],
       },
-      description: 'Consultez les rôles, capacités et états des installations du central.',
+      description: 'Consultez l’état, la capacité et le lien avec le central de ce worker.',
     },
   },
   {
     path: 'plugins',
     loadComponent: () =>
-      import('./features/plugins/plugin-catalog-page.component').then(
-        (module) => module.PluginCatalogPageComponent,
+      import('./features/plugins/worker-capabilities-page.component').then(
+        (module) => module.WorkerCapabilitiesPageComponent,
       ),
     data: {
-      title: 'Plugins & Outils',
+      title: 'Capacités',
       navigation: {
         group: 'Infrastructure',
-        label: 'Plugins & Outils',
+        label: 'Capacités',
         glyph: '✣',
         order: 2,
         keywords: ['plugins', 'outils', 'ffmpeg', 'mkvtoolnix', 'extensions'],
       },
-      description: 'Consultez les plugins et outils fournis par le central.',
+      description: 'Consultez les outils détectés, les plugins reçus et la synchronisation de ce worker.',
     },
   },
   {

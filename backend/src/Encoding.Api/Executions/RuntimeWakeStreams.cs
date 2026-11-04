@@ -11,6 +11,13 @@ public sealed class RuntimeWakeStreams(ExecutionStreamBroadcaster executions, In
     private readonly object gate = new();
     private readonly Dictionary<Guid, CancellationTokenSource> active = [];
 
+    /// <summary>Curseur sur les mêmes signaux que le flux SSE ; réutilisé par le WebSocket des workers.</summary>
+    public WakeCursor CreateCursor() => new(executions, live);
+
+    public long Timestamp() => time.GetTimestamp();
+
+    public TimeSpan Elapsed(long since) => time.GetElapsedTime(since);
+
     public async Task RunAsync(Guid worker, Func<CancellationToken, Task<bool>> authenticate,
         Func<string, CancellationToken, Task> write, CancellationToken requestAborted)
     {
@@ -23,7 +30,7 @@ public sealed class RuntimeWakeStreams(ExecutionStreamBroadcaster executions, In
         var ct = connection.Token;
         try
         {
-            var cursor = new WakeCursor(executions, live);
+            var cursor = CreateCursor();
             var checkedAt = time.GetTimestamp();
             await write("ready", ct);
             while (!ct.IsCancellationRequested)

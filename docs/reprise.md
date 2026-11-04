@@ -39,7 +39,7 @@ Non vérifié :
 
 ## Reprendre l'environnement
 
-Piles de test (Docker) :
+Piles de test (Docker), à exécuter en CI ou sur un environnement distant dédié, jamais sur le poste local :
 ```
 cd backend
 CENTRAL_API_PORT=5082 docker compose -f docker-compose.central.yml up -d --build
@@ -50,11 +50,11 @@ CENTRAL_API_PORT=5082 docker compose -f docker-compose.central.yml down -v   # r
 - `down -v` supprime seulement les volumes nommés du projet ; les médias de test (`/home/remi/encoding-tests/*`, montés en bind) ne doivent jamais être supprimés. Adapter ces chemins sur une autre machine (`docker-compose.central.yml`).
 - Le central est initialisé par l'interface (`/setup`) ; ne pas laisser de mot de passe de test dans le dépôt.
 
-Vérifications avant de pousser (la CI ne tourne que sur la PR `dev` vers `main`) :
-- Frontend (`frontend/`) : `npm run lint`, `npm run format:flows`, `npm run format:settings`, `npm test` (vitest ; **vérifie les gabarits Angular**, contrairement à `tsc`), `npm run build`, `node --test tests/*.test.mjs`. E2E : `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium npx playwright test`. Les contrôles de format ont fait échouer la CI plusieurs fois : les lancer tous, pas seulement Prettier sur les fichiers modifiés.
-- Backend (`backend/`) : la CI compile avec `-warnaserror` **et** le `.editorconfig` racine (sans lui, environ 367 fausses erreurs d'analyse). En local, vérifications légères uniquement (TEST_RULES.md, section 8) : pas de suite complète ni de test lourd. Périmètre minimal (économie CPU, TEST_RULES.md section 8) : format `dotnet format <projet.csproj> --verify-no-changes --no-restore --include <fichiers>` (jamais sur la solution), build `dotnet build <projet.csproj> --no-restore`, tests ciblés `dotnet test <projet.Tests.csproj> --no-build --filter "FullyQualifiedName~<Classe>&Category!=Stress&Category!=ContentionLoad"`, commandes lourdes avec `nice -n 19`, une à la fois. Élargissement seulement pour un contrat partagé, un échec suggérant un impact large ou l'ultime vérification avant livraison (une fois, justifiée), avec par exemple : `dotnet test tests/Encoding.Runtime.Tests -c Release --filter "Category!=Stress&Category!=ContentionLoad&FullyQualifiedName!~WorkerProcessLossTests&FullyQualifiedName!~DockerCentral"`.
-- Tests média : `ENCODING_TEST_SKIP_MEDIA=1` les ignore en local (Runtime et Plugins) ; la CI les exécute. `LoadStressTests` : workflow `stress.yml` en déclenchement manuel seulement.
+Vérifications : suivre strictement le profil local de TEST_RULES.md, section 8. En local, seuls les contrôles statiques légers ciblés sont autorisés, un à la fois, avec `timeout 15s nice -n 19`. Aucune compilation, aucun typecheck, aucun test unitaire ou scénario.
+- Frontend (`frontend/`) : lint TypeScript (`npm run lint`, qui lance `tsc`), tests, compilation Angular et E2E sont réservés aux runners GitHub Actions. Le format peut être vérifié localement sur les seuls fichiers modifiés.
+- Backend (`backend/`) : la CI compile avec `-warnaserror` et le `.editorconfig` racine. Aucun test .NET ne doit être exécuté localement, même ciblé ou dans Docker. Compilation, restauration .NET et format .NET sont également réservés à la CI.
+- Tests média (Runtime et Plugins) : exécutés en CI. `LoadStressTests` : workflow `stress.yml` en déclenchement manuel seulement.
 - Tests lourds (**CI uniquement, jamais en local** — TEST_RULES.md, section 8) : `ENCODING_TEST_MULTIPROCESS=1` pour `WorkerProcessLossTests` (ffmpeg requis, environ 3,5 min) ; `ENCODING_TEST_DOCKER=1`, `ENCODING_TEST_CENTRAL_IMAGE`, `ENCODING_TEST_WORKER_IMAGE` pour `DockerCentralTests` (images avec ffmpeg : `.github/docker/Dockerfile.cluster-test` avec `BASE_IMAGE`).
-- Sur la machine d'origine, les dossiers `obj/` du dépôt appartiennent à `root` : le backend y était compilé et testé sur une copie synchronisée dans `/tmp`. Sans objet si le dépôt est sain sur l'autre machine.
+- Ne pas contourner le profil local en compilant ou testant une copie dans `/tmp`.
 
 Règles du dépôt à garder en tête : changements poussés directement sur `dev`, CI sur la PR de promotion `dev` vers `main` ; nouvelle route fermée par défaut ; migrations additives à numéro unique ; aucun secret dans les journaux ; décision structurante = ADR court, changement de comportement = fiche de domaine mise à jour (voir [AGENTS.md](../AGENTS.md)).

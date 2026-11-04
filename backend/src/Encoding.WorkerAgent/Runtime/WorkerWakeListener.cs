@@ -12,7 +12,7 @@ public sealed class WorkerWakeListener(
     WorkerIdentityStore identities,
     WorkerWakeSignal signal,
     TimeProvider time,
-    ILogger<WorkerWakeListener> logger, WakeReconnectPolicy? reconnectPolicy = null) : BackgroundService
+    ILogger<WorkerWakeListener> logger, WakeReconnectPolicy? reconnectPolicy = null, WorkerSocketClient? socketClient = null) : BackgroundService
 {
     /// <summary>Le central envoie un ping toutes les 15 s : au-delà, le flux est considéré comme mort.</summary>
     private static readonly TimeSpan Silence = TimeSpan.FromSeconds(45);
@@ -22,6 +22,12 @@ public sealed class WorkerWakeListener(
     {
         while (!ct.IsCancellationRequested)
         {
+            if (socketClient?.Connected == true)
+            {
+                try { await Task.Delay(TimeSpan.FromSeconds(1), time, ct); }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+                continue;
+            }
             try
             {
                 var identity = await identities.GetAsync(ct);
@@ -29,10 +35,11 @@ public sealed class WorkerWakeListener(
                 {
                     foreach (var serverUrl in identity.GetCandidateServerUrls(options))
                     {
+                        if (socketClient?.Connected == true) break;
                         try { await ListenAsync(identity, serverUrl, ct); }
                         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
                         catch (Exception exception) { logger.LogDebug("Flux de réveil indisponible ({Type}).", exception.GetType().Name); }
-                        finally { signal.SetConnected(false); }
+                        finally { if (socketClient?.Connected != true) signal.SetConnected(false); }
                     }
                 }
             }
@@ -49,7 +56,21 @@ public sealed class WorkerWakeListener(
         using var response = await client.OpenWakeStreamAsync(ct);
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
         using var reader = new StreamReader(stream);
-        await ReadEventsAsync(reader, ct);
+        if (socketClient is null)
+        {
+            await ReadEventsAsync(reader, ct);
+            return;
+        }
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var read = ReadEventsAsync(reader, linked.Token);
+        try
+        {
+            while (!read.IsCompleted && socketClient?.Connected != true)
+                await Task.WhenAny(read, Task.Delay(TimeSpan.FromMilliseconds(250), time, ct));
+            if (socketClient?.Connected == true) linked.Cancel();
+            await read;
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested && socketClient?.Connected == true) { }
     }
 
     /// <summary>Lit les événements SSE jusqu'à la fin du flux ; un silence de plus de <see cref="Silence"/> coupe la lecture.</summary>

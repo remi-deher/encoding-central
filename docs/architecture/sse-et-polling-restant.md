@@ -1,6 +1,6 @@
 # SSE et polling : état et reste à faire
 
-Dernière mise à jour : 2026-11-03 (branche `dev`, commit `94c9b1f4` et suivants).
+Dernière mise à jour : 2026-11-04 (branche `dev`, commit `94c9b1f4` et suivants ; télémétrie worker en branche `feat/worker-telemetry-ws`).
 
 ## Objectif
 
@@ -45,6 +45,14 @@ L'observateur de présence existe parce que « en ligne » se calcule **à la le
 - **Assistant IA** : `GET /api/v1/tools/ai/assistant/activity/{requestId}/stream` (repli sur l'interrogation).
 - **Tests backend** : le diffuseur, la table route → sujet et le signal de réveil sont couverts (`InterfaceLiveTests`) ; l'observateur de présence ne l'est toujours pas.
 - Les lignes de ces écrans dans les tableaux ci-dessous sont donc **faites** ; restent le suivi des exécutions (`execution-tracking`, `execution-detail-polling`), l'activité et les écrans IA/système (état externe).
+
+### Télémétrie temps réel des exécutions (branche `feat/worker-telemetry-ws`)
+
+Le worker pousse sa télémétrie (étapes, progression, journaux en direct) sur un **WebSocket** `GET /api/v1/runtime/workers/{id}/socket`, qui porte aussi le signal de réveil ; le SSE `/wake` reste en secours (ADR [0045](adr/0045-websocket-telemetrie-worker.md)). Rien de transactionnel ne passe par le socket : `claim`, `renew`, `steps/complete`, `finish` restent des POST.
+
+L'interface ne parle pas WebSocket : le central rediffuse la télémétrie par SSE authentifiées par session, `/api/v1/executions/{id}/telemetry` et `/api/v1/workers/{id}/telemetry` (événements `snapshot`, `step`, `progress`, `log`, `end`), servies par `shared/services/execution-telemetry.ts` côté frontend. Cela vise à retirer le sondage de `execution-detail-polling.ts` et de la trace de flow quand le flux est connecté ; quand il est silencieux, le sondage reste le repli.
+
+À brancher sur ces flux : `shared/services/execution-detail-polling.ts`, la trace de flow (`activity-flow-trace.component.ts`) et le panneau des tâches en cours du worker. Les proxys doivent autoriser l'upgrade WebSocket sur `/api/v1/runtime/` (générateur de configuration mis à jour).
 
 ## Polling qui reste
 

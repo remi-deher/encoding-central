@@ -16,6 +16,12 @@
   </mat-tab>
   @if (detail.rawNode()?.roles?.includes('worker')) {
     <mat-tab label="Traitement">
+      @if (data.selectedNode(); as worker) {
+        <app-worker-running-tasks
+          [workerId]="worker.id"
+          [activityCount]="data.activeTasks()[worker.id] ?? 0"
+        />
+      }
       <div class="node-processing-tab">
         <app-detail-card-grid
           [cards]="processing.processingCards()"
@@ -70,6 +76,30 @@
       limites et règles d’attribution déterminent aussi l’éligibilité à une tâche.
     </p>
   </mat-tab>
+  @if (detail.rawNode()?.roles?.includes('worker')) {
+    <mat-tab label="Store">
+      @if (detail.rawNode(); as worker) {
+        <section class="node-processing-tab" aria-label="État Store du worker">
+          <p class="node-tab-note">
+            Worker {{ worker.status === 'online' ? 'en ligne' : 'hors ligne' }} · dernière présence {{ worker.lastSeenAt }}
+          </p>
+          @if (detail.storeState(); as state) {
+            <h3>État désiré · révision {{ state.desired.revision }}</h3>
+            @for (item of state.desired.items; track item.kind + item.id + item.platform) {
+              <p>{{ item.kind }} {{ item.id }} {{ item.version }} · SHA-256 {{ item.sha256 }}</p>
+            } @empty { <p>Aucun paquet désiré.</p> }
+            <h3>État appliqué · révision {{ state.applied.revision }}</h3>
+            <p>Dernière remontée : {{ state.applied.reportedAt ?? 'jamais' }}</p>
+            @for (item of state.applied.items; track item.kind + item.id + item.platform) {
+              <p>{{ item.kind }} {{ item.id }} {{ item.version }} · {{ item.status }}{{ item.errorCode ? ' · ' + item.errorCode : '' }}</p>
+            } @empty { <p>Aucun état appliqué rapporté.</p> }
+          } @else {
+            <p role="status">État Store indisponible ou en chargement.</p>
+          }
+        </section>
+      }
+    </mat-tab>
+  }
   <mat-tab label="Bibliothèques">
     @if (data.selectedNode(); as node) {
       <section class="node-libraries" aria-label="Bibliothèques autorisées sur ce worker">
