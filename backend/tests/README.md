@@ -2,7 +2,7 @@
 
 La suite utilise les vrais dépôts, des fichiers SQLite temporaires, les endpoints HTTP du runtime et le runner worker. Elle ne dépend d'aucun serveur de base externe ; chaque scénario supprime son fichier et ses médias synthétiques à la fin.
 
-Tous les tests .NET, y compris Launcher, Plugins et Runtime, sont réservés à la CI GitHub Actions : ne les exécutez pas localement, même dans Docker. Voir [TEST_RULES.md](../../TEST_RULES.md), section 8. La CI de promotion exécute la suite Runtime hors Stress, y compris la contention de charge, exige les outils média, collecte la couverture et conserve les résultats `.trx`.
+Tous les tests .NET, y compris Launcher, Plugins et Runtime, sont réservés à la CI GitHub Actions : ne les exécutez pas localement, même dans Docker. Les compilations, typechecks, tests frontend et scénarios sont également interdits sur le poste. Seuls les contrôles statiques légers ciblés sont autorisés. Voir [TEST_RULES.md](../../TEST_RULES.md), section 8. La CI de promotion exécute la suite Runtime hors Stress, y compris la contention de charge, exige les outils média, collecte la couverture et conserve les résultats `.trx`.
 
 Les scénarios média encodent une vidéo synthétique de 1 seconde en H.265 : une fois avant le relais, et une fois en transférant le plan avant son exécution. Le service source publie réellement le résultat distinct et les tests vérifient que la source reste intacte.
 
@@ -20,7 +20,7 @@ Le test multi-processus `WorkerProcessLossTests` démarre un vrai serveur et deu
 
 Deux tests utilisent de vrais conteneurs de l'image `encoding` sur un réseau Docker (`DockerCentralTests`, ignorés par défaut). Le premier démarre un serveur et deux workers (utilisateur non-root, lanceur, enrôlement par fenêtre ouverte), fait un `docker kill` du conteneur qui encode puis vérifie l'échec sans réattribution, puis la relance explicite sur l'autre conteneur et l'intégrité de la source. Le second fait rejoindre le serveur récent par un worker de la dernière image publiée (`mrcryllix/encoding:latest`) et vérifie qu'il exécute un flow : compatibilité entre versions de nœuds. Réservés à la CI (TEST_RULES.md, section 8). La CI les exécute dans le job `backend-docker-cluster-tests` (images construites avec ffmpeg via `.github/docker/Dockerfile.cluster-test`).
 
-## Frontend
+## Frontend — exécution CI uniquement
 
 `npm test` (dans `frontend/`) exécute les tests de logique pure (`node --test`) puis les tests de composants Angular (Vitest, `*.spec.ts`, via `ng test`). `npm run test:e2e` lance le parcours E2E léger Playwright (bureau et mobile, API simulée, vérifications d’accessibilité axe) ; il ne requiert ni backend ni média. En CI, les rapports et traces sont conservés en cas d’échec. Exception temporaire documentée : la règle axe `color-contrast` est désactivée dans `e2e/smoke.spec.ts` tant que les jetons de thème de la vue d’ensemble ne sont pas corrigés (12 éléments signalés).
 

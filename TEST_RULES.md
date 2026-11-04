@@ -7,7 +7,7 @@ Ces règles sont obligatoires pour les changements du projet. Les tests doivent 
 - Mettre en place GitHub Actions pour exécuter les vérifications du projet sur les changements proposés et poussés.
 - La CI doit au minimum installer les dépendances, vérifier le format et le lint, compiler ou vérifier les types, puis exécuter les tests adaptés au changement.
 - Les vérifications requises doivent être visibles et réussir avant qu’un changement puisse être intégré.
-- Les contrôles locaux et ceux de GitHub doivent utiliser les mêmes commandes et configurations lorsque c’est possible.
+- Les contrôles locaux autorisés et ceux de GitHub utilisent les mêmes configurations lorsque c’est possible. Le profil local restrictif de la section 8 prime : les compilations et les tests s'exécutent uniquement en CI.
 - Les jobs doivent échouer clairement, conserver les diagnostics utiles et avoir des limites de durée explicites.
 
 ## 2. Tests des fonctionnalités
@@ -29,7 +29,7 @@ Ces règles sont obligatoires pour les changements du projet. Les tests doivent 
 
 ## 4. E2E
 
-- Prévoir un parcours E2E léger, déterministe et exécutable localement pour vérifier le chemin critique de l’application.
+- Prévoir un parcours E2E déterministe pour vérifier le chemin critique de l’application, exécuté exclusivement en CI GitHub Actions.
 - Réserver les E2E lourds, les scénarios multi-workers complets et les traitements longs aux workflows GitHub Actions adaptés (voir section 8 pour la liste complète des charges lourdes réservées à la CI).
 - Garder les E2E indépendants des services personnels, des secrets locaux et des médias non versionnés.
 - En cas d’échec, fournir des journaux et des artefacts de diagnostic suffisants pour reproduire le problème.
@@ -37,8 +37,8 @@ Ces règles sont obligatoires pour les changements du projet. Les tests doivent 
 ## 5. Code mort et qualité du code
 
 - Ajouter des vérifications automatisées qui détectent le code mort ou inutilisé selon les outils retenus par le projet.
-- Exécuter le lint localement et dans GitHub Actions avec la même configuration.
-- Vérifier également le formatage, la compilation et les types statiques disponibles dans la stack choisie.
+- Exécuter le lint sans compilation/typecheck localement sur les fichiers modifiés et dans GitHub Actions avec la même configuration. Un script nommé « lint » qui lance `tsc` est réservé à la CI.
+- Vérifier le formatage de façon ciblée en local ; réserver la compilation et les types statiques à la CI.
 - Ne pas supprimer du code sur la seule base d’un outil de détection : vérifier ses usages dynamiques, ses points d’entrée et ses extensions par plugins.
 
 ## 6. CSS et interface
@@ -58,9 +58,17 @@ Ces règles sont obligatoires pour les changements du projet. Les tests doivent 
 
 ## 8. Profil de vérifications locales et charges lourdes réservées à la CI
 
-**Aucun test .NET en local**, y compris les tests ciblés, les projets de test lancés avec `dotnet run` et les tests dans Docker. Tous les tests .NET sont réservés à la CI GitHub Actions. Ne pas les lancer automatiquement ni manuellement sur le poste ; signaler dans le rapport qu'ils n'ont pas été exécutés localement.
+**Aucun test .NET en local**, ni test frontend, unitaire, d'intégration, E2E ou de scénario, même ciblé. Aucune compilation, aucun typecheck, aucun serveur de développement qui compile ni build Docker sur le poste. Cette règle s'applique à tous les agents, au lead et aux vérifications automatiques Friday, y compris sous `nice`, dans Docker ou sur une copie dans `/tmp`. Écrire et corriger les tests sans les exécuter localement.
 
-**Vérifications légères autorisées en local :** lint et format ciblés, compilation ou typecheck des projets touchés, tests frontend ciblés et E2E légers sans backend .NET. Vérifier d'abord les fichiers modifiés ; utiliser `nice -n 19` pour les commandes coûteuses et ne pas les exécuter en parallèle. Ne jamais lancer `dotnet format` sur la solution entière pendant le travail courant.
+**Vérifications locales autorisées :** lecture du code, `git diff --check`, vérification de syntaxe sans compilation, format en mode vérification et lint sans typecheck sur les seuls fichiers modifiés. Lancer un seul contrôle à la fois avec `timeout 15s nice -n 19 ...`. Si le contrôle dépasse cette limite, le reporter en CI sans le relancer localement. Dans ce dépôt, `frontend/package.json` définit `lint` comme `tsc --noEmit` : `npm run lint` est donc interdit en local malgré son nom. Ne pas lancer `dotnet format`, même ciblé.
+
+**Commandes réservées à la CI :** `npm test`, `ng test`, Vitest/Jest, Playwright/Cypress, les tests Node/Python, `ng build`, `tsc` (même `--noEmit`), `dotnet build/test/run/publish/restore`, les builds et scénarios Docker, les benchmarks et les traitements média. Aucun contournement par un alias, un autre gestionnaire de paquets, un sous-agent ou une autre équipe.
+
+**Délégation :** le lead regroupe les besoins de validation pour éviter plusieurs suites identiques. Après publication autorisée de la branche, utiliser les contrôles de PR existants ou le déclenchement manuel des workflows `backend.yml` et `frontend.yml` sur cette branche. Ces déclenchements manuels ne seront disponibles qu'après intégration de leur configuration dans la branche par défaut GitHub. Ils utilisent `ubuntu-latest`, jamais un runner auto-hébergé sur ce poste. Attendre les résultats du SHA exact (`gh pr checks`, `gh run view`), transmettre les échecs au développeur et ne jamais annoncer une CI verte sans preuve. Les changements non poussés ne sont pas couverts par une ancienne exécution CI. Ne pas pousser le travail d'un autre agent ni fusionner sans autorisation.
+
+**Friday :** ne pas mettre de compilation ou de test dans le champ `check` des tâches. Si un contrôle local automatique est nécessaire, utiliser uniquement `timeout 15s nice -n 19 git diff --check`. La QA prépare les scénarios et analyse les résultats CI ; elle ne démarre pas l'application localement.
+
+Dans les rapports, distinguer « contrôle statique local réussi », « non exécuté localement — validation CI attendue » et « validation CI réussie sur le SHA … ».
 
 **Réservé à la CI :**
 
