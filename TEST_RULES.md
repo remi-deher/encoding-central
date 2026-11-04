@@ -58,7 +58,7 @@ Ces règles sont obligatoires pour les changements du projet. Les tests doivent 
 
 ## 8. Profil de vérifications locales et charges lourdes réservées à la CI
 
-**Aucun test .NET en local**, ni test frontend, unitaire, d'intégration, E2E ou de scénario, même ciblé. Aucune compilation, aucun typecheck, aucun serveur de développement qui compile ni build Docker sur le poste. Cette règle s'applique à tous les agents, au lead et aux vérifications automatiques Friday, y compris sous `nice`, dans Docker ou sur une copie dans `/tmp`. Écrire et corriger les tests sans les exécuter localement.
+**Aucun test .NET en local**, ni test frontend, unitaire, d'intégration, E2E ou de scénario, même ciblé. Par défaut, aucune compilation, aucun typecheck, aucun serveur de développement qui compile ni build Docker sur le poste ; seule l’exception de recette Docker ci-dessous autorise les compilations dans le build approuvé. Cette règle s'applique à tous les agents, au lead et aux vérifications automatiques Friday, y compris sous `nice`, dans Docker ou sur une copie dans `/tmp`. Écrire et corriger les tests sans les exécuter localement.
 
 **Vérifications locales autorisées :** lecture du code, `git diff --check`, vérification de syntaxe sans compilation, format en mode vérification et lint sans typecheck sur les seuls fichiers modifiés. Lancer un seul contrôle à la fois avec `timeout 15s nice -n 19 ...`. Si le contrôle dépasse cette limite, le reporter en CI sans le relancer localement. Dans ce dépôt, `frontend/package.json` définit `lint` comme `tsc --noEmit` : `npm run lint` est donc interdit en local malgré son nom. Ne pas lancer `dotnet format`, même ciblé.
 
@@ -69,6 +69,16 @@ Ces règles sont obligatoires pour les changements du projet. Les tests doivent 
 **Friday :** ne pas mettre de compilation ou de test dans le champ `check` des tâches. Si un contrôle local automatique est nécessaire, utiliser uniquement `timeout 15s nice -n 19 git diff --check`. La QA prépare les scénarios et analyse les résultats CI ; elle ne démarre pas l'application localement.
 
 Dans les rapports, distinguer « contrôle statique local réussi », « non exécuté localement — validation CI attendue » et « validation CI réussie sur le SHA … ».
+
+### Exception : recette Docker demandée par le propriétaire
+
+À la fin d’une tâche, le lead vérifie les résultats des tests unitaires pertinents et des contrôles requis sur le SHA exact. Un build ou les seuls tests d’architecture ne suffisent pas. Si ces tests ne sont pas verts, il fait corriger ou compléter la CI et ne propose pas encore la recette.
+
+Une fois les tests verts, il propose au propriétaire de construire les images Docker et de démarrer les Compose pour une recette manuelle. Il attend un accord explicite pour cette livraison : le silence n’autorise rien. Cet accord permet les compilations nécessaires dans la construction Docker, une seule construction à la fois, puis le démarrage de conteneurs avec données et volumes de test isolés et ressources bornées. Les suites automatisées locales, benchmarks et charges média lourdes restent interdits.
+
+Après démarrage, le lead fournit les accès et vérifications suggérées et attend le retour du propriétaire avant toute fusion. Si un défaut est signalé, il fait corriger et valider le nouveau SHA en CI. Une réponse autre qu’une validation ou un refus explicite de recette ne vaut pas accord de fusion.
+
+Après validation de la recette, ou refus explicite de la tester, le lead poursuit le circuit normal : fusion de la PR de tâche vers `dev` seulement si ses contrôles requis sont verts, attente de la CI verte sur le commit exact de `dev`, puis ouverture ou actualisation d’une PR de promotion `dev` → `main`. La CI complète de promotion reste obligatoire. La fusion vers `main` et le déploiement nécessitent une autorisation explicite distincte. Ne pas inclure des changements étrangers à la livraison.
 
 **Réservé à la CI :**
 
