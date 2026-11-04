@@ -42,7 +42,7 @@ public sealed class PluginConfigurationRepository(DbDataSource dataSource, IData
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
-        var current = await ReadAsync("SELECT encrypted_values FROM plugin_configurations WHERE plugin_id=@id FOR UPDATE", connection, transaction, "id", plugin.Id, ct);
+        var current = await ReadAsync("SELECT encrypted_values FROM plugin_configurations WHERE plugin_id=@id", connection, transaction, "id", plugin.Id, ct);
         var values = Merge(plugin.ConfigurationSchema, current, request.Values, request.ClearSecrets, flowOverride: false);
         var validation = Validate(plugin.ConfigurationSchema, values, requireRequired: true);
         if (validation is not null) throw new PluginConfigurationValidationException(validation);
@@ -53,7 +53,7 @@ public sealed class PluginConfigurationRepository(DbDataSource dataSource, IData
             INSERT INTO plugin_configurations(plugin_id,revision,encrypted_values)
             VALUES(@id,1,@values)
             ON CONFLICT(plugin_id) DO UPDATE SET revision=plugin_configurations.revision+1,
-              encrypted_values=EXCLUDED.encrypted_values,updated_at=clock_timestamp()
+              encrypted_values=EXCLUDED.encrypted_values,updated_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
             RETURNING revision
             """, connection, transaction);
         command.Parameters.AddWithValue("id", plugin.Id);
@@ -85,13 +85,13 @@ public sealed class PluginConfigurationRepository(DbDataSource dataSource, IData
         }
         // Lock the parent row so concurrent first writes for this flow are serialized even when
         // the plugin override does not exist yet. The last committed request wins.
-        await using (var flowLock = Sql.Command("SELECT id FROM flows WHERE id=@flow FOR UPDATE", connection, transaction))
+        await using (var flowLock = Sql.Command("SELECT id FROM flows WHERE id=@flow", connection, transaction))
         {
             flowLock.Parameters.AddWithValue("flow", flowId);
             await flowLock.ExecuteScalarAsync(ct);
         }
         var current = await ReadAsync(
-            "SELECT encrypted_values FROM flow_plugin_configurations WHERE flow_id=@flow AND plugin_id=@plugin FOR UPDATE",
+            "SELECT encrypted_values FROM flow_plugin_configurations WHERE flow_id=@flow AND plugin_id=@plugin",
             connection, transaction, ("flow", (object)flowId), ("plugin", plugin.Id), ct);
         var values = Merge(plugin.ConfigurationSchema, current, request.Values, request.ClearSecrets, flowOverride: true);
         var validation = Validate(plugin.ConfigurationSchema, values, requireRequired: false);
@@ -103,7 +103,7 @@ public sealed class PluginConfigurationRepository(DbDataSource dataSource, IData
             INSERT INTO flow_plugin_configurations(flow_id,plugin_id,revision,encrypted_values)
             VALUES(@flow,@plugin,1,@values)
             ON CONFLICT(flow_id,plugin_id) DO UPDATE SET revision=flow_plugin_configurations.revision+1,
-              encrypted_values=EXCLUDED.encrypted_values,updated_at=clock_timestamp()
+              encrypted_values=EXCLUDED.encrypted_values,updated_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
             RETURNING revision
             """, connection, transaction);
         command.Parameters.AddWithValue("flow", flowId);
@@ -130,12 +130,12 @@ public sealed class PluginConfigurationRepository(DbDataSource dataSource, IData
         if (ids.Length == 0) return result;
         await using var command = Sql.Command("""
             SELECT requested.plugin_id,global.encrypted_values,flow.encrypted_values
-            FROM unnest(@plugins::text[]) AS requested(plugin_id)
+            FROM (SELECT value AS plugin_id FROM json_each(@plugins)) AS requested
             LEFT JOIN plugin_configurations global ON global.plugin_id=requested.plugin_id
             LEFT JOIN flow_plugin_configurations flow ON flow.flow_id=@flow AND flow.plugin_id=requested.plugin_id
             ORDER BY requested.plugin_id
             """, connection, transaction);
-        command.Parameters.AddWithValue("plugins", SqlKind.TextArray, ids);
+        command.Parameters.AddWithValue("plugins", ids);
         command.Parameters.AddWithValue("flow", flowId);
         await using var reader = await command.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))

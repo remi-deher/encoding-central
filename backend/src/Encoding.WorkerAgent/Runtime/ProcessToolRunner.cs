@@ -24,7 +24,8 @@ public sealed class ProcessToolRunner : IProcessToolRunner
 
     public async Task<ToolResult> RunAsync(string executable, IEnumerable<string> arguments, string workingDirectory,
         TimeSpan timeout, CancellationToken ct, string? input = null, int outputLimit = 2 * 1024 * 1024,
-        bool sandbox = false, IReadOnlyList<string>? readOnlyPaths = null, bool trackProgress = false, double? progressDurationSeconds = null)
+        bool sandbox = false, IReadOnlyList<string>? readOnlyPaths = null, bool trackProgress = false, double? progressDurationSeconds = null,
+        bool allowNetwork = false)
     {
         var argumentList = arguments.ToList();
         if (sandbox)
@@ -52,7 +53,11 @@ public sealed class ProcessToolRunner : IProcessToolRunner
         var managedPath = ManagedToolCatalog.ExecutableDirectories();
         if (managedPath.Count > 0)
             info.Environment["PATH"] = string.Join(Path.PathSeparator, managedPath.Append(Environment.GetEnvironmentVariable("PATH") ?? ""));
-        if (sandbox) info.Environment[ProcessSandbox.MinimalEnvironmentVariable] = "minimal";
+        if (sandbox)
+        {
+            info.Environment[ProcessSandbox.MinimalEnvironmentVariable] = "minimal";
+            info.Environment[SandboxPolicy.EnvironmentVariable] = SandboxPolicy.ForPlugin(allowNetwork).Serialize();
+        }
         // MKVToolNix lit les arguments et écrit son JSON selon la locale : en locale « C » (image sans LANG) les noms accentués sont tronqués.
         if (Path.GetFileName(executable).StartsWith("mkv", StringComparison.Ordinal)) info.Environment["LC_ALL"] = "C.UTF-8";
         var startedAt = DateTimeOffset.UtcNow;

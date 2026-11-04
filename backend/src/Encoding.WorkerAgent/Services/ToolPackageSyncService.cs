@@ -12,7 +12,7 @@ public sealed class ToolPackageSyncService(WorkerAgentOptions options, WorkerIde
 {
     private sealed record Listed(string Id, string Version, string Platform, string ArchiveSha256);
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(60);
-    private readonly HttpClient http = new() { Timeout = TimeSpan.FromMinutes(3) };
+    private readonly HttpClient http = WorkerCentralHttp.Create(TimeSpan.FromMinutes(3));
     private string Root => configuration["Runtime:ManagedToolDirectory"] is { Length: > 0 } configured ? configured : ManagedToolCatalog.DefaultDirectory;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

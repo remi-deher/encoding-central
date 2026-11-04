@@ -36,7 +36,7 @@ Statuts : **actuel** (repris dans la fiche), **partiel** (une partie remplacée)
 | 0028 | [runtime](domains/runtime.md) | actuel | Journal des commandes du pipeline |
 | 0029 | [auth-ops](domains/auth-ops.md), [storage](domains/storage.md) | actuel | Santé, métriques, rétention, migrations |
 | 0030 | [runtime](domains/runtime.md) | actuel | Remplacement de la source |
-| 0031 | [auth-ops](domains/auth-ops.md) | actuel | Auth, rôles, jumelage (⚠ défaut Auth:Enabled=false : open-questions) |
+| 0031 | [auth-ops](domains/auth-ops.md) | actuel | Auth, rôles, jumelage (auth obligatoire par défaut) |
 | 0032 | [plugins](domains/plugins.md) | actuel | Intégrations ; section Landlock/.NET mise à jour le 2026-10-21 |
 | 0033 | [runtime](domains/runtime.md) | actuel | Attentes durables |
 | 0034 | [workers](domains/workers.md) | actuel | Groupes et étiquettes |

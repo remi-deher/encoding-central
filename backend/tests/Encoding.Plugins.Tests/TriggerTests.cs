@@ -59,7 +59,7 @@ internal static class TriggerTests
         var library = Guid.NewGuid();
         var token = "fixture-node-token-is-long-enough-for-authentication";
         await using (var setup = db.CreateCommand("""
-            INSERT INTO workers(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at,worker_token_hash) VALUES(@node,'scanner',ARRAY['worker'],1,'[]'::jsonb,clock_timestamp(),@token);
+            INSERT INTO workers(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at,worker_token_hash) VALUES(@node,'scanner',json_array('worker'),1,'[]',(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),@token);
             INSERT INTO libraries(id,name) VALUES(@library,'Séries');
             INSERT INTO library_worker_accesses(library_id,worker_id,mode,local_path,can_read,can_write) VALUES(@library,@node,'direct',@root,true,true);
             """))
@@ -167,11 +167,11 @@ internal static class TriggerTests
         var first = await triggers.ClaimAsync(10, CancellationToken.None);
         var second = await triggers.ClaimAsync(10, CancellationToken.None);
         Check(first.Count == 1 && second.Count == 0, "A claimed request is not handed to a second server.");
-        await db.CreateCommand("UPDATE integration_trigger_requests SET claimed_until=clock_timestamp()-interval '1 second' WHERE state='processing'").ExecuteNonQueryAsync();
+        await db.CreateCommand("UPDATE integration_trigger_requests SET claimed_until=(strftime('%Y-%m-%d %H:%M:%f', 'now', '-1 seconds') || '000Z') WHERE state='processing'").ExecuteNonQueryAsync();
         Check((await triggers.ClaimAsync(10, CancellationToken.None)).Count == 1, "An expired claim (lost server) is taken over.");
 
         // Expiration.
-        await db.CreateCommand("UPDATE integration_trigger_requests SET requested_at=clock_timestamp()-interval '2 hours',claimed_until=NULL WHERE state='processing'").ExecuteNonQueryAsync();
+        await db.CreateCommand("UPDATE integration_trigger_requests SET requested_at=(strftime('%Y-%m-%d %H:%M:%f', 'now', '-2 hours') || '000Z'),claimed_until=NULL WHERE state='processing'").ExecuteNonQueryAsync();
         await service.ProcessAsync(CancellationToken.None);
         Check(await ScalarAsync(db, "SELECT count(*) FROM integration_trigger_requests WHERE state='expired'") == 1, "A request whose file never appears expires.");
         using (var oversized = new HttpRequestMessage(HttpMethod.Post, "/api/v1/integrations/sonarr/webhook") { Content = new StringContent("{\"eventType\":\"Test\",\"pad\":\"" + new string('x', 1024 * 1024 + 16) + "\"}", System.Text.Encoding.UTF8, "application/json") })

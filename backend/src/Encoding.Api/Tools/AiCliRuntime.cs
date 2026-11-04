@@ -167,6 +167,7 @@ public class AiCliRuntime(IConfiguration configuration, IDataProtectionProvider 
         var temporaryDirectory = Path.Combine(profile, "tmp");
         Directory.CreateDirectory(temporaryDirectory);
         start.Environment["TMPDIR"] = temporaryDirectory;
+        if (UseSandbox) start.Environment[Encoding.Core.Runtime.SandboxPolicy.EnvironmentVariable] = Encoding.Core.Runtime.SandboxPolicy.AiCli.Serialize();
         start.Environment["NO_COLOR"] = "1";
         start.Environment["CI"] = "1";
         start.Environment["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1";

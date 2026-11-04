@@ -9,11 +9,11 @@ import {
   scan,
   shareReplay,
   Subject,
-  timer,
   timeout,
 } from 'rxjs';
 import { ExecutionResponse } from '../../shared/models/execution';
 import { ExecutionTracking } from '../../shared/services/execution-tracking';
+import { LiveUpdates } from '../../shared/services/live-updates';
 
 interface HomeExecutionState {
   readonly status: 'loading' | 'ready' | 'error';
@@ -30,8 +30,9 @@ export const INITIAL_HOME_EXECUTIONS: HomeExecutionState = {
 @Injectable()
 export class HomeExecutions {
   private readonly tracking = inject(ExecutionTracking);
+  private readonly live = inject(LiveUpdates);
   private readonly refreshRequested = new Subject<void>();
-  readonly state$ = merge(timer(0, 10000), this.refreshRequested).pipe(
+  readonly state$ = merge(this.live.drive(['executions']), this.refreshRequested).pipe(
     exhaustMap(() =>
       forkJoin({
         running: this.tracking.overview({ state: 'running', limit: 3 }),

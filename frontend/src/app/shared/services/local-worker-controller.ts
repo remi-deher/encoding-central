@@ -247,7 +247,7 @@ export class LocalWorkerController {
       displayName?.trim() || this.status()?.displayName?.trim() || undefined;
     await this.run(
       this.http.post<LocalWorkerPairing>('/api/v1/local-worker/pairing-key', {
-        clusterId: target.id,
+        centralId: target.id,
         displayName: effectiveDisplayName,
       }),
       (pairing) => {
@@ -268,7 +268,7 @@ export class LocalWorkerController {
     if (!target || !this.canJoin()) return;
     await this.run(
       this.http.post<unknown>('/api/v1/local-worker/enroll', {
-        clusterId: target.id,
+        centralId: target.id,
         displayName: displayName?.trim() || this.status()?.displayName?.trim() || undefined,
       }),
       () => {

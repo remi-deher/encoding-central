@@ -12,7 +12,8 @@ public sealed record DiscoveredCentral(Guid Id, string Name, string ApiBaseUrl, 
 
 public sealed class WorkerCentralDiscovery(
     WorkerAgentOptions options,
-    ILogger<WorkerCentralDiscovery> logger) : BackgroundService
+    ILogger<WorkerCentralDiscovery> logger,
+    WorkerIdentityStore? identities = null) : BackgroundService
 {
     private readonly ConcurrentDictionary<Guid, DiscoveredCentral> centrals = new();
     private readonly object knownAddressesLock = new();
@@ -155,7 +156,7 @@ public sealed class WorkerCentralDiscovery(
             {
                 await AddConfiguredCentralAsync(client, stoppingToken);
                 await RefreshKnownAddressesAsync(stoppingToken);
-                await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+                await Task.Delay(await NextRefreshDelayAsync(stoppingToken), stoppingToken);
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -166,6 +167,12 @@ public sealed class WorkerCentralDiscovery(
             logger.LogWarning(exception, "La découverte DNS-SD est indisponible sur cette interface réseau.");
         }
     }
+
+    /// <summary>30 s tant que le worker cherche son central ; 5 min une fois enrôlé (il n'a plus besoin de le chercher, le flux de réveil et le heartbeat le relient).</summary>
+    private async Task<TimeSpan> NextRefreshDelayAsync(CancellationToken cancellationToken) =>
+        identities is not null && (await identities.GetAsync(cancellationToken)).IsEnrolled
+            ? WorkerPacing.EnrolledPollInterval
+            : TimeSpan.FromSeconds(30);
 
     private async Task AddConfiguredCentralAsync(HttpClient client, CancellationToken cancellationToken)
     {

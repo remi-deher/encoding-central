@@ -1,0 +1,170 @@
+<mat-tab-group
+  class="node-detail-tabs"
+  aria-label="Sections du worker"
+  [selectedIndex]="data.selectedNodeTabIndex()"
+  (selectedIndexChange)="data.selectedNodeTabIndex.set($event)"
+>
+  <mat-tab label="Général">
+    @if (detail.generalSheet(); as sheet) {
+      <app-resource-sheet
+        ariaLabel="Informations générales du worker"
+        [title]="sheet.title"
+        [subtitle]="sheet.subtitle"
+        [sections]="sheet.sections"
+      />
+    }
+  </mat-tab>
+  @if (detail.rawNode()?.roles?.includes('worker')) {
+    <mat-tab label="Traitement">
+      <div class="node-processing-tab">
+        <app-detail-card-grid
+          [cards]="processing.processingCards()"
+          [initiallyExpanded]="true"
+          [collapsible]="false"
+          [cardContentTemplates]="{
+            'node-processing-limit': processingLimitContent,
+            'node-processing-calendar': processingCalendarContent,
+          }"
+          ariaLabel="Réglages de traitement du worker"
+        />
+        <p class="node-tab-note">
+          Les plafonds de bibliothèque et de couple worker et bibliothèque s’appliquent aussi.
+          Hors des plages du calendrier, aucun nouveau traitement ne démarre ; ceux en cours
+          ne sont pas interrompus.
+        </p>
+      </div>
+      <ng-template #processingLimitContent>
+        @if (processing.processingForm(); as form) {
+          <app-record-form
+            [data]="form"
+            [busy]="processing.processingBusy()"
+            (submitted)="processing.saveNodeProcessing($event)"
+          />
+        } @else {
+          <p role="status">Chargement de la limite du worker…</p>
+        }
+      </ng-template>
+      <ng-template #processingCalendarContent>
+        @if (processing.nodeProcessingState(); as settings) {
+          <app-weekly-schedule-form
+            [schedule]="settings.schedule"
+            [busy]="processing.scheduleBusy()"
+            (saved)="processing.saveNodeSchedule($event)"
+          />
+        } @else {
+          <p role="status">Chargement du calendrier…</p>
+        }
+      </ng-template>
+    </mat-tab>
+  }
+  <mat-tab label="Capacités">
+    <app-detail-field-list [fields]="detail.capabilityFields()" layout="cards" />
+    <app-detail-card-grid
+      [cards]="detail.capabilityCards()"
+      [initiallyExpanded]="false"
+      ariaLabel="Outils et capacités de traitement"
+      emptyMessage="Aucune capacité déclarée par ce worker."
+    />
+    <p class="node-tab-note capability-note">
+      Les encodeurs « utilisables » ont réussi un test synthétique ; les bibliothèques,
+      limites et règles d’attribution déterminent aussi l’éligibilité à une tâche.
+    </p>
+  </mat-tab>
+  <mat-tab label="Bibliothèques">
+    @if (data.selectedNode(); as node) {
+      <section class="node-libraries" aria-label="Bibliothèques autorisées sur ce worker">
+        <header class="node-libraries-heading">
+          <div>
+            <h3>Accès autorisés par le serveur</h3>
+            <p>
+              Le serveur déclare les bibliothèques et autorise les workers. Configurez ici le
+              chemin visible depuis {{ node.name }}.
+            </p>
+          </div>
+          <button matButton="filled" type="button" (click)="detail.openAddLibrary()">
+            Déclarer une bibliothèque
+          </button>
+        </header>
+        @if (detail.availableLibraries().length) {
+          <div class="add-library-row">
+            <mat-form-field appearance="outline">
+              <mat-label>Bibliothèque déjà déclarée</mat-label>
+              <mat-select
+                [value]="detail.selectedAvailableLibraryId()"
+                (selectionChange)="detail.selectedAvailableLibraryId.set($event.value)"
+              >
+                @for (library of detail.availableLibraries(); track library.id) {
+                  <mat-option [value]="library.id">{{ library.name }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+            <button
+              matButton="outlined"
+              type="button"
+              [disabled]="!detail.selectedAvailableLibraryId()"
+              (click)="detail.addExistingLibrary()"
+            >
+              Ajouter au worker
+            </button>
+          </div>
+        }
+        @if (data.nodeLibraryLoading()) {
+          <p role="status">Chargement des bibliothèques autorisées…</p>
+        } @else if (detail.nodeLibraryRows().length) {
+          <app-data-table
+            [columns]="detail.nodeLibraryColumns"
+            [rows]="detail.nodeLibraryRows()"
+            [rowActions]="detail.nodeLibraryActions"
+            [separateRowActionColumns]="true"
+            (rowAction)="detail.onNodeLibraryAction($event)"
+            (toggleChange)="detail.onNodeLibraryToggle($event)"
+            emptyMessage="Aucune bibliothèque autorisée sur ce worker."
+          />
+        } @else {
+          <div class="node-libraries-empty">
+            <strong>Aucune bibliothèque autorisée</strong>
+            <p>
+              Choisissez une bibliothèque déjà déclarée par le serveur ou créez-en une
+              nouvelle.
+            </p>
+          </div>
+        }
+      </section>
+    }
+  </mat-tab>
+  <mat-tab label="Avancé">
+    <div class="node-processing-tab">
+      @if (members.lifecycleText(); as text) {
+        <p class="node-tab-note" role="status">{{ text }}</p>
+      }
+      @if (detail.rawNode()?.lifecycle === 'quarantined') {
+        <div class="node-tab-actions">
+          <app-drawer-action-button
+            label="Lever la quarantaine"
+            [disabled]="members.lifecycleBusy()"
+            (activated)="members.clearQuarantine()"
+          />
+        </div>
+      }
+      <p class="node-tab-note">
+        Retirer le worker révoque son identité et refuse ses baux actifs, sans supprimer
+        l’historique. Il ne peut pas être réactivé par un simple signal de présence.
+      </p>
+      <div class="node-tab-actions">
+        <app-drawer-action-button
+          label="Supprimer le worker"
+          tone="danger"
+          [disabled]="members.removalBusy()"
+          (activated)="members.confirmNodeRemoval()"
+        />
+      </div>
+    </div>
+  </mat-tab>
+  <mat-tab label="Journaux">
+    @if (data.selectedNode(); as node) {
+      <div class="node-logs-tab">
+        <app-system-log-viewer [nodeId]="node.id" [title]="'Journaux de ' + node.name" />
+      </div>
+    }
+  </mat-tab>
+</mat-tab-group>

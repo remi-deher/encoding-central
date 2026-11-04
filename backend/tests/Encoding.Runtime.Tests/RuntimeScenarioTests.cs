@@ -50,7 +50,7 @@ public sealed class RuntimeScenarioTests(RuntimeFixture database)
     public Task ConcurrentReceiverClaimsKeepOneOwner() => Scenarios.ConcurrentRelayAsync();
 
     [DatabaseFact]
-    public Task EarlyWorkerRelayAvoidsDownloadsAndSurvivesReceiverLoss() => Scenarios.EarlyRunnerAsync();
+    public Task EarlyWorkerRelayAvoidsDownloadsAndFailsOnReceiverLoss() => Scenarios.EarlyRunnerAsync();
 
     [DatabaseFact]
     public Task RejectedCheckpointWithLiveLeaseFailsWithoutRetry() => Scenarios.ConflictDuringCheckpointFailsExecutionAsync();
@@ -92,10 +92,10 @@ public sealed class RuntimeScenarioTests(RuntimeFixture database)
     public Task PublishStepKeepsTheExecutionActive() => Scenarios.PublishStepKeepsTheExecutionActiveAsync();
 
     [DatabaseFact]
-    public Task PublicationRequestedBeforeWorkerLossIsAdoptedNotRepeated() => Scenarios.PublicationRequestedBeforeWorkerLossIsAdoptedNotRepeatedAsync();
+    public Task PublicationRequestedBeforeWorkerLossIsNotCompleted() => Scenarios.PublicationRequestedBeforeWorkerLossIsNotCompletedAsync();
 
     [DatabaseFact]
-    public Task ResumeOnAnotherDirectWorkerWhenTheDeadWorkerWasTheAccessNode() => Scenarios.ResumeOnAnotherDirectWorkerWhenTheDeadWorkerWasTheAccessNodeAsync();
+    public Task DirectAccessDoesNotAuthorizeRecovery() => Scenarios.DirectAccessDoesNotAuthorizeRecoveryAsync();
 
     [DatabaseFact]
     public Task WaitMediaPolicy() => Scenarios.WaitMediaPolicyAsync();
@@ -112,19 +112,19 @@ public sealed class RuntimeScenarioTests(RuntimeFixture database)
     public Task RelayWaitsForABusyWorker() => Scenarios.RelayWaitsForABusyWorkerAsync();
 
     [DatabaseFact]
-    public Task ResumeWaitsForAnEligibleWorker() => Scenarios.ResumeWaitsForAnEligibleWorkerAsync();
+    public Task WorkerLossFailsWithoutAnEligibleWorker() => Scenarios.WorkerLossFailsWithoutAnEligibleWorkerAsync();
 
     [DatabaseFact]
-    public Task ReplayableStepIsResumedAfterWorkerLoss() => Scenarios.ReplayableStepIsResumedAfterWorkerLossAsync();
+    public Task ReplayableStepIsNotReassignedAfterWorkerLoss() => Scenarios.ReplayableStepIsNotReassignedAfterWorkerLossAsync();
 
     [DatabaseFact]
     public Task LibraryAccessBlockBranchesOnDirectAccess() => Scenarios.LibraryAccessBlockBranchesOnDirectAccessAsync();
 
     [DatabaseFact]
-    public Task ResumeKeepsTheRelayDestination() => Scenarios.ResumeKeepsTheRelayDestinationAsync();
+    public Task PreviousRelayDoesNotAuthorizeRecovery() => Scenarios.PreviousRelayDoesNotAuthorizeRecoveryAsync();
 
     [DatabaseFact]
-    public Task RetryPolicyKeepsPriorityOverResume() => Scenarios.RetryPolicyKeepsPriorityOverResumeAsync();
+    public Task ExplicitFlowRetryCreatesANewAttempt() => Scenarios.ExplicitFlowRetryCreatesANewAttemptAsync();
 
     [DatabaseFact]
     public Task FlowRetryPolicyIsBounded() => Scenarios.BoundedFlowRetryAsync();

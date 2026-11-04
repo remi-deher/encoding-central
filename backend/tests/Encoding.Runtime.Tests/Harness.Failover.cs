@@ -30,7 +30,7 @@ internal static partial class Harness
         }
         private async Task ResetNodesAsync()
         {
-            await using var command=db.CreateCommand("UPDATE workers SET last_seen_at=clock_timestamp(),max_concurrent_tasks=100,deleted_at=NULL; DELETE FROM worker_processing_settings;");
+            await using var command=db.CreateCommand("UPDATE workers SET last_seen_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),max_concurrent_tasks=100,deleted_at=NULL; DELETE FROM worker_processing_settings;");
             await command.ExecuteNonQueryAsync();
         }
 
@@ -117,7 +117,7 @@ internal static partial class Harness
             RuntimeLease? busyLease=null; for(var attempt=0;attempt<5 && busyLease?.ExecutionId!=queued;attempt++) busyLease=await runtime.ClaimAsync(a,CancellationToken.None);
             Check(busyLease?.ExecutionId==queued,"The second execution holds the media.");
             Check(await policies.RequestRollbackAsync(expired.Id,CancellationToken.None)=="busy","A media that is being processed cannot be restored concurrently.");
-            await using(var elapse=db.CreateCommand("UPDATE source_replacements SET grace_until=clock_timestamp()-interval '1 second',state='replaced' WHERE execution_id=@id")){ elapse.Parameters.AddWithValue("id",expired.Id); await elapse.ExecuteNonQueryAsync(); }
+            await using(var elapse=db.CreateCommand("UPDATE source_replacements SET grace_until=(strftime('%Y-%m-%d %H:%M:%f', 'now', '-1 seconds') || '000Z'),state='replaced' WHERE execution_id=@id")){ elapse.Parameters.AddWithValue("id",expired.Id); await elapse.ExecuteNonQueryAsync(); }
             Check(await policies.RequestRollbackAsync(expired.Id,CancellationToken.None)=="not-restorable","A rollback is refused once the grace period is over.");
             Check((await policies.TasksAsync(a,CancellationToken.None)).Single(task=>task.ExecutionId==expired.Id).Action=="finalize","The backup becomes due for purge after the grace period.");
             Check(await policies.ReportAsync(expired.Id,a,new("failed","Fichier remplaçant absent"),CancellationToken.None) && (await policies.GetAsync(expired.Id,CancellationToken.None))!.State=="retained","A refused purge keeps the backup and flags it for manual action.");
@@ -134,8 +134,8 @@ internal static partial class Harness
             var modified=new DateTimeOffset(2024,5,6,7,8,9,TimeSpan.Zero);
             var scan=Guid.NewGuid();
             await using(var file=db.CreateCommand("""
-                INSERT INTO library_scans(id,library_id,media_type,state,completed_at) VALUES(@scan,@library,'video','completed',clock_timestamp());
-                INSERT INTO library_media(id,library_id,relative_path,byte_length,modified_at,scan_id,stable_since) VALUES(gen_random_uuid(),@library,'source.mkv',21,@modified,@scan,clock_timestamp()-interval '1 hour')
+                INSERT INTO library_scans(id,library_id,media_type,state,completed_at) VALUES(@scan,@library,'video','completed',(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'));
+                INSERT INTO library_media(id,library_id,relative_path,byte_length,modified_at,scan_id,stable_since) VALUES(lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)), 2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(hex(randomblob(2)), 2) || '-' || hex(randomblob(6))),@library,'source.mkv',21,@modified,@scan,(strftime('%Y-%m-%d %H:%M:%f', 'now', '-1 hours') || '000Z'))
                 """))
             { file.Parameters.AddWithValue("scan",scan); file.Parameters.AddWithValue("library",library); file.Parameters.AddWithValue("modified",modified); await file.ExecuteNonQueryAsync(); }
             var before=await ScalarAsync<long>("SELECT count(*) FROM executions");
@@ -168,7 +168,7 @@ internal static partial class Harness
                     await command.ExecuteNonQueryAsync();
                 }
                 Check(await runtime.EnqueueAsync(new(id,library,"source.mkv",flow.Id,flow.Version),flow,CancellationToken.None),"Enqueue fixture.");
-                await using var aged=db.CreateCommand("UPDATE executions SET queued_at=clock_timestamp()-interval '10 minutes' WHERE id=@id");
+                await using var aged=db.CreateCommand("UPDATE executions SET queued_at=(strftime('%Y-%m-%d %H:%M:%f', 'now', '-10 minutes') || '000Z') WHERE id=@id");
                 aged.Parameters.AddWithValue("id",id); await aged.ExecuteNonQueryAsync();
                 return id;
             }
@@ -186,62 +186,41 @@ internal static partial class Harness
             await ResetNodesAsync();
             var flow=Chain(Node(registry,"entry","base-input-file"),Node(registry,"variable","base-variable",new(){["name"]=J("kept"),["value"]=J("7")}),Node(registry,"end","base-complete-flow"));
             var(id,first,context)=await EnqueueAsync(flow);
-            context=context with { Variables=new Dictionary<string,JsonElement>{["kept"]=J(7)} };
-            await CompleteAsync(id,a,first,"entry",context); await CompleteAsync(id,a,first,"variable",context);
-
+            await CompleteAsync(id,a,first,"entry",context);
+            await CompleteAsync(id,a,first,"variable",context);
             await ExpireAsync(id);
-            var claims=await Task.WhenAll(runtime.ClaimAsync(a,CancellationToken.None),runtime.ClaimAsync(b,CancellationToken.None),runtime.ClaimAsync(c,CancellationToken.None));
-            Check(claims.All(claim=>claim is null),"An expired assigned task is not silently resumed by any worker before recovery.");
-            var recovery=FullRecovery();
-            await recovery.ProcessOnceAsync(CancellationToken.None);
-            Check((await executions.GetAsync(id,CancellationToken.None))!.State=="running","The interrupted execution stays running while it waits for a worker.");
-            Check(await ScalarAsync<long>("SELECT count(*) FROM media_reservations WHERE execution_id=@id",("id",id))==1,"The media stays reserved while the execution waits for a worker.");
-            Check(await ScalarAsync<int>("SELECT resume_count FROM execution_work WHERE execution_id=@id",("id",id))==1,"The resume is counted.");
-            Check(await runtime.RenewAsync(id,a,first.Epoch,CancellationToken.None) is null,"The disconnected worker is fenced once the execution is handed back.");
-
-            var resumed=await runtime.ClaimAsync(b,CancellationToken.None)??throw new InvalidOperationException("A surviving eligible worker must resume the execution.");
-            Check(resumed.ExecutionId==id && resumed.Epoch>first.Epoch,"The resume keeps the execution ID under a new fencing epoch.");
-            Check(resumed.Checkpoint?.NextNodeId=="end" && resumed.Checkpoint.Context.Variables["kept"].GetInt32()==7,"The resume continues at the last durable checkpoint with its variables.");
-            Check(await runtime.ClaimAsync(c,CancellationToken.None) is null,"Only one worker takes the resumed execution.");
-            Check(await ScalarAsync<long>("SELECT count(*) FROM execution_events WHERE execution_id=@id AND detail LIKE '%reprise 1/2%'",("id",id))==1,"The history says that the execution was resumed.");
-
-            // Deuxième perte : nouvelle reprise ; troisième : la borne est atteinte, l'exécution échoue et libère le média.
-            await ExpireAsync(id); await recovery.ProcessOnceAsync(CancellationToken.None);
-            var second=await runtime.ClaimAsync(c,CancellationToken.None)??throw new InvalidOperationException("A second resume is allowed.");
-            Check(second.Epoch>resumed.Epoch && second.Checkpoint?.NextNodeId=="end","The second resume starts from the same checkpoint.");
-            await ExpireAsync(id); await recovery.ProcessOnceAsync(CancellationToken.None);
-            var exhausted=await executions.GetAsync(id,CancellationToken.None);
-            Check(exhausted!.State=="failed" && exhausted.Detail?.Contains("déjà été reprise",StringComparison.Ordinal)==true,"The resume limit fails the execution with an explicit reason.");
+            Check(await runtime.RenewAsync(id,a,first.Epoch,CancellationToken.None) is null,"An expired worker cannot renew before recovery.");
+            await FullRecovery().ProcessOnceAsync(CancellationToken.None);
+            var failed=await executions.GetAsync(id,CancellationToken.None);
+            Check(failed!.State=="failed" && failed.Detail?.Contains("worker_perdu",StringComparison.Ordinal)==true,"Lease loss fails the assigned attempt explicitly.");
             Check(await ScalarAsync<long>("SELECT count(*) FROM media_reservations WHERE execution_id=@id",("id",id))==0,"Failure releases the media reservation.");
-
+            Check(await ScalarAsync<long>("SELECT count(*) FROM disk_locks WHERE execution_id=@id",("id",id))==0,"Failure releases disk locks.");
+            Check(await runtime.ClaimAsync(b,CancellationToken.None) is null && await runtime.ClaimAsync(c,CancellationToken.None) is null,"No surviving worker resumes the failed execution.");
+            Check(await runtime.StartStepAsync(id,a,new(first.Epoch,"end"),CancellationToken.None) is null,"The returning worker cannot start another step.");
+            Check(await runtime.RenewAsync(id,a,first.Epoch,CancellationToken.None) is null,"The returning worker cannot renew the old lease.");
+            var lateBytes=System.Text.Encoding.UTF8.GetBytes("late-write");
+            var lateSha=Convert.ToHexStringLower(SHA256.HashData(lateBytes));
+            Check(!await artifacts.PutAsync(id,a,first.Epoch,lateSha,new MemoryStream(lateBytes),false,CancellationToken.None),"The returning worker cannot upload an artifact.");
+            Check(await FullRecovery().ProcessOnceAsync(CancellationToken.None)==0,"Recovery is idempotent.");
             await using(var lost=db.CreateCommand("UPDATE workers SET max_concurrent_tasks=0 WHERE id=@id")){ lost.Parameters.AddWithValue("id",a); await lost.ExecuteNonQueryAsync(); }
             var retryId=await executions.RetryAsync(id,CancellationToken.None)??throw new InvalidOperationException("An explicit retry must create a new execution.");
-            var retry=await runtime.ClaimAsync(b,CancellationToken.None)??throw new InvalidOperationException("The eligible surviving worker must claim the explicit retry.");
-            Check(retry.ExecutionId==retryId && retry.ExecutionId!=id && retry.Attempt==first.Attempt+1,"An explicit retry uses a new execution ID and increments the attempt number.");
-            Check(retry.Checkpoint is null && retry.EntryNodeId=="entry","A retry starts the flow again instead of resuming the interrupted checkpoint.");
-            Check(await ScalarAsync<long>("SELECT count(*) FROM execution_events WHERE execution_id=@id AND state='failed'",("id",id))==1,"The failed state remains in the execution history.");
+            var retry=await runtime.ClaimAsync(b,CancellationToken.None)??throw new InvalidOperationException("The surviving worker claims the explicit retry.");
+            Check(retry.ExecutionId==retryId && retryId!=id && retry.Attempt==first.Attempt+1,"Retry creates a linked new attempt.");
+            Check(retry.Checkpoint is null && retry.EntryNodeId=="entry","The new attempt starts at the flow entry.");
+            Check(await ScalarAsync<long>("SELECT count(*) FROM execution_events WHERE execution_id=@id AND state='failed'",("id",id))==1,"Failure remains recorded exactly once.");
             Check(await executions.CancelAsync(retryId,CancellationToken.None),"Clean up the explicit retry.");await ExpireAsync(retryId);await RecoverCancellationAsync(retryId);
-            Console.WriteLine("PASS: worker loss resumes the execution at its checkpoint on another worker, bounded; explicit retry still starts afresh.");
         }
 
-        public async Task ResumeWaitsForAnEligibleWorkerAsync()
+        public async Task WorkerLossFailsWithoutAnEligibleWorkerAsync()
         {
             await ResetNodesAsync();
-            var flow=Chain(Node(registry,"entry","base-input-file"),Node(registry,"variable","base-variable",new(){["name"]=J("kept"),["value"]=J("7")}),Node(registry,"end","base-complete-flow"));
-            var(id,first,context)=await EnqueueAsync(flow);
-            await CompleteAsync(id,a,first,"entry",context);
+            var flow=Chain(Node(registry,"entry","base-input-file"),Node(registry,"end","base-complete-flow"));
+            var(id,_,_)=await EnqueueAsync(flow);
             await ExpireAsync(id);
-            var recovery=FullRecovery();
-            await recovery.ProcessOnceAsync(CancellationToken.None);
             await using(var gone=db.CreateCommand("UPDATE workers SET max_concurrent_tasks=0 WHERE id IN (@a,@b,@c)")){ gone.Parameters.AddWithValue("a",a); gone.Parameters.AddWithValue("b",b); gone.Parameters.AddWithValue("c",c); await gone.ExecuteNonQueryAsync(); }
-            await recovery.ProcessOnceAsync(CancellationToken.None);
-            Check((await executions.GetAsync(id,CancellationToken.None))!.State=="running","A restarting worker has a grace period before a resume is declared impossible.");
-            await using(var old=db.CreateCommand("UPDATE executions SET updated_at=clock_timestamp()-interval '10 minutes' WHERE id=@id")){ old.Parameters.AddWithValue("id",id); await old.ExecuteNonQueryAsync(); }
-            await recovery.ProcessOnceAsync(CancellationToken.None);
-            var failed=await executions.GetAsync(id,CancellationToken.None);
-            Check(failed!.State=="failed" && failed.Detail?.Contains("Aucun worker éligible",StringComparison.Ordinal)==true,"With no eligible worker left the resume fails with an explicit reason.");
-            Check(await ScalarAsync<long>("SELECT count(*) FROM media_reservations WHERE execution_id=@id",("id",id))==0,"The failure releases the media reservation.");
-            Console.WriteLine("PASS: a resume waits for an eligible worker, then fails explicitly.");
+            await FullRecovery().ProcessOnceAsync(CancellationToken.None);
+            Check((await executions.GetAsync(id,CancellationToken.None))!.State=="failed","Lease expiry fails immediately without waiting for a replacement worker.");
+            Check(await ScalarAsync<long>("SELECT count(*) FROM media_reservations WHERE execution_id=@id",("id",id))==0,"Failure releases the reservation.");
         }
 
         /// <summary>Le seul destinataire capable du relais est occupé : l'exécution attend qu'il se libère au lieu d'échouer.</summary>
@@ -257,54 +236,41 @@ internal static partial class Harness
             await ExpireAsync(busyId);
             Check(await runtime.ClaimAsync(b,CancellationToken.None) is { } received && received.ExecutionId==id,"The destination takes the waiting relay once it is free.");
             Check(await executions.CancelAsync(id,CancellationToken.None),"Clean up the relay.");await ExpireAsync(id);await RecoverCancellationAsync(id);
-            Check(await executions.CancelAsync(busyId,CancellationToken.None),"Clean up the busy execution.");await RecoverCancellationAsync(busyId);
+            var expiredBusy=(await executions.GetAsync(busyId,CancellationToken.None))!;
+            Check(expiredBusy.State=="failed" && expiredBusy.Detail?.Contains("worker_perdu",StringComparison.Ordinal)==true,"Recovery closes the expired busy attempt without reassignment.");
+            Check(await ScalarAsync<long>("SELECT count(*) FROM media_reservations WHERE execution_id=@id",("id",busyId))==0,"Recovery releases the expired busy attempt's reservation.");
             Console.WriteLine("PASS: a relay waits for a busy destination.");
         }
 
-        public async Task ReplayableStepIsResumedAfterWorkerLossAsync()
+        public async Task ReplayableStepIsNotReassignedAfterWorkerLossAsync()
         {
             await ResetNodesAsync();
+            await configurations.SaveGlobalAsync(registry.Plugins.Single(plugin=>plugin.Id=="plex"),
+                new((await configurations.GetGlobalAsync(registry.Plugins.Single(plugin=>plugin.Id=="plex"),CancellationToken.None)).Revision,new Dictionary<string,JsonElement>{["baseUrl"]=J("http://127.0.0.1:9"),["apiKey"]=J("fixture-only")}),CancellationToken.None);
             var flow=Chain(Node(registry,"entry","base-input-file"),Node(registry,"plex-refresh","plex-refresh-library"),Node(registry,"end","base-complete-flow"));
             var(id,first,context)=await EnqueueAsync(flow);
             await CompleteAsync(id,a,first,"entry",context);
-            var started=await runtime.StartStepAsync(id,a,new(first.Epoch,"plex-refresh"),CancellationToken.None)??throw new InvalidOperationException("The refresh starts.");
-            Check(await ScalarAsync<long>("SELECT count(*) FROM execution_steps WHERE execution_id=@id AND flow_node_id='plex-refresh' AND idempotent",("id",id))==1,"Refreshing a media server is classified as replayable.");
+            Check(await runtime.StartStepAsync(id,a,new(first.Epoch,"plex-refresh"),CancellationToken.None) is not null,"The replayable step starts.");
             await ExpireAsync(id);
-            await new RuntimeRecoveryService(db,NullLogger<RuntimeRecoveryService>.Instance).ProcessOnceAsync(CancellationToken.None);
-            var resumed=await runtime.ClaimAsync(b,CancellationToken.None)??throw new InvalidOperationException("Another worker resumes the unfinished replayable step.");
-            Check(resumed.ExecutionId==id && resumed.Checkpoint?.NextNodeId=="plex-refresh","The resume re-enters the interrupted step from the previous checkpoint.");
-            var again=await runtime.StartStepAsync(id,b,new(resumed.Epoch,"plex-refresh"),CancellationToken.None);
-            Check(again is not null && again.InvocationId==started.InvocationId,"The replayed step keeps its invocation identity.");
-            Check(await executions.CancelAsync(id,CancellationToken.None),"Clean up.");await ExpireAsync(id);await RecoverCancellationAsync(id);
-            Console.WriteLine("PASS: an interrupted replayable step is replayed by the resuming worker.");
+            await FullRecovery().ProcessOnceAsync(CancellationToken.None);
+            Check((await executions.GetAsync(id,CancellationToken.None))!.State=="failed","A replayable step does not authorize automatic reassignment.");
+            Check(await runtime.ClaimAsync(b,CancellationToken.None) is null,"Another worker cannot replay the interrupted step.");
         }
 
-        public async Task ResumeKeepsTheRelayDestinationAsync()
+        public async Task PreviousRelayDoesNotAuthorizeRecoveryAsync()
         {
             await ResetNodesAsync();
-            var flow=Chain(Node(registry,"entry","base-input-file"),Node(registry,"variable","base-variable",new(){["name"]=J("kept"),["value"]=J("7")}),Node(registry,"end","base-complete-flow"));
-            var(id,first,context)=await EnqueueAsync(flow);
-            await CompleteAsync(id,a,first,"entry",context);
-            // Le dernier relais du flow désignait le worker b (encodage confié à un seul worker) : sa destination reste la règle de la reprise.
+            var flow=Chain(Node(registry,"entry","base-input-file"),Node(registry,"end","base-complete-flow"));
+            var(id,_,_)=await EnqueueAsync(flow);
             await using(var relay=db.CreateCommand("UPDATE execution_work SET handoff_selector=@selector WHERE execution_id=@id"))
             { relay.Parameters.AddWithValue("id",id); relay.Parameters.AddWithValue("selector",SqlKind.Json,JsonSerializer.Serialize(new RuntimeHandoffSelector("node",b),new JsonSerializerOptions(JsonSerializerDefaults.Web))); await relay.ExecuteNonQueryAsync(); }
             await ExpireAsync(id);
-            var recovery=FullRecovery();
-            await recovery.ProcessOnceAsync(CancellationToken.None);
-            Check(await runtime.ClaimAsync(c,CancellationToken.None) is null && await runtime.ClaimAsync(a,CancellationToken.None) is null,"A resume never leaves the node chosen by the last relay while that node is available.");
-            var resumed=await runtime.ClaimAsync(b,CancellationToken.None)??throw new InvalidOperationException("The relay destination resumes the execution.");
-            Check(resumed.ExecutionId==id && resumed.Checkpoint?.NextNodeId=="variable","The destination resumes at the checkpoint.");
-            // Si ce worker est perdu à son tour, la reprise ne part pas ailleurs : elle échoue après le délai de grâce.
-            await ExpireAsync(id);
-            await recovery.ProcessOnceAsync(CancellationToken.None);
-            await using(var aged=db.CreateCommand("UPDATE executions SET updated_at=clock_timestamp()-interval '10 minutes' WHERE id=@id")){ aged.Parameters.AddWithValue("id",id); await aged.ExecuteNonQueryAsync(); }
-            await using(var down=db.CreateCommand("UPDATE workers SET max_concurrent_tasks=0 WHERE id=@b")){ down.Parameters.AddWithValue("b",b); await down.ExecuteNonQueryAsync(); }
-            await recovery.ProcessOnceAsync(CancellationToken.None);
-            Check((await executions.GetAsync(id,CancellationToken.None))!.State=="failed","With the relay destination unavailable the resume fails instead of moving to another node.");
-            Console.WriteLine("PASS: a resume keeps the destination of the last relay.");
+            await FullRecovery().ProcessOnceAsync(CancellationToken.None);
+            Check((await executions.GetAsync(id,CancellationToken.None))!.State=="failed","A previous relay does not authorize reassignment after lease loss.");
+            Check(await runtime.ClaimAsync(b,CancellationToken.None) is null,"The former relay destination cannot claim the failed attempt.");
         }
 
-        public async Task RetryPolicyKeepsPriorityOverResumeAsync()
+        public async Task ExplicitFlowRetryCreatesANewAttemptAsync()
         {
             await ResetNodesAsync();
             var flow=Chain(Node(registry,"entry","base-input-file"),Node(registry,"retry","nodes-retry-on-worker-loss"),Node(registry,"end","base-complete-flow"));
@@ -314,7 +280,7 @@ internal static partial class Harness
             Check((await executions.GetAsync(id,CancellationToken.None))!.State=="failed","A flow with its own retry rule keeps fail-then-fresh-attempt semantics.");
             var retryId=await ScalarAsync<Guid>("SELECT id FROM executions WHERE retry_of=@id",("id",id));
             Check(await executions.CancelAsync(retryId,CancellationToken.None),"Clean up.");await ExpireAsync(retryId);await RecoverCancellationAsync(retryId);
-            Console.WriteLine("PASS: the explicit retry rule of a flow takes priority over the automatic resume.");
+            Console.WriteLine("PASS: the explicit flow rule creates a new attempt after lease loss.");
         }
 
         public async Task CancelledExecutionCanBeResumedAsFreshAttemptAsync()
@@ -368,6 +334,8 @@ internal static partial class Harness
         public async Task UncertainPluginStepIsNotRepeatedAfterWorkerLossAsync()
         {
             await ResetNodesAsync();
+            await configurations.SaveGlobalAsync(registry.Plugins.Single(plugin=>plugin.Id=="plex"),
+                new((await configurations.GetGlobalAsync(registry.Plugins.Single(plugin=>plugin.Id=="plex"),CancellationToken.None)).Revision,new Dictionary<string,JsonElement>{["baseUrl"]=J("http://127.0.0.1:9"),["apiKey"]=J("fixture-only")}),CancellationToken.None);
             var flow=Chain(Node(registry,"entry","base-input-file"),Node(registry,"plex-refresh","plex-refresh-library"),Node(registry,"end","base-complete-flow"));
             var(id,first,context)=await EnqueueAsync(flow);
             await CompleteAsync(id,a,first,"entry",context);

@@ -252,17 +252,17 @@ describe('SetupWizardPageComponent', () => {
     expect(component['currentStep']()).toBe(1);
   });
 
-  it('submits the central initialisation with the cluster name', async () => {
+  it('submits the central initialisation with the single central name', async () => {
     const fixture = TestBed.createComponent(SetupWizardPageComponent);
     fixture.detectChanges();
     const component = fixture.componentInstance;
 
     fillAdmin(component);
-    component['clusterName'].set('Mon Central Maison');
+    component['nodeName'].set('Mon Central Maison');
     await component['submitCreateCluster']();
 
     expect(setupFn).toHaveBeenCalledWith({
-      workerDisplayName: 'Serveur Salon',
+      workerDisplayName: 'Mon Central Maison',
       centralName: 'Mon Central Maison',
       username: 'admin',
       password: VALID_PASSWORD,

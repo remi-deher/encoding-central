@@ -58,6 +58,7 @@ internal static class StoreTests
         PackageValidation();
         await InstallLifecycle();
         await RepositoryRoundTrip();
+        await OfficialRepositoryInvariants();
         WorkerCatalog();
     }
 
@@ -225,6 +226,47 @@ internal static class StoreTests
         }
         finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
         Console.WriteLine("PASS: repositories (index validation, impersonation, SHA-256 check, install, disable, removal) against a local HTTP server.");
+    }
+
+    private static async Task OfficialRepositoryInvariants()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "encoding-official-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["PluginStore:Directory"] = directory,
+                ["ToolStore:Directory"] = Path.Combine(directory, "tools"),
+                ["PluginStore:OfficialRepositoryUrl"] = "https://example.invalid/repository.json"
+            }).Build();
+            var tools = new ToolStoreService(configuration, NullLogger<ToolStoreService>.Instance);
+            var store = new PluginStoreService(configuration, StoreCatalogFixture.Create(), tools, NullLogger<PluginStoreService>.Instance);
+            var repositories = new PluginRepositoryService(configuration, new Factory(), store, tools, NullLogger<PluginRepositoryService>.Instance);
+
+            var fresh = repositories.List().Single();
+            Check(fresh.IsOfficial && fresh.Enabled, "A fresh install lists the official repository, enabled.");
+            Check(store.Installed().Count == 0 && tools.Available().Count == 0, "A fresh install activates no plugin and no tool.");
+
+            async Task<string> Refuses(Func<Task> action)
+            {
+                try { await action(); }
+                catch (PluginRepositoryException exception) { return exception.Message; }
+                return "";
+            }
+            Check((await Refuses(() => repositories.SetEnabledAsync(fresh.Id, false, CancellationToken.None))).Contains("désactivé"), "The official repository cannot be disabled.");
+            Check((await Refuses(() => repositories.RemoveAsync(fresh.Id, CancellationToken.None))).Contains("verrouillé"), "The official repository cannot be removed.");
+            Check(repositories.List().Single().Enabled, "The official repository is still enabled after refused changes.");
+            Check((await repositories.SetEnabledAsync(fresh.Id, true, CancellationToken.None))!.Enabled, "Enabling the official repository stays a no-op success.");
+
+            // Une ancienne désactivation persistée (avant cet invariant) est neutralisée à la lecture.
+            Directory.CreateDirectory(directory);
+            var legacy = fresh with { Enabled = false };
+            await File.WriteAllTextAsync(Path.Combine(directory, "repositories.json"),
+                System.Text.Json.JsonSerializer.Serialize(new[] { legacy }, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)));
+            Check(repositories.List().Single().Enabled, "A persisted disabled official repository is read as enabled.");
+        }
+        finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
+        Console.WriteLine("PASS: official repository invariants (present, enabled, not disableable, not removable, nothing activated by default).");
     }
 
     private static void WorkerCatalog()

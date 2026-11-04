@@ -27,16 +27,16 @@ public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresen
     {
         await using var cmd=Sql.Command("""
           INSERT INTO execution_waits(execution_id,flow_node_id,spec,state,started_at,deadline,due_at,next_check_at,resolved_at,probe_count,last_probe_at,last_probe_output)
-          VALUES(@id,@node,@spec,'waiting',clock_timestamp(),
-            CASE WHEN @max::integer IS NULL THEN NULL ELSE clock_timestamp()+make_interval(mins=>@max) END,
-            CASE WHEN @delay::integer IS NULL THEN NULL ELSE clock_timestamp()+make_interval(mins=>@delay) END,
-            CASE WHEN @delay::integer IS NULL THEN clock_timestamp() ELSE clock_timestamp()+make_interval(mins=>@delay) END,NULL,0,NULL,NULL)
+          VALUES(@id,@node,@spec,'waiting',(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),
+            CASE WHEN @max IS NULL THEN NULL ELSE (strftime('%Y-%m-%d %H:%M:%f', 'now', '+' || (@max) || ' minutes') || '000Z') END,
+            CASE WHEN @delay IS NULL THEN NULL ELSE (strftime('%Y-%m-%d %H:%M:%f', 'now', '+' || (@delay) || ' minutes') || '000Z') END,
+            CASE WHEN @delay IS NULL THEN (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') ELSE (strftime('%Y-%m-%d %H:%M:%f', 'now', '+' || (@delay) || ' minutes') || '000Z') END,NULL,0,NULL,NULL)
           ON CONFLICT(execution_id) DO UPDATE SET flow_node_id=EXCLUDED.flow_node_id,spec=EXCLUDED.spec,state='waiting',started_at=EXCLUDED.started_at,
             deadline=EXCLUDED.deadline,due_at=EXCLUDED.due_at,next_check_at=EXCLUDED.next_check_at,resolved_at=NULL,probe_count=0,last_probe_at=NULL,last_probe_output=NULL;
-          UPDATE execution_waits SET next_check_at=LEAST(next_check_at,COALESCE(deadline,'infinity'::timestamptz)) WHERE execution_id=@id;
-          UPDATE execution_work SET worker_id=NULL,lease_until=NULL,lease_epoch=lease_epoch+1,available_at='infinity'::timestamptz,wait_probe_due=false,
+          UPDATE execution_waits SET next_check_at=MIN(next_check_at,COALESCE(deadline,'9999-12-31 23:59:59.999999Z')) WHERE execution_id=@id;
+          UPDATE execution_work SET worker_id=NULL,lease_until=NULL,lease_epoch=lease_epoch+1,available_at='9999-12-31 23:59:59.999999Z',wait_probe_due=false,
             handoff_pending=false,handoff_selector=NULL,previous_worker_id=NULL,media_policy=@media WHERE execution_id=@id;
-          UPDATE media_reservations SET lease_epoch=@epoch+1,lease_until='infinity'::timestamptz WHERE execution_id=@id;
+          UPDATE media_reservations SET lease_epoch=@epoch+1,lease_until='9999-12-31 23:59:59.999999Z' WHERE execution_id=@id;
           DELETE FROM disk_locks WHERE execution_id=@id;
           """,c,tx);
         cmd.Parameters.AddWithValue("media",wait.MediaPolicy);
@@ -55,9 +55,9 @@ public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresen
         if(!await RuntimeRepository.FenceAsync(id,worker,request.Epoch,c,tx,ct)) return false;
         RuntimeWait spec; int revision; Guid? actor;
         await using(var read=Sql.Command("""
-          SELECT x.spec::text,e.revision,e.worker_id FROM execution_waits x JOIN execution_work k ON k.execution_id=x.execution_id
+          SELECT x.spec,e.revision,e.worker_id FROM execution_waits x JOIN execution_work k ON k.execution_id=x.execution_id
           JOIN executions e ON e.id=x.execution_id
-          WHERE x.execution_id=@id AND x.state='waiting' AND k.wait_probe_due FOR UPDATE OF x
+          WHERE x.execution_id=@id AND x.state='waiting' AND k.wait_probe_due
           """,c,tx))
         {
             read.Parameters.AddWithValue("id",id);
@@ -66,13 +66,13 @@ public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresen
         }
         var met=request.OutputId is not null && ProbeOf(spec).Met.Contains(request.OutputId);
         await using(var update=Sql.Command("""
-          UPDATE execution_waits SET probe_count=probe_count+1,last_probe_at=clock_timestamp(),last_probe_output=@output,
-            state=CASE WHEN @met THEN 'met' ELSE state END,resolved_at=CASE WHEN @met THEN clock_timestamp() ELSE NULL END,
-            next_check_at=CASE WHEN @met THEN next_check_at ELSE LEAST(clock_timestamp()+make_interval(secs=>@poll),COALESCE(deadline,'infinity'::timestamptz)) END
+          UPDATE execution_waits SET probe_count=probe_count+1,last_probe_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),last_probe_output=@output,
+            state=CASE WHEN @met THEN 'met' ELSE state END,resolved_at=CASE WHEN @met THEN (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') ELSE NULL END,
+            next_check_at=CASE WHEN @met THEN next_check_at ELSE MIN((strftime('%Y-%m-%d %H:%M:%f', 'now', '+' || (@poll) || ' seconds') || '000Z'),COALESCE(deadline,'9999-12-31 23:59:59.999999Z')) END
             WHERE execution_id=@id;
           UPDATE execution_work SET worker_id=NULL,lease_until=NULL,lease_epoch=lease_epoch+1,wait_probe_due=false,
-            available_at=CASE WHEN @met THEN clock_timestamp() ELSE 'infinity'::timestamptz END WHERE execution_id=@id;
-          UPDATE media_reservations SET lease_epoch=@epoch+1,lease_until='infinity'::timestamptz WHERE execution_id=@id;
+            available_at=CASE WHEN @met THEN (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') ELSE '9999-12-31 23:59:59.999999Z' END WHERE execution_id=@id;
+          UPDATE media_reservations SET lease_epoch=@epoch+1,lease_until='9999-12-31 23:59:59.999999Z' WHERE execution_id=@id;
           """,c,tx))
         {
             update.Parameters.AddWithValue("id",id); update.Parameters.AddWithValue("met",met); update.Parameters.AddWithValue("epoch",request.Epoch);
@@ -85,7 +85,29 @@ public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresen
         await tx.CommitAsync(ct); return true;
     }
 
-    /// <summary>Évalue les attentes dues. Chaque décision est prise une seule fois (verrou de ligne, SKIP LOCKED) quel que soit le nombre de serveurs.</summary>
+    /// <summary>
+    /// Délai avant la prochaine attente à évaluer (minuteur, sonde, échéance), ou null s'il n'y en a aucune.
+    /// Lecture seule : le service dort jusque-là au lieu de repasser à intervalle fixe.
+    /// </summary>
+    public async Task<TimeSpan?> NextDueInAsync(CancellationToken ct)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var next = Sql.Command("""
+            SELECT MIN(x.next_check_at) FROM execution_waits x JOIN executions e ON e.id=x.execution_id
+            WHERE x.state='waiting' AND e.state='running'
+            """, connection);
+        var due = await next.ExecuteScalarAsync(ct) switch
+        {
+            DateTimeOffset value => value,
+            DateTime value => new DateTimeOffset(DateTime.SpecifyKind(value, DateTimeKind.Utc)),
+            string value when DateTimeOffset.TryParse(value, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal, out var parsed) => parsed,
+            _ => (DateTimeOffset?)null,
+        };
+        return due is null ? null : due.Value - DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>Évalue les attentes dues. Chaque décision est prise une seule fois : la transaction est admise par l'écrivain SQLite unique (<see cref="Infrastructure.Data.Sqlite.SqliteWriter"/>), sans verrou de ligne.</summary>
     public async Task<int> ProcessDueAsync(CancellationToken ct)
     {
         // Skip idle polls without taking SQLite's writer lock. The transaction below rechecks
@@ -94,22 +116,22 @@ public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresen
         await using (var pending = Sql.Command("""
             SELECT EXISTS(SELECT 1 FROM execution_waits x JOIN executions e ON e.id=x.execution_id
               WHERE x.state='waiting' AND (e.state IN('cancelled','failed','succeeded','deferred')
-                OR (e.state='running' AND x.next_check_at<=clock_timestamp()
+                OR (e.state='running' AND x.next_check_at<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
                   AND EXISTS(SELECT 1 FROM execution_work w WHERE w.execution_id=e.id))))
             """, readConnection))
             if (!await pending.ScalarBoolAsync(ct)) return 0;
         await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
         await using(var closed=Sql.Command("""
-          UPDATE execution_waits SET state='cancelled',resolved_at=clock_timestamp()
+          UPDATE execution_waits SET state='cancelled',resolved_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
           WHERE state='waiting' AND execution_id IN(SELECT id FROM executions WHERE state IN('cancelled','failed','succeeded','deferred'))
           """,c,tx)) await closed.ExecuteNonQueryAsync(ct);
         var due=new List<(Guid Id,string Node,RuntimeWait Spec,bool Expired,bool TimerDue,int Revision,Guid? Actor,FlowDefinition Flow,Guid Library,bool ProbePending)>();
         await using(var read=Sql.Command("""
-          SELECT x.execution_id,x.flow_node_id,x.spec::text,COALESCE(x.deadline<=clock_timestamp(),false),COALESCE(x.due_at<=clock_timestamp(),false),
-            e.revision,e.worker_id,e.flow_definition::text,k.library_id,k.wait_probe_due
+          SELECT x.execution_id,x.flow_node_id,x.spec,COALESCE(x.deadline<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),false),COALESCE(x.due_at<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),false),
+            e.revision,e.worker_id,e.flow_definition,k.library_id,k.wait_probe_due
           FROM execution_waits x JOIN executions e ON e.id=x.execution_id JOIN execution_work k ON k.execution_id=x.execution_id
-          WHERE x.state='waiting' AND x.next_check_at<=clock_timestamp() AND e.state='running'
-          ORDER BY x.next_check_at LIMIT 50 FOR UPDATE OF x,e,k SKIP LOCKED
+          WHERE x.state='waiting' AND x.next_check_at<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') AND e.state='running'
+          ORDER BY x.next_check_at LIMIT 50
           """,c,tx))
         {
             await using var r=await read.ExecuteReaderAsync(ct);
@@ -130,8 +152,8 @@ public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresen
             // Une condition de plugin est évaluée par un worker. Si ce worker perd son bail, RuntimeRecovery échoue la tentative au lieu de réattribuer la sonde.
             var probe=item.Spec.Mode=="block";
             await using var next=Sql.Command("""
-              UPDATE execution_waits SET next_check_at=LEAST(clock_timestamp()+make_interval(secs=>@poll),COALESCE(deadline,'infinity'::timestamptz)) WHERE execution_id=@id;
-              UPDATE execution_work SET wait_probe_due=true,available_at=clock_timestamp() WHERE execution_id=@id AND @probe AND lease_until IS NULL;
+              UPDATE execution_waits SET next_check_at=MIN((strftime('%Y-%m-%d %H:%M:%f', 'now', '+' || (@poll) || ' seconds') || '000Z'),COALESCE(deadline,'9999-12-31 23:59:59.999999Z')) WHERE execution_id=@id;
+              UPDATE execution_work SET wait_probe_due=true,available_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') WHERE execution_id=@id AND @probe AND lease_until IS NULL;
               """,c,tx);
             next.Parameters.AddWithValue("id",item.Id); next.Parameters.AddWithValue("probe",probe); next.Parameters.AddWithValue("poll",(double)item.Spec.PollSeconds);
             await next.ExecuteNonQueryAsync(ct);
@@ -148,7 +170,7 @@ public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresen
             // Le contexte ne change pas pendant l'attente : seule la sortie du dernier checkpoint est remplacée, par une connexion validée du flow publié.
             var (output,nextNode)=RuntimeWaitPolicy.TimeoutRoute(item.Flow,item.Node);
             string? json;
-            await using(var read=Sql.Command("SELECT checkpoint::text FROM execution_steps WHERE execution_id=@id AND flow_node_id=@node AND completed_at IS NOT NULL",c,tx))
+            await using(var read=Sql.Command("SELECT checkpoint FROM execution_steps WHERE execution_id=@id AND flow_node_id=@node AND completed_at IS NOT NULL",c,tx))
             { read.Parameters.AddWithValue("id",item.Id); read.Parameters.AddWithValue("node",item.Node); json=await read.ExecuteScalarAsync(ct) as string; }
             if(json is null) return;
             var checkpoint=JsonSerializer.Deserialize<RuntimeCheckpoint>(json,Json)! with { OutputId=output,NextNodeId=nextNode,Wait=null };
@@ -160,8 +182,8 @@ public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresen
             detail=nextNode is null?"Délai maximal atteint ; la sortie « Délai dépassé » n'est pas reliée : l'exécution échoue.":"Délai maximal atteint ; le flow continue par la sortie « Délai dépassé ».";
         }
         await using(var update=Sql.Command("""
-          UPDATE execution_waits SET state=@state,resolved_at=clock_timestamp() WHERE execution_id=@id;
-          UPDATE execution_work SET available_at=clock_timestamp(),wait_probe_due=false WHERE execution_id=@id;
+          UPDATE execution_waits SET state=@state,resolved_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') WHERE execution_id=@id;
+          UPDATE execution_work SET available_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),wait_probe_due=false WHERE execution_id=@id;
           """,c,tx))
         { update.Parameters.AddWithValue("id",item.Id); update.Parameters.AddWithValue("state",outcome); await update.ExecuteNonQueryAsync(ct); }
         if(item.Actor is not null)
@@ -173,16 +195,16 @@ public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresen
         await using var cmd=Sql.Command("""
           SELECT EXISTS(
             SELECT 1 FROM workers n
-            WHERE n.deleted_at IS NULL AND 'worker'=ANY(n.roles) AND (@node::uuid IS NULL OR n.id=@node)
-              AND @status<>'offline' AND n.last_seen_at>clock_timestamp()-@offline
+            WHERE n.deleted_at IS NULL AND EXISTS(SELECT 1 FROM json_each(n.roles) WHERE value = 'worker') AND (@node IS NULL OR n.id=@node)
+              AND @status<>'offline' AND n.last_seen_at>(strftime('%Y-%m-%d %H:%M:%f', 'now', @offlineAgo) || '000Z')
               AND (@status='online' OR (SELECT count(*) FROM execution_work w JOIN executions e ON e.id=w.execution_id
-                    WHERE w.worker_id=n.id AND w.lease_until>clock_timestamp() AND e.state IN('running','cancelling'))
+                    WHERE w.worker_id=n.id AND w.lease_until>(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') AND e.state IN('running','cancelling'))
                   <COALESCE((SELECT p.max_concurrent_tasks FROM worker_processing_settings p WHERE p.worker_id=n.id),n.max_concurrent_tasks)))
           OR (@status='offline' AND NOT EXISTS(
-            SELECT 1 FROM workers n WHERE n.id=@node AND n.deleted_at IS NULL AND n.last_seen_at>clock_timestamp()-@offline))
+            SELECT 1 FROM workers n WHERE n.id=@node AND n.deleted_at IS NULL AND n.last_seen_at>(strftime('%Y-%m-%d %H:%M:%f', 'now', @offlineAgo) || '000Z')))
           """,c,tx);
         cmd.Parameters.AddWithValue("node",SqlKind.Uuid,(object?)spec.WorkerId??DBNull.Value); cmd.Parameters.AddWithValue("status",spec.WorkerStatus!);
-        cmd.Parameters.AddWithValue("offline",presence.OfflineAfter);
+        cmd.Parameters.AddWithValue("offlineAgo", -presence.OfflineAfter);
         return (await cmd.ScalarBoolAsync(ct));
     }
 
@@ -191,7 +213,7 @@ public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresen
         await using var cmd=Sql.Command("""
           SELECT count(*) FROM execution_work w JOIN executions e ON e.id=w.execution_id
           WHERE (@scope='cluster' OR w.library_id=@library)
-            AND CASE WHEN @metric='running' THEN e.state IN('running','cancelling') AND w.lease_until>clock_timestamp() ELSE e.state='queued' END
+            AND CASE WHEN @metric='running' THEN e.state IN('running','cancelling') AND w.lease_until>(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') ELSE e.state='queued' END
           """,c,tx);
         cmd.Parameters.AddWithValue("scope",spec.Scope!); cmd.Parameters.AddWithValue("library",library); cmd.Parameters.AddWithValue("metric",spec.Metric!);
         var count=(long)(await cmd.ExecuteScalarAsync(ct))!;
@@ -199,21 +221,39 @@ public sealed class ExecutionWaitRepository(DbDataSource dataSource,WorkerPresen
     }
 }
 
-/// <summary>Évalue périodiquement les attentes dues sur chaque serveur ; sans état local, donc sans point de défaillance unique.</summary>
-public sealed class ExecutionWaitService(ExecutionWaitRepository waits,ILogger<ExecutionWaitService> logger) : BackgroundService
+/// <summary>
+/// Évalue les attentes dues. Le service dort jusqu'à la prochaine échéance connue (minuteur, sonde, délai maximal) et se réveille plus tôt
+/// quand une exécution, un worker ou une bibliothèque change (état d'un worker, charge, fin d'exécution) : plus de passage à vide toutes les 5 s.
+/// Sans état local ; chaque décision reste prise une seule fois, sérialisée par l'écrivain SQLite unique.
+/// </summary>
+public sealed class ExecutionWaitService(ExecutionWaitRepository waits,IServiceProvider services,ILogger<ExecutionWaitService> logger) : BackgroundService
 {
+    /// <summary>Filet de sécurité : borne la perte d'un signal ou une échéance posée sans passer par une mutation de l'API.</summary>
+    private static readonly TimeSpan SafetyNet=TimeSpan.FromSeconds(30);
+    /// <summary>Plancher : une attente qui reste due sans pouvoir être résolue ne doit pas faire tourner le service à vide.</summary>
+    private static readonly TimeSpan Floor=TimeSpan.FromSeconds(1);
+
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
+        var executions=services.GetService<ExecutionStreamBroadcaster>();
+        var live=services.GetService<Encoding.Api.Infrastructure.InterfaceLiveBroadcaster>();
+        var cursor=executions is not null&&live is not null?new Encoding.Api.Infrastructure.WakeCursor(executions,live):null;
         while(!ct.IsCancellationRequested)
         {
+            var sleep=SafetyNet;
             try
             {
-
                 await waits.ProcessDueAsync(ct);
+                if(await waits.NextDueInAsync(ct) is {} until) sleep=until<Floor?Floor:until<SafetyNet?until:SafetyNet;
             }
             catch(OperationCanceledException) when(ct.IsCancellationRequested) { break; }
-            catch(Exception exception) { logger.LogWarning("Évaluation des attentes momentanément indisponible : {Type}.",exception.GetType().Name); }
-            try { await Task.Delay(TimeSpan.FromSeconds(5),ct); } catch(OperationCanceledException) when(ct.IsCancellationRequested) { break; }
+            catch(Exception exception) { logger.LogWarning("Évaluation des attentes momentanément indisponible : {Type}.",exception.GetType().Name); sleep=TimeSpan.FromSeconds(5); }
+            try
+            {
+                if(cursor is null) await Task.Delay(sleep<TimeSpan.FromSeconds(5)?sleep:TimeSpan.FromSeconds(5),ct);
+                else await cursor.WaitAsync(sleep,ct);
+            }
+            catch(OperationCanceledException) when(ct.IsCancellationRequested) { break; }
         }
     }
 }

@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
@@ -11,7 +10,7 @@ namespace Encoding.Api.Infrastructure.Data.Sqlite;
 
 /// <summary>
 /// Source de données SQLite utilisée par chaque serveur (architecture 0043).
-/// Les connexions traduisent le SQL partagé à l'exécution et ouvrent leurs transactions en écriture immédiate,
+/// Le SQL des dépôts est du SQLite natif, exécuté tel quel (aucune traduction). Les connexions ouvrent leurs transactions en écriture immédiate,
 /// ce qui remplace les verrous de lignes et les verrous consultatifs (un seul écrivain à la fois).
 /// Une lecture cohérente demande <see cref="IsolationLevel.Snapshot"/> : la transaction est alors différée et ne prend pas le verrou d'écriture.
 /// </summary>
@@ -221,7 +220,6 @@ public sealed class SqliteTransactionWrapper(SqliteConnectionWrapper connection,
 
 public sealed class SqliteCommandWrapper : DbCommand
 {
-    private static readonly ConcurrentDictionary<string, string> Translations = new(StringComparer.Ordinal);
     private readonly SqliteParameterCollection parameters = new SqliteCommand().Parameters;
     private SqliteCommand? executing;
 
@@ -250,26 +248,14 @@ public sealed class SqliteCommandWrapper : DbCommand
         var command = connection.Inner.CreateCommand();
         command.Transaction = (wrappedTransaction ?? connection.Transaction)?.Inner;
         command.CommandTimeout = connection.Writer.Options.Enabled ? 1 : CommandTimeout;
-        var sql = Translations.GetOrAdd(CommandText,
-            text => { try { return SqliteTranslator.Translate(text); } catch (FormatException exception) { throw new FormatException($"{exception.Message} [SQL: {text}]"); } });
-        var arrays = SqliteTranslator.ArrayParameters(sql);
         foreach (SqliteParameter parameter in parameters)
-        {
-            var name = parameter.ParameterName.TrimStart('@', ':', '$');
-            if (arrays.Contains(name, StringComparer.OrdinalIgnoreCase))
-            {
-                var items = ((IEnumerable)(parameter.Value ?? Array.Empty<object>())).Cast<object?>().ToList();
-                sql = SqliteTranslator.ExpandArray(sql, name, items.Count);
-                for (var i = 0; i < items.Count; i++) command.Parameters.AddWithValue($"@{name}_{i}", Convert(items[i]));
-            }
-            else command.Parameters.AddWithValue("@" + name, Convert(parameter.Value));
-        }
-        command.CommandText = sql;
-        if (Trace) Console.Error.WriteLine("SQLTRACE " + sql.Replace('\n', ' ') + " :: " + string.Join(", ", command.Parameters.Cast<SqliteParameter>().Select(p => p.ParameterName + "=" + p.Value)));
+            command.Parameters.AddWithValue("@" + parameter.ParameterName.TrimStart('@', ':', '$'), Convert(parameter.Value));
+        command.CommandText = CommandText;
+        if (Trace) Console.Error.WriteLine("SQLTRACE " + CommandText.Replace('\n', ' ') + " :: " + string.Join(", ", command.Parameters.Cast<SqliteParameter>().Select(p => p.ParameterName + "=" + p.Value)));
         return executing = command;
     }
 
-    /// <summary>Valeur SQLite d'un paramètre : instants en texte UTC de largeur fixe, durées en modificateurs, tableaux en JSON.</summary>
+    /// <summary>Valeur SQLite d'un paramètre : instants en texte UTC de largeur fixe, durées en modificateurs de date (<c>'+30 seconds'</c>), tableaux en JSON (à lire via <c>json_each(@p)</c>).</summary>
     internal static object Convert(object? value) => value switch
     {
         null or DBNull => DBNull.Value,

@@ -1,0 +1,85 @@
+name: Backend dev
+# Garde-fou léger de la branche dev : compilation stricte + tests d'architecture seulement.
+# Les jobs lourds (runtime complet, multi-processus, Docker, stress, mesures) restent dans backend.yml,
+# déclenchés par la PR de promotion vers main (TEST_RULES.md §8). Ce workflow est volontairement séparé :
+# backend.yml ne doit pas s'exécuter sur dev, sinon ses jobs ignorés produiraient des contrôles « skipped »
+# que .github/scripts/wait-ci.mjs lirait comme des échecs lors de la promotion.
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+permissions:
+  contents: read
+concurrency:
+  group: backend-dev-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  # Le déclencheur n'a pas de filtre de chemins : sinon le contrôle requis resterait « en attente »
+  # sur une PR sans changement backend. Le filtrage est fait ici, et le contrôle `dev-ci` conclut toujours.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.diff.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: diff
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git diff --name-only "$BASE" HEAD | grep -qE '^(backend/|\.github/workflows/backend-dev\.yml$)'; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  backend-dev-fast:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Check documented local runtime filters
+        run: node --test backend/tests/local-profile.test.mjs
+      - run: dotnet restore backend/Encoding.sln
+      - run: dotnet build backend/Encoding.sln --configuration Release --no-restore -warnaserror
+      - name: Architecture and SQL prepare tests only
+        run: >-
+          dotnet test backend/tests/Encoding.Runtime.Tests --configuration Release --no-build
+          --filter "FullyQualifiedName~ArchitectureTests|FullyQualifiedName~SqlStatementsPrepareTests"
+          --logger "trx;LogFileName=architecture.trx" --results-directory test-results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-dev-architecture-results
+          path: test-results
+          retention-days: 7
+
+  # Contrôle agrégateur à rendre requis dans la protection de dev (et lui seul).
+  dev-ci:
+    if: always()
+    needs: [changes, backend-dev-fast]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Conclude
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          FAST: ${{ needs.backend-dev-fast.result }}
+        run: |
+          echo "changes=$CHANGES backend-dev-fast=$FAST"
+          test "$CHANGES" = success
+          test "$FAST" = success || test "$FAST" = skipped

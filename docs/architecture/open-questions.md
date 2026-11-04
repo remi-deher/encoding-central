@@ -7,14 +7,15 @@ Dressé le 2026-10-21 en relisant les anciens ADR contre le code de `dev`. Cette
 ## À traiter en priorité (production)
 
 ### 1. Authentification par défaut : décidé (2026-10-21)
-- Décision de Rémi : le setup d'un admin est imposé. `Auth:Enabled` vaut désormais `true` par défaut ; les écritures MCP exigent un jeton à portée explicite. Voir [auth-ops](domains/auth-ops.md). Reste à faire : vérifier sur les deux hôtes TrueNAS (comptes existants ? sinon l'assistant d'admin apparaîtra à la mise à jour) et ajouter un jeton MCP scopé pour les clients existants.
+- Décision de Rémi : le setup d'un admin est imposé. `Auth:Enabled` vaut désormais `true` par défaut ; les écritures MCP exigent un jeton à portée explicite. Voir [auth-ops](domains/auth-ops.md). Reste à faire : vérifier sur les deux hôtes TrueNAS (comptes existants ? sinon l'assistant d'admin apparaîtra à la mise à jour) et ajouter un jeton MCP scopé pour les clients existants. Complément (2026-11-03) : `Auth:Enabled=false` est refusé au démarrage hors Development ; jeton optionnel `Auth:SetupToken` pour le premier administrateur.
 
 ### 2. Deux mécanismes de réplication : retrait décidé et implémenté (2026-10-25)
 Rémi retient le maillage LWW comme modèle unique. Le mode de consensus, sa dépendance, son coordinateur SQL, ses routes, tests et outils dédiés sont retirés (ADR [0013](adr/0013-retrait-mode-raft.md)). Le protocole du maillage ne change pas. La sortie d'une ancienne installation utilisant ce mode nécessite une sauvegarde et une transition explicite ; aucune conversion automatique n'est livrée. La reprise inter-serveurs est livrée séparément par l’ADR [0016](adr/0016-transferts-et-reprise-manuelle.md).
 
-### 3. Sécurité du bac à sable : `/proc` et `/sys` lisibles
-- Constaté : Landlock autorise la lecture de `/proc` et `/sys` (ajouté pour les CLI IA). `/proc/<pid>/environ` et `mem` de l'agent restent lisibles par un plugin du même utilisateur, limités seulement par les contrôles ptrace. Mesure déjà prise : environnement minimal de l'enfant. Un plugin .NET n'a jamais été essayé sous Landlock réel.
-- Proposition : espace de noms PID ou utilisateur dédié aux plugins ; tester Landlock réel (aucun scénario Landlock n'a été exécuté en conteneur de développement).
+### 3. Sécurité du bac à sable : réseau, `/proc`, seccomp (partiellement traité, 2026-11-03)
+- Traité (ADR [0042](adr/0042-reseau-plugins-capacite-et-seccomp.md), statut `proposed` : **validation de Rémi attendue**, l'ADR passe alors à `accepted` et ce point est refermé) : plus de réseau sans capacité `network` du manifeste (Landlock ABI 4 + seccomp), `/proc` limité à `/proc/self`, `/sys` limité au CPU et aux cgroups, seccomp minimal (sockets `AF_UNIX`, pas de `ptrace`/`process_vm_*`/`io_uring`/`bpf`). Rectification : `/proc/<pid>/environ` d'un processus hors domaine était déjà refusé par la portée ptrace de Landlock ; `cmdline`, `stat`, `status` restaient lisibles, ce qui est désormais fermé pour les plugins.
+- À faire par les plugins du Store : déclarer `capabilities: ["network"]` (plex, jellyfin, sonarr, radarr) ; sans cela ils perdent le réseau.
+- Reste ouvert : (a) un plugin avec `network` joint toute adresse (réseau local, métadonnées cloud) : Landlock ne filtre que des ports, pas des hôtes ; piste : proxy sortant avec liste d'hôtes ou espace de noms réseau ; (b) les CLI IA gardent `/proc` et `/sys` larges ; (c) seccomp est une liste de refus minimale, pas une liste d'autorisation (une liste blanche exige de tester chaque runtime Python/Node/natif) ; (d) `AF_UNIX` reste permis : socket abstrait de l'hôte bloqué seulement à partir de l'ABI 6 (D-Bus, X11 accessibles avant), descripteur hérité non filtré, sockets à chemin refusés par Landlock hors espace de travail ; exigence : ne jamais monter docker.sock, D-Bus ou l'agent SSH dans le conteneur du worker ; portée des signaux (ABI 6) non utilisée ; (e) pas d'espace de noms PID/utilisateur ; (f) plugin .NET jamais essayé ; (g) aucune vérification en conteneur de production ni sur noyau < 6.7 ; hors x86-64/ARM64 le bac à sable est indisponible.
 
 ### 4. Reprise après perte d’un serveur : décidée et implémentée (2026-10-25)
 La reprise manuelle à deux serveurs est livrée par l’ADR [0016](adr/0016-transferts-et-reprise-manuelle.md) : neutralisation explicite de l’installation source et de ses workers, grâce de 135 s, checkpoint signé et fichiers vérifiés, époque supérieure, puis réconciliation avant réadmission. Un serveur injoignable n’est jamais considéré arrêté automatiquement. Les baux restent locaux. Témoin/majorité de reprise à trois serveurs et automatisation restent des extensions futures ; les validations multi-hôtes/NAS restent à réaliser.
@@ -48,9 +49,13 @@ Décidés par l'[ADR 0036](adr/0036-separation-stricte-central-worker.md) : cent
 - Les instructions du projet (mission) et la mémoire d'équipe citent encore PostgreSQL ; le code, `AGENTS.md` et la production (vérifiée le 2026-10-21) sont en SQLite seul. À aligner côté instructions du projet, hors dépôt.
 - Documents d'exploitation : ré-audités le 2026-10-21 (index dans `docs/operations/README.md`). Restent à ré-auditer : `docs/design/*`.
 - `backend/README.md` : sections datées par numéros de migration (« la migration 0008 ajoute… ») à réécrire en renvoyant vers les fiches.
+- Dette SQL (ADR 0043) : l'instant courant est écrit en littéral `(strftime('%Y-%m-%d %H:%M:%f', 'now'…) || '000Z')` à ~100 endroits, contre quelques usages de `Sql.UtcNow` ; à factoriser (constante interpolée ou vue) dans une PR dédiée.
 
 ## Non vérifié en conditions réelles (à ne pas présenter comme garanti)
 Landlock en conteneur de production ; GPU réel (QSV, VAAPI, NVENC) ; Plex/Jellyfin/Sonarr/Radarr réels ; NAS/NFS (atomicité du renommage et des verrous) ; cluster multi-hôtes sous charge (changement de mode, reprise après perte de worker) ; thème sombre et mobile de la page Nœuds et de l'éditeur de flow.
+
+## Verrou d'écriture de source orphelin (ADR 0014)
+Détection livrée (états `Orphaned`/`ProbablyOrphaned`, voir [runtime](domains/runtime.md)). Reste à faire : brancher `ReleaseOrphan` sur une action opérateur (corriger sa fenêtre TOCTOU entre inspection et suppression, journaliser l'acteur), vérifier les verrous d'un autre hôte auprès du central (exécution terminée ou époque expirée) et valider le comportement sur NAS/NFS.
 
 ## Reprise après perte du worker (ADR 0004)
 Livrée : reprise au dernier checkpoint, bornée à 2, blocs rejouables. Reste à décider : attendre le retour du nœud d'accès (au lieu d'échouer) quand le traitement continue ailleurs ; reprendre le verrou de disque libéré ; checkpoint intermédiaire à l'intérieur d'un encodage long (aujourd'hui, le bloc est refait depuis son début).

@@ -28,15 +28,31 @@ public sealed record AuthOptions(
         if (maxPending <= 0) throw new InvalidOperationException("Auth:MaxPendingPairingRequests doit être supérieur à zéro.");
         var secure = configuration["Auth:CookieSecure"];
         var enabled = configuration.GetValue("Auth:Enabled", true);
+        // Jeton d'initialisation : Auth:SetupToken (Auth__SetupToken) ou la variable documentée AUTH_SETUP_TOKEN. Vide = non exigé.
+        var setupToken = configuration["Auth:SetupToken"];
+        if (string.IsNullOrWhiteSpace(setupToken)) setupToken = configuration["AUTH_SETUP_TOKEN"];
+        setupToken = string.IsNullOrWhiteSpace(setupToken) ? null : setupToken.Trim();
         return new AuthOptions(
             TimeSpan.FromMinutes(idle),
             TimeSpan.FromHours(absolute),
             string.IsNullOrWhiteSpace(secure) || secure.Equals("auto", StringComparison.OrdinalIgnoreCase) ? null : bool.Parse(secure),
-            null,
+            setupToken,
             maxFailures,
             maxPending,
             perMinute,
             enabled,
             heavyPerMinute);
+    }
+
+    /// <summary>
+    /// Refuse <c>Auth:Enabled=false</c> hors environnement Development : ce mode donne le rôle administrateur à tout appelant,
+    /// MCP compris. Échec explicite au démarrage plutôt qu'un central ouvert sans que l'opérateur s'en aperçoive.
+    /// </summary>
+    public void EnsureAllowedIn(IHostEnvironment environment)
+    {
+        if (Enabled || environment.IsDevelopment()) return;
+        throw new InvalidOperationException(
+            $"Auth:Enabled=false est refusé en environnement « {environment.EnvironmentName} » : ce mode donne le rôle administrateur à toute requête. " +
+            "Retirez Auth__Enabled (l'authentification est obligatoire par défaut) ; ce mode n'est accepté qu'avec ASPNETCORE_ENVIRONMENT=Development.");
     }
 }

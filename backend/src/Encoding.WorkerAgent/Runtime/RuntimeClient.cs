@@ -8,7 +8,7 @@ namespace Encoding.WorkerAgent.Runtime;
 
 public sealed class RuntimeClient : IDisposable
 {
-    private readonly HttpClient http=new() { Timeout=Timeout.InfiniteTimeSpan };
+    private readonly HttpClient http=WorkerCentralHttp.Create(Timeout.InfiniteTimeSpan);
     private readonly WorkerIdentityState identity;
     public RuntimeClient(WorkerIdentityState identity, string? apiBaseUrl = null)
     {
@@ -39,6 +39,19 @@ public sealed class RuntimeClient : IDisposable
             throw new HttpRequestException($"Response status code does not indicate success: {(int)response.StatusCode} ({response.ReasonPhrase}). Content: {content}", null, response.StatusCode);
         }
         return (await response.Content.ReadFromJsonAsync<T>(AgentJson.Options,ct))!;
+    }
+    /// <summary>Ouvre le flux SSE de réveil du central. L'appelant dispose la réponse, ce qui ferme le flux.</summary>
+    public async Task<HttpResponseMessage> OpenWakeStreamAsync(CancellationToken ct)
+    {
+        using var request=new HttpRequestMessage(HttpMethod.Get,Route("wake"));
+        request.Headers.Accept.ParseAdd("text/event-stream");
+        var response=await http.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,ct);
+        if(!response.IsSuccessStatusCode)
+        {
+            var status=response.StatusCode; response.Dispose();
+            throw new HttpRequestException($"Le flux de réveil est refusé : {(int)status}.",null,status);
+        }
+        return response;
     }
     public Task<RuntimePublicationState> PublicationStateAsync(Guid id,long epoch,CancellationToken ct)=>GetAsync<RuntimePublicationState>($"executions/{id:D}/publication?epoch={epoch}",ct);
     public Task ReportSourceOperationAsync(Guid id,long epoch,string stepNodeId,Guid invocationId,RuntimeCommandLog operation,CancellationToken ct)=>

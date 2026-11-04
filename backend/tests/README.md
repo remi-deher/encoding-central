@@ -2,15 +2,25 @@
 
 La suite utilise les vrais dépôts, des fichiers SQLite temporaires, les endpoints HTTP du runtime et le runner worker. Elle ne dépend d'aucun serveur de base externe ; chaque scénario supprime son fichier et ses médias synthétiques à la fin.
 
-Avec .NET 10 :
+Avec .NET 10, le profil local par défaut exécute les scénarios Launcher/Plugins et cible Runtime :
 
-```powershell
-dotnet test backend/tests/Encoding.Runtime.Tests --configuration Release
+```sh
+nice -n 19 dotnet run --project backend/tests/Encoding.Launcher.Tests --configuration Release
+nice -n 19 dotnet run --project backend/tests/Encoding.Plugins.Tests --configuration Release
+nice -n 19 dotnet test backend/tests/Encoding.Runtime.Tests --configuration Release --filter "FullyQualifiedName~ExecutionStatesTests&Category!=Stress&Category!=ContentionLoad"
 ```
 
-La suite utilise xUnit (`dotnet test`). Les scénarios de base s’exécutent toujours sur SQLite. FFmpeg, ffprobe et MediaInfo sont nécessaires aux scénarios média ; `backend/tests/Dockerfile` fournit le SDK et ces outils. La CI exécute toute la suite, exige les outils média, collecte la couverture et conserve les résultats `.trx` en artefact.
+Remplacer `ExecutionStatesTests` par la classe Runtime liée au changement (périmètre minimal, économie CPU : voir TEST_RULES.md, section 8).
 
-Depuis la racine du dépôt, avec Docker :
+Pour une modification Runtime et avant une PR, lancer toute la suite Runtime hors Stress et contention de charge, une seule fois :
+
+```sh
+nice -n 19 dotnet test backend/tests/Encoding.Runtime.Tests --configuration Release --filter "Category!=Stress&Category!=ContentionLoad"
+```
+
+La suite utilise xUnit (`dotnet test`). Les scénarios de base s’exécutent toujours sur SQLite. FFmpeg, ffprobe et MediaInfo sont nécessaires aux scénarios média ; `backend/tests/Dockerfile` fournit le SDK et ces outils. La CI de promotion exécute la suite Runtime hors Stress, y compris la contention de charge, exige les outils média, collecte la couverture et conserve les résultats `.trx`.
+
+Depuis la racine du dépôt, avec Docker (reproduit la suite complète de la CI — réservé à la CI, pas une vérification locale par défaut) :
 
 ```powershell
 docker build -t encoding-runtime-tests -f backend/tests/Dockerfile backend/tests
@@ -29,9 +39,9 @@ Les tests de remplacement de source (fichiers, politique, période de grâce, re
 
 Le maillage est aussi vérifié à trois serveurs (`ClusterMeshConvergenceTests`) : écritures concurrentes pendant une partition totale, échanges dans un ordre aléatoire à graine fixe avec doublons, rattrapage d'un serveur par un relais sans l'auteur d'origine, événements d'un type inconnu conservés et relayés, lots invalides refusés en bloc. Côté exécution, une publication demandée avant la perte du worker est adoptée par le worker de reprise sans être refaite, et une exécution répliquée vers un autre serveur y reste visible sans jamais y être attribuable (baux et réservations restent locaux).
 
-Le test multi-processus `WorkerProcessLossTests` démarre un vrai serveur et deux vrais workers (enrôlement local, bibliothèque en accès direct, flow d'encodage H.265 d'un média synthétique), tue le worker en plein ffmpeg (SIGKILL) et vérifie qu'après l'expiration du bail l'autre worker reprend la même exécution, sans doublon, que la source est inchangée et qu'aucun fichier parasite n'apparaît dans la bibliothèque. Il est ignoré par défaut (plusieurs minutes, ffmpeg et Linux requis) : `ENCODING_TEST_MULTIPROCESS=1 dotnet test backend/tests/Encoding.Runtime.Tests --filter WorkerProcessLossTests`. La CI l'exécute dans le job `backend-multiprocess-tests`.
+Le test multi-processus `WorkerProcessLossTests` démarre un vrai serveur et deux vrais workers (enrôlement local, bibliothèque en accès direct, flow d'encodage H.265 d'un média synthétique), tue le worker en plein ffmpeg (SIGKILL) et vérifie qu'après l'expiration du bail l'autre worker reprend la même exécution, sans doublon, que la source est inchangée et qu'aucun fichier parasite n'apparaît dans la bibliothèque. Il est ignoré par défaut (plusieurs minutes, ffmpeg et Linux requis) et réservé à la CI par défaut; une exécution locale ponctuelle peut utiliser `ENCODING_TEST_MULTIPROCESS=1` (TEST_RULES.md, section 8). La CI l'exécute dans le job `backend-multiprocess-tests`.
 
-Deux tests utilisent de vrais conteneurs de l'image `encoding` sur un réseau Docker (`DockerCentralTests`, ignorés par défaut). Le premier démarre un serveur et deux workers (utilisateur non-root, lanceur, enrôlement par fenêtre ouverte), fait un `docker kill` du conteneur qui encode puis vérifie la reprise par l'autre conteneur et l'intégrité de la source. Le second fait rejoindre le serveur récent par un worker de la dernière image publiée (`mrcryllix/encoding:latest`) et vérifie qu'il exécute un flow : compatibilité entre versions de nœuds. Local : construire l'image (`docker build -f backend/Dockerfile -t encoding:test .`) puis `ENCODING_TEST_DOCKER=1 ENCODING_TEST_IMAGE=encoding:test ENCODING_TEST_PREVIOUS_IMAGE=<image précédente> dotnet test backend/tests/Encoding.Runtime.Tests --filter DockerCentralTests`. La CI les exécute dans le job `backend-docker-cluster-tests`.
+Deux tests utilisent de vrais conteneurs de l'image `encoding` sur un réseau Docker (`DockerCentralTests`, ignorés par défaut). Le premier démarre un serveur et deux workers (utilisateur non-root, lanceur, enrôlement par fenêtre ouverte), fait un `docker kill` du conteneur qui encode puis vérifie l'échec sans réattribution, puis la relance explicite sur l'autre conteneur et l'intégrité de la source. Le second fait rejoindre le serveur récent par un worker de la dernière image publiée (`mrcryllix/encoding:latest`) et vérifie qu'il exécute un flow : compatibilité entre versions de nœuds. Réservés à la CI par défaut; une exécution locale ponctuelle nécessite les images et variables d'environnement de `.github/workflows/backend.yml` (TEST_RULES.md, section 8). La CI les exécute dans le job `backend-docker-cluster-tests` (images construites avec ffmpeg via `.github/docker/Dockerfile.cluster-test`).
 
 ## Frontend
 
@@ -51,6 +61,6 @@ Les tests des plugins Python et du SDK sont maintenus dans le dépôt public Enc
 
 ## Charge et contention SQLite
 
-`LoadContentionTests` tourne à chaque PR (quelques secondes) : une lecture cohérente (`Snapshot`) ne bloque jamais un écrivain, heartbeats, aperçu des exécutions et récupération partagent une grosse file sans erreur `database is locked`, et un heartbeat retardé ne fait échouer aucune exécution en file alors qu'un nœud réellement perdu le fait. Les bornes de latence sont larges : elles détectent une régression, pas une performance précise.
+`LoadContentionTests` tourne dans le job `backend-runtime-tests` de la PR de promotion vers `main` : une lecture cohérente (`Snapshot`) ne bloque jamais un écrivain, heartbeats, aperçu des exécutions et récupération partagent une grosse file sans erreur `database is locked`, et un heartbeat retardé ne fait échouer aucune exécution en file alors qu'un nœud réellement perdu le fait. Le scénario de charge mixte (`Category=ContentionLoad`) reste réservé à la CI : 3 000 exécutions, six heartbeats, trois aperçus et une récupération pendant 8 secondes. Les deux autres tests de la classe restent accessibles localement avec le filtre léger. Les bornes de latence sont larges : elles détectent une régression, pas une performance précise.
 
-`LoadStressTests` (`Category=Stress`) est exclu des PR et lancé chaque nuit par `.github/workflows/stress.yml` (ou à la demande) : 20 000 exécutions, 30 nœuds, 60 s par défaut (`ENCODING_STRESS_EXECUTIONS`, `ENCODING_STRESS_NODES`, `ENCODING_STRESS_SECONDS`). En local : `dotnet test backend/tests/Encoding.Runtime.Tests --filter "Category=Stress"`.
+`LoadStressTests` (`Category=Stress`) est exclu des PR et lancé uniquement à la demande (`workflow_dispatch`) par `.github/workflows/stress.yml` : 20 000 exécutions, 30 nœuds, 60 s par défaut (`ENCODING_STRESS_EXECUTIONS`, `ENCODING_STRESS_NODES`, `ENCODING_STRESS_SECONDS`). **CI uniquement, sans exception locale** (TEST_RULES.md, section 8).

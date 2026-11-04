@@ -266,7 +266,7 @@ internal static partial class Harness
             artifacts=new(db,config); executions=new(db);
             foreach(var id in new[]{a,b,c})
             {
-                await using var command=db.CreateCommand("INSERT INTO workers(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at,worker_token_hash) VALUES(@id,@name,ARRAY['worker'],100,@caps,clock_timestamp(),@token)");
+                await using var command=db.CreateCommand("INSERT INTO workers(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at,worker_token_hash) VALUES(@id,@name,json_array('worker'),100,@caps,(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),@token)");
                 command.Parameters.AddWithValue("id",id); command.Parameters.AddWithValue("name",id.ToString());
                 command.Parameters.AddWithValue("caps",SqlKind.Json,JsonSerializer.Serialize(Capabilities(true),Json));
                 command.Parameters.AddWithValue("token",SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Token))); await command.ExecuteNonQueryAsync();
@@ -375,7 +375,7 @@ internal static partial class Harness
 
             var production = (await groups.ListAsync(CancellationToken.None)).Single(g => g.Name == "Production");
             Check(production.WorkerIds.Contains(b), "A manual group lists its active members.");
-            await using (var retire = db.CreateCommand("UPDATE workers SET deleted_at=clock_timestamp() WHERE id=@id"))
+            await using (var retire = db.CreateCommand("UPDATE workers SET deleted_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') WHERE id=@id"))
             { retire.Parameters.AddWithValue("id", b); await retire.ExecuteNonQueryAsync(); }
             try
             {
@@ -411,7 +411,7 @@ internal static partial class Harness
                 UPDATE executions SET state='cancelled'
                 WHERE state='queued' OR state='running' AND id IN (
                   SELECT execution_id FROM execution_work
-                  WHERE worker_id IS NULL AND lease_until IS NULL AND available_at<=clock_timestamp()
+                  WHERE worker_id IS NULL AND lease_until IS NULL AND available_at<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
                 )
                 """:"UPDATE executions SET state='cancelled' WHERE state='queued'";
             await using(var leftovers=db.CreateCommand(cleanup)) await leftovers.ExecuteNonQueryAsync();
@@ -518,7 +518,7 @@ internal static partial class Harness
                 await using var direct=db.CreateCommand("UPDATE library_worker_accesses SET mode='direct',local_path='/another/mount',transfer_source_worker_id=NULL WHERE worker_id=@node AND library_id=(SELECT library_id FROM execution_work WHERE execution_id=@id)");
                 direct.Parameters.AddWithValue("id",id);direct.Parameters.AddWithValue("node",b);await direct.ExecuteNonQueryAsync();
             }
-            await using(var pending=db.CreateCommand("SELECT lease_until='infinity'::timestamptz FROM media_reservations WHERE execution_id=@id"))
+            await using(var pending=db.CreateCommand("SELECT lease_until='9999-12-31 23:59:59.999999Z' FROM media_reservations WHERE execution_id=@id"))
             { pending.Parameters.AddWithValue("id",id);Check((await pending.ScalarBoolAsync()),"The media reservation survives waiting."); }
             var received=await runtime.ClaimAsync(b,CancellationToken.None)??throw new InvalidOperationException("The receiver must claim.");
             Check(received.ExecutionId==id && received.Attempt==lease.Attempt && received.Epoch>lease.Epoch,"The same execution resumes with a new epoch.");
@@ -591,7 +591,7 @@ internal static partial class Harness
             Check(await runtime.EnqueueAsync(new(id, library, "source.mkv", flow.Id, flow.Version), flow, CancellationToken.None), "Enqueue fixture.");
             Check(await runtime.ClaimAsync(b, CancellationToken.None) is null, "Le worker par transfert laisse la main au worker direct capable.");
             // Le worker direct perd ses capacités : le worker par transfert prend alors le relais, sans attente indéfinie.
-            await using(var strip = db.CreateCommand("UPDATE workers SET capabilities='[]'::jsonb WHERE id=@a")) { strip.Parameters.AddWithValue("a", a); await strip.ExecuteNonQueryAsync(); }
+            await using(var strip = db.CreateCommand("UPDATE workers SET capabilities='[]' WHERE id=@a")) { strip.Parameters.AddWithValue("a", a); await strip.ExecuteNonQueryAsync(); }
             var claim = await runtime.ClaimAsync(b, CancellationToken.None);
             await ResetNodesAsync();
             await using(var restore = db.CreateCommand("UPDATE workers SET capabilities=@caps WHERE id=@a"))
@@ -622,10 +622,10 @@ internal static partial class Harness
             catch(InvalidDataException) { corruptRejected=true; }
             Check(corruptRejected,"A corrupt transfer must be rejected before registration.");
             await CompleteAsync(id,a,lease,"relay",context);
-            await using(var offline=db.CreateCommand("UPDATE workers SET last_seen_at=clock_timestamp()-interval '2 hours' WHERE id=@id"))
+            await using(var offline=db.CreateCommand("UPDATE workers SET last_seen_at=(strftime('%Y-%m-%d %H:%M:%f', 'now', '-2 hours') || '000Z') WHERE id=@id"))
             { offline.Parameters.AddWithValue("id",b);await offline.ExecuteNonQueryAsync(); }
             Check(await runtime.ClaimAsync(b,CancellationToken.None) is null,"An offline target cannot claim.");
-            await using(var busy=db.CreateCommand("UPDATE workers SET last_seen_at=clock_timestamp(),max_concurrent_tasks=0 WHERE id=@id"))
+            await using(var busy=db.CreateCommand("UPDATE workers SET last_seen_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),max_concurrent_tasks=0 WHERE id=@id"))
             { busy.Parameters.AddWithValue("id",b);await busy.ExecuteNonQueryAsync(); }
             Check(await runtime.ClaimAsync(b,CancellationToken.None) is null,"Capacity limits still apply to a relay.");
             await using(var unsupported=db.CreateCommand("UPDATE workers SET max_concurrent_tasks=10 WHERE id=@node; UPDATE library_worker_accesses SET is_enabled=false WHERE worker_id=@node AND library_id=(SELECT library_id FROM execution_work WHERE execution_id=@execution)"))
@@ -668,7 +668,7 @@ internal static partial class Harness
         }
         private async Task ExpireAsync(Guid id)
         {
-            await using var command=db.CreateCommand("UPDATE execution_work SET lease_until=clock_timestamp()-interval '1 second' WHERE execution_id=@id; UPDATE media_reservations SET lease_until=clock_timestamp()-interval '1 second' WHERE execution_id=@id");
+            await using var command=db.CreateCommand("UPDATE execution_work SET lease_until=(strftime('%Y-%m-%d %H:%M:%f', 'now', '-1 seconds') || '000Z') WHERE execution_id=@id; UPDATE media_reservations SET lease_until=(strftime('%Y-%m-%d %H:%M:%f', 'now', '-1 seconds') || '000Z') WHERE execution_id=@id");
             command.Parameters.AddWithValue("id",id);await command.ExecuteNonQueryAsync();
         }
         private async Task RecoverCancellationAsync(Guid id)
@@ -777,12 +777,11 @@ internal static partial class Harness
             var received=await runtime.ClaimAsync(b,CancellationToken.None)??throw new InvalidOperationException("The early runner must yield.");
             Check(received.Checkpoint?.Context.Variables["selected"].GetInt32()==42,"The runner persists variables before the relay.");
             await ExpireAsync(id);
-            Check(await runtime.ClaimAsync(b,CancellationToken.None) is null,"An interrupted receiver attempt is not reassigned before the recovery service hands it back.");
+            Check(await runtime.ClaimAsync(b,CancellationToken.None) is null,"An interrupted receiver attempt is not reassigned before the recovery service closes it.");
             var recovery=new RuntimeRecoveryService(db,NullLogger<RuntimeRecoveryService>.Instance);
             await recovery.ProcessOnceAsync(CancellationToken.None);
-            var again=await runtime.ClaimAsync(b,CancellationToken.None)??throw new InvalidOperationException("The relay destination must resume the disconnected receiver's attempt.");
-            Check(again.ExecutionId==id && again.Checkpoint?.Context.Variables["selected"].GetInt32()==42,"The resumed attempt keeps the relay checkpoint.");
-            Check(await executions.CancelAsync(id,CancellationToken.None),"Clean up the resumed relay.");await ExpireAsync(id);await RecoverCancellationAsync(id);
+            Check((await executions.GetAsync(id,CancellationToken.None))!.State=="failed","Loss of the receiver fails the relayed attempt.");
+            Check(await runtime.ClaimAsync(b,CancellationToken.None) is null,"The relay destination cannot silently resume its expired attempt.");
         }
         public async Task CancellationAsync()
         {
@@ -860,7 +859,7 @@ internal static partial class Harness
             Directory.CreateDirectory(sourceOptions.DataDirectory);
             await File.WriteAllTextAsync(Path.Combine(sourceOptions.DataDirectory,"node-identity.json"),
                 JsonSerializer.Serialize(new WorkerIdentityState(a,"fixture","fixture",app.Urls.Single()+"/",Token,true),Json),deadline.Token);
-            using var sourceService=new RuntimeTransferService(sourceOptions,new WorkerIdentityStore(sourceOptions),scanner,new PublicationGuardRunner(new NoGuardInvoker(),NullLogger<PublicationGuardRunner>.Instance),localPublicationArtifacts,NullLogger<RuntimeTransferService>.Instance);
+            using var sourceService=new RuntimeTransferService(sourceOptions,new WorkerIdentityStore(sourceOptions),scanner,new PublicationGuardRunner(new NoGuardInvoker(),NullLogger<PublicationGuardRunner>.Instance),localPublicationArtifacts,new WorkerWakeSignal(),NullLogger<RuntimeTransferService>.Instance);
             await sourceService.StartAsync(deadline.Token);
             await run;
             await sourceService.StopAsync(CancellationToken.None);

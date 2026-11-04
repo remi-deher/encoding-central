@@ -24,7 +24,7 @@ public sealed class LibraryFlowChangeTests
         var library = Guid.NewGuid(); var scan = Guid.NewGuid();
         await using (var setup = db.Db.CreateCommand("""
             INSERT INTO libraries(id,name) VALUES(@library,'Synthetic');
-            INSERT INTO library_scans(id,library_id,media_type,state,completed_at) VALUES(@scan,@library,'video','completed',clock_timestamp());
+            INSERT INTO library_scans(id,library_id,media_type,state,completed_at) VALUES(@scan,@library,'video','completed',(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'));
             """))
         { setup.Parameters.AddWithValue("library", library); setup.Parameters.AddWithValue("scan", scan); await setup.ExecuteNonQueryAsync(); }
         var modified = new DateTimeOffset(2024, 5, 6, 7, 8, 9, TimeSpan.Zero);
@@ -32,7 +32,7 @@ public sealed class LibraryFlowChangeTests
         foreach (var name in new[] { "queued.mkv", "done.mkv", "running.mkv" })
         {
             media[name] = Guid.NewGuid();
-            await using var file = db.Db.CreateCommand("INSERT INTO library_media(id,library_id,relative_path,byte_length,modified_at,scan_id,stable_since) VALUES(@id,@library,@path,10,@modified,@scan,clock_timestamp()-interval '1 hour')");
+            await using var file = db.Db.CreateCommand("INSERT INTO library_media(id,library_id,relative_path,byte_length,modified_at,scan_id,stable_since) VALUES(@id,@library,@path,10,@modified,@scan,(strftime('%Y-%m-%d %H:%M:%f', 'now', '-1 hours') || '000Z'))");
             file.Parameters.AddWithValue("id", media[name]); file.Parameters.AddWithValue("library", library); file.Parameters.AddWithValue("path", name);
             file.Parameters.AddWithValue("modified", modified); file.Parameters.AddWithValue("scan", scan); await file.ExecuteNonQueryAsync();
         }

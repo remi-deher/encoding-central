@@ -7,6 +7,8 @@ on:
       - ".github/workflows/backend.yml"
       - ".github/actions/apt-install/**"
       - ".github/scripts/apt-install.sh"
+permissions:
+  contents: read
 concurrency:
   group: backend-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -197,18 +199,24 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      - name: Show the kernel and Landlock ABI
+        run: |
+          uname -r
+          cat /sys/kernel/security/lsm; echo
+          python3 -c "import ctypes; libc = ctypes.CDLL(None, use_errno=True); print('Landlock ABI:', libc.syscall(444, None, 0, 1))"
       - name: Install the pinned official CLI packages
         run: |
           npm install --prefix "$RUNNER_TEMP/encoding-ai-cli" --no-audit --no-fund \
             @openai/codex@0.163.0 @anthropic-ai/claude-code@2.1.302
           echo "$RUNNER_TEMP/encoding-ai-cli/node_modules/.bin" >> "$GITHUB_PATH"
-      - name: Check official CLI versions, options and Landlock execution
+      - name: Check official CLI versions, options, Landlock and seccomp execution
         run: >-
           dotnet test backend/tests/Encoding.Runtime.Tests/Encoding.Runtime.Tests.csproj
           --configuration Release
-          --filter "FullyQualifiedName~AiCliNativeCompatibilityTests|FullyQualifiedName~ProductionRuntimeFailsClosedWithoutLandlockOrDeniesFilesOutsideProfile|FullyQualifiedName~ProductionSandboxAllowsReadingSystemOpenSslConfiguration"
+          --filter "FullyQualifiedName~AiCliNativeCompatibilityTests|FullyQualifiedName~ProductionRuntimeFailsClosedWithoutLandlockOrDeniesFilesOutsideProfile|FullyQualifiedName~ProductionSandboxAllowsReadingSystemOpenSslConfiguration|FullyQualifiedName~ProcessSandboxNativeTests|FullyQualifiedName~ProcessSandboxRulesTests"
         env:
           ENCODING_TEST_AI_CLI_NATIVE: '1'
+          ENCODING_TEST_LANDLOCK: '1'
           ENCODING_TEST_AI_CLI_RUNTIME: ${{ runner.temp }}/encoding-ai-cli/node_modules
 
   cluster-two-server-measurements:

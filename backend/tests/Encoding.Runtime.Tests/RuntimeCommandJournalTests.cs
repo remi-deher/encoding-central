@@ -27,7 +27,7 @@ public sealed class RuntimeCommandJournalTests
             Assert.True(await RuntimeCommandJournal.StoreAsync(id, [new("check", invocation, started with { ProgressPercent = 50 })], c, tx, default));
             await tx.CommitAsync();
         }
-        await using (var done = db.Db.CreateCommand("UPDATE execution_steps SET completed_at=clock_timestamp() WHERE execution_id=@id"))
+        await using (var done = db.Db.CreateCommand("UPDATE execution_steps SET completed_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') WHERE execution_id=@id"))
         {
             done.Parameters.AddWithValue("id", id); await done.ExecuteNonQueryAsync();
         }

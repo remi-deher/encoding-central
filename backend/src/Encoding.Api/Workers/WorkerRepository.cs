@@ -24,7 +24,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         var tokenHash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(request.WorkerToken));
         const string sql = """
             INSERT INTO workers (id, name, roles, max_concurrent_tasks, capabilities, inventory, last_seen_at, worker_token_hash, display_name)
-            SELECT @id, @name, @roles, @max_concurrent_tasks, @capabilities, @inventory, clock_timestamp(), @worker_token_hash, @display_name
+            SELECT @id, @name, @roles, @max_concurrent_tasks, @capabilities, @inventory, (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'), @worker_token_hash, @display_name
             WHERE @allow_new OR EXISTS (SELECT 1 FROM workers WHERE id = @id AND deleted_at IS NULL AND worker_token_hash = @worker_token_hash)
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
@@ -32,7 +32,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
                 max_concurrent_tasks = EXCLUDED.max_concurrent_tasks,
                 capabilities = EXCLUDED.capabilities,
                 inventory = EXCLUDED.inventory,
-                last_seen_at = clock_timestamp(),
+                last_seen_at = (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),
                 display_name = COALESCE(workers.display_name, EXCLUDED.display_name)
             WHERE workers.deleted_at IS NULL AND (workers.worker_token_hash IS NULL OR workers.worker_token_hash = EXCLUDED.worker_token_hash)
             RETURNING id, name, roles, max_concurrent_tasks, capabilities, last_seen_at, inventory, display_name, labels
@@ -62,6 +62,14 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         return (await command.ScalarBoolAsync(cancellationToken));
     }
 
+    /// <summary>Identité du worker porteur de ce jeton (source d'autorité : jamais un identifiant fourni par le worker) ; <c>null</c> si inconnu ou retiré.</summary>
+    public async Task<Guid?> WorkerIdForTokenAsync(string token, CancellationToken cancellationToken)
+    {
+        await using var command = dataSource.CreateCommand("SELECT id FROM workers WHERE worker_token_hash = @hash AND deleted_at IS NULL");
+        command.Parameters.AddWithValue("hash", SqlKind.Bytes, HashSecret(token));
+        return await command.ScalarGuidAsync(cancellationToken);
+    }
+
     public async Task<bool> AuthenticateTokenAsync(Guid workerId, string token, CancellationToken cancellationToken)
     {
         await using var command = dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM workers WHERE id = @id AND worker_token_hash = @hash AND deleted_at IS NULL)");
@@ -83,7 +91,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         await using var deleted=dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM workers WHERE id=@id AND deleted_at IS NOT NULL)");
         deleted.Parameters.AddWithValue("id",request.Worker.Id); if((await deleted.ScalarBoolAsync(cancellationToken))) return PairingRequestResult.Conflict;
         // Borne les demandes en attente pour qu’un appelant anonyme ne puisse pas saturer la liste d’approbation.
-        await using var pending=dataSource.CreateCommand("SELECT count(*) FROM worker_enrollment_requests WHERE expires_at > clock_timestamp() AND worker_id <> @id");
+        await using var pending=dataSource.CreateCommand("SELECT count(*) FROM worker_enrollment_requests WHERE expires_at > (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') AND worker_id <> @id");
         pending.Parameters.AddWithValue("id",request.Worker.Id); if((long)(await pending.ExecuteScalarAsync(cancellationToken))! >= maxPending) return PairingRequestResult.TooMany;
         var pairingKeyHash = HashSecret(request.PairingKey);
         var nodeTokenHash = HashSecret(request.Worker.WorkerToken);
@@ -99,7 +107,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
             INSERT INTO worker_enrollment_requests
                 (worker_id, pairing_key_hash, worker_token_hash, name, roles, max_concurrent_tasks, capabilities, inventory, display_name, expires_at)
             VALUES
-                (@id, @pairing_key_hash, @worker_token_hash, @name, @roles, @max_concurrent_tasks, @capabilities, @inventory, @display_name, clock_timestamp() + interval '10 minutes')
+                (@id, @pairing_key_hash, @worker_token_hash, @name, @roles, @max_concurrent_tasks, @capabilities, @inventory, @display_name, (strftime('%Y-%m-%d %H:%M:%f', 'now', '+10 minutes') || '000Z'))
             ON CONFLICT (worker_id) DO UPDATE SET
                 pairing_key_hash = EXCLUDED.pairing_key_hash,
                 worker_token_hash = EXCLUDED.worker_token_hash,
@@ -109,10 +117,10 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
                 capabilities = EXCLUDED.capabilities,
                 inventory = EXCLUDED.inventory,
                 display_name = COALESCE(EXCLUDED.display_name, worker_enrollment_requests.display_name),
-                created_at = clock_timestamp(),
+                created_at = (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),
                 expires_at = EXCLUDED.expires_at
             WHERE worker_enrollment_requests.worker_token_hash = EXCLUDED.worker_token_hash
-               OR worker_enrollment_requests.expires_at <= clock_timestamp()
+               OR worker_enrollment_requests.expires_at <= (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
             RETURNING worker_id
             """;
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -137,7 +145,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         const string sql = """
             SELECT worker_id, name, roles, max_concurrent_tasks, capabilities, created_at, expires_at, inventory, worker_token_hash, display_name
             FROM worker_enrollment_requests
-            WHERE expires_at > clock_timestamp() AND NOT EXISTS(SELECT 1 FROM workers n WHERE n.id=worker_enrollment_requests.worker_id AND n.deleted_at IS NOT NULL)
+            WHERE expires_at > (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') AND NOT EXISTS(SELECT 1 FROM workers n WHERE n.id=worker_enrollment_requests.worker_id AND n.deleted_at IS NOT NULL)
             ORDER BY created_at, worker_id
             """;
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -178,8 +186,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         var selectSql = $"""
             SELECT worker_id, worker_token_hash, name, roles, max_concurrent_tasks, capabilities, inventory, display_name
             FROM worker_enrollment_requests
-            WHERE {requestPredicate} AND expires_at > clock_timestamp()
-            FOR UPDATE
+            WHERE {requestPredicate} AND expires_at > (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
             """;
         Guid workerId;
         byte[] nodeTokenHash;
@@ -208,14 +215,14 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
 
         const string enrollSql = """
             INSERT INTO workers (id, name, roles, max_concurrent_tasks, capabilities, inventory, last_seen_at, worker_token_hash, display_name)
-            VALUES (@id, @name, @roles, @max_concurrent_tasks, @capabilities, @inventory, clock_timestamp(), @worker_token_hash, @display_name)
+            VALUES (@id, @name, @roles, @max_concurrent_tasks, @capabilities, @inventory, (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'), @worker_token_hash, @display_name)
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
                 roles = EXCLUDED.roles,
                 max_concurrent_tasks = EXCLUDED.max_concurrent_tasks,
                 capabilities = EXCLUDED.capabilities,
                 inventory = EXCLUDED.inventory,
-                last_seen_at = clock_timestamp(),
+                last_seen_at = (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),
                 display_name = COALESCE(workers.display_name, EXCLUDED.display_name)
             WHERE workers.deleted_at IS NULL AND (workers.worker_token_hash IS NULL OR workers.worker_token_hash = EXCLUDED.worker_token_hash)
             RETURNING id, name, roles, max_concurrent_tasks, capabilities, last_seen_at, inventory, display_name, labels
@@ -250,7 +257,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         using var priority = Encoding.Api.Infrastructure.Data.Sqlite.SqliteWriter.Prioritize();
         var tokenHash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token));
         const string unchanged = """
-            UPDATE workers SET last_seen_at = clock_timestamp()
+            UPDATE workers SET last_seen_at = (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
             WHERE id=@id AND deleted_at IS NULL AND worker_token_hash=@worker_token_hash
               AND name=@name AND roles=@roles AND max_concurrent_tasks=@max_concurrent_tasks
               AND capabilities=@capabilities AND inventory IS NOT DISTINCT FROM @inventory
@@ -264,7 +271,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
                 max_concurrent_tasks = @max_concurrent_tasks,
                 capabilities = @capabilities,
                 inventory = @inventory,
-                last_seen_at = clock_timestamp()
+                last_seen_at = (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
             WHERE id = @id AND deleted_at IS NULL AND worker_token_hash = @worker_token_hash
             RETURNING id, name, roles, max_concurrent_tasks, capabilities, last_seen_at, true AS is_online, inventory, display_name, labels,
                 app_version, session_nonce, incompatible_reason
@@ -303,9 +310,9 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
                 app_version = @version,
                 incompatible_reason = @reason,
                 quarantined = quarantined OR COALESCE(@nonce IS NOT NULL AND session_nonce IS NOT NULL AND session_nonce <> @nonce
-                    AND previous_nonce = @nonce AND nonce_changed_at > clock_timestamp() - interval '10 minutes', false),
+                    AND previous_nonce = @nonce AND nonce_changed_at > (strftime('%Y-%m-%d %H:%M:%f', 'now', '-10 minutes') || '000Z'), false),
                 previous_nonce = CASE WHEN @nonce IS NULL OR session_nonce IS NOT DISTINCT FROM @nonce THEN previous_nonce ELSE session_nonce END,
-                nonce_changed_at = CASE WHEN @nonce IS NULL OR session_nonce IS NOT DISTINCT FROM @nonce THEN nonce_changed_at ELSE clock_timestamp() END,
+                nonce_changed_at = CASE WHEN @nonce IS NULL OR session_nonce IS NOT DISTINCT FROM @nonce THEN nonce_changed_at ELSE (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') END,
                 session_nonce = COALESCE(@nonce, session_nonce)
             WHERE id = @id
             """;
@@ -321,7 +328,7 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
     private async Task<IReadOnlyList<WorkerResponse>> WithLifecycleAsync(IReadOnlyList<WorkerResponse> workers, CancellationToken ct)
     {
         if (workers.Count == 0) return workers;
-        await using var command = dataSource.CreateCommand("SELECT id, draining, quarantined, incompatible_reason FROM workers WHERE id = ANY(@ids)");
+        await using var command = dataSource.CreateCommand("SELECT id, draining, quarantined, incompatible_reason FROM workers WHERE id IN (SELECT value FROM json_each(@ids))");
         command.Parameters.AddWithValue("ids", workers.Select(worker => worker.Id).ToArray());
         var states = new Dictionary<Guid, (bool Draining, bool Quarantined, string? Incompatible)>();
         await using (var reader = await command.ExecuteReaderAsync(ct))

@@ -74,6 +74,8 @@ builder.Services.AddHttpClient("release-updates", client =>
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Encoding-UpdateChecker/1.0");
 });
 builder.Services.AddSingleton<ExecutionStreamBroadcaster>();
+builder.Services.AddSingleton<Encoding.Api.Infrastructure.InterfaceLiveBroadcaster>();
+builder.Services.AddSingleton<RuntimeWakeStreams>();
 builder.Services.AddSingleton<ExecutionRepository>();
 builder.Services.AddSingleton<FlowComponentRegistry>();
 builder.Services.AddSingleton<Encoding.Api.Plugins.CentralExtensionActivationState>();
@@ -122,6 +124,7 @@ builder.Services.AddSingleton<AiQuotaService>();
 builder.Services.AddSingleton<AiModelCatalogService>();
 builder.Services.AddSingleton<AiCentralStore>();
 builder.Services.AddSingleton<AiCentralService>();
+builder.Services.AddSingleton<AiActivityBroadcaster>();
 builder.Services.AddSingleton<AiAssistantSupportService>();
 builder.Services.AddSingleton<AiAssistantConversationsService>();
 builder.Services.AddSingleton<AiAssistantActionsService>();
@@ -171,9 +174,13 @@ builder.Services.AddSingleton<LibraryWorkerAccessRepository>();
 builder.Services.AddSingleton<CentralIdentityRepository>();
 builder.Services.AddSingleton<CentralId>();
 builder.Services.AddSingleton<RegisterRepository>();
+builder.Services.AddSingleton<WorkerStoreStateRepository>();
+builder.Services.AddSingleton<StoreStateBroadcaster>();
+builder.Services.AddSingleton<WorkerStoreStateService>();
 builder.Services.AddHostedService<CentralDiscoveryPublisher>();
 builder.Services.AddSingleton<RuntimeExecutionCoordinator>();
 builder.Services.AddSingleton<WorkerManagementService>();
+builder.Services.AddHostedService<Encoding.Api.Workers.WorkerPresenceWatcher>();
 builder.Services.AddSingleton<FlowCoordinatorService>();
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
@@ -182,6 +189,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 
 var app = builder.Build();
+app.Services.GetRequiredService<Encoding.Api.Auth.AuthOptions>().EnsureAllowedIn(app.Environment);
 // Fail startup if the bundled installed catalog is invalid or missing.
 var flowRegistry = app.Services.GetRequiredService<FlowComponentRegistry>();
 // Store descriptors and their tool dependencies must be active before default flows are validated or seeded.
@@ -205,6 +213,7 @@ app.UseStaticFiles();
 if (!app.Services.GetRequiredService<Encoding.Api.Auth.AuthOptions>().Enabled)
     app.Logger.LogWarning("Auth:Enabled=false : toute requête est traitée comme administrateur, MCP et API de gestion compris. À réserver au développement.");
 app.UseClusterAuthentication();
+app.UseInterfaceLiveNotifications();
 app.MapAuthEndpoints();
 app.MapApiTokenEndpoints();
 app.MapNetworkSettingsEndpoints();
@@ -220,6 +229,7 @@ app.MapFlowSimulationEndpoints();
 app.MapPluginConfigurationEndpoints();
 Encoding.Api.Plugins.Plex.PlexSetupEndpoints.MapPlexSetupEndpoints(app);
 app.MapPluginStoreEndpoints();
+app.MapWorkerStoreStateEndpoints();
 app.MapArrWebhookEndpoints();
 app.MapRuntimeEndpoints();
 app.MapSourceReplacementEndpoints();
@@ -235,6 +245,7 @@ app.MapWorkerEndpoints();
 app.MapWorkerGroupEndpoints();
 app.MapLocalWorkerEndpoints();
 app.MapExecutionEndpoints();
+Encoding.Api.Infrastructure.InterfaceLiveEndpoints.MapInterfaceLiveEndpoints(app);
 app.MapGet("/api/v1/system/version", (Encoding.Api.Updates.ReleaseService releases) =>
     Results.Ok(new { version = releases.Installed.Version, commit = releases.Installed.Commit }));
 app.MapGet("/api/v1/system/updates", (Encoding.Api.Updates.ReleaseService releases, CancellationToken ct) =>

@@ -27,9 +27,8 @@ public sealed partial class RuntimeRepository
         await using var command=Sql.Command($"""
           SELECT w.execution_id FROM execution_work w JOIN executions e ON e.id=w.execution_id
           JOIN media_reservations m ON m.execution_id=w.execution_id AND m.lease_epoch=w.lease_epoch
-          WHERE w.execution_id=@id AND w.lease_epoch=@epoch AND w.lease_until>clock_timestamp() AND m.lease_until>clock_timestamp()
+          WHERE w.execution_id=@id AND w.lease_epoch=@epoch AND w.lease_until>(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') AND m.lease_until>(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
           AND (CASE WHEN @source THEN w.source_worker_id ELSE w.worker_id END)=@actor AND e.state IN ('running','cancelling')
-          FOR UPDATE OF e,w,m
           """,c,tx);
         command.Parameters.AddWithValue("id",id); command.Parameters.AddWithValue("actor",actor); command.Parameters.AddWithValue("epoch",epoch); command.Parameters.AddWithValue("source",source);
         return await command.ExecuteScalarAsync(ct) is not null;
@@ -48,9 +47,9 @@ public sealed partial class RuntimeRepository
         if(!await FenceAsync(id,worker,epoch,c,tx,ct)) return null;
         if (!await RuntimeCommandJournal.StoreAsync(id, commands, c, tx, ct)) return null;
         await using var update=Sql.Command("""
-          UPDATE execution_work SET lease_until=clock_timestamp()+interval '180 seconds' WHERE execution_id=@id;
-          UPDATE media_reservations SET lease_until=clock_timestamp()+interval '180 seconds' WHERE execution_id=@id;
-          UPDATE disk_locks SET lease_until=clock_timestamp()+interval '180 seconds' WHERE execution_id=@id;
+          UPDATE execution_work SET lease_until=(strftime('%Y-%m-%d %H:%M:%f', 'now', '+180 seconds') || '000Z') WHERE execution_id=@id;
+          UPDATE media_reservations SET lease_until=(strftime('%Y-%m-%d %H:%M:%f', 'now', '+180 seconds') || '000Z') WHERE execution_id=@id;
+          UPDATE disk_locks SET lease_until=(strftime('%Y-%m-%d %H:%M:%f', 'now', '+180 seconds') || '000Z') WHERE execution_id=@id;
           SELECT e.state='cancelling',e.revision,w.lease_until FROM executions e JOIN execution_work w ON w.execution_id=e.id WHERE e.id=@id
           """,c,tx);
         update.Parameters.AddWithValue("id",id); await using var r=await update.ExecuteReaderAsync(ct); await r.ReadAsync(ct);
@@ -81,7 +80,7 @@ public sealed partial class RuntimeRepository
             await update.ExecuteNonQueryAsync(ct);
         }
         FlowDefinition? flow=null; Guid libraryId=Guid.Empty; FlowPlacementPlan? plan=null;
-        await using(var read=Sql.Command("SELECT e.flow_definition::text,w.library_id,w.placement_plan::text FROM executions e JOIN execution_work w ON w.execution_id=e.id WHERE e.id=@id",c,tx))
+        await using(var read=Sql.Command("SELECT e.flow_definition,w.library_id,w.placement_plan FROM executions e JOIN execution_work w ON w.execution_id=e.id WHERE e.id=@id",c,tx))
         {
             read.Parameters.AddWithValue("id",id); await using var row=await read.ExecuteReaderAsync(ct);
             if(!await row.ReadAsync(ct)) return null;
@@ -105,7 +104,7 @@ public sealed partial class RuntimeRepository
         await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
         if(!await FenceAsync(id,worker,epoch,c,tx,ct)) return null;
         FlowDefinition? flow=null; Guid libraryId=Guid.Empty; FlowPlacementPlan? plan=null; JsonElement? metadata=null;
-        await using(var read=Sql.Command("SELECT e.flow_definition::text,w.library_id,w.placement_plan::text,w.before_metadata::text FROM executions e JOIN execution_work w ON w.execution_id=e.id WHERE e.id=@id",
+        await using(var read=Sql.Command("SELECT e.flow_definition,w.library_id,w.placement_plan,w.before_metadata FROM executions e JOIN execution_work w ON w.execution_id=e.id WHERE e.id=@id",
             c,tx))
         {
             read.Parameters.AddWithValue("id",id); await using var row=await read.ExecuteReaderAsync(ct);
@@ -127,7 +126,7 @@ public sealed partial class RuntimeRepository
 
     public async Task<bool> AuthorizeSourceWriteAsync(Guid id,Guid worker,long epoch,string root,CancellationToken ct)
     {
-        await using(var check=dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.execution_id=@id AND w.worker_id=@worker AND w.source_worker_id=@worker AND w.lease_epoch=@epoch AND w.lease_until>clock_timestamp() AND e.state='running' AND EXISTS(SELECT 1 FROM library_worker_accesses a WHERE a.library_id=w.library_id AND a.worker_id=@worker AND a.is_enabled AND a.can_write AND a.mode='direct' AND a.local_path=@root))"))
+        await using(var check=dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.execution_id=@id AND w.worker_id=@worker AND w.source_worker_id=@worker AND w.lease_epoch=@epoch AND w.lease_until>(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') AND e.state='running' AND EXISTS(SELECT 1 FROM library_worker_accesses a WHERE a.library_id=w.library_id AND a.worker_id=@worker AND a.is_enabled AND a.can_write AND a.mode='direct' AND a.local_path=@root))"))
         {
             check.Parameters.AddWithValue("id",id);check.Parameters.AddWithValue("worker",worker);check.Parameters.AddWithValue("epoch",epoch);check.Parameters.AddWithValue("root",root);
             if(!await check.ScalarBoolAsync(ct)) return false;
@@ -147,10 +146,10 @@ public sealed partial class RuntimeRepository
         await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
         if(!await FenceAsync(id,worker,request.Epoch,c,tx,ct)) return null;
         FlowDefinition flow;
-        await using(var cmd=Sql.Command("SELECT flow_definition::text FROM executions WHERE id=@id AND state='running'",c,tx))
+        await using(var cmd=Sql.Command("SELECT flow_definition FROM executions WHERE id=@id AND state='running'",c,tx))
         { cmd.Parameters.AddWithValue("id",id); if(await cmd.ExecuteScalarAsync(ct) is not string json) return null; flow=JsonSerializer.Deserialize<FlowDefinition>(json,Json)!; }
         var node=flow.Nodes.SingleOrDefault(n=>n.Id==request.NodeId); if(node is null) return null;
-        await using(var prior=Sql.Command("SELECT checkpoint::text FROM execution_steps WHERE execution_id=@id AND completed_at IS NOT NULL ORDER BY completed_revision DESC LIMIT 1",c,tx))
+        await using(var prior=Sql.Command("SELECT checkpoint FROM execution_steps WHERE execution_id=@id AND completed_at IS NOT NULL ORDER BY completed_revision DESC LIMIT 1",c,tx))
         {
             prior.Parameters.AddWithValue("id",id); var json=await prior.ExecuteScalarAsync(ct) as string;
             var expected=json is null ? flow.Nodes.Single(n=>components.Resolve(n.Component)!.Kind=="input").Id : JsonSerializer.Deserialize<RuntimeCheckpoint>(json,Json)!.NextNodeId;
@@ -158,7 +157,7 @@ public sealed partial class RuntimeRepository
         }
         await using var start=Sql.Command("""
           INSERT INTO execution_steps(execution_id,flow_node_id,invocation_id,idempotent) VALUES(@id,@node,@invocation,@idempotent) ON CONFLICT DO NOTHING;
-          SELECT invocation_id,checkpoint::text FROM execution_steps WHERE execution_id=@id AND flow_node_id=@node
+          SELECT invocation_id,checkpoint FROM execution_steps WHERE execution_id=@id AND flow_node_id=@node
           """,c,tx);
         start.Parameters.AddWithValue("id",id); start.Parameters.AddWithValue("node",request.NodeId); start.Parameters.AddWithValue("invocation",Guid.NewGuid());
         start.Parameters.AddWithValue("idempotent",RuntimeStepEffects.IsReplayable(node.Component.PluginId,node.Component.ComponentId));
@@ -188,7 +187,6 @@ public sealed partial class RuntimeRepository
           JOIN executions e ON e.id=w.execution_id
           WHERE s.execution_id=@id AND s.flow_node_id=@node AND s.invocation_id=@invocation
             AND s.completed_at IS NOT NULL AND s.completed_epoch=@epoch AND s.completed_worker_id=@worker
-          FOR UPDATE OF e,w
           """,c,tx))
         {
             duplicate.Parameters.AddWithValue("id",id); duplicate.Parameters.AddWithValue("node",cp.NodeId);
@@ -198,7 +196,7 @@ public sealed partial class RuntimeRepository
         }
         if(!await FenceAsync(id,worker,request.Epoch,c,tx,ct)) return false;
         FlowDefinition flow;
-        await using(var cmd=Sql.Command("SELECT flow_definition::text FROM executions WHERE id=@id AND state='running'",c,tx))
+        await using(var cmd=Sql.Command("SELECT flow_definition FROM executions WHERE id=@id AND state='running'",c,tx))
         { cmd.Parameters.AddWithValue("id",id); if(await cmd.ExecuteScalarAsync(ct) is not string json) return false; flow=JsonSerializer.Deserialize<FlowDefinition>(json,Json)!; }
         if(!await ValidVideoEncodingsAsync(flow,id,worker,cp.NodeId,cp.Context.VideoEncodings,c,tx,ct)) return false;
         if(cp.Context.DirectSource is not null)
@@ -245,7 +243,7 @@ public sealed partial class RuntimeRepository
         else if(cp.Handoff is not null)
         {
             if(!cp.PlacementHandoff || cp.NextNodeId is null || cp.Handoff.Mode!="node" || cp.Handoff.TargetWorkerId is not { } target) return false;
-            await using var savedPlan=Sql.Command("SELECT placement_plan::text FROM execution_work WHERE execution_id=@id",c,tx);
+            await using var savedPlan=Sql.Command("SELECT placement_plan FROM execution_work WHERE execution_id=@id",c,tx);
             savedPlan.Parameters.AddWithValue("id",id);
             var planJson=await savedPlan.ExecuteScalarAsync(ct) as string;
             var plan=planJson is null?null:JsonSerializer.Deserialize<FlowPlacementPlan>(planJson,Json);
@@ -266,7 +264,7 @@ public sealed partial class RuntimeRepository
             : cp.TerminalResult is not null || !component.Outputs.Any(o=>o.Id==cp.OutputId)) return false;
         if(cp.NextNodeId!=flow.Connections.SingleOrDefault(e=>e.SourceNodeId==node.Id && e.SourceOutputId==cp.OutputId)?.TargetNodeId) return false;
         RuntimeCommandLog[] existingLogs;
-        await using(var readLogs=Sql.Command("SELECT command_logs FROM execution_steps WHERE execution_id=@id AND flow_node_id=@node AND invocation_id=@invocation AND completed_at IS NULL FOR UPDATE",
+        await using(var readLogs=Sql.Command("SELECT command_logs FROM execution_steps WHERE execution_id=@id AND flow_node_id=@node AND invocation_id=@invocation AND completed_at IS NULL",
             c,tx))
         {
             readLogs.Parameters.AddWithValue("id",id); readLogs.Parameters.AddWithValue("node",cp.NodeId); readLogs.Parameters.AddWithValue("invocation",cp.InvocationId);
@@ -277,7 +275,7 @@ public sealed partial class RuntimeRepository
         var serializedFinalCommands=JsonSerializer.Serialize(finalCommands,Json);
         if(System.Text.Encoding.UTF8.GetByteCount(serializedFinalCommands)>524288) return false;
         await using var update=Sql.Command("""
-          UPDATE execution_steps SET completed_at=clock_timestamp(),completed_revision=@completed_revision,checkpoint=@checkpoint,command_logs=@commands,
+          UPDATE execution_steps SET completed_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),completed_revision=@completed_revision,checkpoint=@checkpoint,command_logs=@commands,
             completed_epoch=@epoch,completed_worker_id=@worker
           WHERE execution_id=@id AND flow_node_id=@node AND invocation_id=@invocation AND completed_at IS NULL RETURNING flow_node_id
           """,c,tx);
@@ -307,7 +305,7 @@ public sealed partial class RuntimeRepository
             await using var yield=Sql.Command("""
               UPDATE execution_work SET handoff_pending=true,handoff_selector=@selector,previous_worker_id=@worker,
                 worker_id=NULL,lease_until=NULL,lease_epoch=lease_epoch+1 WHERE execution_id=@id;
-              UPDATE media_reservations SET lease_epoch=@epoch+1,lease_until='infinity'::timestamptz WHERE execution_id=@id;
+              UPDATE media_reservations SET lease_epoch=@epoch+1,lease_until='9999-12-31 23:59:59.999999Z' WHERE execution_id=@id;
               DELETE FROM disk_locks WHERE execution_id=@id;
               """,c,tx);
             yield.Parameters.AddWithValue("id",id); yield.Parameters.AddWithValue("worker",worker); yield.Parameters.AddWithValue("epoch",request.Epoch);
@@ -389,17 +387,17 @@ public sealed partial class RuntimeRepository
     {
         var direct=new List<(Guid Id,IReadOnlyList<WorkerToolCapability> Capabilities,WorkerInventory? Inventory)>();
         await using(var read=Sql.Command("""
-          SELECT dn.id,dn.capabilities::text,dn.inventory::text FROM library_worker_accesses da JOIN workers dn ON dn.id=da.worker_id
+          SELECT dn.id,dn.capabilities,dn.inventory FROM library_worker_accesses da JOIN workers dn ON dn.id=da.worker_id
           WHERE da.library_id=@library AND da.mode='direct' AND da.is_enabled AND da.can_read AND da.local_path IS NOT NULL AND (NOT @write OR da.can_write)
-            AND dn.id<>@claimant AND dn.id IS DISTINCT FROM @previous AND dn.deleted_at IS NULL AND dn.last_seen_at>clock_timestamp()-@offline AND dn.accepts_work AND 'worker'=ANY(dn.roles)
+            AND dn.id<>@claimant AND dn.id IS DISTINCT FROM @previous AND dn.deleted_at IS NULL AND dn.last_seen_at>(strftime('%Y-%m-%d %H:%M:%f', 'now', @offlineAgo) || '000Z') AND dn.accepts_work AND EXISTS(SELECT 1 FROM json_each(dn.roles) WHERE value = 'worker')
             -- Un worker direct saturé ne retient pas le travail : sa file ne doit pas laisser les autres workers inactifs.
-            AND (SELECT count(*) FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.worker_id=dn.id AND w.lease_until>clock_timestamp() AND e.state IN ('running','cancelling'))
+            AND (SELECT count(*) FROM execution_work w JOIN executions e ON e.id=w.execution_id WHERE w.worker_id=dn.id AND w.lease_until>(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') AND e.state IN ('running','cancelling'))
                 <COALESCE((SELECT p.max_concurrent_tasks FROM worker_processing_settings p WHERE p.worker_id=dn.id),dn.max_concurrent_tasks)
           """,c,tx))
         {
             read.Parameters.AddWithValue("library",library); read.Parameters.AddWithValue("write",write);
             read.Parameters.AddWithValue("claimant",claimant); read.Parameters.AddWithValue("previous",
-                item.PreviousWorker is {} previous?previous:DBNull.Value); read.Parameters.AddWithValue("offline",presence.OfflineAfter);
+                item.PreviousWorker is {} previous?previous:DBNull.Value); read.Parameters.AddWithValue("offlineAgo", -presence.OfflineAfter);
             await using var r=await read.ExecuteReaderAsync(ct);
             while(await r.ReadAsync(ct))
                 direct.Add((r.GetGuid(0),JsonSerializer.Deserialize<WorkerToolCapability[]>(r.GetString(1),Json)??[],r.IsDBNull(2)?null:JsonSerializer.Deserialize<WorkerInventory>(r.GetString(2),Json)));

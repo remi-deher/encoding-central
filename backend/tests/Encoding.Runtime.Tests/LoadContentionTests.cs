@@ -122,6 +122,7 @@ public sealed class LoadContentionTests
     }
 
     [Fact]
+    [Trait("Category", "ContentionLoad")]
     public Task HeartbeatsOverviewAndRecoveryShareALargeQueueWithoutLocksOrFailures() =>
         RunMixedLoadAsync(queued: 3000, nodeCount: 6, duration: TimeSpan.FromSeconds(8), heartbeatBound: TimeSpan.FromSeconds(5), overviewBound: TimeSpan.FromSeconds(10));
 

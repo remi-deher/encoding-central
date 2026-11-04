@@ -44,7 +44,7 @@ internal static partial class Harness
             await Locks.ReleaseAsync(x, a, For(lx, "race"), token); await Locks.ReleaseAsync(y, a, For(ly, "race"), token);
 
             // Reprise d'un verrou expiré (exécution perdue), puis refus pour l'ancien détenteur.
-            await ScalarAsync<object>("UPDATE disk_locks SET lease_until=clock_timestamp()-interval '1 second' WHERE disk_key='nas-1' RETURNING 1");
+            await ScalarAsync<object>("UPDATE disk_locks SET lease_until=(strftime('%Y-%m-%d %H:%M:%f', 'now', '-1 seconds') || '000Z') WHERE disk_key='nas-1' RETURNING 1");
             Check((await Locks.TryAcquireAsync(y, a, For(ly, "nas-1"), token)) is { Acquired: true }, "An expired lock is taken over.");
             Check((await Locks.TryAcquireAsync(x, a, For(lx, "nas-1"), token)) is { Acquired: false }, "The previous holder is now told the disk is busy.");
 
@@ -53,9 +53,9 @@ internal static partial class Harness
             Check((await Locks.TryAcquireAsync(x, a, For(lx, "nas-1"), token)) is { Acquired: true }, "A released disk can be taken.");
 
             // Le renouvellement du bail d'exécution prolonge ses verrous.
-            await ScalarAsync<object>("UPDATE disk_locks SET lease_until=clock_timestamp()+interval '1 second' WHERE disk_key='nas-1' RETURNING 1");
+            await ScalarAsync<object>("UPDATE disk_locks SET lease_until=(strftime('%Y-%m-%d %H:%M:%f', 'now', '+1 seconds') || '000Z') WHERE disk_key='nas-1' RETURNING 1");
             Check(await runtime.RenewAsync(x, a, lx.Epoch, token) is not null, "The execution lease is renewed.");
-            Check(await ScalarAsync<long>("SELECT count(*) FROM disk_locks WHERE disk_key='nas-1' AND lease_until>clock_timestamp()+interval '30 seconds'") == 1, "Renewing the execution lease extends its disk locks.");
+            Check(await ScalarAsync<long>("SELECT count(*) FROM disk_locks WHERE disk_key='nas-1' AND lease_until>(strftime('%Y-%m-%d %H:%M:%f', 'now', '+30 seconds') || '000Z')") == 1, "Renewing the execution lease extends its disk locks.");
 
             // Route worker : succès, occupé, nom invalide.
             using var client = Client(a);
@@ -81,7 +81,7 @@ internal static partial class Harness
             Check(await executions.CancelAsync(w, token), "Cancel the waiting execution."); await ExpireAsync(w); await RecoverCancellationAsync(w);
         }
 
-        /// <summary>La perte du worker libère le verrou ; l'exécution est reprise (ADR 0004) sans le garder pour un worker disparu.</summary>
+        /// <summary>La perte du worker fait échouer la tentative et libère son verrou de disque.</summary>
         public async Task DiskLockReleasedAfterWorkerLossAsync()
         {
             var flow = new FlowDefinition(1, Guid.NewGuid(), 1, "Disk fixture", "video",
@@ -96,8 +96,8 @@ internal static partial class Harness
             Check(await runtime.ClaimAsync(b, token) is null, "Another worker cannot silently resume the assigned attempt.");
             var recovery = new RuntimeRecoveryService(db, NullLogger<RuntimeRecoveryService>.Instance);
             await recovery.ProcessOnceAsync(token);
-            Check((await executions.GetAsync(x, token))?.State == "running" && await ScalarAsync<long>("SELECT count(*) FROM execution_work WHERE execution_id=@id AND worker_id IS NULL AND handoff_pending", ("id", x)) == 1, "The disconnected worker's attempt is handed back for a resume.");
-            Check(await LockHolderAsync("nas-loss") is null, "Resuming releases the lost worker's disk lock.");
+            Check((await executions.GetAsync(x, token))?.State == "failed", "The disconnected worker's attempt fails without reassignment.");
+            Check(await LockHolderAsync("nas-loss") is null, "Failure releases the lost worker's disk lock.");
             Check((await Locks.TryAcquireAsync(y, a, new(second.Epoch, "nas-loss"), token)) is { Acquired: true }, "A later explicit task can acquire the released disk.");
             var secondState = (await executions.GetAsync(y, token))?.State;
             Check(secondState is "running" or "cancelling", "The second execution remains active after the first worker fails.");
@@ -105,7 +105,6 @@ internal static partial class Harness
             {
                 Check(await executions.CancelAsync(y, token), "Cancel the second execution."); await ExpireAsync(y); await RecoverCancellationAsync(y);
             }
-            Check(await executions.CancelAsync(x, token), "Cancel the resumable execution."); await RecoverCancellationAsync(x);
         }
 
         private static bool Throws(Action action) { try { action(); return false; } catch (ArgumentException) { return true; } }

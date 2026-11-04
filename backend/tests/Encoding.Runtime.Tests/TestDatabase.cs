@@ -9,7 +9,6 @@ namespace Encoding.Runtime.Tests;
 /// </summary>
 public sealed class TestDatabase : IAsyncDisposable
 {
-    public static bool IsSqlite => true;
     public static string? ConfiguredConnection => "sqlite";
 
     private readonly string? file;

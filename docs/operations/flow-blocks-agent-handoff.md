@@ -8,10 +8,10 @@ Les scénarios de ressources couvrent extraction réelle, stockage durable, repr
 
 Le test de restauration du central attend désormais l'échec prévu de la tentative dont le worker ne renouvelle plus le bail. Il ne suppose plus que toute la maintenance se termine avant les 60 secondes du bail. Les garanties du runtime ne changent pas.
 
-Les commandes de vérification restent :
+Les commandes ci-dessous sont l'élargissement au projet entier : commencer par les tests ciblés sur les fichiers modifiés (`--filter "FullyQualifiedName~<Classe>"`) et n'élargir que dans les cas de TEST_RULES.md, section 8 (périmètre minimal, `nice -n 19`, jamais en parallèle). Les commandes de vérification restent (règle [TEST_RULES.md](../../TEST_RULES.md), section 8 : en local, vérifications légères uniquement — la suite backend complète et les scénarios lourds ne tournent qu'en CI GitHub Actions) :
 
 ```powershell
-C:/Users/remi2/.dotnet/dotnet test backend/tests/Encoding.Runtime.Tests/Encoding.Runtime.Tests.csproj -m:1
+C:/Users/remi2/.dotnet/dotnet test backend/tests/Encoding.Runtime.Tests/Encoding.Runtime.Tests.csproj -m:1 --filter "Category!=Stress&FullyQualifiedName!~WorkerProcessLossTests&FullyQualifiedName!~DockerCentralTests"
 cd frontend
 npm run lint
 npm run build

@@ -13,7 +13,7 @@ namespace Encoding.WorkerAgent.Runtime;
 internal sealed partial class RuntimeFlowExecution(WorkerAgentOptions options, MediaScanner scanner, MediaActions actions, ProcessToolRunner tools,
     PluginProcessHost plugins, PublicationGuardRunner guards, Encoding.WorkerAgent.Services.IToolCapabilityProbe capabilities,
     LocalPublicationArtifactStore localPublicationArtifacts, ILogger logger, RuntimeLease lease, RuntimeClient client,
-    CancellationToken stoppingToken) : IDisposable
+    CancellationToken stoppingToken, TimeProvider? timeProvider = null) : IDisposable
 {
     private readonly RuntimeCommandCapture commandCapture = RuntimeCommandCapture.Begin(lease.ExecutionId);
     private readonly CancellationTokenSource job = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
@@ -28,10 +28,20 @@ internal sealed partial class RuntimeFlowExecution(WorkerAgentOptions options, M
         commandCapture.Dispose();
     }
 
+    private readonly TimeProvider time = timeProvider ?? TimeProvider.System;
+    private WorkerLeaseDeadline? leaseDeadline;
+
     public async Task RunAsync()
     {
+        using var deadline = new WorkerLeaseDeadline(lease.ExpiresAt, time, () =>
+        {
+            state.MarkLost();
+            job.Cancel();
+        });
+        leaseDeadline = deadline;
+        if (deadline.Remaining <= TimeSpan.Zero) { state.MarkLost(); job.Cancel(); return; }
         Directory.CreateDirectory(directory);
-        if (lease.Probe is { } wanted) { await ProbeAsync(lease, wanted, client, directory, stoppingToken); return; }
+        if (lease.Probe is { } wanted) { await ProbeAsync(lease, wanted, client, directory, job.Token); return; }
         var renewal = StartRenewal();
         try
         {
@@ -78,7 +88,7 @@ internal sealed partial class RuntimeFlowExecution(WorkerAgentOptions options, M
             else
             {
                 state.MarkLost();
-                logger.LogWarning(exception, "Exécution {ExecutionId} interrompue pendant un échange HTTP ({StatusCode}) ; reprise après expiration du bail.", lease.ExecutionId, exception.StatusCode);
+                logger.LogWarning(exception, "Exécution {ExecutionId} interrompue pendant un échange HTTP ({StatusCode}) ; échec après expiration du bail.", lease.ExecutionId, exception.StatusCode);
             }
         }
         catch (Exception exception)
@@ -112,7 +122,7 @@ internal sealed partial class RuntimeFlowExecution(WorkerAgentOptions options, M
             {
                 while (!job.IsCancellationRequested)
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(15), job.Token);
+                    await Task.Delay(TimeSpan.FromSeconds(15), time, job.Token);
                     try
                     {
                         await RenewAsync(job.Token);
@@ -131,13 +141,6 @@ internal sealed partial class RuntimeFlowExecution(WorkerAgentOptions options, M
                         consecutiveFailures++;
                         logger.LogWarning("Renouvellement du bail de l’exécution {ExecutionId} en échec ({Failures} consécutifs) : {Type} {Message}.",
                             lease.ExecutionId, consecutiveFailures, exception.GetType().Name, exception.Message);
-                        if (consecutiveFailures >= 5)
-                        {
-                            logger.LogError("Bail de l’exécution {ExecutionId} considéré comme perdu après 5 échecs consécutifs.", lease.ExecutionId);
-                            state.MarkLost();
-                            job.Cancel();
-                            break;
-                        }
                     }
                 }
             }
@@ -202,6 +205,12 @@ internal sealed partial class RuntimeFlowExecution(WorkerAgentOptions options, M
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(30));
             var status = (await client.PostAsync<RuntimeLeaseStatus>($"executions/{lease.ExecutionId:D}/renew", new RuntimeFence(lease.Epoch, commandCapture.ForHeartbeat()), timeout.Token))!;
+            if (leaseDeadline is not null && !leaseDeadline.TryRenew(status.ExpiresAt))
+            {
+                state.MarkLost();
+                job.Cancel();
+                throw new OperationCanceledException(job.Token);
+            }
             state.ApplyLeaseRenewal(status.Revision, status.CancelRequested, job.Cancel);
             return status;
         }

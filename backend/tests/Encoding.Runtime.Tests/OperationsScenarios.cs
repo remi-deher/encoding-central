@@ -120,7 +120,7 @@ internal static class OperationsScenarios
         var failed = await Execution(db, store, library, "failed", 60, null);
         var unpublished = await Execution(db, store, library, "succeeded", 60, null, publicationRequested: true);
         var reserved = await Execution(db, store, library, "cancelled", 60, null);
-        await Exec(db, $"INSERT INTO media_reservations(library_id, media_key, execution_id, lease_epoch, lease_until) VALUES ('{library}', 'k-reserved', '{reserved}', 1, now() - interval '1 hour')");
+        await Exec(db, $"INSERT INTO media_reservations(library_id, media_key, execution_id, lease_epoch, lease_until) VALUES ('{library}', 'k-reserved', '{reserved}', 1, (strftime('%Y-%m-%d %H:%M:%f', 'now', '-1 hours') || '000Z'))");
         var staleTemporary = Path.Combine(store.DirectoryFor(recent), "x.tmp");
         File.WriteAllText(staleTemporary, "partial"); File.SetLastWriteTimeUtc(staleTemporary, DateTime.UtcNow.AddDays(-3));
         var freshTemporary = Path.Combine(store.DirectoryFor(recent), "y.tmp");
@@ -197,7 +197,7 @@ internal static class OperationsScenarios
         var id = Guid.NewGuid();
         await Exec(db, $$"""
             INSERT INTO executions(id, media, library_name, flow_name, flow_version, flow_definition, state, attempt, finished_at)
-            VALUES ('{{id}}', 'm.mkv', 'ops', 'flow', 1, '{}', '{{state}}', 1, now() - interval '{{ageDays}} days')
+            VALUES ('{{id}}', 'm.mkv', 'ops', 'flow', 1, '{}', '{{state}}', 1, (strftime('%Y-%m-%d %H:%M:%f', 'now', '-{{ageDays}} days') || '000Z'))
             """);
         await Exec(db, $"INSERT INTO execution_work(execution_id, library_id, media_path, media_key, publication_requested, published_path) VALUES ('{id}', '{library}', 'm.mkv', 'k-{id:N}', {(publicationRequested ? "true" : "false")}, {(published is null ? "NULL" : $"'{published}'")})");
         await Exec(db, $"INSERT INTO execution_artifacts(execution_id, sha256, byte_length) VALUES ('{id}', '{new string('a', 64)}', 4)");

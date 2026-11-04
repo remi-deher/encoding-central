@@ -99,6 +99,36 @@ export class AiToolsService {
     );
   }
 
+  /**
+   * Progression d'une demande en SSE. Émet chaque changement, se termine quand la demande est finie et échoue si le flux ne peut pas
+   * s'ouvrir (navigateur sans EventSource, proxy, session) : l'appelant reprend alors l'interrogation périodique.
+   */
+  streamAssistantActivity(requestId: string): Observable<AiAssistantActivity> {
+    return new Observable<AiAssistantActivity>((subscriber) => {
+      if (typeof EventSource === 'undefined') {
+        subscriber.error(new Error('EventSource indisponible'));
+        return undefined;
+      }
+      const source = new EventSource(
+        `/api/v1/tools/ai/assistant/activity/${encodeURIComponent(requestId)}/stream`,
+        { withCredentials: true },
+      );
+      source.addEventListener('activity', (event: MessageEvent<string>) => {
+        try {
+          subscriber.next(JSON.parse(event.data) as AiAssistantActivity);
+        } catch {
+          // Un événement illisible est ignoré : le suivant, ou le repli, prend le relais.
+        }
+      });
+      source.addEventListener('end', () => subscriber.complete());
+      // EventSource se reconnecte seul tant que le flux n'est pas refusé ; fermé pour de bon, on bascule sur le repli.
+      source.onerror = () => {
+        if (source.readyState === EventSource.CLOSED) subscriber.error(new Error('Flux fermé'));
+      };
+      return () => source.close();
+    });
+  }
+
   getAssistantConversation(id: string): Observable<AiAssistantConversationDetail> {
     return this.http.get<AiAssistantConversationDetail>(
       `/api/v1/tools/ai/assistant/conversations/${encodeURIComponent(id)}`,

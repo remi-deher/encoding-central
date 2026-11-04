@@ -21,7 +21,7 @@ Une décision structurante : nouveau principe, changement d'un invariant des fic
 | [0001](0001-replication-connexions-ia.md) | Réplication chiffrée des connexions IA | superseded | ai |
 | [0002](0002-modification-mkv-sur-place.md) | Modification MKV sur place par bloc dédié | implemented | runtime |
 | [0003](0003-publication-etape-de-flow.md) | Publication comme étape de flow, distincte de la fin du flow | implemented | flows |
-| [0004](0004-reprise-au-checkpoint.md) | Reprise au checkpoint après perte du worker, blocs rejouables | implemented | runtime |
+| [0004](0004-reprise-au-checkpoint.md) | Reprise au checkpoint après perte du worker, blocs rejouables | superseded | runtime |
 | [0005](0005-bloc-bibliotheque-sur-ce-noeud.md) | Bloc « Bibliothèque sur ce nœud » : brancher un flow selon l'accès direct | implemented | flows |
 | [0006](0006-ressources-de-flow.md) | Ressources de flow : fichiers partagés du cluster (polices, images, audio) | accepted | flows |
 | [0007](0007-decodage-unique-avant-publication.md) | Un seul décodage complet, juste avant la publication | superseded | runtime |
@@ -58,3 +58,7 @@ Une décision structurante : nouveau principe, changement d'un invariant des fic
 | [0038](0038-profils-et-depot-complet.md) | Profils de sous-titres et dépôt complet | implemented | plugins |
 | [0039](0039-version-exacte-worker-central.md) | Un worker doit avoir la version exacte du central | implemented | workers |
 | [0040](0040-vocabulaire-central-worker.md) | Vocabulaire central / worker | accepted | workers |
+| [0041](0041-sse-a-la-place-du-sondage.md) | SSE à la place du sondage, pour l'interface et pour les workers | accepted | runtime |
+| [0042](0042-reseau-plugins-capacite-et-seccomp.md) | Réseau des plugins : capacité déclarée, Landlock ABI 4 et seccomp minimal | proposed | plugins |
+| [0043](0043-sql-sqlite-natif.md) | SQL SQLite natif, sans couche de traduction | implemented | storage |
+| [0044](0044-echec-apres-perte-de-bail.md) | Échec après perte de bail sans réattribution automatique | implemented | runtime |

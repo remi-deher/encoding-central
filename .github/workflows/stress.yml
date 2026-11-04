@@ -1,8 +1,6 @@
 name: Stress
-# Charge lourde de la base SQLite d'un nœud (grosse file, nombreux nœuds). Exclue des PR (Category!=Stress dans backend.yml).
+# Charge lourde de la base SQLite d'un nœud (grosse file, nombreux nœuds). Exclue des PR (Category!=Stress dans backend.yml) ; déclenchement manuel uniquement (workflow_dispatch).
 on:
-  schedule:
-    - cron: '30 2 * * *'
   workflow_dispatch:
     inputs:
       executions:

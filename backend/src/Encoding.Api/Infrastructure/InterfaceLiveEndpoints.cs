@@ -37,8 +37,7 @@ public static class InterfaceLiveEndpoints
             var method = context.HttpContext.Request.Method;
             var path = context.HttpContext.Request.Path.Value ?? "";
             if (HttpMethods.IsGet(method) || HttpMethods.IsHead(method)
-                || path.EndsWith("/heartbeat", StringComparison.OrdinalIgnoreCase)
-                || path.Contains("/directory-browse", StringComparison.OrdinalIgnoreCase))
+                || path.EndsWith("/heartbeat", StringComparison.OrdinalIgnoreCase))
                 return result;
             if (result is IStatusCodeHttpResult { StatusCode: >= 200 and < 300 })
                 context.HttpContext.RequestServices.GetRequiredService<InterfaceLiveBroadcaster>().Publish(topic);

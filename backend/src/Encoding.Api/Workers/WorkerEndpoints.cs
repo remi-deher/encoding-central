@@ -9,7 +9,7 @@ public static class WorkerEndpoints
 {
     public static void MapWorkerEndpoints(this WebApplication app)
     {
-        var nodes = app.MapGroup("/api/v1/workers").WithTags("Workers");
+        var nodes = app.MapGroup("/api/v1/workers").WithTags("Workers").NotifyLive("workers");
         nodes.MapWorkerDirectoryBrowseEndpoints();
         nodes.MapWorkerEnrollmentEndpoints();
         nodes.MapWorkerHeartbeatEndpoints();

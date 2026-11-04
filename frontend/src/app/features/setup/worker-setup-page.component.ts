@@ -15,6 +15,7 @@ import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { AuthService } from '../../core/auth/auth.service';
 import { WorkerInventory } from '../../shared/models/central';
+import { DiscoveredCentral } from '../../shared/models/local-worker';
 import { formatMemory } from '../../shared/models/worker-hardware';
 import { LocalWorkerController } from '../../shared/services/local-worker-controller';
 import { AccessTemplateComponent } from '../../shared/templates/access-template.component';
@@ -27,6 +28,16 @@ interface WorkerHardware {
   readonly inventory: WorkerInventory;
   readonly tools: readonly { readonly toolId: string; readonly accelerationTypes: readonly string[] }[];
 }
+
+const DETECTED_STYLES = `
+  .detected { display: grid; gap: 0.5rem; margin-bottom: 1rem; }
+  .detected-heading { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+  .detected-heading h3 { margin: 0; font-size: 1rem; }
+  .detected ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+  .detected li button { width: 100%; justify-content: flex-start; gap: 0.75rem; }
+  .detected li span { color: var(--text-secondary); }
+  .detected p { margin: 0; color: var(--text-secondary); }
+`;
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -92,6 +103,45 @@ interface WorkerHardware {
                 <p>L’adresse est enregistrée localement et utilisée pour tous les échanges.</p>
               </div>
             </div>
+            <div class="detected" aria-live="polite">
+              <div class="detected-heading">
+                <h3>Centraux détectés sur le réseau</h3>
+                <button
+                  matButton="outlined"
+                  type="button"
+                  [disabled]="busy() || discovering()"
+                  (click)="refreshDetected()"
+                >
+                  Actualiser la découverte
+                </button>
+              </div>
+              @if (detected().length) {
+                <ul>
+                  @for (central of detected(); track central.id) {
+                    <li>
+                      <button
+                        matButton="outlined"
+                        type="button"
+                        [disabled]="busy()"
+                        (click)="chooseDetected(central)"
+                      >
+                        <strong>{{ central.name }}</strong>
+                        <span>{{ central.apiBaseUrl }}</span>
+                      </button>
+                    </li>
+                  }
+                </ul>
+              } @else {
+                <p>
+                  {{
+                    discovering()
+                      ? 'Recherche en cours…'
+                      : 'Aucun central détecté. La découverte DNS-SD ne traverse pas toujours les conteneurs ni les sous-réseaux : saisissez son adresse ci-dessous.'
+                  }}
+                </p>
+              }
+            </div>
+
             <label for="central-address">Adresse du central</label>
             <input
               id="central-address"
@@ -154,6 +204,12 @@ interface WorkerHardware {
               <h2 id="worker-enrollment-heading">Rattacher le worker</h2>
               <p>Votre compte administrateur du central autorise ce rattachement : aucune validation n’est à faire ailleurs.</p>
             </div>
+            @if (signedInAs(); as account) {
+              <div class="notice" role="status">
+                Session déjà ouverte sur ce central en tant que <strong>{{ account }}</strong> :
+                elle sera utilisée pour le rattachement, sans nouvelle saisie d’identifiants.
+              </div>
+            }
             @if (local.status()?.isEnrolled) {
               <div class="notice" role="status">
                 Ce worker est rattaché à <strong>{{ local.status()?.centralName }}</strong>.
@@ -188,7 +244,7 @@ interface WorkerHardware {
       </div>
     </app-access-template>
   `,
-  styles: SETUP_SURFACE_STYLES,
+  styles: SETUP_SURFACE_STYLES + DETECTED_STYLES,
 })
 export class WorkerSetupPageComponent {
   private readonly http = inject(HttpClient);
@@ -199,6 +255,10 @@ export class WorkerSetupPageComponent {
   protected readonly local = inject(LocalWorkerController);
 
   protected centralAddress = '';
+  protected readonly detected = signal<readonly DiscoveredCentral[]>([]);
+  protected readonly discovering = signal(false);
+  /** Compte administrateur déjà connecté au central choisi (session relayée) : l'étape de connexion est alors inutile. */
+  protected readonly signedInAs = signal<string | null>(null);
   protected username = '';
   protected password = '';
   protected readonly step = signal(0);
@@ -264,6 +324,26 @@ export class WorkerSetupPageComponent {
       .get<WorkerHardware>('/api/v1/worker/hardware')
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({ next: (value) => this.hardware.set(value), error: () => undefined });
+    void this.refreshDetected();
+  }
+
+  /** Centraux vus par la découverte DNS-SD de l'agent ; la liste est lisible tant qu'aucun central n'est choisi. */
+  protected async refreshDetected(): Promise<void> {
+    this.discovering.set(true);
+    try {
+      this.detected.set(
+        await firstValueFrom(this.http.get<readonly DiscoveredCentral[]>('/api/v1/worker/centrals')),
+      );
+    } catch {
+      this.detected.set([]);
+    } finally {
+      this.discovering.set(false);
+    }
+  }
+
+  protected async chooseDetected(central: DiscoveredCentral): Promise<void> {
+    this.centralAddress = central.apiBaseUrl;
+    await this.connect();
   }
 
   protected async connect(): Promise<void> {
@@ -277,6 +357,18 @@ export class WorkerSetupPageComponent {
       if (status.setupRequired) {
         this.errorMessage.set('Le central doit être initialisé directement depuis son interface.');
         return;
+      }
+      this.signedInAs.set(null);
+      if (status.user?.role === 'admin') {
+        this.signedInAs.set(status.user.username);
+        this.local.refresh();
+        this.step.set(2);
+        return;
+      }
+      if (status.user) {
+        this.errorMessage.set(
+          `La session ouverte sur ce central (${status.user.username}) n’est pas administratrice : connectez-vous avec un compte administrateur.`,
+        );
       }
       this.step.set(1);
     } catch (error) {
@@ -323,7 +415,7 @@ export class WorkerSetupPageComponent {
       this.welcome.set(true);
       return;
     }
-    this.step.update((step) => step - 1);
+    this.step.update((step) => (step === 2 && this.signedInAs() ? 0 : step - 1));
   }
 
   protected openNodes(): void {

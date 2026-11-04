@@ -42,7 +42,7 @@ public static class SafeMediaPaths
         }
         finally { if(File.Exists(partial)) File.Delete(partial); }
     }
-    public sealed class MediaLockBusyException() : IOException("Ce média est déjà utilisé par un autre traitement.");
+    public class MediaLockBusyException(string message="Ce média est déjà utilisé par un autre traitement.") : IOException(message);
     private sealed class MediaLock(string path,FileStream stream) : IDisposable
     {
         public void Dispose() { stream.Dispose(); ActiveLocks.TryRemove(path,out _); }
