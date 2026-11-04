@@ -62,6 +62,14 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         return (await command.ScalarBoolAsync(cancellationToken));
     }
 
+    /// <summary>Identité du worker porteur de ce jeton (source d'autorité : jamais un identifiant fourni par le worker) ; <c>null</c> si inconnu ou retiré.</summary>
+    public async Task<Guid?> WorkerIdForTokenAsync(string token, CancellationToken cancellationToken)
+    {
+        await using var command = dataSource.CreateCommand("SELECT id FROM workers WHERE worker_token_hash = @hash AND deleted_at IS NULL");
+        command.Parameters.AddWithValue("hash", SqlKind.Bytes, HashSecret(token));
+        return await command.ScalarGuidAsync(cancellationToken);
+    }
+
     public async Task<bool> AuthenticateTokenAsync(Guid workerId, string token, CancellationToken cancellationToken)
     {
         await using var command = dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM workers WHERE id = @id AND worker_token_hash = @hash AND deleted_at IS NULL)");

@@ -13,8 +13,14 @@ public sealed class StoreCatalogException(string message) : Exception(message);
 /// le central retient l'empreinte SHA-256 officielle, jamais une valeur fournie par le client, et n'a besoin d'aucun accès réseau
 /// si le catalogue est déjà synchronisé (une panne du Store ne supprime ni ne modifie l'état déjà persisté).
 /// </summary>
-public sealed class WorkerStoreStateService(WorkerStoreStateRepository repository, PluginRepositoryService repositories)
+public sealed class WorkerStoreStateService(WorkerStoreStateRepository repository, PluginRepositoryService repositories,
+    StoreStateBroadcaster broadcaster, Encoding.Api.Workers.WorkerRepository workers)
 {
+    /// <summary>Identité du worker d'après son jeton ; jamais d'après un identifiant fourni par lui.</summary>
+    public Task<Guid?> WorkerIdForTokenAsync(string token, CancellationToken ct) => workers.WorkerIdForTokenAsync(token, ct);
+
+    public StoreStateBroadcaster Changes => broadcaster;
+
     public Task<WorkerStoreState?> GetAsync(Guid workerId, CancellationToken ct) => repository.GetAsync(workerId, ct);
 
     /// <summary>Remplace l'état désiré. <c>null</c> si le worker est inconnu ; <see cref="StoreCatalogException"/> si un élément est invalide ou absent du catalogue.</summary>
@@ -27,7 +33,9 @@ public sealed class WorkerStoreStateService(WorkerStoreStateRepository repositor
         try
         {
             var state = await repository.ReplaceDesiredAsync(workerId, resolved, ct);
-            return state is null ? null : new SetStoreStateResponse(workerId, state.Revision, state.Items);
+            if (state is null) return null;
+            broadcaster.Notify();
+            return new SetStoreStateResponse(workerId, state.Revision, state.Items);
         }
         catch (StoreStateException exception) { throw new StoreCatalogException(exception.Message); }
     }

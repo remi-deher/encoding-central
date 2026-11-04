@@ -75,7 +75,7 @@ public sealed class WorkerStoreDesiredStateTests
         var tools = new ToolStoreService(configuration, NullLogger<ToolStoreService>.Instance);
         var plugins = new PluginStoreService(configuration, StoreCatalogFixture.Create(), tools, NullLogger<PluginStoreService>.Instance);
         var repositories = new PluginRepositoryService(configuration, new Factory(), plugins, tools, NullLogger<PluginRepositoryService>.Instance);
-        var service = new WorkerStoreStateService(new WorkerStoreStateRepository(database.Db), repositories);
+        var service = new WorkerStoreStateService(new WorkerStoreStateRepository(database.Db), repositories, new StoreStateBroadcaster(), new Encoding.Api.Workers.WorkerRepository(database.Db));
         rig = new Rig { Database = database, Store = store, Directory = directory, Service = service, Repositories = repositories, Worker = ids[0], Other = ids[1] };
         return rig;
     }
@@ -94,6 +94,7 @@ public sealed class WorkerStoreDesiredStateTests
         Assert.Equal(ToolSha.ToLowerInvariant(), result.Items.Single(item => item.Kind == "tool").Sha256);
         Assert.Equal(2, (await rig.Service.SetDesiredAsync(rig.Worker, Request(), CancellationToken.None))!.Revision); // vider l'état est permis
         Assert.Equal(0, (await rig.Service.GetAsync(rig.Other, CancellationToken.None))!.Desired.Revision);
+        Assert.Equal(2, rig.Service.Changes.CurrentVersion); // chaque écriture réveille les flux SSE
     }
 
     [Theory]

@@ -175,6 +175,7 @@ builder.Services.AddSingleton<CentralIdentityRepository>();
 builder.Services.AddSingleton<CentralId>();
 builder.Services.AddSingleton<RegisterRepository>();
 builder.Services.AddSingleton<WorkerStoreStateRepository>();
+builder.Services.AddSingleton<StoreStateBroadcaster>();
 builder.Services.AddSingleton<WorkerStoreStateService>();
 builder.Services.AddHostedService<CentralDiscoveryPublisher>();
 builder.Services.AddSingleton<RuntimeExecutionCoordinator>();
