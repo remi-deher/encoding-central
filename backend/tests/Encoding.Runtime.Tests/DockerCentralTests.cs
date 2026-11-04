@@ -248,7 +248,7 @@ public sealed class DockerCentralTests
     }
 
     [DockerFact]
-    public async Task KillingTheEncodingWorkerContainerResumesOnTheOtherWorkerAndKeepsTheSource()
+    public async Task KillingTheEncodingWorkerContainerFailsTheAttemptAndAllowsOperatorRetry()
     {
         await using var cluster = new Central();
         await cluster.StartServerAsync();
@@ -275,19 +275,35 @@ public sealed class DockerCentralTests
 
         await DockerAsync("kill", cluster.ContainerOf(victim!));   // arrêt brutal du conteneur entier (SIGKILL), sans fermeture propre
 
-        JsonElement final = default;
+        JsonElement lost = default;
         await WaitAsync(async () =>
         {
             var list = (await cluster.Client.GetFromJsonAsync<JsonElement>("api/v1/executions")).GetProperty("executions");
             Assert.Equal(1, list.GetArrayLength());
-            final = list[0].Clone();
-            return final.GetProperty("state").GetString() is "succeeded" or "failed";
-        }, 420, "reprise et fin de l'exécution", cluster);
+            lost = list[0].Clone();
+            return lost.GetProperty("state").GetString() is "succeeded" or "failed";
+        }, 420, "expiration du bail", cluster);
 
         var history = (await cluster.Client.GetFromJsonAsync<JsonElement>($"api/v1/executions/{executionId}/events")).ToString();
-        Assert.True(final.GetProperty("state").GetString() == "succeeded", $"{final.GetProperty("detail")}\n{history}\n{await cluster.NodeDiagnosticsAsync()}\n{await cluster.LibraryAccessDiagnosticsAsync()}\n{await cluster.IdentityDiagnosticsAsync()}\n{await cluster.ProcessDiagnosticsAsync()}\n{await cluster.LogsAsync()}");
+        Assert.True(lost.GetProperty("state").GetString() == "failed", $"{lost.GetProperty("detail")}\n{history}\n{await cluster.LogsAsync()}");
+        Assert.Equal(executionId, lost.GetProperty("id").GetGuid());
+        Assert.Contains("worker_perdu", lost.GetProperty("detail").GetString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("reprise", history, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(sourceSha, Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(source))));
+
+        using var response = await cluster.Client.PostAsJsonAsync($"api/v1/executions/{executionId}/retry", new { });
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        var retried = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var retryId = retried.GetProperty("id").GetGuid();
+        Assert.NotEqual(executionId, retryId);
+        JsonElement final = default;
+        await WaitAsync(async () =>
+        {
+            final = await cluster.Client.GetFromJsonAsync<JsonElement>($"api/v1/executions/{retryId}");
+            return final.GetProperty("state").GetString() is "succeeded" or "failed";
+        }, 420, "relance opérateur", cluster);
+        Assert.True(final.GetProperty("state").GetString() == "succeeded", $"{final.GetProperty("detail")}\n{await cluster.LogsAsync()}");
         Assert.NotEqual(victim, final.GetProperty("worker").GetString());
-        Assert.Contains("reprise", history, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(sourceSha, Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(source))));
         Assert.DoesNotContain(Directory.GetFiles(cluster.Media), path => path != source);
     }
