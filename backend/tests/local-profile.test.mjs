@@ -4,18 +4,11 @@ import { readFileSync } from 'node:fs';
 
 const read = path => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 
-test('documented local runtime commands exclude stress and contention load', () => {
-  for (const path of ['TEST_RULES.md', 'backend/tests/README.md', 'docs/reprise.md']) {
-    const lines = read(path).split('\n').filter(line =>
-      line.includes('dotnet test ') && !line.includes('docker run'));
-    assert.ok(lines.length, `No local test commands found in ${path}`);
-    for (const line of lines) {
-      for (const command of line.split('dotnet test ').slice(1)) {
-        const args = command.split('`')[0];
-        assert.match(args, /Category!=Stress/, path);
-        assert.match(args, /Category!=ContentionLoad/, path);
-      }
-    }
+test('local documentation reserves .NET tests for CI', () => {
+  for (const path of ['AGENTS.md', 'TEST_RULES.md', 'backend/tests/README.md', 'docs/reprise.md']) {
+    const content = read(path);
+    assert.match(content, /(?:Aucun|aucun|Tous les) tests? .NET/ , path);
+    assert.doesNotMatch(content, /(?:dotnet test\s+|dotnet run --project backend\/tests\/)/, path);
   }
 });
 
