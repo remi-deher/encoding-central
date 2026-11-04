@@ -1,6 +1,6 @@
 ---
 domain: runtime
-updated: 2026-11-03
+updated: 2026-11-04
 legacy_adr: [0005, 0009, 0015, 0016, 0018, 0020, 0021, 0028, 0030, 0033, 0054, 0058, 0059, 0064, 0066, 0075]
 code:
   - backend/src/Encoding.Api/Executions/
@@ -54,6 +54,7 @@ flowchart LR
 - Un claim parcourt les candidats par pages de 100, dans l'ordre stable `(queued_at,id)`, jusqu'à attribution ou fin de file. Les 100 premiers incompatibles n'empêchent plus un worker de prendre une tâche compatible plus loin. Chaque page termine sa transaction avant la suivante ; présence, calendrier, capacités, plafonds, accès et réservation sont revérifiés sous transaction. Le curseur n'est valable que pour cet appel et l'annulation arrête la recherche ; les tâches apparues derrière le curseur sont réexaminées au prochain appel. La migration additive 0051 indexe cet ordre.
 - Bail 180 s renouvelé toutes les 15 s, **époque** croissante, réservation unique par bibliothèque/chemin. Tout rapport, renouvellement, transfert et publication vérifie époque et expiration ; un ancien worker est refusé (409). Checkpoint et événement dans la même transaction.
 - **Perte du worker** ([ADR 0044](../adr/0044-echec-apres-perte-de-bail.md)) : la tentative échoue avec la raison `worker_perdu`, les réservations et verrous de disque sont libérés ; les artefacts et la source sont conservés, **aucune réattribution silencieuse sous le même identifiant**. Reprise = nouvelle exécution depuis l'entrée, manuelle ou par `nodes-retry-on-worker-loss` (1 à 10 tentatives, cible worker/groupe/étiquettes), refusée automatiquement si une étape du précédent essai est non idempotente. Un script ou plugin interrompu avant son checkpoint a un effet incertain : échec + relance explicite.
+- **Mise à niveau** : une reprise automatique héritée encore en attente (`resume_count > 0`, `handoff_pending`, aucun worker assigné) est exclue du claim dès le démarrage, puis clôturée par la récupération même sans bail expiré. Ses réservations et verrous sont libérés ; les artefacts sont conservés. Aucune relance automatique n'est créée pour ces anciennes reprises : une action explicite doit créer une nouvelle exécution après vérification des effets antérieurs. Une annulation demandée reste une annulation ; les relais explicites sans reprise historique restent inchangés.
 - Plafonds de traitement : global worker, global bibliothèque, couple worker/bibliothèque ; tous doivent autoriser ; maxima sans réservation ; diminuer une limite ne tue pas l'actif.
 - Annulation : contrôlée avant chaque étape et pendant les processus externes ; confirmée seulement après arrêt de l'arbre de processus et nettoyage ; perte du bail interdit toute publication.
 

@@ -236,7 +236,9 @@ internal static partial class Harness
             await ExpireAsync(busyId);
             Check(await runtime.ClaimAsync(b,CancellationToken.None) is { } received && received.ExecutionId==id,"The destination takes the waiting relay once it is free.");
             Check(await executions.CancelAsync(id,CancellationToken.None),"Clean up the relay.");await ExpireAsync(id);await RecoverCancellationAsync(id);
-            Check(await executions.CancelAsync(busyId,CancellationToken.None),"Clean up the busy execution.");await RecoverCancellationAsync(busyId);
+            var expiredBusy=(await executions.GetAsync(busyId,CancellationToken.None))!;
+            Check(expiredBusy.State=="failed" && expiredBusy.Detail?.Contains("worker_perdu",StringComparison.Ordinal)==true,"Recovery closes the expired busy attempt without reassignment.");
+            Check(await ScalarAsync<long>("SELECT count(*) FROM media_reservations WHERE execution_id=@id",("id",busyId))==0,"Recovery releases the expired busy attempt's reservation.");
             Console.WriteLine("PASS: a relay waits for a busy destination.");
         }
 

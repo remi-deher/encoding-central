@@ -27,7 +27,11 @@ sur les effets non idempotents restent applicables. Les relais et attentes expli
 La reprise automatique au checkpoint masque le changement de worker et conserve une tentative interrompue active.
 
 ## Conséquences et risques
-La colonne historique `resume_count` reste inutilisée ; aucune migration appliquée n'est modifiée.
+La colonne historique `resume_count` n'est plus incrémentée, mais reste lue pour
+clôturer les reprises automatiques encore en attente lors d'une mise à niveau.
+Elles sont exclues du claim avant le passage de récupération, qui libère leurs
+réservations et verrous sans suppression d'artefact ni relance automatique.
+Aucune migration appliquée n'est modifiée.
 La détection d'expiration conserve sa boucle d'une seconde : son passage à un minuteur
 événementiel dépasse cette correction. Les scénarios multi-processus et les écritures
 média réelles restent à vérifier en CI.

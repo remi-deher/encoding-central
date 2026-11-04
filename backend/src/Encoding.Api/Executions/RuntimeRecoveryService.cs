@@ -31,9 +31,11 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
     /// <summary>Délai avant de déclarer qu'aucun worker du central ne peut jamais exécuter une exécution neuve (ADR 0024).</summary>
     private static readonly TimeSpan FreshPlacementGrace=TimeSpan.FromMinutes(2);
 
+    // Les reprises héritées ont déjà rendu leur bail : leur fermeture ne dépend plus de son expiration.
     private static readonly string ExpiredWorkPredicate = $"""
         ((e.state='cancelling' AND (w.lease_until IS NULL OR w.lease_until<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')))
-        OR (e.state='running' AND w.worker_id IS NOT NULL AND w.lease_until IS NOT NULL AND w.lease_until<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')))
+        OR (e.state='running' AND w.worker_id IS NOT NULL AND w.lease_until IS NOT NULL AND w.lease_until<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'))
+        OR (e.state IN ('queued','running','cancelling') AND w.worker_id IS NULL AND w.handoff_pending AND w.resume_count>0))
         """;
 
     private async Task<bool> HasExpiredWorkAsync(CancellationToken ct)
@@ -47,7 +49,8 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
     /// Closes cancelled work. An attempt whose assigned worker lost its lease fails (<c>worker_perdu</c>) and is never reassigned
     /// under the same execution ID (ADR 0044): locks and reservations are released, artifacts and source are kept. A new execution
     /// is created only by an operator request or by the bounded <c>nodes-retry-on-worker-loss</c> rule of the flow.
-    /// An explicit relay or wait (worker_id = NULL) is not an assigned attempt and is not concerned.
+    /// Pending automatic resumptions persisted by older versions are also closed without an automatic retry.
+    /// An explicit relay or wait with no historic resumption is not concerned.
     /// </summary>
     public async Task<int> ProcessOnceAsync(CancellationToken ct)
     {
@@ -56,30 +59,33 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
             return await FailUnavailableTargetsAsync(ct);
         await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
         await RuntimeRepository.FailUnavailableSourcesAsync(c, tx, offlineAfter, ct);
-        var expired=new List<(Guid Id,Guid? Worker,int Revision,string State,int Attempt,string Flow,bool HasNonIdempotentStep,bool Uncertain)>();
+        var expired=new List<(Guid Id,Guid? Worker,int Revision,string State,int Attempt,string Flow,bool HasNonIdempotentStep,bool Uncertain,bool LegacyResume)>();
         await using(var cmd=Sql.Command($"""
           SELECT e.id,e.worker_id,e.revision,e.state,e.attempt,e.flow_definition,
             EXISTS(SELECT 1 FROM execution_steps s WHERE s.execution_id=e.id AND NOT s.idempotent),
-            EXISTS(SELECT 1 FROM execution_steps s WHERE s.execution_id=e.id AND s.completed_at IS NULL AND NOT s.idempotent)
+            EXISTS(SELECT 1 FROM execution_steps s WHERE s.execution_id=e.id AND s.completed_at IS NULL AND NOT s.idempotent),
+            w.worker_id IS NULL AND w.handoff_pending AND w.resume_count>0
           FROM executions e JOIN execution_work w ON w.execution_id=e.id
           WHERE {ExpiredWorkPredicate}
           ORDER BY e.updated_at LIMIT 100
           """,c,tx))
         await using(var r=await cmd.ExecuteReaderAsync(ct))
         { while(await r.ReadAsync(ct)) expired.Add((r.GetGuid(0),r.IsDBNull(1)?null:r.GetGuid(1),r.GetInt32(2),r.GetString(3),r.GetInt32(4),r.GetString(5),
-            r.GetBoolean(6),r.GetBoolean(7))); }
+            r.GetBoolean(6),r.GetBoolean(7),r.GetBoolean(8))); }
         foreach(var item in expired)
         {
             var cancelled=item.State=="cancelling";
             var detail=cancelled
                 ? "Annulation terminée après expiration du bail ; la source est conservée."
+                : item.LegacyResume
+                    ? "worker_perdu : reprise automatique héritée clôturée après mise à niveau, sans réattribution. Les effets antérieurs doivent être vérifiés avant une relance explicite en nouvelle exécution."
                 : item.Uncertain
                     ? "worker_perdu : le worker a perdu son bail pendant une étape à effet externe. Le résultat est incertain ; la tentative est en erreur et une relance explicite doit créer une nouvelle exécution."
                 : "worker_perdu : le worker a perdu son bail pendant cette tentative. Elle est en erreur, sans réattribution ; une relance explicite doit créer une nouvelle exécution.";
             if(await ExecutionRepository.RecordInTransactionAsync(item.Id,new(Guid.NewGuid(),item.Revision,cancelled?"cancelled":"failed",item.Worker,null,detail),c,tx,ct))
             {
                 await RuntimeRepository.ReleaseAsync(item.Id,c,tx,ct);
-                if(!cancelled && !item.HasNonIdempotentStep && item.Worker is {} previous)
+                if(!cancelled && !item.LegacyResume && !item.HasNonIdempotentStep && item.Worker is {} previous)
                 {
                     try
                     {
