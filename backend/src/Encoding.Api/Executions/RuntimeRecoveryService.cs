@@ -28,15 +28,14 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
         }
     }
 
-    /// <summary>Reprises automatiques d'une même exécution après perte du worker (ADR 0004).</summary>
-    public const int MaximumResumes=2;
-    private static readonly TimeSpan ResumeGrace=TimeSpan.FromMinutes(2);
     /// <summary>Délai avant de déclarer qu'aucun worker du central ne peut jamais exécuter une exécution neuve (ADR 0024).</summary>
     private static readonly TimeSpan FreshPlacementGrace=TimeSpan.FromMinutes(2);
 
+    // Les reprises héritées ont déjà rendu leur bail : leur fermeture ne dépend plus de son expiration.
     private static readonly string ExpiredWorkPredicate = $"""
         ((e.state='cancelling' AND (w.lease_until IS NULL OR w.lease_until<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')))
-        OR (e.state='running' AND w.worker_id IS NOT NULL AND w.lease_until IS NOT NULL AND w.lease_until<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')))
+        OR (e.state='running' AND w.worker_id IS NOT NULL AND w.lease_until IS NOT NULL AND w.lease_until<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'))
+        OR (e.state IN ('queued','running','cancelling') AND w.worker_id IS NULL AND w.handoff_pending AND w.resume_count>0))
         """;
 
     private async Task<bool> HasExpiredWorkAsync(CancellationToken ct)
@@ -47,9 +46,11 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
     }
 
     /// <summary>
-    /// Closes cancelled work. An attempt whose assigned worker lost its lease is resumed at its last durable checkpoint by another
-    /// eligible worker (same execution ID, bounded) when every unfinished step is replayable; otherwise it fails and must be retried
-    /// as a new execution. An explicit relay or wait (worker_id = NULL) is claimed again under the same execution ID.
+    /// Closes cancelled work. An attempt whose assigned worker lost its lease fails (<c>worker_perdu</c>) and is never reassigned
+    /// under the same execution ID (ADR 0044): locks and reservations are released, artifacts and source are kept. A new execution
+    /// is created only by an operator request or by the bounded <c>nodes-retry-on-worker-loss</c> rule of the flow.
+    /// Pending automatic resumptions persisted by older versions are also closed without an automatic retry.
+    /// An explicit relay or wait with no historic resumption is not concerned.
     /// </summary>
     public async Task<int> ProcessOnceAsync(CancellationToken ct)
     {
@@ -58,34 +59,33 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
             return await FailUnavailableTargetsAsync(ct);
         await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
         await RuntimeRepository.FailUnavailableSourcesAsync(c, tx, offlineAfter, ct);
-        var expired=new List<(Guid Id,Guid? Worker,int Revision,string State,int Attempt,string Flow,bool HasNonIdempotentStep,bool Uncertain,bool Waiting,int Resumes)>();
+        var expired=new List<(Guid Id,Guid? Worker,int Revision,string State,int Attempt,string Flow,bool HasNonIdempotentStep,bool Uncertain,bool LegacyResume)>();
         await using(var cmd=Sql.Command($"""
           SELECT e.id,e.worker_id,e.revision,e.state,e.attempt,e.flow_definition,
             EXISTS(SELECT 1 FROM execution_steps s WHERE s.execution_id=e.id AND NOT s.idempotent),
             EXISTS(SELECT 1 FROM execution_steps s WHERE s.execution_id=e.id AND s.completed_at IS NULL AND NOT s.idempotent),
-            EXISTS(SELECT 1 FROM execution_waits x WHERE x.execution_id=e.id AND x.state='waiting'),w.resume_count
+            w.worker_id IS NULL AND w.handoff_pending AND w.resume_count>0
           FROM executions e JOIN execution_work w ON w.execution_id=e.id
           WHERE {ExpiredWorkPredicate}
           ORDER BY e.updated_at LIMIT 100
           """,c,tx))
         await using(var r=await cmd.ExecuteReaderAsync(ct))
         { while(await r.ReadAsync(ct)) expired.Add((r.GetGuid(0),r.IsDBNull(1)?null:r.GetGuid(1),r.GetInt32(2),r.GetString(3),r.GetInt32(4),r.GetString(5),
-            r.GetBoolean(6),r.GetBoolean(7),r.GetBoolean(8),r.GetInt32(9))); }
+            r.GetBoolean(6),r.GetBoolean(7),r.GetBoolean(8))); }
         foreach(var item in expired)
         {
             var cancelled=item.State=="cancelling";
-            if(!cancelled && await TryResumeAsync(item.Id,item.Worker,item.Revision,item.Attempt,item.Flow,item.Uncertain,item.Waiting,item.Resumes,c,tx,ct)) continue;
             var detail=cancelled
                 ? "Annulation terminée après expiration du bail ; la source est conservée."
+                : item.LegacyResume
+                    ? "worker_perdu : reprise automatique héritée clôturée après mise à niveau, sans réattribution. Les effets antérieurs doivent être vérifiés avant une relance explicite en nouvelle exécution."
                 : item.Uncertain
-                    ? "Le worker a perdu sa connexion pendant une étape à effet externe. Le résultat est incertain ; la tâche est en erreur et nécessite une relance explicite."
-                : item.Resumes>=MaximumResumes
-                    ? $"Le worker a perdu sa connexion et la tâche a déjà été reprise {MaximumResumes} fois ; elle est en erreur et nécessite une relance explicite."
-                : "Le worker a perdu sa connexion pendant cette tentative. La tâche est en erreur ; une relance doit créer une nouvelle tentative.";
+                    ? "worker_perdu : le worker a perdu son bail pendant une étape à effet externe. Le résultat est incertain ; la tentative est en erreur et une relance explicite doit créer une nouvelle exécution."
+                : "worker_perdu : le worker a perdu son bail pendant cette tentative. Elle est en erreur, sans réattribution ; une relance explicite doit créer une nouvelle exécution.";
             if(await ExecutionRepository.RecordInTransactionAsync(item.Id,new(Guid.NewGuid(),item.Revision,cancelled?"cancelled":"failed",item.Worker,null,detail),c,tx,ct))
             {
                 await RuntimeRepository.ReleaseAsync(item.Id,c,tx,ct);
-                if(!cancelled && !item.HasNonIdempotentStep && item.Worker is {} previous)
+                if(!cancelled && !item.LegacyResume && !item.HasNonIdempotentStep && item.Worker is {} previous)
                 {
                     try
                     {
@@ -107,44 +107,6 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
         }
         await tx.CommitAsync(ct);
         return expired.Count+await FailUnavailableTargetsAsync(ct);
-    }
-
-    /// <summary>
-    /// Rend l'exécution à la file des relais : même identité, époque suivante, dernier checkpoint durable. Le worker suivant est choisi
-    /// par les règles d'attribution habituelles (capacités, accès au média, limites, charge). Refusée si une étape à effet externe est
-    /// inachevée, si une attente est en cours, si la borne est atteinte ou si le flow a sa propre règle de relance.
-    /// </summary>
-    private async Task<bool> TryResumeAsync(Guid id,Guid? worker,int revision,int attempt,string flowJson,bool uncertain,bool waiting,int resumes,
-        System.Data.Common.DbConnection c,System.Data.Common.DbTransaction tx,CancellationToken ct)
-    {
-        if(worker is null || uncertain || waiting || resumes>=MaximumResumes) return false;
-        try
-        {
-            var flow=JsonSerializer.Deserialize<FlowDefinition>(flowJson,Json);
-            if(flow is null || RuntimeRetryPolicy.Resolve(flow) is not null) return false;
-        }
-        catch(ArgumentException) { return false; }
-        var detail=$"Le worker a perdu sa connexion ; reprise {resumes+1}/{MaximumResumes} depuis le dernier checkpoint par un autre worker éligible.";
-        if(!await ExecutionRepository.RecordInTransactionAsync(id,new(Guid.NewGuid(),revision,"running",worker,null,detail),c,tx,ct)) return false;
-        // La destination du dernier relais (worker, groupe, étiquettes) reste la règle de la reprise : un encodage confié à .51 ne reprend pas ailleurs.
-        RuntimeHandoffSelector? previousSelector=null;
-        await using(var read=Sql.Command("SELECT handoff_selector FROM execution_work WHERE execution_id=@id",c,tx))
-        {
-            read.Parameters.AddWithValue("id",id);
-            if(await read.ExecuteScalarAsync(ct) is string stored) previousSelector=JsonSerializer.Deserialize<RuntimeHandoffSelector>(stored,Json);
-        }
-        var resumeSelector=(previousSelector??new RuntimeHandoffSelector("eligible")) with { Resumed=true };
-        await using var yield=Sql.Command("""
-          UPDATE execution_work SET handoff_pending=true,handoff_selector=@selector,previous_worker_id=@worker,
-            worker_id=NULL,lease_until=NULL,lease_epoch=lease_epoch+1,resume_count=resume_count+1 WHERE execution_id=@id;
-          UPDATE media_reservations SET lease_epoch=(SELECT lease_epoch FROM execution_work WHERE execution_id=@id),lease_until='9999-12-31 23:59:59.999999Z' WHERE execution_id=@id;
-          DELETE FROM disk_locks WHERE execution_id=@id;
-          """,c,tx);
-        yield.Parameters.AddWithValue("id",id); yield.Parameters.AddWithValue("worker",worker.Value);
-        yield.Parameters.AddWithValue("selector",SqlKind.Json,JsonSerializer.Serialize(resumeSelector,Json));
-        await yield.ExecuteNonQueryAsync(ct);
-        logger.LogInformation("L’exécution {ExecutionId} est reprise au dernier checkpoint après perte du worker {WorkerId} (reprise {Resume}/{Maximum}).",id,worker,resumes+1,MaximumResumes);
-        return true;
     }
 
     private async Task<int> FailUnavailableTargetsAsync(CancellationToken ct)
@@ -182,13 +144,11 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
             var selector=fresh?new RuntimeHandoffSelector("eligible"):JsonSerializer.Deserialize<RuntimeHandoffSelector>(item.Selector,Json);
             var checkpoint=item.Checkpoint is null?null:JsonSerializer.Deserialize<RuntimeCheckpoint>(item.Checkpoint,Json);
             if(flow is null || selector is null) continue;
-            // Un worker qui redémarre doit pouvoir revenir avant qu'une reprise soit déclarée impossible.
-            if(selector.IsResume && DateTimeOffset.UtcNow-item.Updated<ResumeGrace) continue;
             if(await HasEligibleWorkerAsync(item,flow,selector,checkpoint,fresh,ct)) continue;
 
             await using var c=await dataSource.OpenConnectionAsync(ct);await using var tx=await c.BeginTransactionAsync(ct);
             var detail=fresh?"placement_impossible: "+(item.Plan?.Reason??"Aucun worker du central ne peut exécuter ce flow (capacité absente, désignation de worker impossible ou aucun accès à la bibliothèque)."):
-                selector.IsResume?"Aucun worker éligible n’a pu reprendre cette tâche après la perte de son worker (capacités, accès au média ou limites) ; l’exécution échoue.":"Aucun worker en ligne ne correspond à la destination de ce relais ou de cette relance ; l’exécution échoue.";
+                "Aucun worker en ligne ne correspond à la destination de ce relais ou de cette relance ; l’exécution échoue.";
             if(await ExecutionRepository.RecordInTransactionAsync(item.Id,new(Guid.NewGuid(),item.Revision,"failed",item.Actor,null,detail),c,tx,ct))
             {
                 await RuntimeRepository.ReleaseAsync(item.Id,c,tx,ct);
@@ -234,7 +194,7 @@ public sealed class RuntimeRecoveryService(DbDataSource dataSource,ILogger<Runti
         {
             var plannedTarget=item.Plan?.WorkerAssignments?.TryGetValue(entry,out var workerTarget)==true?workerTarget:item.Plan?.AssignedWorkerId;
             if(plannedTarget is not null && candidate.Id!=plannedTarget.Value) continue;
-            if(candidate.Id==item.Previous && !selector.IsResume || candidate.Capacity<=0) continue;
+            if(candidate.Id==item.Previous || candidate.Capacity<=0) continue;
             var identity=await workerGroups!.GetWorkerIdentityAsync(candidate.Id,ct);
             if(!selector.Accepts(candidate.Id,item.Previous??Guid.Empty,identity)) continue;
             if(!fresh && candidate.ScheduleEnabled && candidate.Timezone is not null && candidate.Slots is not null

@@ -777,12 +777,11 @@ internal static partial class Harness
             var received=await runtime.ClaimAsync(b,CancellationToken.None)??throw new InvalidOperationException("The early runner must yield.");
             Check(received.Checkpoint?.Context.Variables["selected"].GetInt32()==42,"The runner persists variables before the relay.");
             await ExpireAsync(id);
-            Check(await runtime.ClaimAsync(b,CancellationToken.None) is null,"An interrupted receiver attempt is not reassigned before the recovery service hands it back.");
+            Check(await runtime.ClaimAsync(b,CancellationToken.None) is null,"An interrupted receiver attempt is not reassigned before the recovery service closes it.");
             var recovery=new RuntimeRecoveryService(db,NullLogger<RuntimeRecoveryService>.Instance);
             await recovery.ProcessOnceAsync(CancellationToken.None);
-            var again=await runtime.ClaimAsync(b,CancellationToken.None)??throw new InvalidOperationException("The relay destination must resume the disconnected receiver's attempt.");
-            Check(again.ExecutionId==id && again.Checkpoint?.Context.Variables["selected"].GetInt32()==42,"The resumed attempt keeps the relay checkpoint.");
-            Check(await executions.CancelAsync(id,CancellationToken.None),"Clean up the resumed relay.");await ExpireAsync(id);await RecoverCancellationAsync(id);
+            Check((await executions.GetAsync(id,CancellationToken.None))!.State=="failed","Loss of the receiver fails the relayed attempt.");
+            Check(await runtime.ClaimAsync(b,CancellationToken.None) is null,"The relay destination cannot silently resume its expired attempt.");
         }
         public async Task CancellationAsync()
         {

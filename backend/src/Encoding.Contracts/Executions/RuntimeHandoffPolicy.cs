@@ -5,17 +5,10 @@ using Encoding.Contracts.Workers;
 
 namespace Encoding.Contracts.Executions;
 
-public sealed record RuntimeHandoffSelector(string Mode, Guid? TargetWorkerId = null, Guid? TargetGroupId = null, string? RequiredLabels = null, bool Resumed = false)
+public sealed record RuntimeHandoffSelector(string Mode, Guid? TargetWorkerId = null, Guid? TargetGroupId = null, string? RequiredLabels = null)
 {
-    /// <summary>Ancienne forme d'une reprise (ADR 0004), conservée pour lire les lignes déjà écrites : tout worker éligible.</summary>
-    public const string ResumeMode = "resume";
-
-    /// <summary>Vrai pour une reprise après perte du worker : la destination du dernier relais est conservée, mais le worker perdu peut revenir.</summary>
-    [System.Text.Json.Serialization.JsonIgnore]
-    public bool IsResume => Resumed || Mode == ResumeMode;
-
-    public bool Accepts(Guid candidate, Guid previousWorker, WorkerIdentityResponse? identity = null) => (IsResume || candidate != previousWorker)
-        && (Mode is "eligible" or ResumeMode || Mode == "node" && TargetWorkerId == candidate
+    public bool Accepts(Guid candidate, Guid previousWorker, WorkerIdentityResponse? identity = null) => candidate != previousWorker
+        && (Mode == "eligible" || Mode == "node" && TargetWorkerId == candidate
             || Mode == "selector" && identity is not null
                 && (TargetGroupId is null || identity.GroupIds.Contains(TargetGroupId.Value))
                 && WorkerLabelSelector.Matches(RequiredLabels, identity.EffectiveLabels));

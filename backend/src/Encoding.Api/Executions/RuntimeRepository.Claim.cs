@@ -157,6 +157,7 @@ public sealed partial class RuntimeRepository
           WHERE (e.state='queued' OR e.state='running' AND w.worker_id IS NULL)
           AND l.is_active AND w.available_at<=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
           AND w.lease_until IS NULL
+          AND NOT (w.handoff_pending AND w.resume_count>0)
           {cursorPredicate}
           AND NOT EXISTS(SELECT 1 FROM library_processing_settings p WHERE p.library_id=l.id AND p.max_concurrent_tasks IS NOT NULL
             AND p.max_concurrent_tasks<=(SELECT count(*) FROM execution_work aw JOIN executions ae ON ae.id=aw.execution_id WHERE aw.library_id=l.id AND aw.lease_until>(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') AND ae.state IN ('running','cancelling')))
@@ -331,9 +332,7 @@ public sealed partial class RuntimeRepository
                     originalAccess.Parameters.AddWithValue("library",item.Library); originalAccess.Parameters.AddWithValue("source",originalSource);
                     originalAccess.Parameters.AddWithValue("write",needsWrite); originalAccess.Parameters.AddWithValue("offlineAgo", -presence.OfflineAfter);
                     if(await originalAccess.ScalarBoolAsync(ct)) { source=originalSource; if(source!=worker) root=null; }
-                    // Après la perte d'un worker, l'accès d'origine peut être le worker perdu lui-même (accès direct sur chaque worker) :
-                    // la reprise utilise alors l'accès propre du worker qui la reçoit, déjà résolu ci-dessus.
-                    else if(!item.Selector.IsResume) continue;
+                    else continue;
                 }
             }
             var pluginSettings=item.Settings is {} savedSettings?pluginConfigurations.ReadSnapshot(savedSettings)
