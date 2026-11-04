@@ -26,7 +26,9 @@ public static class StoreEventStream
     public static StoreEventKind Initial(string? lastEventId, long currentRevision)
     {
         if (!TryParseEventId(lastEventId, out var seen) || seen > currentRevision) return StoreEventKind.Snapshot;
-        return seen < currentRevision ? StoreEventKind.DesiredState : StoreEventKind.None;
+        // Un snapshot complet après chaque reconnexion permet au worker de se réconcilier après une panne
+        // locale ou un redémarrage central, même si son curseur pointe sur la révision courante.
+        return seen < currentRevision ? StoreEventKind.DesiredState : StoreEventKind.Snapshot;
     }
 
     public static string Frame(StoreEventKind kind, StoreDesiredState state)

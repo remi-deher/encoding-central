@@ -1,5 +1,3 @@
-using System.Net.Http.Json;
-using System.Text.Json;
 using Encoding.Contracts.Tools;
 using Encoding.Core.Tools;
 using Encoding.WorkerAgent.Runtime;
@@ -7,55 +5,39 @@ using Encoding.WorkerAgent.Runtime;
 namespace Encoding.WorkerAgent.Services;
 
 /// <summary>Synchronise les paquets d'outils gérés vers un worker et vérifie le hash avant extraction.</summary>
-public sealed class ToolPackageSyncService(WorkerAgentOptions options, WorkerIdentityStore identityStore, IConfiguration configuration,
-    ToolCapabilityProbe capabilityProbe, ILogger<ToolPackageSyncService> logger) : BackgroundService
+public sealed class ToolPackageSyncService(WorkerIdentityStore identityStore, IConfiguration configuration,
+    ToolCapabilityProbe capabilityProbe, ILogger<ToolPackageSyncService> logger)
 {
     private sealed record Listed(string Id, string Version, string Platform, string ArchiveSha256);
-    private static readonly TimeSpan Interval = TimeSpan.FromSeconds(60);
     private readonly HttpClient http = WorkerCentralHttp.Create(TimeSpan.FromMinutes(3));
     private string Root => configuration["Runtime:ManagedToolDirectory"] is { Length: > 0 } configured ? configured : ManagedToolCatalog.DefaultDirectory;
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        if (!options.Roles.Contains(Encoding.Contracts.Workers.WorkerRole.Worker)) return;
-        await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try { await SyncOnceAsync(stoppingToken); }
-            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException or JsonException
-                && !stoppingToken.IsCancellationRequested)
-            { logger.LogWarning("La synchronisation des outils gérés a échoué : {Reason}", exception.Message); }
-            await Task.Delay(Interval, stoppingToken);
-        }
-    }
-
-    public async Task SyncOnceAsync(CancellationToken ct)
+    internal async Task<IReadOnlyList<WorkerAppliedItem>> SyncDesiredAsync(string server, WorkerStoreDesiredState state, CancellationToken ct)
     {
         var identity = await identityStore.GetAsync(ct);
-        if (!identity.HasCredentials || identity.ApiBaseUrl is null) return;
-        List<Listed>? listed = null;
-        string? activeServer = null;
-        foreach (var server in identity.IsEnrolled ? identity.GetCandidateServerUrls(options) : [identity.ApiBaseUrl])
-        {
-            try { listed = await Get(identity, server, ct); activeServer = server; break; }
-            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or JsonException && !ct.IsCancellationRequested) { }
-        }
-        if (listed is null || activeServer is null) throw new HttpRequestException("Aucun serveur du central n'est joignable pour synchroniser les outils.");
+        if (!identity.HasCredentials || !identity.IsEnrolled) return [];
+        var listed = state.Items.Where(item => item.Kind == "tool" && item.Platform is not null)
+            .Select(item => new Listed(item.Id, item.Version, item.Platform!, item.Sha256)).ToArray();
 
         Directory.CreateDirectory(Root);
         var platform = ToolPackagePlatform.Current;
         var desired = listed.Where(item => item.Platform == platform).ToArray();
         var changed = false;
+        var allApplied = true;
+        var applied = new List<WorkerAppliedItem>();
         foreach (var item in desired)
         {
             var target = Path.Combine(Root, item.Id, item.Version, item.Platform);
             var marker = Path.Combine(target, ".verified");
-            if (File.Exists(marker) && string.Equals(File.ReadAllText(marker).Trim(), item.ArchiveSha256, StringComparison.OrdinalIgnoreCase)) continue;
-            try { await InstallAsync(identity, activeServer, item, target, ct); changed = true; }
+            if (File.Exists(marker) && string.Equals(File.ReadAllText(marker).Trim(), item.ArchiveSha256, StringComparison.OrdinalIgnoreCase))
+            { applied.Add(new("tool", item.Id, item.Version, item.Platform, item.ArchiveSha256, "applied", null)); continue; }
+            try { await InstallAsync(identity, server, item, target, ct); changed = true; applied.Add(new("tool", item.Id, item.Version, item.Platform, item.ArchiveSha256, "applied", null)); }
             catch (ToolPackageException exception) { logger.LogError("Le paquet outil {ToolId} {Version} ({Platform}) est refusé : {Reason}", item.Id,
-                item.Version, item.Platform, exception.Message); }
+                item.Version, item.Platform, exception.Message); allApplied = false; applied.Add(new("tool", item.Id, item.Version, item.Platform, item.ArchiveSha256, "failed", "package_rejected")); }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            { logger.LogError(exception, "L'installation du paquet outil {ToolId} {Version} a échoué.", item.Id, item.Version); allApplied = false; applied.Add(new("tool", item.Id, item.Version, item.Platform, item.ArchiveSha256, "failed", "install_failed")); }
         }
-        foreach (var toolDirectory in Directory.EnumerateDirectories(Root))
+        if (allApplied) foreach (var toolDirectory in Directory.EnumerateDirectories(Root))
             foreach (var versionDirectory in Directory.EnumerateDirectories(toolDirectory))
                 foreach (var platformDirectory in Directory.EnumerateDirectories(versionDirectory))
                 {
@@ -63,6 +45,7 @@ public sealed class ToolPackageSyncService(WorkerAgentOptions options, WorkerIde
                     if (!desired.Any(item => (item.Id, item.Version, item.Platform) == tuple)) TryDelete(platformDirectory);
                 }
         if (changed) await capabilityProbe.InvalidateCacheAsync(ct);
+        return applied;
     }
 
     private async Task InstallAsync(WorkerIdentityState identity, string server, Listed item, string target, CancellationToken ct)
@@ -86,15 +69,6 @@ public sealed class ToolPackageSyncService(WorkerAgentOptions options, WorkerIde
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         Directory.Move(temporary, target);
         logger.LogInformation("Paquet outil {ToolId} {Version} ({Platform}) installé sur ce worker, SHA-256 {Sha256}.", item.Id, item.Version, item.Platform, item.ArchiveSha256);
-    }
-
-    private async Task<List<Listed>> Get(WorkerIdentityState identity, string server, CancellationToken ct)
-    {
-        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(new Uri(server), "api/v1/store/tools/installed"));
-        request.Headers.Add("X-Node-Token", identity.WorkerToken);
-        using var response = await http.SendAsync(request, ct);
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<List<Listed>>(new JsonSerializerOptions(JsonSerializerDefaults.Web), ct) ?? [];
     }
 
     private static async Task<byte[]> ReadLimitedAsync(HttpResponseMessage response, CancellationToken ct)

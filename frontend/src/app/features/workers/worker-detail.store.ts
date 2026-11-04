@@ -44,6 +44,15 @@ export class WorkerDetailStore {
   readonly data = inject(WorkerDataStore);
   readonly processing = inject(WorkerProcessingStore);
 
+  readonly storeState = toSignal(
+    toObservable(computed(() => this.data.selectedNode()?.id ?? null)).pipe(
+      switchMap((id) => id ? this.live.drive(['workers']).pipe(
+        exhaustMap(() => this.http.get<WorkerStoreState>('/api/v1/workers/' + id + '/store-state').pipe(catchError(() => of(null)))),
+        startWith(null),
+      ) : of(null)),
+    ), { initialValue: null },
+  );
+
   readonly rawNode = computed(
     () => this.data.nodes().find((node) => node.id === this.data.selectedNode()?.id) ?? null,
   );
@@ -447,4 +456,13 @@ export class WorkerDetailStore {
   overviewLibraries(nodeId: string | null) {
     return nodeOverviewLibraries(this.data.allLibraries(), this.data.nodeAccessByLibrary(), nodeId);
   }
+}
+
+export interface WorkerStoreState {
+  readonly desired: { readonly revision: number; readonly items: readonly StoreItem[] };
+  readonly applied: { readonly revision: number; readonly reportedAt: string | null; readonly items: readonly StoreItem[] };
+}
+export interface StoreItem {
+  readonly kind: string; readonly id: string; readonly version: string; readonly platform: string | null;
+  readonly sha256: string; readonly status?: string; readonly errorCode?: string | null;
 }

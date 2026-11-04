@@ -72,8 +72,9 @@ builder.Services.AddSingleton<WorkerEnrollmentService>();
 builder.Services.AddHostedService<WorkerCentralDiscovery>(provider => provider.GetRequiredService<WorkerCentralDiscovery>());
 builder.Services.AddHostedService<WorkerAutoEnrollmentService>();
 builder.Services.AddHostedService<WorkerHeartbeatService>();
-builder.Services.AddHostedService<PluginSyncService>();
-builder.Services.AddHostedService<ToolPackageSyncService>();
+builder.Services.AddSingleton<PluginSyncService>();
+builder.Services.AddSingleton<ToolPackageSyncService>();
+builder.Services.AddHostedService<StoreSyncCoordinator>();
 builder.Services.ConfigureHttpJsonOptions(json =>
     json.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
 

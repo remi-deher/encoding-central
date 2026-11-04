@@ -9,6 +9,7 @@ namespace Encoding.Api.Plugins;
 /// </summary>
 public static class WorkerStoreStateEndpoints
 {
+    public sealed record AppliedStateRequest(long Revision, IReadOnlyList<StoreAppliedItem>? Items);
     public static void MapWorkerStoreStateEndpoints(this WebApplication app)
     {
         app.MapGet("/api/v1/workers/{workerId:guid}/store-state", async (Guid workerId, WorkerStoreStateService states, CancellationToken ct) =>
@@ -21,6 +22,26 @@ public static class WorkerStoreStateEndpoints
             try { return await states.SetDesiredAsync(workerId, request, ct) is { } result ? Results.Ok(result) : Results.NotFound(); }
             catch (StoreCatalogException exception) { return Results.UnprocessableEntity(new { title = exception.Message }); }
         }).WithTags("Store").WithName("SetWorkerStoreState");
+
+        app.MapPut("/api/v1/store/applied-state", async (HttpContext http, AppliedStateRequest request, WorkerStoreStateService states, CancellationToken ct) =>
+        {
+            var token = http.Request.Headers["X-Node-Token"].ToString();
+            if (token.Length == 0 || await states.WorkerIdForTokenAsync(token, ct) is not { } workerId)
+                return Results.Unauthorized();
+            if (request.Items is null || request.Revision < 0)
+                return Results.UnprocessableEntity(new { code = "invalid_report" });
+            try
+            {
+                var result = await states.ReportAppliedAsync(workerId, request.Revision, request.Items, ct);
+                return result.Outcome switch
+                {
+                    StoreReportOutcome.Accepted => Results.Ok(new { revision = request.Revision }),
+                    StoreReportOutcome.StaleRevision or StoreReportOutcome.UnknownRevision => Results.Conflict(new { desiredRevision = result.DesiredRevision }),
+                    _ => Results.Unauthorized()
+                };
+            }
+            catch (StoreStateException) { return Results.UnprocessableEntity(new { code = "invalid_report" }); }
+        }).AllowNodeCredentials().WithTags("Store").WithName("ReportWorkerAppliedStoreState");
 
         // Flux SSE worker ← central. L'identité vient du jeton X-Node-Token ; la route ne lit aucun identifiant fourni par le worker.
         app.MapGet("/api/v1/store/events", async (HttpContext http, WorkerStoreStateService states) =>

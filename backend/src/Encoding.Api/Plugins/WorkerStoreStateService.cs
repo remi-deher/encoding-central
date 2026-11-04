@@ -23,6 +23,9 @@ public sealed class WorkerStoreStateService(WorkerStoreStateRepository repositor
 
     public Task<WorkerStoreState?> GetAsync(Guid workerId, CancellationToken ct) => repository.GetAsync(workerId, ct);
 
+    public Task<StoreReportResult> ReportAppliedAsync(Guid workerId, long revision, IReadOnlyList<StoreAppliedItem> items, CancellationToken ct) =>
+        repository.ReportAppliedAsync(workerId, revision, items, ct);
+
     /// <summary>Remplace l'état désiré. <c>null</c> si le worker est inconnu ; <see cref="StoreCatalogException"/> si un élément est invalide ou absent du catalogue.</summary>
     public async Task<SetStoreStateResponse?> SetDesiredAsync(Guid workerId, SetStoreStateRequest request, CancellationToken ct)
     {
