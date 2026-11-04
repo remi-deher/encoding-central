@@ -26,9 +26,7 @@ import { FlowComponentDefinition, FlowComponentOutput } from '../../shared/model
 import { DetailDrawerComponent } from '../../shared/ui/detail-drawer/detail-drawer';
 import { FlowCommandBarComponent } from './editor/flow-command-bar.component';
 import { FlowPaletteDockComponent } from './editor/flow-palette-dock.component';
-import {
-  FlowSimulationTrayComponent,
-} from './editor/flow-simulation-tray.component';
+import { FlowSimulationTrayComponent } from './editor/flow-simulation-tray.component';
 import { FlowGraphStore } from './editor/flow-graph.store';
 import { FlowGraphEditingStore } from './editor/flow-graph-editing.store';
 import { FlowPackInsertionStore } from './editor/flow-pack-insertion.store';
@@ -120,9 +118,7 @@ export class FlowEditorPageComponent {
     this.graph.onExternalEdit((state) => {
       this.persistence.savedName.set(state.name);
       this.components.flowMediaType.set(state.mediaType);
-      this.inspector.reconcileAfterUndo((nodeId) =>
-        state.nodes.some((node) => node.id === nodeId),
-      );
+      this.inspector.reconcileAfterUndo((nodeId) => state.nodes.some((node) => node.id === nodeId));
     });
     this.persistence.registerAssistant(this, (nodeId) => this.persistence.prepareAiSession(nodeId));
     inject(DestroyRef).onDestroy(() => this.persistence.unregisterAssistant(this));

@@ -46,7 +46,11 @@
     mode="side"
     size="standard"
     [opened]="inspector.configuringNode() !== undefined"
-    [title]="inspector.configuringNode()?.name || inspector.configuringNode()?.component?.name || 'Réglages du bloc'"
+    [title]="
+      inspector.configuringNode()?.name ||
+      inspector.configuringNode()?.component?.name ||
+      'Réglages du bloc'
+    "
     [eyebrow]="inspector.configuringNode()?.component?.pluginName ?? ''"
     [description]="inspector.configuringNode()?.component?.description ?? ''"
     [content]="inspectorContent"
