@@ -55,3 +55,23 @@ Ces règles sont obligatoires pour les changements du projet. Les tests doivent 
 - Ne pas ignorer durablement un test instable : identifier sa cause, le corriger ou suivre explicitement sa mise en quarantaine avec une action de résolution.
 - Ne pas abaisser une vérification ou masquer un échec pour faire passer la CI ; documenter toute exception temporaire et sa portée.
 - Mesurer la couverture comme un indicateur, pas comme un objectif isolé : protéger d’abord les comportements et invariants à risque.
+
+## 8. Profil de tests .NET local
+
+Pour le développement courant, lancer les scénarios Launcher et Plugins, puis cibler dans Runtime les classes qui couvrent le comportement modifié :
+
+```sh
+dotnet run --project backend/tests/Encoding.Launcher.Tests --configuration Release
+dotnet run --project backend/tests/Encoding.Plugins.Tests --configuration Release
+dotnet test backend/tests/Encoding.Runtime.Tests --configuration Release --filter "FullyQualifiedName~ExecutionStatesTests"
+```
+
+Remplacer `ExecutionStatesTests` par la classe concernée lorsqu'une autre couverture ciblée est adaptée. Pour une modification du runtime et avant une PR, lancer toute la suite Runtime hors stress avec le filtre utilisé par la CI :
+
+```sh
+dotnet test backend/tests/Encoding.Runtime.Tests --configuration Release --filter "Category!=Stress"
+```
+
+Les tests `LoadContentionTests` restent dans cette suite hors stress. `WorkerProcessLossTests`, `DockerCentralTests` et `LoadStressTests` sont réservés à la CI par défaut; une exécution locale ponctuelle reste possible si le développeur la demande et dispose des prérequis. Ne pas définir leurs variables `ENCODING_TEST_MULTIPROCESS`, `ENCODING_TEST_DOCKER` ou le filtre `Category=Stress` dans le profil courant. Le stress utilise par défaut 20 000 tâches, 30 nœuds et 60 secondes.
+
+Le workflow `cluster-two-server-measurements` référence aussi `MeasuresTwoServerOwnershipLoad`, mais cette méthode/test est absente du code présent. Ne pas présenter cette mesure comme une vérification locale disponible ni modifier son filtre pour produire un résultat artificiel; traiter la divergence séparément.
