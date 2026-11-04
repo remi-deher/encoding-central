@@ -72,6 +72,8 @@ Pour le backend .NET, le profil courant exécute les scénarios Launcher et Plug
   nice -n 19 dotnet test backend/tests/Encoding.Runtime.Tests --configuration Release --filter "FullyQualifiedName~ExecutionStatesTests&Category!=Stress&Category!=ContentionLoad"
   ```
 
+  Les tests média (ffmpeg, ffprobe, MKVToolNix, scripts) sont **délégués à la CI** : en local, définir `ENCODING_TEST_SKIP_MEDIA=1` devant les commandes Plugins et Runtime (`ENCODING_TEST_SKIP_MEDIA=1 nice -n 19 dotnet run --project backend/tests/Encoding.Plugins.Tests --configuration Release`). La CI ne le définit jamais et `ENCODING_TEST_REQUIRE_MEDIA_TOOLS=1` l'emporte.
+
   Remplacer `ExecutionStatesTests` par la classe liée au comportement modifié.
 - E2E léger : `npm run test:e2e` (parcours Playwright smoke, API simulée, sans backend ni média réel).
 
@@ -88,9 +90,10 @@ Pour le backend .NET, le profil courant exécute les scénarios Launcher et Plug
 **Réservé à la CI par défaut :**
 
 - Seule exception légère en CI sur `dev` : le workflow `backend-dev.yml` (job `backend-dev-fast`) compile avec `-warnaserror` et n'exécute que `ArchitectureTests` et `SqlStatementsPrepareTests` ainsi que le contrôle léger des filtres documentés sur les PR et push vers `dev`.
+- Tests média de `Encoding.Runtime.Tests` (`MediaToolsFact`, `MkvToolsFact`) et de `Encoding.Plugins.Tests` (audio, noms de pistes, sous-titres, outils de script) : ignorés en local avec `ENCODING_TEST_SKIP_MEDIA=1`, exécutés par la CI.
 - Suite backend complète non filtrée (outils média exigés via `ENCODING_TEST_REQUIRE_MEDIA_TOOLS=1`, collecte de couverture, artefacts `.trx`) : job `backend-runtime-tests` de `.github/workflows/backend.yml`.
 - Contention de charge `Category=ContentionLoad` : scénario mixte de `LoadContentionTests`, exécuté par `backend-runtime-tests` sur la PR de promotion ; exclure ce scénario des vérifications locales. Les autres tests de la classe restent accessibles localement.
-- Tests de stress `Category=Stress` (`LoadStressTests`, variables `ENCODING_STRESS_EXECUTIONS` / `ENCODING_STRESS_NODES` / `ENCODING_STRESS_SECONDS`) : workflow `.github/workflows/stress.yml` (nightly + manuel), exclu des PR par le filtre `Category!=Stress`. **CI uniquement, sans exception locale.**
+- Tests de stress `Category=Stress` (`LoadStressTests`, variables `ENCODING_STRESS_EXECUTIONS` / `ENCODING_STRESS_NODES` / `ENCODING_STRESS_SECONDS`) : workflow `.github/workflows/stress.yml` (**déclenchement manuel uniquement**, plus de nightly), exclu des PR par le filtre `Category!=Stress`. **CI uniquement, sans exception locale.**
 - Tests multi-processus réels (`WorkerProcessLossTests`, `ENCODING_TEST_MULTIPROCESS=1` : vrai serveur, vrais workers, SIGKILL en plein encodage, plusieurs minutes) : job `backend-multiprocess-tests`.
 - Tests cluster Docker (`DockerCentralTests`, `ENCODING_TEST_DOCKER=1` + `ENCODING_TEST_CENTRAL_IMAGE` / `ENCODING_TEST_WORKER_IMAGE` construites) : job `backend-docker-cluster-tests`.
 - Mesures de charge et de coordination (`MeasuresTwoServerOwnershipLoad`, `ENCODING_TEST_LARGE_COORDINATION_MEASUREMENTS=1`, 7 000 exécutions en file) et toute mesure de performance / benchmark : job `cluster-two-server-measurements` et workflows dédiés.
