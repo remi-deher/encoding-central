@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Encoding.Api.Executions;
 using Encoding.Api.Flows;
+using Encoding.Api.Infrastructure;
 using Encoding.Api.Infrastructure.Data;
 using Encoding.Api.Plugins;
 using Encoding.Api.Workers;
@@ -280,7 +281,7 @@ public sealed class StepRefusalTests
     {
         await using var s = await Scenario.CreateAsync("refusal-log");
         Assert.Equal(StepRefusalCodes.LeaseEpochMismatch, await s.RefusalAsync(s.Request(epoch: s.Epoch + 1)));
-        var (level, message) = Assert.Single(s.Logger.Entries.Where(entry => entry.Message.Contains(StepRefusalCodes.LeaseEpochMismatch)));
+        var (level, message) = Assert.Single(s.Logger.Entries, entry => entry.Message.Contains(StepRefusalCodes.LeaseEpochMismatch));
         Assert.Equal(LogLevel.Warning, level);
         Assert.Contains("steps/complete", message);
         Assert.Contains(s.ExecutionId.ToString(), message);
