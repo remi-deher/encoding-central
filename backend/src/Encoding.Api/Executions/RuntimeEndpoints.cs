@@ -202,13 +202,20 @@ public static class RuntimeEndpoints
 
     private static void MapRuntimeStepEndpoints(this RouteGroupBuilder group)
     {
+        // Le corps du 409 porte un code de motif court et stable (StepRefusalCodes) que le worker reprend dans son échec.
         group.MapPost("/executions/{id:guid}/steps/start", async (
             Guid workerId, Guid id, StartRuntimeStep request, RuntimeExecutionCoordinator coordinator, CancellationToken ct) =>
-            await coordinator.StartStepAsync(id, workerId, request, ct) is { } step ? (IResult)Results.Ok(step) : Results.Conflict());
+        {
+            var (step, refusal) = await coordinator.TryStartStepAsync(id, workerId, request, ct);
+            return step is not null ? (IResult)Results.Ok(step) : Results.Conflict(new RuntimeRefusal(refusal?.Code ?? "unknown"));
+        });
 
         group.MapPost("/executions/{id:guid}/steps/complete", async (
             Guid workerId, Guid id, CompleteRuntimeStep request, RuntimeExecutionCoordinator coordinator, CancellationToken ct) =>
-            await coordinator.CompleteStepAsync(id, workerId, request, ct) ? Results.NoContent() : Results.Conflict());
+        {
+            var refusal = await coordinator.TryCompleteStepAsync(id, workerId, request, ct);
+            return refusal is null ? (IResult)Results.NoContent() : Results.Conflict(new RuntimeRefusal(refusal.Code));
+        });
 
         group.MapPost("/executions/{id:guid}/wait/probe", async (
             Guid workerId, Guid id, ReportWaitProbe request, RuntimeExecutionCoordinator coordinator, CancellationToken ct) =>
