@@ -19,6 +19,8 @@ export type PrimaryNavigationSheetResult = 'assistant' | undefined;
 /** Icône du registre `app-icon` pour une destination ; `undefined` = glyphe de la route. */
 export function navigationIconName(path: string): IconName | undefined {
   switch (path) {
+    case '/':
+      return 'home';
     case '/flows':
       return 'flow';
     case '/activity':

@@ -49,7 +49,7 @@ export interface DeviceAuthDialogData {
   template: `
     <app-dialog-frame
       eyebrow="Authentification sécurisée"
-      icon="diamond"
+      icon="key"
       [heading]="'Associer ' + data.toolName"
     >
       <mat-dialog-content class="app-dialog-body device-auth-body">
