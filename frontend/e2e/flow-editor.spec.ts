@@ -343,7 +343,7 @@ test('editor opens canvas navigation and tools on demand', async ({ page }) => {
     .getByRole('menuitem', { name: 'Basculer le volet de simulation', exact: true })
     .click();
   await expect(
-    page.getByRole('button', { name: 'Vérification du flow', exact: true }),
+    page.getByRole('radio', { name: 'Vérification du flow', exact: true }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Réduire', exact: true }).click();
   await expect(page.locator('.simulation-tray')).toHaveCount(0);

@@ -101,7 +101,7 @@ test('overview uses backend counts and filtered records with accessible responsi
   await expect(home.locator('app-overview-execution')).toHaveCount(1);
   await expect(home.locator('app-overview-execution')).toContainText('En cours');
   await expect(home.locator('app-overview-execution')).toContainText('100 %');
-  await expect(home.locator('.remaining-link')).toContainText('3 autres traitements');
+  await expect(home.locator('.remaining-link')).toContainText('3 autres exécutions');
   await expect(home.locator('.publication')).toContainText('Severance');
   await expect(home.locator('.node-row')).toContainText('RTX 4070');
   await expect(home.locator('.attention')).toContainText('2 tâches');

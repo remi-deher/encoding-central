@@ -126,7 +126,7 @@ test('populated tools stay readable in four palettes and both modes without mobi
 test('adaptive shell keeps all destinations reachable at tablet width and supports pointer search', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 900, height: 900 });
+  await page.setViewportSize({ width: 768, height: 900 });
   await page.goto('/');
   await expect(page.locator('.application-sidebar')).toHaveClass(/is-collapsed/);
   await expect(page.getByRole('link', { name: 'Paramètres', exact: true })).toBeVisible();
@@ -177,7 +177,7 @@ test('store cards and repository actions stay accessible with populated content 
     }),
   );
   await page.goto('/plugins');
-  await page.getByRole('tab', { name: /Store & Dépôts/ }).click();
+  await page.getByRole('tab', { name: /Store et dépôts/ }).click();
   await expect(page.getByRole('heading', { name: 'Outil de test' })).toBeVisible();
   const importAction = page.getByRole('button', { name: 'Importer une archive', exact: true });
   await expect(importAction).toBeVisible();
