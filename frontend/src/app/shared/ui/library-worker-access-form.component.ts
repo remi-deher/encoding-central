@@ -600,7 +600,7 @@ interface WorkerAccessControls {
     }
     .directory-browser-error {
       margin: 0;
-      color: var(--color-error, #b3261e);
+      color: var(--mat-sys-error);
     }
     .directory-browser-empty {
       margin: 0;

@@ -461,10 +461,10 @@ type ConfigurationFormGroup = FormGroup<
     }
     .connection-test-result {
       margin: var(--space-2) 0 0;
-      color: var(--color-success);
+      color: var(--success);
     }
     .connection-test-failed {
-      color: var(--color-error);
+      color: var(--mat-sys-error);
     }
     @media (max-width: 600px) {
       .form-actions {

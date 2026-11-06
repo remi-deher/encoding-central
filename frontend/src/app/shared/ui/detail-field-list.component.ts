@@ -245,7 +245,7 @@ export interface DetailField {
 
     .copy-feedback {
       font-weight: 600;
-      color: var(--color-success);
+      color: var(--success);
     }
   `,
 })
