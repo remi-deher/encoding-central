@@ -173,7 +173,7 @@ const LANGUAGE_LABELS: Readonly<Record<FlowScriptLanguage, string>> = {
                       [value]="published.code"
                       [language]="published.language"
                       [disabled]="true"
-                      [label]="'Code publié v' + version.version"
+                      [label]="'Code publié v' + entry.version.version"
                     />
                     <button
                       matButton="outlined"

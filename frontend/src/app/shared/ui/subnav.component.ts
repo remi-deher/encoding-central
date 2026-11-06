@@ -55,7 +55,7 @@ export interface SubnavOption {
               type="button"
               mat-tab-link
               class="subnav-item"
-              [id]="panelId() ? tabId(option.value) : null"
+              [id]="panelId() ? tabId(option.value) : undefined"
               [attr.aria-controls]="panelId() || null"
               [active]="option.value === selected()"
               [attr.aria-selected]="option.value === selected()"
