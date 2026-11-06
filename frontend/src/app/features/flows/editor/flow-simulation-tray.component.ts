@@ -1,6 +1,7 @@
 import { IconComponent } from '../../../shared/ui/icon.component';
 import { ChangeDetectionStrategy, Component, input, model, output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { FlowComponentConfiguration, FlowGraphNode } from '../../../shared/models/flow-component';
 import { SimulationResult } from '../../../shared/models/flow-simulation';
@@ -14,7 +15,13 @@ export interface FlowValidationIssue {
 @Component({
   selector: 'app-flow-simulation-tray',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [IconComponent, MatButtonModule, MatTooltipModule, FlowSimulationPanelComponent],
+  imports: [
+    IconComponent,
+    MatButtonModule,
+    MatButtonToggleModule,
+    MatTooltipModule,
+    FlowSimulationPanelComponent,
+  ],
   template: `
     @if (opened()) {
       <section
@@ -23,41 +30,33 @@ export interface FlowValidationIssue {
         aria-label="Volet de simulation et diagnostics"
       >
         <header class="tray-header">
-          <div class="tabs-group" role="group" aria-label="Simulation et diagnostic">
-            <button
-              type="button"
-              class="tab-btn"
-              [class.tab-btn_active]="activeTab() === 'simulation'"
-              (click)="selectTab('simulation')"
-              [attr.aria-pressed]="activeTab() === 'simulation'"
-            >
-              <span class="tab-glyph" aria-hidden="true">▷</span>
-              <span class="tab-label">Simulation</span>
+          <mat-button-toggle-group
+            class="tabs-group"
+            aria-label="Simulation et diagnostic"
+            [value]="activeTab()"
+            (change)="selectTab($event.value)"
+          >
+            <mat-button-toggle value="simulation" class="tab-btn">
+              <app-icon name="play_arrow" /><span class="tab-label">Simulation</span>
               @if (result(); as res) {
-                <span class="status-indicator-pill" [attr.data-status]="res.status">
-                  {{ res.status }}
-                </span>
+                <span class="status-indicator-pill" [attr.data-status]="res.status">{{
+                  simulationStatusLabel(res.status)
+                }}</span>
               }
-            </button>
+            </mat-button-toggle>
 
-            <button
-              type="button"
-              class="tab-btn"
-              [class.tab-btn_active]="activeTab() === 'diagnostics'"
-              (click)="selectTab('diagnostics')"
-              [attr.aria-pressed]="activeTab() === 'diagnostics'"
-            >
-              <span class="tab-glyph" aria-hidden="true">✔</span>
+            <mat-button-toggle value="diagnostics" class="tab-btn">
+              <app-icon name="check" />
               <span class="tab-label">Vérification du flow</span>
               @if (validationIssues().length > 0) {
                 <span class="issues-count-badge" role="status">
                   {{ validationIssues().length }}
                 </span>
               } @else if (isValid() === true) {
-                <span class="valid-badge" aria-hidden="true">✔</span>
+                <span class="valid-badge" aria-hidden="true"><app-icon name="check" /></span>
               }
-            </button>
-          </div>
+            </mat-button-toggle>
+          </mat-button-toggle-group>
 
           <div class="tray-status-hint">
             @if (validating()) {
@@ -137,7 +136,9 @@ export interface FlowValidationIssue {
                   <div class="issues-list" role="list">
                     @for (issue of validationIssues(); track issue.path + issue.message) {
                       <div class="issue-item" role="listitem">
-                        <span class="issue-icon" aria-hidden="true">⚠️</span>
+                        <span class="issue-icon" aria-hidden="true"
+                          ><app-icon name="warning"
+                        /></span>
                         <div class="issue-content">
                           <strong class="issue-path">{{ issue.path || 'Graphe' }}</strong>
                           <span class="issue-message">{{ issue.message }}</span>
@@ -147,7 +148,7 @@ export interface FlowValidationIssue {
                   </div>
                 } @else if (isValid() === true) {
                   <div class="valid-banner">
-                    <span class="valid-icon" aria-hidden="true">✔</span>
+                    <span class="valid-icon" aria-hidden="true"><app-icon name="check" /></span>
                     <div>
                       <h4 class="valid-title">Flow prêt à être utilisé</h4>
                       <p class="valid-desc">
@@ -439,6 +440,16 @@ export class FlowSimulationTrayComponent {
   readonly isValid = input<boolean | null>(null);
 
   readonly openedChange = output<boolean>();
+
+  protected simulationStatusLabel(status: SimulationResult['status']): string {
+    return status === 'completed'
+      ? 'Terminée'
+      : status === 'failed'
+        ? 'Échec'
+        : status === 'invalid'
+          ? 'Invalide'
+          : 'En attente';
+  }
   readonly runRequested = output<FlowComponentConfiguration>();
   readonly continueRequested = output<FlowComponentConfiguration>();
   readonly fileSelected = output<File>();

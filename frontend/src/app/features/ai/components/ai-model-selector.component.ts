@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, output, signal } f
 import { MatSelectModule } from '@angular/material/select';
 import { MatSliderModule } from '@angular/material/slider';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { IconComponent } from '../../../shared/ui/icon.component';
 import { AiAssistantModelOption } from '../../../shared/models/ai-tools';
 import { aiEffortLabel, aiModelKey, aiTypeLabel } from './ai-model-selection';
 
@@ -12,7 +13,7 @@ import { aiEffortLabel, aiModelKey, aiTypeLabel } from './ai-model-selection';
     '(document:click)': 'closeOnOutsideClick($event)',
     '(document:keydown.escape)': 'closeSettings()',
   },
-  imports: [MatSelectModule, MatSliderModule, MatTooltipModule],
+  imports: [MatSelectModule, MatSliderModule, MatTooltipModule, IconComponent],
   template: `
     <div class="model-control">
       <button
@@ -26,39 +27,12 @@ import { aiEffortLabel, aiModelKey, aiTypeLabel } from './ai-model-selection';
         "
         (click)="toggleSettings()"
       >
-        <svg
-          viewBox="0 0 24 24"
-          width="17"
-          height="17"
-          aria-hidden="true"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.8"
-          stroke-linecap="round"
-        >
-          <path d="M4 7h9m4 0h3M4 17h3m4 0h9" />
-          <circle cx="15" cy="7" r="2" />
-          <circle cx="9" cy="17" r="2" />
-        </svg>
+        <app-icon name="settings" />
         <span class="model-current">{{
           selected()?.label ?? unavailableModel() ?? 'Indisponible'
         }}</span>
         <span class="model-effort">{{ selectedEffortLabel() }}</span>
-        <svg
-          class="model-chevron"
-          [class.is-open]="settingsOpen()"
-          viewBox="0 0 24 24"
-          width="14"
-          height="14"
-          aria-hidden="true"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="m6 9 6 6 6-6" />
-        </svg>
+        <app-icon class="model-chevron" [class.is-open]="settingsOpen()" name="down" />
       </button>
       <section
         id="assistant-model-settings"
@@ -111,7 +85,8 @@ import { aiEffortLabel, aiModelKey, aiTypeLabel } from './ai-model-selection';
             }
             @for (option of filteredModels(); track key(option)) {
               <mat-option [value]="key(option)"
-                >{{ option.label }}{{ option.workerName ? ' · ' + option.workerName : '' }}</mat-option
+                >{{ option.label
+                }}{{ option.workerName ? ' · ' + option.workerName : '' }}</mat-option
               >
             }
           </mat-select>
@@ -202,8 +177,13 @@ import { aiEffortLabel, aiModelKey, aiTypeLabel } from './ai-model-selection';
       white-space: nowrap;
     }
     @container (max-width: 420px) {
-      .model-button { width: 100%; }
-      .model-current { flex: 1 1 auto; text-align: left; }
+      .model-button {
+        width: 100%;
+      }
+      .model-current {
+        flex: 1 1 auto;
+        text-align: left;
+      }
     }
     .model-chevron {
       flex: 0 0 auto;

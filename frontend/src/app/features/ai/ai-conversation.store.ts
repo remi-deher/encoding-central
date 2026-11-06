@@ -61,22 +61,26 @@ export class AiConversationStore {
   /** Synchronisation de l’URL (?conversation=) : assigné par la page (null en mode panneau). */
   urlSync: ((id: string | null) => void) | null = null;
   /** Ressources jointes au prochain message (store de contexte), pour l’envoi. */
-  pendingResource: (() => {
-    type: AssistantResourceType;
-    id: string;
-    version?: number;
-  } | null) | null = null;
+  pendingResource:
+    | (() => {
+        type: AssistantResourceType;
+        id: string;
+        version?: number;
+      } | null)
+    | null = null;
   /** Outils de lecture sélectionnés et pièce jointe courante (store de contexte). */
   pendingReadTools: (() => readonly string[]) | null = null;
   pendingAttachments: (() => readonly { name: string; content: string }[]) | null = null;
   /** Modèle/effort choisis (store de modèles). */
-  pendingModelSelection: (() => {
-    key: string;
-    provider: string;
-    model: string;
-    reasoningEffort: string | null;
-    workerId?: string | null;
-  } | null) | null = null;
+  pendingModelSelection:
+    | (() => {
+        key: string;
+        provider: string;
+        model: string;
+        reasoningEffort: string | null;
+        workerId?: string | null;
+      } | null)
+    | null = null;
   /** Efface la pièce jointe et remet le prompt à zéro après un envoi réussi (store de contexte). */
   resetComposer: (() => void) | null = null;
   /** Recharge les listes dépendantes après une action (flows/exécutions/bibliothèques). */
@@ -86,7 +90,8 @@ export class AiConversationStore {
   /** Sélectionne le modèle par défaut quand les options sont prêtes. */
   onOptionsReady: (() => void) | null = null;
 
-  private requestSelection: import('../../shared/models/ai-tools').AiTurnModelSelection | null = null;
+  private requestSelection: import('../../shared/models/ai-tools').AiTurnModelSelection | null =
+    null;
   private pendingPollTimer: ReturnType<typeof setTimeout> | null = null;
   private progressPollTimer: ReturnType<typeof setTimeout> | null = null;
   private progressStream: Subscription | null = null;
@@ -136,7 +141,7 @@ export class AiConversationStore {
       label: conversation.title,
       description: `${conversation.provider} · ${conversation.source.label}`,
       group: 'Conversations IA',
-      glyph: '✦',
+      icon: 'auto_awesome',
       run: () => this.openConversation(conversation.id),
     }));
     const resultIds = new Set(knownMatches.map((conversation) => conversation.id));
@@ -148,7 +153,7 @@ export class AiConversationStore {
         label: result.title,
         description: result.snippet,
         group: 'Conversations IA',
-        glyph: result.turnIndex === null ? '✦' : '❞',
+        icon: result.turnIndex === null ? 'auto_awesome' : 'document',
         run: () =>
           this.openConversation(
             result.conversationId,
@@ -191,15 +196,11 @@ export class AiConversationStore {
     }, 240);
   }
 
-  conversationSources(
-    conversation: AiAssistantConversation,
-  ): readonly AiAssistantSource[] {
+  conversationSources(conversation: AiAssistantConversation): readonly AiAssistantSource[] {
     return [conversation.source, ...(conversation.additionalSources ?? [])];
   }
 
-  visibleConversationSources(
-    conversation: AiAssistantConversation,
-  ): readonly AiAssistantSource[] {
+  visibleConversationSources(conversation: AiAssistantConversation): readonly AiAssistantSource[] {
     return this.conversationSources(conversation).filter((source) => source.kind !== 'application');
   }
 
@@ -314,8 +315,7 @@ export class AiConversationStore {
     const resource = this.pendingResource?.() ?? null;
     const flowId = activeConversation
       ? (this.conversationSources(activeConversation).find((source) => source.kind === 'flow')
-          ?.resourceId ??
-        (resource?.type === 'flow' ? resource.id : null))
+          ?.resourceId ?? (resource?.type === 'flow' ? resource.id : null))
       : resource?.type === 'flow'
         ? resource.id
         : null;
@@ -493,7 +493,7 @@ export class AiConversationStore {
         this.pendingActionProposal.set(null);
         const detail =
           proposal.action === 'start-library'
-            ? `${(result as { queued: number; skipped: number }).queued} tâche(s) mise(s) en file.`
+            ? `${(result as { queued: number; skipped: number }).queued} exécution(s) mise(s) en file.`
             : proposal.action === 'cancel-execution'
               ? 'Annulation demandée.'
               : proposal.action === 'delete-flow'

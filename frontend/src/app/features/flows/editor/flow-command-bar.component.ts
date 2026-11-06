@@ -14,7 +14,7 @@ import { MediaType } from '../../../shared/models/media-type';
     <header class="command-bar" role="toolbar" aria-label="Commandes du flow">
       <div class="command-group navigation-group">
         <a
-          mat-icon-button
+          matIconButton
           routerLink="/flows"
           class="back-link"
           aria-label="Retourner au catalogue des flows"
@@ -95,7 +95,7 @@ import { MediaType } from '../../../shared/models/media-type';
 
       <div class="command-group workbench-actions">
         <button
-          mat-icon-button
+          matIconButton
           type="button"
           [disabled]="!canUndo()"
           (click)="undoRequested.emit()"
@@ -105,7 +105,7 @@ import { MediaType } from '../../../shared/models/media-type';
           <app-icon name="undo" />
         </button>
         <button
-          mat-icon-button
+          matIconButton
           type="button"
           [disabled]="!canRedo()"
           (click)="redoRequested.emit()"
@@ -146,7 +146,7 @@ import { MediaType } from '../../../shared/models/media-type';
           <app-icon name="save" /> {{ saving() ? 'Enregistrement…' : 'Enregistrer' }}
         </button>
         <button
-          mat-icon-button
+          matIconButton
           type="button"
           [matMenuTriggerFor]="moreMenu"
           aria-label="Autres actions du flow"

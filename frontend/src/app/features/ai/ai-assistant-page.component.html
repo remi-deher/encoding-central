@@ -24,13 +24,13 @@
     (deleteRequested)="conversations.confirmDeleteConversation($event)"
   />
   <app-ai-workspace-panel assistant-context class="assistant-context-content" />
-  <section assistant-chat class="assistant-chat-content" aria-labelledby="assistant-page-title">
-    <h1 id="assistant-page-title" class="visually-hidden">Assistant</h1>
+  <section assistant-chat class="assistant-chat-content" aria-label="Assistant">
+    <app-page-header title="Assistant" [visuallyHidden]="true" />
     @if (!panelMode()) {
       <header class="chat-toolbar">
         <button
           class="history-toggle"
-          mat-icon-button
+          matIconButton
           type="button"
           [attr.aria-label]="
             historyOpen() ? 'Masquer les conversations' : 'Afficher les conversations'
@@ -41,22 +41,17 @@
           "
           (click)="historyOpen.set(!historyOpen())"
         >
-          <svg
-            viewBox="0 0 24 24"
-            width="20"
-            height="20"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            aria-hidden="true"
-          >
-            <path d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
+          <app-icon name="menu" />
         </button>
         <div class="chat-toolbar__copy">
           <h2>{{ conversations.detail()?.conversation?.title ?? 'Nouvelle conversation' }}</h2>
         </div>
-        <button matButton="tonal" type="button" class="context-toggle" (click)="context.openWorkspace()">
+        <button
+          matButton="tonal"
+          type="button"
+          class="context-toggle"
+          (click)="context.openWorkspace()"
+        >
           <span>Contexte</span>
         </button>
       </header>

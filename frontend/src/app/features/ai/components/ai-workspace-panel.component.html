@@ -1,12 +1,12 @@
 <header class="preview-panel__header">
   <h2>{{ context.previewFlow() ? context.previewTitle() : 'Espace de travail' }}</h2>
   <button
-    mat-icon-button
+    matIconButton
     type="button"
     aria-label="Fermer l’espace de travail"
     (click)="context.closePreview()"
   >
-    ×
+    <app-icon name="close" />
   </button>
 </header>
 @if (!context.previewFlow()) {
@@ -51,9 +51,7 @@
           matButton="tonal"
           type="button"
           [disabled]="
-            !context.selectedResourceId() ||
-            conversations.sending() ||
-            context.updatingSources()
+            !context.selectedResourceId() || conversations.sending() || context.updatingSources()
           "
           (click)="context.addResourceToContext()"
         >
@@ -64,12 +62,12 @@
         <div class="selected-resource">
           <span>{{ resource.label }}</span>
           <button
-            mat-icon-button
+            matIconButton
             type="button"
             aria-label="Retirer la ressource"
             (click)="context.removeSelectedResource()"
           >
-            ×
+            <app-icon name="close" />
           </button>
         </div>
       }
@@ -122,9 +120,7 @@
     <div class="workspace-files__heading">
       <div>
         <h3>Fichiers</h3>
-        <p class="muted">
-          Ajoutez des fichiers de configuration, flows, scripts ou sous-titres.
-        </p>
+        <p class="muted">Ajoutez des fichiers de configuration, flows, scripts ou sous-titres.</p>
       </div>
       <button
         matButton="tonal"
@@ -148,16 +144,16 @@
       <ul class="workspace-file-list">
         @for (file of context.attachments(); track file.name) {
           <li>
-            <span aria-hidden="true">📄</span>
+            <app-icon name="document" />
             <span>{{ file.name }}</span>
             <button
-              mat-icon-button
+              matIconButton
               type="button"
               [disabled]="conversations.sending() || conversations.hasPendingRequest()"
               [attr.aria-label]="'Retirer ' + file.name"
               (click)="context.removeAttachment(file.name)"
             >
-              ×
+              <app-icon name="close" />
             </button>
           </li>
         }

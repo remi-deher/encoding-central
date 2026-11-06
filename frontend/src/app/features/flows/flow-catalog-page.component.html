@@ -46,24 +46,27 @@
   (selectionAction)="onSelectionAction($event)"
 >
   <ng-template #catalogueSummary>
-    <div class="flow-types" role="group" aria-label="Filtrer par type de média">
+    <mat-chip-listbox
+      class="flow-types"
+      aria-label="Filtrer par type de média"
+      [value]="typeFilter()"
+      (change)="typeFilter.set($event.value)"
+    >
       @if (totalCount() > 0) {
         @for (type of typeTiles(); track type.value) {
-          <button
-            type="button"
+          <mat-chip-option
             class="flow-type"
+            [value]="type.value"
             [attr.data-media]="type.value"
-            [attr.aria-pressed]="typeFilter() === type.value"
             [disabled]="type.count === 0"
-            (click)="toggleType(type.value)"
           >
             <span class="flow-type-icon"><app-icon [name]="type.icon" /></span>
             <span class="flow-type-label">{{ type.label }}</span>
             <span class="flow-type-count">{{ type.count }}</span>
-          </button>
+          </mat-chip-option>
         }
       }
-    </div>
+    </mat-chip-listbox>
   </ng-template>
 
   <ng-template #detailContent catalogue-detail>
@@ -80,12 +83,12 @@
     @if (selectedFlow(); as flow) {
       @if (auth.isAdmin()) {
         <button
-          mat-icon-button
+          matIconButton
           type="button"
           [matMenuTriggerFor]="flowActions"
           aria-label="Actions du flow"
         >
-          ⋮
+          <app-icon name="more_vert" />
         </button>
         <mat-menu #flowActions="matMenu">
           <button

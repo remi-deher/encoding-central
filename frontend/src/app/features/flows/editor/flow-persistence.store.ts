@@ -9,7 +9,10 @@ import { FlowValidation } from '../../../shared/services/flow-validation';
 import { FlowTemplates } from '../../../shared/services/flow-templates';
 import { FlowComponentPacks } from '../../../shared/services/flow-component-packs';
 import { NotificationService } from '../../../shared/services/notification.service';
-import { FlowEditorAssistant, FlowAssistantSession } from '../../../shared/services/flow-editor-assistant.service';
+import {
+  FlowEditorAssistant,
+  FlowAssistantSession,
+} from '../../../shared/services/flow-editor-assistant.service';
 import {
   flowDocumentKey,
   flowPublishedVersion,
@@ -55,7 +58,6 @@ export class FlowPersistenceStore {
   readonly validationIssues = signal<readonly FlowValidationIssue[]>([]);
   readonly validationSuccess = signal<boolean | null>(null);
   readonly packCatalog = signal<readonly FlowComponentPackSummary[]>([]);
-  readonly packCreationOpen = signal(false);
 
   private readonly savedGraph = signal<string | null>(null);
   private readonly savedDocumentKey = signal<string | null>(null);
@@ -100,13 +102,13 @@ export class FlowPersistenceStore {
             ? this.live
                 .drive(['flows'], { refreshMs: 15_000 })
                 .pipe(
-                switchMap(() =>
-                  (draft !== undefined
-                    ? from(this.serverValidation.get(this.validationFlowId))
-                    : this.serverValidation.versionStatus(this.validationFlowId, version)
-                  ).pipe(catchError(() => of(null))),
-                ),
-              )
+                  switchMap(() =>
+                    (draft !== undefined
+                      ? from(this.serverValidation.get(this.validationFlowId))
+                      : this.serverValidation.versionStatus(this.validationFlowId, version)
+                    ).pipe(catchError(() => of(null))),
+                  ),
+                )
             : of(null),
         ),
         takeUntilDestroyed(),
@@ -133,12 +135,8 @@ export class FlowPersistenceStore {
     }
   }
 
-  openPackCreation(): void {
-    this.packCreationOpen.set(true);
-  }
-
-  async createPackFromPublishedFlow(values: Record<string, string>): Promise<void> {
-    if (this.storedVersion() < 1 || this.saving()) return;
+  async createPackFromPublishedFlow(values: Record<string, string>): Promise<boolean> {
+    if (this.storedVersion() < 1 || this.saving()) return false;
     try {
       await this.packApi.createFromFlow({
         sourceFlowId: this.validationFlowId,
@@ -147,14 +145,15 @@ export class FlowPersistenceStore {
         description: values['description'] ?? '',
       });
       this.packCatalog.set(await firstValueFrom(this.packApi.list()));
-      this.packCreationOpen.set(false);
       this.notifications.show('Pack créé depuis la version publiée du flow.');
+      return true;
     } catch (error) {
       this.notifications.show(
         error instanceof HttpErrorResponse
           ? (error.error?.title ?? 'Création du pack impossible.')
           : 'Création du pack impossible.',
       );
+      return false;
     }
   }
 
@@ -183,10 +182,7 @@ export class FlowPersistenceStore {
     }
   }
 
-  async loadTemplate(
-    templateId: string,
-    plugins: readonly FlowPluginCatalog[],
-  ): Promise<void> {
+  async loadTemplate(templateId: string, plugins: readonly FlowPluginCatalog[]): Promise<void> {
     try {
       const template = await this.templates.get(templateId);
       const name =
@@ -356,7 +352,10 @@ export class FlowPersistenceStore {
   }
 
   /** Enregistre la page comme éditrice auprès de l’assistant de flow. */
-  registerAssistant(owner: object, prepare: (nodeId?: string) => Promise<FlowAssistantSession | null>): void {
+  registerAssistant(
+    owner: object,
+    prepare: (nodeId?: string) => Promise<FlowAssistantSession | null>,
+  ): void {
     this.flowAssistant.register(owner, prepare);
   }
 

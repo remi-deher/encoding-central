@@ -4,13 +4,14 @@ import { RecordFormComponent, RecordFormData } from '../../shared/ui/record-form
 import { MatButtonModule } from '@angular/material/button';
 import { FlowValidation } from '../../shared/services/flow-validation';
 import { NotificationService } from '../../shared/services/notification.service';
+import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 
 @Component({
   selector: 'app-flow-guided-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RecordFormComponent, MatButtonModule],
+  imports: [RecordFormComponent, MatButtonModule, PageHeaderComponent],
   template: `
-    <h1 class="visually-hidden">{{ definition.title }}</h1>
+    <app-page-header [title]="definition.title" [visuallyHidden]="true" />
     @if (form(); as form) {
       <app-record-form
         [data]="form"
@@ -41,7 +42,7 @@ export class FlowGuidedPageComponent {
   protected readonly loadError = signal(false);
   protected readonly definition: RecordFormData = {
     title: 'Créer un flow vidéo guidé',
-    description: 'Préparez un traitement unique vers MKV, puis ouvrez son graphe dans l’éditeur.',
+    description: 'Préparez une exécution unique vers MKV, puis ouvrez son graphe dans l’éditeur.',
     submitLabel: 'Créer le brouillon et ouvrir l’éditeur',
     reviewTitle: 'Vérifier les choix avant de créer le brouillon',
     initialValues: {
@@ -86,7 +87,7 @@ export class FlowGuidedPageComponent {
         required: true,
         hint: 'En mode automatique uniquement. Un seul nouvel essai CPU, à partir du même fichier de travail.',
         options: [
-          { value: 'false', label: 'Arrêter le traitement' },
+          { value: 'false', label: 'Arrêter l’exécution' },
           { value: 'true', label: 'Réessayer en CPU' },
         ],
       },
@@ -107,7 +108,7 @@ export class FlowGuidedPageComponent {
         id: 'general',
         label: 'Général',
         description:
-          'Flow vidéo générique vers MKV. Les distinctions film et série ne changent pas le traitement média.',
+          'Flow vidéo générique vers MKV. Les distinctions film et série ne changent pas le traitement du média.',
         fieldIds: ['name', 'codec'],
       },
       {

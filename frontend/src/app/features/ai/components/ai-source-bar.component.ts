@@ -6,12 +6,13 @@ import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { AiContextStore } from '../ai-context.store';
 import { AiConversationStore } from '../ai-conversation.store';
+import { IconComponent } from '../../../shared/ui/icon.component';
 
 /** Barre des ressources jointes à la conversation, avec le menu d’actions par source. */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-ai-source-bar',
-  imports: [MatButtonModule, MatChipsModule, MatMenuModule, RouterLink],
+  imports: [MatButtonModule, MatChipsModule, MatMenuModule, RouterLink, IconComponent],
   template: `
     @if (conversations.detail(); as current) {
       @if (conversations.visibleConversationSources(current.conversation).length) {
@@ -24,13 +25,12 @@ import { AiConversationStore } from '../ai-conversation.store';
               <span class="source-item"
                 ><mat-chip>{{ source.label }}</mat-chip
                 ><button
-                  mat-icon-button
+                  matIconButton
                   [matMenuTriggerFor]="sourceMenu"
                   [attr.aria-label]="'Actions pour ' + source.label"
                 >
-                  ⋮
-                </button></span
-              >
+                  <app-icon name="more_vert" /></button
+              ></span>
               <mat-menu #sourceMenu="matMenu">
                 <a mat-menu-item [routerLink]="source.href">Ouvrir la ressource</a>
                 @if (isAdmin() && source.kind === 'flow' && source.version) {
@@ -57,7 +57,7 @@ import { AiConversationStore } from '../ai-conversation.store';
                     [disabled]="conversations.actionBusy()"
                     (click)="context.startLibraryFromAssistant(source, isAdmin())"
                   >
-                    Lancer les traitements…
+                    Démarrer les exécutions…
                   </button>
                 }
                 @if (isAdmin() && context.isCancelableExecution(source)) {
