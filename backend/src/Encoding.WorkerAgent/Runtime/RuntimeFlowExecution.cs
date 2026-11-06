@@ -15,7 +15,7 @@ internal sealed partial class RuntimeFlowExecution(WorkerAgentOptions options, M
     LocalPublicationArtifactStore localPublicationArtifacts, ILogger logger, RuntimeLease lease, RuntimeClient client,
     CancellationToken stoppingToken, TimeProvider? timeProvider = null) : IDisposable
 {
-    private readonly RuntimeCommandCapture commandCapture = RuntimeCommandCapture.Begin(lease.ExecutionId);
+    private readonly RuntimeCommandCapture commandCapture = RuntimeCommandCapture.Begin(lease.ExecutionId, lease.Epoch);
     private readonly CancellationTokenSource job = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
     private readonly SemaphoreSlim leaseGate = new(1, 1);
     private readonly string directory = Path.Combine(options.DataDirectory, "executions", lease.ExecutionId.ToString("D"), lease.Epoch.ToString(System.Globalization.CultureInfo.InvariantCulture));
@@ -62,9 +62,10 @@ internal sealed partial class RuntimeFlowExecution(WorkerAgentOptions options, M
             // les médias invalides. FailureAsync renouvelle d'abord le bail et confirme un échec terminal ;
             // si le bail a réellement changé d'époque, le renouvellement sera refusé et l'ancien worker
             // ne pourra rien modifier.
-            logger.LogWarning(exception, "Complétion de l’exécution {ExecutionId} refusée par le central ; tentative de clôture en échec.", lease.ExecutionId);
+            logger.LogWarning(exception, "Complétion de l’exécution {ExecutionId} refusée par le central (motif : {Reason}) ; tentative de clôture en échec.",
+                lease.ExecutionId, RuntimeRefusalReason.From(exception) ?? "inconnu");
             state.MarkLost();
-            await FailureAsync("failed", "cluster_refused : Le central a refusé une étape ou une complétion de l’exécution.");
+            await FailureAsync("failed", RuntimeRefusalReason.Describe(exception, "Le central a refusé une étape ou une complétion de l’exécution."));
         }
         catch (HttpRequestException exception) when (exception.StatusCode is null || (int)exception.StatusCode >= 500)
         {

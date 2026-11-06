@@ -7,10 +7,11 @@ namespace Encoding.WorkerAgent.Runtime;
 
 public sealed class RuntimeCommandCapture : IDisposable
 {
-    private sealed record ActiveStep(RuntimeCommandCapture Capture, string NodeId, Guid InvocationId);
+    private sealed record ActiveStep(RuntimeCommandCapture Capture, string NodeId, Guid InvocationId, long Epoch);
     private static readonly AsyncLocal<RuntimeCommandCapture?> Current = new();
     private static readonly AsyncLocal<ActiveStep?> CurrentStep = new();
     private static readonly ConcurrentDictionary<Guid, RuntimeCommandCapture> ActiveExecutions = new();
+    private static WorkerTelemetrySink? telemetry;
     private static readonly Regex SecretAssignment = new(
         "(?i)(password|passwd|secret|token|api[_-]?key|authorization)(\\s*[:=]\\s*)(\\\"[^\\\"]*\\\"|'[^']*'|[^\\s,;]+)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -27,23 +28,45 @@ public sealed class RuntimeCommandCapture : IDisposable
     private readonly HashSet<(string NodeId, Guid InvocationId)> completedSteps = [];
     private readonly RuntimeCommandCapture? previous;
     private readonly Guid? executionId;
+    private readonly long epoch;
     private bool disposed;
 
-    private RuntimeCommandCapture(Guid? executionId)
+    private RuntimeCommandCapture(Guid? executionId, long epoch)
     {
         this.executionId = executionId;
+        this.epoch = epoch;
         previous = Current.Value;
         Current.Value = this;
         if (executionId is { } id) ActiveExecutions[id] = this;
     }
 
-    public static RuntimeCommandCapture Begin(Guid? executionId = null) => new(executionId);
+    public static void ConfigureTelemetry(WorkerTelemetrySink sink) => Volatile.Write(ref telemetry, sink);
 
-    public IDisposable BeginStep(string nodeId, Guid invocationId)
+    public static RuntimeCommandCapture Begin(Guid? executionId = null, long epoch = 0) => new(executionId, epoch);
+
+    public IDisposable BeginStep(string nodeId, Guid invocationId, long? stepEpoch = null)
     {
         var previousStep = CurrentStep.Value;
-        CurrentStep.Value = new(this, nodeId, invocationId);
+        CurrentStep.Value = new(this, nodeId, invocationId, stepEpoch ?? epoch);
         return new Scope(() => CurrentStep.Value = previousStep);
+    }
+
+    public void EmitStep(string nodeId, string state) => telemetry?.Step(executionId ?? Guid.Empty, epoch, nodeId, state);
+
+    public static void RecordLine(Guid commandId, string stream, string line)
+    {
+        var step = CurrentStep.Value;
+        // Pas de rédaction (3 regex par ligne) quand personne n'écoute.
+        if (telemetry is not { Connected: true } sink) return;
+        if (step is null || Current.Value != step.Capture || step.Capture.executionId is not { } executionId) return;
+        sink.Log(executionId, step.Epoch, step.NodeId, commandId, stream, Redact(line));
+    }
+
+    public static void RecordProgress(Guid commandId, double? percent, long? bytes, long elapsedMs)
+    {
+        var step = CurrentStep.Value;
+        if (step is null || Current.Value != step.Capture || step.Capture.executionId is not { } executionId) return;
+        telemetry?.Progress(executionId, step.Epoch, step.NodeId, commandId, percent, bytes, elapsedMs);
     }
 
     public IReadOnlyList<RuntimeCommandLog> ForStep(string nodeId, Guid invocationId)
@@ -99,6 +122,7 @@ public sealed class RuntimeCommandCapture : IDisposable
             step.Capture.records.RemoveAll(item => item.Command.Id == log.Id);
             step.Capture.records.Add(new(step.NodeId, step.InvocationId, log));
         }
+        if (finishedAt is not null) telemetry?.CompleteCommand(log.Id);
     }
 
     public static RuntimeCommandLog CreateOperationLog(string operation, Guid id, DateTimeOffset startedAt,

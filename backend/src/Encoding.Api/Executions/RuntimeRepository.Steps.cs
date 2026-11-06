@@ -141,19 +141,23 @@ public sealed partial class RuntimeRepository
         await tx.CommitAsync(ct);return true;
     }
 
-    public async Task<StartedRuntimeStep?> StartStepAsync(Guid id,Guid worker,StartRuntimeStep request,CancellationToken ct)
+    public async Task<StartedRuntimeStep?> StartStepAsync(Guid id,Guid worker,StartRuntimeStep request,CancellationToken ct) =>
+        (await TryStartStepAsync(id,worker,request,ct)).Step;
+
+    /// <summary>Démarre l'étape ; en cas de refus, <c>Refusal</c> porte le motif (déjà journalisé).</summary>
+    public async Task<(StartedRuntimeStep? Step,StepRefusal? Refusal)> TryStartStepAsync(Guid id,Guid worker,StartRuntimeStep request,CancellationToken ct)
     {
+        (StartedRuntimeStep?,StepRefusal?) Fail(string code)=>(null,Refuse(code,"steps/start",id,worker,request.NodeId,request.Epoch));
         await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
-        if(!await FenceAsync(id,worker,request.Epoch,c,tx,ct)) return null;
-        FlowDefinition flow;
-        await using(var cmd=Sql.Command("SELECT flow_definition FROM executions WHERE id=@id AND state='running'",c,tx))
-        { cmd.Parameters.AddWithValue("id",id); if(await cmd.ExecuteScalarAsync(ct) is not string json) return null; flow=JsonSerializer.Deserialize<FlowDefinition>(json,Json)!; }
-        var node=flow.Nodes.SingleOrDefault(n=>n.Id==request.NodeId); if(node is null) return null;
+        if(!await FenceAsync(id,worker,request.Epoch,c,tx,ct)) return Fail(await DiagnoseFenceAsync(id,worker,request.Epoch,c,tx,ct));
+        var flow=await LoadRunningFlowAsync(id,c,tx,ct);
+        if(flow is null) return Fail(StepRefusalCodes.ExecutionNotRunning);
+        var node=flow.Nodes.SingleOrDefault(n=>n.Id==request.NodeId); if(node is null) return Fail(StepRefusalCodes.NodeUnknown);
         await using(var prior=Sql.Command("SELECT checkpoint FROM execution_steps WHERE execution_id=@id AND completed_at IS NOT NULL ORDER BY completed_revision DESC LIMIT 1",c,tx))
         {
             prior.Parameters.AddWithValue("id",id); var json=await prior.ExecuteScalarAsync(ct) as string;
             var expected=json is null ? flow.Nodes.Single(n=>components.Resolve(n.Component)!.Kind=="input").Id : JsonSerializer.Deserialize<RuntimeCheckpoint>(json,Json)!.NextNodeId;
-            if(expected!=node.Id) return null;
+            if(expected!=node.Id) return Fail(StepRefusalCodes.StepOutOfOrder);
         }
         await using var start=Sql.Command("""
           INSERT INTO execution_steps(execution_id,flow_node_id,invocation_id,idempotent) VALUES(@id,@node,@invocation,@idempotent) ON CONFLICT DO NOTHING;
@@ -163,157 +167,7 @@ public sealed partial class RuntimeRepository
         start.Parameters.AddWithValue("idempotent",RuntimeStepEffects.IsReplayable(node.Component.PluginId,node.Component.ComponentId));
         await using var r=await start.ExecuteReaderAsync(ct); await r.ReadAsync(ct);
         var result=new StartedRuntimeStep(r.GetGuid(0),r.IsDBNull(1)?null:JsonSerializer.Deserialize<RuntimeCheckpoint>(r.GetString(1),Json));
-        await r.DisposeAsync(); await tx.CommitAsync(ct); return result;
-    }
-
-    public async Task<bool> CompleteStepAsync(Guid id,Guid worker,CompleteRuntimeStep request,CancellationToken ct)
-    {
-        var cp=request.Checkpoint;
-        var commands=request.Commands??[];
-        if(cp is null || string.IsNullOrWhiteSpace(cp.NodeId) || cp.InvocationId==Guid.Empty
-            || cp.Context is null || cp.Context.Variables is null || cp.Context.Plan is null
-            || cp.Context.VideoEncodings is { Count: > 64 }
-            || !(RuntimeArtifactStore.ValidDigest(cp.Context.CurrentSha256) || cp.Context.CurrentSha256=="" && cp.Context.DirectSource is { IsValid:true })
-            || cp.Context.Extension is null || !System.Text.RegularExpressions.Regex.IsMatch(cp.Context.Extension,"^\\.[a-zA-Z0-9]{1,10}$")
-            || commands.Count>64 || commands.Any(command=>!ValidCommandLog(command))
-            || commands.Select(command=>command.Id).Distinct().Count()!=commands.Count) return false;
-        if(JsonSerializer.SerializeToUtf8Bytes(commands,Json).Length>524288) return false;
-        var serialized=JsonSerializer.Serialize(cp,Json); if(serialized.Length>1048576) return false;
-        await using var c=await dataSource.OpenConnectionAsync(ct); await using var tx=await c.BeginTransactionAsync(ct);
-        // A lost handoff response can be retried after its lease has already been revoked.
-        // Only the exact checkpoint, actor and completed epoch can acknowledge this duplicate.
-        await using(var duplicate=Sql.Command("""
-          SELECT s.checkpoint=@checkpoint FROM execution_steps s JOIN execution_work w ON w.execution_id=s.execution_id
-          JOIN executions e ON e.id=w.execution_id
-          WHERE s.execution_id=@id AND s.flow_node_id=@node AND s.invocation_id=@invocation
-            AND s.completed_at IS NOT NULL AND s.completed_epoch=@epoch AND s.completed_worker_id=@worker
-          """,c,tx))
-        {
-            duplicate.Parameters.AddWithValue("id",id); duplicate.Parameters.AddWithValue("node",cp.NodeId);
-            duplicate.Parameters.AddWithValue("invocation",cp.InvocationId); duplicate.Parameters.AddWithValue("epoch",request.Epoch);
-            duplicate.Parameters.AddWithValue("worker",worker); duplicate.Parameters.AddWithValue("checkpoint",SqlKind.Json,serialized);
-            if(await duplicate.ScalarNullableBoolAsync(ct) is {} same) return same;
-        }
-        if(!await FenceAsync(id,worker,request.Epoch,c,tx,ct)) return false;
-        FlowDefinition flow;
-        await using(var cmd=Sql.Command("SELECT flow_definition FROM executions WHERE id=@id AND state='running'",c,tx))
-        { cmd.Parameters.AddWithValue("id",id); if(await cmd.ExecuteScalarAsync(ct) is not string json) return false; flow=JsonSerializer.Deserialize<FlowDefinition>(json,Json)!; }
-        if(!await ValidVideoEncodingsAsync(flow,id,worker,cp.NodeId,cp.Context.VideoEncodings,c,tx,ct)) return false;
-        if(cp.Context.DirectSource is not null)
-        {
-            var inspected=flow.Nodes.SingleOrDefault(node=>node.Id==cp.NodeId);
-            if(cp.Context.CurrentSha256!="" || cp.Handoff is not null || cp.Wait is not null || cp.Context.Plan.Count>0
-                || inspected is null || !(DirectMediaInspection.Allows(inspected.Component.PluginId,inspected.Component.ComponentId,
-                    FlowOperationConfiguration.Resolve(inspected.Component.ComponentId,inspected.Configuration),cp.Context.Plan.Count,
-                    FfmpegBuilderPolicy.Active(cp.Context.Variables))
-                    || DirectMediaInspection.AllowsMetadataOnly(components.Resolve(inspected.Component)))) return false;
-            await using var direct=Sql.Command("SELECT EXISTS(SELECT 1 FROM execution_work WHERE execution_id=@id AND worker_id=@worker AND source_worker_id=@worker AND NOT source_preparation_requested AND source_sha IS NULL)",
-                c,tx);
-            direct.Parameters.AddWithValue("id",id); direct.Parameters.AddWithValue("worker",worker);
-            if(!await direct.ScalarBoolAsync(ct)) return false;
-        }
-        else await using(var artifact=Sql.Command("SELECT EXISTS(SELECT 1 FROM execution_artifacts WHERE execution_id=@id AND sha256=@sha)",c,tx))
-        {
-            artifact.Parameters.AddWithValue("id",id); artifact.Parameters.AddWithValue("sha",cp.Context.CurrentSha256);
-            if(!(await artifact.ScalarBoolAsync(ct))) return false;
-        }
-        // Additional files produced by a prior step must remain available after the workspace changes.
-        foreach(var variable in cp.Context.Variables.Where(pair=>pair.Key.StartsWith("artifact.",StringComparison.Ordinal)))
-        {
-            if(variable.Value.ValueKind!=JsonValueKind.Object || !variable.Value.TryGetProperty("sha256",out var digest)
-                || digest.ValueKind!=JsonValueKind.String || !RuntimeArtifactStore.ValidDigest(digest.GetString()!)
-                || !variable.Value.TryGetProperty("name",out var name) || name.ValueKind!=JsonValueKind.String
-                || string.IsNullOrWhiteSpace(name.GetString()) || name.GetString()!.Length>255
-                || name.GetString()!.Contains('/') || name.GetString()!.Contains('\\')) return false;
-            await using var artifact=Sql.Command("SELECT EXISTS(SELECT 1 FROM execution_artifacts WHERE execution_id=@id AND sha256=@sha)",c,tx);
-            artifact.Parameters.AddWithValue("id",id); artifact.Parameters.AddWithValue("sha",digest.GetString()!);
-            if(!(await artifact.ScalarBoolAsync(ct))) return false;
-        }
-        var node=flow.Nodes.SingleOrDefault(n=>n.Id==cp.NodeId); if(node is null) return false;
-        RuntimeHandoffSelector? handoff=null;
-        if(RuntimeHandoffPolicy.IsHandoff(node))
-        {
-            await using var settings=Sql.Command("SELECT plugin_configuration_snapshot FROM execution_work WHERE execution_id=@id",c,tx);
-            settings.Parameters.AddWithValue("id",id);
-            var snapshot=await settings.ExecuteScalarAsync(ct) as byte[];
-            try { handoff=RuntimeHandoffPolicy.Resolve(node,snapshot is null?null:pluginConfigurations.ReadSnapshot(snapshot).GetValueOrDefault("nodes")); }
-            catch(ArgumentException) { return false; }
-            if(cp.Handoff!=handoff || cp.PlacementHandoff || cp.NextNodeId is null || handoff.Mode=="node" && handoff.TargetWorkerId==worker) return false;
-        }
-        else if(cp.Handoff is not null)
-        {
-            if(!cp.PlacementHandoff || cp.NextNodeId is null || cp.Handoff.Mode!="node" || cp.Handoff.TargetWorkerId is not { } target) return false;
-            await using var savedPlan=Sql.Command("SELECT placement_plan FROM execution_work WHERE execution_id=@id",c,tx);
-            savedPlan.Parameters.AddWithValue("id",id);
-            var planJson=await savedPlan.ExecuteScalarAsync(ct) as string;
-            var plan=planJson is null?null:JsonSerializer.Deserialize<FlowPlacementPlan>(planJson,Json);
-            if(plan?.WorkerAssignments?.TryGetValue(cp.NextNodeId,out var planned)!=true || planned!=target || target==worker) return false;
-            handoff=cp.Handoff;
-        }
-        else if(cp.PlacementHandoff) return false;
-        RuntimeWait? wait=null;
-        if(RuntimeWaitPolicy.IsWait(node))
-        {
-            try { wait=RuntimeWaitPolicy.Resolve(node); }
-            catch(ArgumentException) { return false; }
-            if(cp.Wait!=wait || cp.NextNodeId is null || cp.OutputId!="resumed" || handoff is not null) return false;
-        }
-        else if(cp.Wait is not null) return false;
-        var component=components.Resolve(node.Component)!;
-        if(component.Kind=="terminal" ? cp.OutputId is not null || cp.TerminalResult is not("success" or "unchanged" or "failed" or "deferred")
-            : cp.TerminalResult is not null || !component.Outputs.Any(o=>o.Id==cp.OutputId)) return false;
-        if(cp.NextNodeId!=flow.Connections.SingleOrDefault(e=>e.SourceNodeId==node.Id && e.SourceOutputId==cp.OutputId)?.TargetNodeId) return false;
-        RuntimeCommandLog[] existingLogs;
-        await using(var readLogs=Sql.Command("SELECT command_logs FROM execution_steps WHERE execution_id=@id AND flow_node_id=@node AND invocation_id=@invocation AND completed_at IS NULL",
-            c,tx))
-        {
-            readLogs.Parameters.AddWithValue("id",id); readLogs.Parameters.AddWithValue("node",cp.NodeId); readLogs.Parameters.AddWithValue("invocation",cp.InvocationId);
-            await using var row=await readLogs.ExecuteReaderAsync(ct);
-            if(!await row.ReadAsync(ct) || !RuntimeCommandLogCodec.TryDeserialize(row.GetString(0),out existingLogs)) return false;
-        }
-        var finalCommands=RuntimeCommandJournal.Merge(existingLogs,commands);
-        var serializedFinalCommands=JsonSerializer.Serialize(finalCommands,Json);
-        if(System.Text.Encoding.UTF8.GetByteCount(serializedFinalCommands)>524288) return false;
-        await using var update=Sql.Command("""
-          UPDATE execution_steps SET completed_at=(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),completed_revision=@completed_revision,checkpoint=@checkpoint,command_logs=@commands,
-            completed_epoch=@epoch,completed_worker_id=@worker
-          WHERE execution_id=@id AND flow_node_id=@node AND invocation_id=@invocation AND completed_at IS NULL RETURNING flow_node_id
-          """,c,tx);
-        update.Parameters.AddWithValue("completed_revision",request.ExpectedRevision+1); update.Parameters.AddWithValue("id",id);
-            update.Parameters.AddWithValue("node",cp.NodeId); update.Parameters.AddWithValue("invocation",cp.InvocationId);
-            update.Parameters.AddWithValue("checkpoint",SqlKind.Json,serialized);
-        update.Parameters.AddWithValue("epoch",request.Epoch); update.Parameters.AddWithValue("worker",worker);
-        update.Parameters.AddWithValue("commands",SqlKind.Json,serializedFinalCommands);
-        update.Parameters.AddWithValue("before",SqlKind.Json,(object?)cp.Context.BeforeMetadata?.GetRawText()??DBNull.Value);
-        update.Parameters.AddWithValue("after",SqlKind.Json,(object?)cp.Context.CurrentMetadata?.GetRawText()??DBNull.Value);
-        if(await update.ExecuteScalarAsync(ct) is null) return false;
-        await using(var metadata=Sql.Command("UPDATE execution_work SET before_metadata=@before,after_metadata=@after WHERE execution_id=@id",c,tx))
-        {
-            metadata.Parameters.AddWithValue("id",id);
-            metadata.Parameters.AddWithValue("before",SqlKind.Json,(object?)cp.Context.BeforeMetadata?.GetRawText()??DBNull.Value);
-            metadata.Parameters.AddWithValue("after",SqlKind.Json,(object?)cp.Context.CurrentMetadata?.GetRawText()??DBNull.Value);
-            await metadata.ExecuteNonQueryAsync(ct);
-        }
-        var detail=handoff is null?$"Étape terminée : {Encoding.Contracts.Text.Mojibake.Repair(node.Name??component.Name)}.":handoff.Mode=="node"
-            ?$"Relais en attente vers le worker {handoff.TargetWorkerId:D}.":"Relais en attente d'un autre worker éligible.";
-        if (node.Component.ComponentId == MediaIntegrityPolicy.Component && ExecutionRepository.ReadIntegrityDiagnostic(cp) is { } diagnostic)
-            detail += " " + diagnostic.Code + " : " + diagnostic.Message;
-        if(wait is not null) detail=ExecutionWaitRepository.Describe(wait);
-        if(!await ExecutionRepository.RecordInTransactionAsync(id,new(request.EventId,request.ExpectedRevision,"running",worker,null,detail),c,tx,ct)) return false;
-        if(handoff is not null)
-        {
-            await using var yield=Sql.Command("""
-              UPDATE execution_work SET handoff_pending=true,handoff_selector=@selector,previous_worker_id=@worker,
-                worker_id=NULL,lease_until=NULL,lease_epoch=lease_epoch+1 WHERE execution_id=@id;
-              UPDATE media_reservations SET lease_epoch=@epoch+1,lease_until='9999-12-31 23:59:59.999999Z' WHERE execution_id=@id;
-              DELETE FROM disk_locks WHERE execution_id=@id;
-              """,c,tx);
-            yield.Parameters.AddWithValue("id",id); yield.Parameters.AddWithValue("worker",worker); yield.Parameters.AddWithValue("epoch",request.Epoch);
-            yield.Parameters.AddWithValue("selector",SqlKind.Json,JsonSerializer.Serialize(handoff,Json));
-            await yield.ExecuteNonQueryAsync(ct);
-        }
-        if(wait is not null) await ExecutionWaitRepository.BeginAsync(id,node.Id,wait,request.Epoch,c,tx,ct);
-        await tx.CommitAsync(ct); return true;
+        await r.DisposeAsync(); await tx.CommitAsync(ct); return (result,null);
     }
 
     internal static bool ValidCommandLog(RuntimeCommandLog command) =>
@@ -332,7 +186,7 @@ public sealed partial class RuntimeRepository
         return new(source,map);
     }
 
-    private static async Task<bool> ValidVideoEncodingsAsync(FlowDefinition flow,Guid executionId,Guid worker,string currentNodeId,
+    private async Task<bool> ValidVideoEncodingsAsync(FlowDefinition flow,Guid executionId,Guid worker,string currentNodeId,
         IReadOnlyList<ResolvedVideoEncoding>? resolutions,DbConnection c,DbTransaction tx,CancellationToken ct)
     {
         foreach(var resolution in resolutions??[])
@@ -354,28 +208,69 @@ public sealed partial class RuntimeRepository
                     executionWorker=await plannedOwner.ScalarGuidAsync(ct) is {} plannedWorkerId?plannedWorkerId:null;
                 }
             }
-            if(executionWorker!=resolution.WorkerId || string.IsNullOrWhiteSpace(resolution.FfmpegVersion)
-                || resolution.FfmpegVersion.Length>128 || resolution.ResolvedAt==default) return false;
+            if(WorkerClause(resolution,executionWorker) is {} workerClause) return RefuseVideoEncoding(workerClause,resolution,executionId,worker,currentNodeId);
             var node=flow.Nodes.SingleOrDefault(item=>item.Id==resolution.FlowNodeId);
-            if(node is null || (node.Component.PluginId!="base" && node.Component.PluginId!="video")
-                || (node.Component.ComponentId!="base-transcode-video" && node.Component.ComponentId!="video-transcode")
-                || !node.Configuration.TryGetValue("encodingProfile",out var profileValue)
-                || profileValue.ValueKind!=JsonValueKind.Object) return false;
+            if(NodeClause(node) is {} nodeClause) return RefuseVideoEncoding(nodeClause,resolution,executionId,worker,currentNodeId);
+            var profileValue=node!.Configuration["encodingProfile"];
             var profile=profileValue.Deserialize<EncodingProfileSnapshot>(Json);
             var codec=node.Configuration.TryGetValue("videoCodec",out var codecValue)?codecValue.GetString():"hevc";
             var retryWithCpu=node.Configuration.TryGetValue("retryWithCpu",out var retryFlag)&&retryFlag.ValueKind==JsonValueKind.True;
             var encoder=VideoEncoderCatalog.Find(resolution.EncoderId);
             var target=profile is null||string.IsNullOrEmpty(codec)?null:MediaCodecPolicy.AcceptedEncodingTarget(profile,codec,resolution.EncoderId,retryWithCpu);
             var preset=encoder?.Presets.FirstOrDefault(item=>item.Id==target?.Preset)?.Value;
-            if(profile is null || encoder is null || target is null || resolution.Codec!=codec || encoder.Codec!=codec
-                || resolution.ProfileId!=profile.Id || resolution.ProfileVersion!=profile.Version || resolution.ProfileName!=profile.Name
-                || resolution.Acceleration!=encoder.Acceleration || resolution.QualityMode!=encoder.QualityMode
-                || resolution.QualityOption!=encoder.QualityOption || resolution.Quality!=target.Quality
-                || resolution.PresetId!=target.Preset || resolution.Priority!=target.Priority
-                || resolution.PresetOption!=(string.IsNullOrEmpty(encoder.PresetOption)?null:encoder.PresetOption)
-                || resolution.PresetValue!=preset) return false;
+            if(FieldClause(resolution,profile,encoder,target,codec,preset) is {} fieldClause) return RefuseVideoEncoding(fieldClause,resolution,executionId,worker,currentNodeId);
         }
         return true;
+    }
+
+    private bool RefuseVideoEncoding(string clause,ResolvedVideoEncoding resolution,Guid executionId,Guid worker,string currentNodeId)
+    {
+        logger?.LogWarning("Encodage vidéo refusé, clause {Clause} — FlowNodeId {FlowNodeId}, EncoderId {EncoderId}, exécution {ExecutionId}, nœud courant {NodeId}, worker {WorkerId}",
+            clause,resolution.FlowNodeId,resolution.EncoderId,executionId,currentNodeId,worker);
+        return false;
+    }
+
+    /// <summary>Clause « worker », « version_ffmpeg » ou « resolved_at » qui échoue (diagnostic seul, mêmes tests et même ordre que la validation).</summary>
+    internal static string? WorkerClause(ResolvedVideoEncoding resolution,Guid? executionWorker)
+    {
+        if(executionWorker!=resolution.WorkerId) return $"worker : attendu {executionWorker?.ToString()??"aucun"}, reçu {resolution.WorkerId}";
+        if(string.IsNullOrWhiteSpace(resolution.FfmpegVersion)) return "version_ffmpeg : vide";
+        if(resolution.FfmpegVersion.Length>128) return $"version_ffmpeg : longueur {resolution.FfmpegVersion.Length} > 128";
+        return resolution.ResolvedAt==default?"resolved_at : valeur par défaut":null;
+    }
+
+    /// <summary>Clause « node » (nœud inconnu, mauvais plugin ou composant) ou « profile » (encodingProfile absent ou non objet) qui échoue.</summary>
+    internal static string? NodeClause(FlowNodeDefinition? node)
+    {
+        if(node is null) return "node : nœud introuvable dans le flow";
+        if(node.Component.PluginId!="base" && node.Component.PluginId!="video") return $"node : plugin {node.Component.PluginId} (attendu base ou video)";
+        if(node.Component.ComponentId!="base-transcode-video" && node.Component.ComponentId!="video-transcode")
+            return $"node : composant {node.Component.ComponentId} (attendu base-transcode-video ou video-transcode)";
+        if(!node.Configuration.TryGetValue("encodingProfile",out var profileValue)) return "profile : encodingProfile absent de la configuration du nœud";
+        return profileValue.ValueKind!=JsonValueKind.Object?$"profile : encodingProfile de type {profileValue.ValueKind} (attendu Object)":null;
+    }
+
+    /// <summary>Clause « profile », « encoder », « target » ou champ précis (attendu / reçu) qui échoue.</summary>
+    internal static string? FieldClause(ResolvedVideoEncoding r,EncodingProfileSnapshot? profile,VideoEncoderDescriptor? encoder,
+        EncodingProfileTarget? target,string? codec,string? preset)
+    {
+        if(profile is null) return "profile : encodingProfile non désérialisable";
+        if(encoder is null) return $"encoder : {r.EncoderId} absent du catalogue";
+        if(target is null) return $"target : aucune cible acceptée pour le profil {profile.Name}, codec {codec}, encodeur {r.EncoderId}";
+        if(r.Codec!=codec) return $"codec : attendu {codec}, reçu {r.Codec}";
+        if(encoder.Codec!=codec) return $"codec_encodeur : attendu {codec}, encodeur {encoder.Id} fournit {encoder.Codec}";
+        if(r.ProfileId!=profile.Id) return $"profile_id : attendu {profile.Id}, reçu {r.ProfileId}";
+        if(r.ProfileVersion!=profile.Version) return $"profile_version : attendu {profile.Version}, reçu {r.ProfileVersion}";
+        if(r.ProfileName!=profile.Name) return $"profile_name : attendu {profile.Name}, reçu {r.ProfileName}";
+        if(r.Acceleration!=encoder.Acceleration) return $"acceleration : attendu {encoder.Acceleration}, reçu {r.Acceleration}";
+        if(r.QualityMode!=encoder.QualityMode) return $"quality_mode : attendu {encoder.QualityMode}, reçu {r.QualityMode}";
+        if(r.QualityOption!=encoder.QualityOption) return $"quality_option : attendu {encoder.QualityOption}, reçu {r.QualityOption}";
+        if(r.Quality!=target.Quality) return $"quality : attendu {target.Quality}, reçu {r.Quality}";
+        if(r.PresetId!=target.Preset) return $"preset_id : attendu {target.Preset}, reçu {r.PresetId}";
+        if(r.Priority!=target.Priority) return $"priority : attendu {target.Priority}, reçu {r.Priority}";
+        var presetOption=string.IsNullOrEmpty(encoder.PresetOption)?null:encoder.PresetOption;
+        if(r.PresetOption!=presetOption) return $"preset_option : attendu {presetOption??"null"}, reçu {r.PresetOption??"null"}";
+        return r.PresetValue!=preset?$"preset_value : attendu {preset??"null"}, reçu {r.PresetValue??"null"}":null;
     }
 
     /// <summary>Lecture seule : un worker à accès direct en ligne, autre que celui qui réclame, peut-il exécuter ce segment ?</summary>

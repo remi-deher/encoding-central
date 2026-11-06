@@ -36,6 +36,8 @@ export const HEALTH_PATH = '/health/ready';
 
 const MAX_BODY_MB = 100;
 const STREAM_TIMEOUT = '1h';
+/** WebSocket de télémétrie worker → central (ADR 0045) : le proxy doit laisser passer l'upgrade. */
+const WS_PATH = '/api/v1/runtime/';
 
 /** Lit une ligne saisie : `192.168.1.50:8090`, `http://nas:8090/` ou `https://nas`. */
 export function parseBackend(line: string): ProxyBackend | null {
@@ -123,6 +125,12 @@ function schemeOf(backends: readonly ProxyBackend[]): string {
   return backends[0]?.scheme ?? 'http';
 }
 
+/** En-têtes d'upgrade WebSocket pour nginx (le bloc / normal vide Connection). */
+const NGINX_WS_HEADERS = [
+  '        proxy_set_header Upgrade $http_upgrade;',
+  '        proxy_set_header Connection $connection_upgrade;',
+];
+
 function nginx(
   domain: string,
   backends: readonly ProxyBackend[],
@@ -137,12 +145,23 @@ function nginx(
       ]
     : ['    listen 80;'];
   const text = [
+    'map $http_upgrade $connection_upgrade {',
+    '    default upgrade;',
+    "    ''      '';",
+    '}',
+    '',
     nginxUpstream(backends),
     '',
     'server {',
     ...listen,
     `    server_name ${domain};`,
     `    client_max_body_size ${MAX_BODY_MB}m;`,
+    '',
+    '    # Télémétrie temps réel worker → central (WebSocket, ADR 0045).',
+    `    location ${WS_PATH} {`,
+    ...nginxProxyBlock(`${schemeOf(backends)}://encoding`).split('\n'),
+    ...NGINX_WS_HEADERS,
+    '    }',
     '',
     '    location / {',
     nginxProxyBlock(`${schemeOf(backends)}://encoding`),
@@ -196,6 +215,7 @@ function caddy(
   );
   const notes = [
     'À ajouter dans votre Caddyfile, puis caddy reload.',
+    'Caddy laisse passer l’upgrade WebSocket nativement : le socket de télémétrie worker (/api/v1/runtime/) fonctionne sans réglage supplémentaire.',
     ...(backends.length > 1
       ? [
           'Le premier worker reçoit le trafic ; Caddy sonde /health/ready et bascule sur les suivants si besoin.',
@@ -254,6 +274,7 @@ function traefik(
   );
   const notes = [
     'À enregistrer dans le dossier surveillé par le provider file de Traefik (par exemple /etc/traefik/dynamic/encoding.yml).',
+    'Traefik relaie l’upgrade WebSocket nativement : le socket de télémétrie worker (/api/v1/runtime/) fonctionne sans réglage supplémentaire.',
     `Les points d’entrée « ${https ? 'websecure' : 'web'} » doivent exister dans votre configuration statique.`,
     ...(backends.length > 1
       ? [
@@ -275,6 +296,23 @@ function npm(domain: string, backends: readonly ProxyBackend[]): ProxyConfigOutp
     'proxy_buffering off;',
     `proxy_read_timeout ${STREAM_TIMEOUT};`,
     `proxy_send_timeout ${STREAM_TIMEOUT};`,
+    '',
+    '# Télémétrie temps réel worker → central (WebSocket, ADR 0045).',
+    '# Remplacez HÔTE_PAR_DÉFAUT par la même adresse que dans l’onglet Details.',
+    '# Pas de « map » ici : NPM colle ce texte dans un bloc server, où map est invalide.',
+    '# Ce location ne sert que le WebSocket : Connection "upgrade" en dur suffit.',
+    `location ${WS_PATH} {`,
+    '    proxy_pass http://HÔTE_PAR_DÉFAUT;',
+    '    proxy_http_version 1.1;',
+    '    proxy_set_header Upgrade $http_upgrade;',
+    '    proxy_set_header Connection "upgrade";',
+    '    proxy_set_header Host $host;',
+    '    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;',
+    '    proxy_set_header X-Forwarded-Proto $scheme;',
+    '    proxy_buffering off;',
+    `    proxy_read_timeout ${STREAM_TIMEOUT};`,
+    `    proxy_send_timeout ${STREAM_TIMEOUT};`,
+    '}',
   ];
   if (fallbacks.length) {
     lines.push(

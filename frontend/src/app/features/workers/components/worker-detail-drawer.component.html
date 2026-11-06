@@ -16,6 +16,12 @@
   </mat-tab>
   @if (detail.rawNode()?.roles?.includes('worker')) {
     <mat-tab label="Traitement">
+      @if (data.selectedNode(); as worker) {
+        <app-worker-running-tasks
+          [workerId]="worker.id"
+          [activityCount]="data.activeTasks()[worker.id] ?? 0"
+        />
+      }
       <div class="node-processing-tab">
         <app-detail-card-grid
           [cards]="processing.processingCards()"

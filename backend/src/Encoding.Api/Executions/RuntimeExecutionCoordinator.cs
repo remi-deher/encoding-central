@@ -253,18 +253,19 @@ public sealed class RuntimeExecutionCoordinator(
     public Task<bool> AuthorizeReplacementAsync(Guid executionId, Guid workerId, string root, CancellationToken ct) =>
         sourceReplacements.AuthorizeAsync(executionId, workerId, root, ct);
 
-    public Task<StartedRuntimeStep?> StartStepAsync(Guid executionId, Guid workerId, StartRuntimeStep request, CancellationToken ct) =>
-        runtime.StartStepAsync(executionId, workerId, request, ct);
+    public Task<(StartedRuntimeStep? Step, StepRefusal? Refusal)> TryStartStepAsync(Guid executionId, Guid workerId, StartRuntimeStep request, CancellationToken ct) =>
+        runtime.TryStartStepAsync(executionId, workerId, request, ct);
 
-    public async Task<bool> CompleteStepAsync(Guid executionId, Guid workerId, CompleteRuntimeStep request, CancellationToken ct)
+    /// <summary>Retourne <c>null</c> si l'étape est complétée, sinon le motif du refus (déjà journalisé par le dépôt).</summary>
+    public async Task<StepRefusal?> TryCompleteStepAsync(Guid executionId, Guid workerId, CompleteRuntimeStep request, CancellationToken ct)
     {
-        if (!await runtime.CompleteStepAsync(executionId, workerId, request, ct))
-            return false;
+        if (await runtime.TryCompleteStepAsync(executionId, workerId, request, ct) is { } refusal)
+            return refusal;
 
         if (request.CleanupAiSessions)
             await CleanupAiSubtitleSessionsAsync(executionId, request.Checkpoint.InvocationId, ct);
 
-        return true;
+        return null;
     }
 
     public Task<bool> ReportWaitProbeAsync(Guid executionId, Guid workerId, ReportWaitProbe request, CancellationToken ct) =>
@@ -277,6 +278,8 @@ public sealed class RuntimeExecutionCoordinator(
             return false;
 
         await CleanupAiSubtitleSessionsAsync(executionId, null, ct);
+        // Fin du flow (pas une simple publication intermédiaire) : la télémétrie en mémoire n'a plus d'objet.
+        if (!request.ContinueFlow) Get<IExecutionTelemetry>()?.End(executionId);
         return true;
     }
 

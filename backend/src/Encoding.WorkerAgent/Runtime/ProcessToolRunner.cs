@@ -28,44 +28,17 @@ public sealed class ProcessToolRunner : IProcessToolRunner
         bool allowNetwork = false)
     {
         var argumentList = arguments.ToList();
-        if (sandbox)
-        {
-            if (!ProcessSandbox.IsAvailable) throw new IOException("L’isolation Linux Landlock est requise pour les scripts et plugins.");
-            var host = Environment.ProcessPath ?? throw new IOException("Hôte de processus absent.");
-            var prefix = new List<string>();
-            if (Path.GetFileNameWithoutExtension(host) == "dotnet") prefix.Add(typeof(ProcessToolRunner).Assembly.Location);
-            var allowedPaths = (readOnlyPaths ?? []).Concat(ManagedToolCatalog.PackageDirectories()).Distinct(StringComparer.Ordinal).ToArray();
-            prefix.AddRange(["--isolated-process", workingDirectory, executable, System.Text.Json.JsonSerializer.Serialize(allowedPaths)]);
-            argumentList = prefix.Concat(argumentList).ToList();
-            executable = host;
-        }
-
-        var info = new ProcessStartInfo(executable)
-        {
-            WorkingDirectory = workingDirectory,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            RedirectStandardInput = input is not null,
-        };
-        foreach (var arg in argumentList) info.ArgumentList.Add(arg);
-        var managedPath = ManagedToolCatalog.ExecutableDirectories();
-        if (managedPath.Count > 0)
-            info.Environment["PATH"] = string.Join(Path.PathSeparator, managedPath.Append(Environment.GetEnvironmentVariable("PATH") ?? ""));
-        if (sandbox)
-        {
-            info.Environment[ProcessSandbox.MinimalEnvironmentVariable] = "minimal";
-            info.Environment[SandboxPolicy.EnvironmentVariable] = SandboxPolicy.ForPlugin(allowNetwork).Serialize();
-        }
-        // MKVToolNix lit les arguments et écrit son JSON selon la locale : en locale « C » (image sans LANG) les noms accentués sont tronqués.
-        if (Path.GetFileName(executable).StartsWith("mkv", StringComparison.Ordinal)) info.Environment["LC_ALL"] = "C.UTF-8";
+        if (sandbox) (executable, argumentList) = Isolate(executable, argumentList, workingDirectory, readOnlyPaths);
+        var ffmpegProgress = !sandbox && InjectFfmpegProgress(executable, argumentList);
+        trackProgress |= ffmpegProgress;
+        var protocolOutput = input is not null || ffmpegProgress;
+        var info = CreateStartInfo(executable, argumentList, workingDirectory, input is not null, sandbox, allowNetwork);
         var startedAt = DateTimeOffset.UtcNow;
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(timeout);
         using var process = Process.Start(info) ?? throw new IOException("Le processus ne peut pas démarrer.");
         var commandId = Guid.NewGuid();
-        RuntimeCommandCapture.Record(executable, argumentList, "", "", null, startedAt, null, false, input is not null, commandId);
+        RuntimeCommandCapture.Record(executable, argumentList, "", "", null, startedAt, null, false, protocolOutput, commandId);
         var outputLog = new StringBuilder();
         var errorLog = new StringBuilder();
         var truncated = false;
@@ -85,6 +58,7 @@ public sealed class ProcessToolRunner : IProcessToolRunner
         async Task<string> ReadAsync(StreamReader reader, bool collectOutput, StringBuilder captured)
         {
             var result = new StringBuilder();
+            var line = new StringBuilder();
             var buffer = new char[4096];
             int count;
             while ((count = await reader.ReadAsync(buffer, deadline.Token)) > 0)
@@ -92,6 +66,17 @@ public sealed class ProcessToolRunner : IProcessToolRunner
                 var take = Math.Min(count, Math.Max(0, CapturedLogLimit - captured.Length));
                 if (take > 0) captured.Append(buffer, 0, take);
                 if (take < count) truncated = true;
+                for (var index = 0; index < count; index++)
+                {
+                    var character = buffer[index];
+                    if (character == '\n')
+                    {
+                        PublishLine(commandId, line.ToString().TrimEnd('\r'), collectOutput, protocolOutput, ffmpegProgress, progressDurationSeconds, startedAt);
+                        line.Clear();
+                    }
+                    else if (line.Length < CapturedLogLimit) line.Append(character);
+                    else truncated = true;
+                }
                 if (trackProgress && collectOutput)
                 {
                     if (captured.Length >= CapturedLogLimit)
@@ -99,7 +84,7 @@ public sealed class ProcessToolRunner : IProcessToolRunner
                         captured.Append(buffer, 0, count);
                         if (captured.Length > CapturedLogLimit) captured.Remove(0, captured.Length - CapturedLogLimit);
                     }
-                    RuntimeCommandCapture.Record(executable, argumentList, captured.ToString(), "", null, startedAt, null, truncated, input is not null, commandId, Progress());
+                    RuntimeCommandCapture.Record(executable, argumentList, captured.ToString(), "", null, startedAt, null, truncated, protocolOutput, commandId, Progress());
                     continue;
                 }
                 if (!collectOutput) continue;
@@ -110,6 +95,7 @@ public sealed class ProcessToolRunner : IProcessToolRunner
                 }
                 result.Append(buffer, 0, count);
             }
+            if (line.Length > 0 && !(collectOutput && protocolOutput)) RuntimeCommandCapture.RecordLine(commandId, collectOutput ? "stdout" : "stderr", line.ToString());
             return result.ToString();
         }
 
@@ -138,8 +124,73 @@ public sealed class ProcessToolRunner : IProcessToolRunner
             try { await Task.WhenAll(new[] { output, errors }.Where(task => task is not null).Select(task => task!)); }
             catch (Exception) when (deadline.IsCancellationRequested) { }
             RuntimeCommandCapture.Record(executable, argumentList, outputLog.ToString(), errorLog.ToString(),
-                exitCode, startedAt, process.HasExited ? DateTimeOffset.UtcNow : null, truncated, input is not null, commandId, Progress());
+                exitCode, startedAt, process.HasExited ? DateTimeOffset.UtcNow : null, truncated, protocolOutput, commandId, Progress());
         }
+    }
+
+    private static (string Executable, List<string> Arguments) Isolate(string executable, List<string> arguments, string workingDirectory,
+        IReadOnlyList<string>? readOnlyPaths)
+    {
+        if (!ProcessSandbox.IsAvailable) throw new IOException("L’isolation Linux Landlock est requise pour les scripts et plugins.");
+        var host = Environment.ProcessPath ?? throw new IOException("Hôte de processus absent.");
+        var prefix = new List<string>();
+        if (Path.GetFileNameWithoutExtension(host) == "dotnet") prefix.Add(typeof(ProcessToolRunner).Assembly.Location);
+        var allowedPaths = (readOnlyPaths ?? []).Concat(ManagedToolCatalog.PackageDirectories()).Distinct(StringComparer.Ordinal).ToArray();
+        prefix.AddRange(["--isolated-process", workingDirectory, executable, System.Text.Json.JsonSerializer.Serialize(allowedPaths)]);
+        return (host, prefix.Concat(arguments).ToList());
+    }
+
+    /// <summary>Ajoute <c>-progress pipe:1</c> à un ffmpeg qui n'écrit pas sur stdout ; vrai si la progression est suivie.</summary>
+    private static bool InjectFfmpegProgress(string executable, List<string> arguments)
+    {
+        var ffmpegProgress = Path.GetFileNameWithoutExtension(executable).Equals("ffmpeg", StringComparison.OrdinalIgnoreCase)
+            && arguments.Contains("-i", StringComparer.Ordinal) && arguments.Count > 1
+            // Une sortie vers stdout (« - » ou « pipe: ») serait mêlée aux lignes de progression.
+            && arguments[^1] is not "-" && !arguments[^1].StartsWith("pipe:", StringComparison.Ordinal);
+        if (ffmpegProgress && !arguments.Contains("-progress", StringComparer.Ordinal))
+            arguments.InsertRange(arguments.Count - 1, ["-progress", "pipe:1", "-nostats"]);
+        return ffmpegProgress;
+    }
+
+    private static ProcessStartInfo CreateStartInfo(string executable, List<string> arguments, string workingDirectory, bool redirectInput,
+        bool sandbox, bool allowNetwork)
+    {
+        var info = new ProcessStartInfo(executable)
+        {
+            WorkingDirectory = workingDirectory,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            RedirectStandardInput = redirectInput,
+        };
+        foreach (var arg in arguments) info.ArgumentList.Add(arg);
+        var managedPath = ManagedToolCatalog.ExecutableDirectories();
+        if (managedPath.Count > 0)
+            info.Environment["PATH"] = string.Join(Path.PathSeparator, managedPath.Append(Environment.GetEnvironmentVariable("PATH") ?? ""));
+        if (sandbox)
+        {
+            info.Environment[ProcessSandbox.MinimalEnvironmentVariable] = "minimal";
+            info.Environment[SandboxPolicy.EnvironmentVariable] = SandboxPolicy.ForPlugin(allowNetwork).Serialize();
+        }
+        // MKVToolNix lit les arguments et écrit son JSON selon la locale : en locale « C » (image sans LANG) les noms accentués sont tronqués.
+        if (Path.GetFileName(executable).StartsWith("mkv", StringComparison.Ordinal)) info.Environment["LC_ALL"] = "C.UTF-8";
+        return info;
+    }
+
+    /// <summary>Diffuse une ligne en direct (sauf stdout protocolaire) et la progression ffmpeg qu'elle porte.</summary>
+    private static void PublishLine(Guid commandId, string value, bool collectOutput, bool protocolOutput, bool ffmpegProgress,
+        double? progressDurationSeconds, DateTimeOffset startedAt)
+    {
+        // stdout protocolaire (JSON de plugin, lignes -progress de ffmpeg) : jamais diffusé tel quel.
+        if (!(collectOutput && protocolOutput))
+            RuntimeCommandCapture.RecordLine(commandId, collectOutput ? "stdout" : "stderr", value);
+        if (ffmpegProgress && collectOutput && value.StartsWith("out_time_us=", StringComparison.Ordinal)
+            && long.TryParse(value.AsSpan("out_time_us=".Length), System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out var outTimeUs))
+            RuntimeCommandCapture.RecordProgress(commandId,
+                progressDurationSeconds is > 0 ? Math.Clamp(outTimeUs / 1_000_000d / progressDurationSeconds.Value * 100, 0, 100) : null,
+                null, (long)(DateTimeOffset.UtcNow - startedAt).TotalMilliseconds);
     }
 
     public async Task<string> CheckedAsync(string executable, IEnumerable<string> args, string directory, CancellationToken ct)

@@ -57,6 +57,8 @@ public sealed record RuntimeStepCommand(string NodeId, Guid InvocationId, Runtim
 public sealed record ExecutionPipelineStepResponse(string NodeId, string NodeName, Guid InvocationId,
     string ComponentKind, string Status, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt,
     string? OutputId, string? OutputLabel, string? NextNodeId, IReadOnlyList<RuntimeCommandLog> Commands, RuntimeStepDiagnostic? Diagnostic = null);
+/// <summary>Corps d'un 409 sur <c>steps/start</c> et <c>steps/complete</c> : code court et stable du motif du refus (jamais de donnée sensible).</summary>
+public sealed record RuntimeRefusal(string Reason);
 public sealed record StartRuntimeStep(long Epoch, string NodeId);
 public sealed record StartedRuntimeStep(Guid InvocationId, RuntimeCheckpoint? Completed);
 public sealed record CompleteRuntimeStep(long Epoch, Guid EventId, int ExpectedRevision, RuntimeCheckpoint Checkpoint,

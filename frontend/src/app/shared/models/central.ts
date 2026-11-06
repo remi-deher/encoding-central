@@ -122,3 +122,46 @@ export function formatWorkerLabel(name: string, displayName?: string | null): st
   }
   return display || host || 'Worker inconnu';
 }
+
+// Télémétrie temps réel (ADR 0045) — miroir de Encoding.Contracts/Executions/WorkerTelemetryContracts.cs.
+export interface ExecutionTelemetryStep {
+  readonly nodeId: string;
+  readonly state: string;
+  readonly startedAt: string;
+  readonly finishedAt: string | null;
+}
+
+export interface ExecutionTelemetryProgress {
+  readonly nodeId: string;
+  readonly commandId: string;
+  readonly percent: number | null;
+  readonly bytesProcessed: number | null;
+  readonly elapsedMs: number;
+  readonly at: string;
+}
+
+export interface ExecutionTelemetryLogLine {
+  readonly nodeId: string;
+  readonly commandId: string;
+  readonly stream: string;
+  readonly seq: number;
+  readonly text: string;
+  readonly at: string;
+}
+
+export interface ExecutionTelemetrySnapshot {
+  readonly executionId: string;
+  readonly workerId: string;
+  readonly startedAt: string;
+  readonly currentNodeId: string | null;
+  readonly steps: readonly ExecutionTelemetryStep[];
+  readonly progress: ExecutionTelemetryProgress | null;
+  readonly logs: readonly ExecutionTelemetryLogLine[];
+}
+
+export interface WorkerRunningExecution {
+  readonly executionId: string;
+  readonly startedAt: string;
+  readonly currentNodeId: string | null;
+  readonly progress: ExecutionTelemetryProgress | null;
+}

@@ -6,6 +6,7 @@ import {
   inject,
   input,
   signal,
+  untracked,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { of, catchError, firstValueFrom } from 'rxjs';
@@ -15,6 +16,7 @@ import { flowDocumentNodes } from '../../../shared/models/flow-document-graph';
 import { layoutFlowCanvas } from '../../../shared/models/flow-canvas';
 import { FlowGraphConnection, FlowGraphNode } from '../../../shared/models/flow-component';
 import { FlowCanvasComponent } from '../../../shared/ui/flow-canvas/flow-canvas.component';
+import { ExecutionTelemetry, ExecutionTelemetryHandle } from '../../../shared/services/execution-telemetry';
 import { ExecutionTracking } from '../../../shared/services/execution-tracking';
 import { FlowValidation } from '../../../shared/services/flow-validation';
 import { StatusBadgeComponent } from '../../../shared/ui/status-badge.component';
@@ -64,6 +66,7 @@ function stepDuration(step: ExecutionPipelineStep): string {
             [executedConnectionIds]="executedConnectionIds()"
             [nodeExecutionDetails]="nodeExecutionDetails()"
             [selectedNodeId]="selectedNodeId()"
+            [activeNodeId]="activeNodeId()"
             (selectNode)="onNodeSelected($event)"
           />
         </div>
@@ -280,6 +283,8 @@ function stepDuration(step: ExecutionPipelineStep): string {
 export class ActivityFlowTraceComponent {
   private readonly tracking = inject(ExecutionTracking);
   private readonly flowValidation = inject(FlowValidation);
+  private readonly telemetry = inject(ExecutionTelemetry);
+  private readonly live = signal<ExecutionTelemetryHandle | null>(null);
 
   readonly executionId = input<string | null>(null);
   readonly steps = input<readonly ExecutionPipelineStep[]>([]);
@@ -292,6 +297,16 @@ export class ActivityFlowTraceComponent {
   protected readonly selectedNodeId = signal<string | null>(null);
 
   constructor() {
+    effect((onCleanup) => {
+      const id = this.executionId();
+      if (!id || this.executionState() !== 'running') return;
+      const handle = untracked(() => this.telemetry.execution(id));
+      this.live.set(handle);
+      onCleanup(() => {
+        handle.close();
+        this.live.set(null);
+      });
+    });
     effect(() => {
       const id = this.executionId();
       if (!id) {
@@ -346,12 +361,65 @@ export class ActivityFlowTraceComponent {
     }));
   });
 
+  /** Le direct n'est suivi que tant que le flux répond ; sinon on retombe sur le sondage. */
+  private readonly liveHandle = computed(() => {
+    const handle = this.live();
+    return handle && handle.connected() && !handle.ended() ? handle : null;
+  });
+
+  /** Étapes sondées, corrigées par les événements `step` reçus en direct. */
+  protected readonly effectiveSteps = computed<readonly ExecutionPipelineStep[]>(() => {
+    const base = this.steps();
+    const handle = this.liveHandle();
+    if (!handle) return base;
+    const result = [...base];
+    for (const live of handle.steps()) {
+      const index = result.map((s) => s.nodeId).lastIndexOf(live.nodeId);
+      const status = live.state === 'completed' ? 'completed' : live.state === 'failed' ? 'failed' : 'running';
+      if (index >= 0) {
+        const current = result[index];
+        if (current.status === 'running' && status !== 'running') {
+          result[index] = { ...current, status, completedAt: live.finishedAt ?? current.completedAt };
+        }
+      } else {
+        const node = this.nodes().find((n) => n.id === live.nodeId);
+        result.push({
+          nodeId: live.nodeId,
+          nodeName: node?.name || node?.component.name || live.nodeId,
+          invocationId: `live-${live.nodeId}`,
+          componentKind: node?.component.kind ?? 'unknown',
+          status,
+          startedAt: live.startedAt,
+          completedAt: live.finishedAt,
+          outputId: null,
+          outputLabel: null,
+          nextNodeId: null,
+          commands: [],
+        });
+      }
+    }
+    return result;
+  });
+
+  protected readonly activeNodeId = computed<string | null>(() => this.liveHandle()?.currentNodeId() ?? null);
+
+  private liveLabel(handle: ExecutionTelemetryHandle, nodeId: string): string {
+    const progress = handle.progress();
+    const seconds = Math.floor(
+      (progress?.nodeId === nodeId ? progress.elapsedMs : handle.elapsedMs()) / 1000,
+    );
+    const elapsed = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+    return progress?.nodeId === nodeId && progress.percent != null
+      ? `${progress.percent.toFixed(0)} % · ${elapsed}`
+      : elapsed;
+  }
+
   protected readonly executedNodeIds = computed<ReadonlySet<string>>(() => {
-    return new Set(this.steps().map((s) => s.nodeId));
+    return new Set(this.effectiveSteps().map((s) => s.nodeId));
   });
 
   protected readonly executedConnectionIds = computed<ReadonlySet<string>>(() => {
-    const stepsList = this.steps();
+    const stepsList = this.effectiveSteps();
     const conns = this.connections();
     const activeIds = new Set<string>();
 
@@ -378,9 +446,11 @@ export class ActivityFlowTraceComponent {
     ReadonlyMap<string, { duration?: string; output?: string; status?: string }>
   >(() => {
     const map = new Map<string, { duration?: string; output?: string; status?: string }>();
-    for (const step of this.steps()) {
+    const handle = this.liveHandle();
+    const active = handle?.currentNodeId() ?? null;
+    for (const step of this.effectiveSteps()) {
       map.set(step.nodeId, {
-        duration: stepDuration(step),
+        duration: handle && step.nodeId === active ? this.liveLabel(handle, step.nodeId) : stepDuration(step),
         output: step.outputLabel || step.outputId || undefined,
         status: step.status,
       });
@@ -391,7 +461,7 @@ export class ActivityFlowTraceComponent {
   protected readonly selectedStep = computed<ExecutionPipelineStep | null>(() => {
     const id = this.selectedNodeId();
     if (!id) return null;
-    return this.steps().find((s) => s.nodeId === id) ?? null;
+    return this.effectiveSteps().find((s) => s.nodeId === id) ?? null;
   });
 
   protected onNodeSelected(nodeId: string): void {

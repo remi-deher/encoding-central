@@ -18,7 +18,6 @@ public sealed partial class ArchitectureTests
         ["Encoding.Api/Flows/FlowSimulator.cs::Simulate(FlowSimulationRequest,IReadOnlyDictionary<string, JsonElement>?)"] = 162,
         ["Encoding.Api/Plugins/PluginConfigurationEndpoints.cs::MapPluginConfigurationEndpoints(WebApplication)"] = 158,
         ["Encoding.Api/Executions/RuntimeEligibility.cs::CanRun(FlowDefinition,IReadOnlyList<WorkerToolCapability>,Guid,string?,bool,RuntimeContext?,WorkerIdentityResponse?,WorkerInventory?,IReadOnlyDictionary<string,Guid>?)"] = 156,
-        ["Encoding.Api/Executions/RuntimeRepository.Steps.cs::CompleteStepAsync(Guid,Guid,CompleteRuntimeStep,CancellationToken)"] = 155,
         ["Encoding.Api/Logging/SystemLogEndpoints.cs::MapSystemLogEndpoints(WebApplication)"] = 152,
         ["Encoding.Contracts/Flows/SubtitleManagement.cs::Plan(IReadOnlyList<SubtitleTrack>,bool?,(int Width, int Height),SubtitleOptions)"] = 143,
         ["Encoding.Api/Executions/FlowPlacementPlanner.Requirements.cs::BuildRequirements(List<FlowNodeDefinition>,JsonElement?)"] = 141,

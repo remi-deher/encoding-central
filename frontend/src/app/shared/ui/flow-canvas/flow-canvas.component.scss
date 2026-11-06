@@ -409,6 +409,35 @@ path {
     var(--elevation-2);
 }
 
+.canvas-node.canvas-node-active {
+  animation: canvas-node-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes canvas-node-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px var(--accent-strong),
+      0 0 0 0 var(--accent-soft),
+      var(--elevation-2);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px var(--accent-strong),
+      0 0 0 8px var(--accent-soft),
+      var(--elevation-2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-node.canvas-node-active {
+    animation: none;
+    box-shadow:
+      0 0 0 4px var(--accent-strong),
+      var(--elevation-2);
+  }
+}
+
 .wire.wire-active {
   stroke: var(--accent-strong);
   stroke-width: 3.5;

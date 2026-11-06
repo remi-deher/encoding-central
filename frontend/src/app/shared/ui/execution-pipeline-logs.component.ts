@@ -3,16 +3,19 @@ import { MatExpansionModule } from '@angular/material/expansion';
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
   computed,
   effect,
   inject,
   input,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { ExecutionPipelineStep, RuntimeCommandLog, executionPhaseLabel } from '../models/execution';
+import { ExecutionTelemetry, ExecutionTelemetryHandle } from '../services/execution-telemetry';
 import { FileDownload } from '../services/file-download';
 import { NotificationService } from '../services/notification.service';
 
@@ -75,6 +78,48 @@ import { NotificationService } from '../services/notification.service';
 
       @if (phaseLabel(phase()); as label) {
         <p role="status">{{ label }}</p>
+      }
+      @if (liveActive()) {
+        <section class="pipeline-live" aria-label="Journal en direct de la commande">
+          <header class="pipeline-live__header">
+            <strong>En direct</strong>
+            <span class="pipeline-live__metrics" role="status">
+              @if (livePercent(); as percent) {
+                {{ percent }} ·
+              }
+              {{ liveElapsed() }}
+            </span>
+            @if (liveCommands().length > 1) {
+              <label>
+                Commande
+                <select
+                  [value]="selectedLiveCommand() ?? ''"
+                  (change)="selectedCommandId.set($any($event.target).value)"
+                >
+                  @for (command of liveCommands(); track command) {
+                    <option [value]="command" [selected]="command === selectedLiveCommand()">
+                      {{ command.slice(0, 8) }}
+                    </option>
+                  }
+                </select>
+              </label>
+            }
+          </header>
+          <pre
+            #liveViewport
+            class="pipeline-live__tail"
+            tabindex="0"
+            aria-label="Dernières lignes de la commande"
+            aria-live="off"
+            (scroll)="updateLiveScroll($event)"
+            >{{ liveText() || 'En attente de sortie…' }}</pre
+          >
+          @if (!followLive()) {
+            <button matButton="outlined" type="button" (click)="resumeLive()">
+              Reprendre le défilement automatique
+            </button>
+          }
+        </section>
       }
       @if (feedback()) {
         <p class="pipeline-logs__feedback" role="status">{{ feedback() }}</p>
@@ -385,6 +430,35 @@ import { NotificationService } from '../services/notification.service';
       color: var(--text-primary);
       font: 13px/1.5 ui-monospace, Consolas, monospace;
     }
+    .pipeline-live {
+      display: grid;
+      gap: var(--space-2);
+      padding: var(--space-3);
+      border: 1px solid var(--accent);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+    }
+    .pipeline-live__header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-3);
+      color: var(--text-secondary);
+      font-size: var(--font-body);
+    }
+    .pipeline-live__tail {
+      margin: 0;
+      min-width: 0;
+      max-height: min(40vh, 360px);
+      overflow: auto;
+      padding: var(--space-3);
+      border-radius: var(--radius-md);
+      background: var(--surface-muted);
+      color: var(--text-primary);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font: 13px/1.5 ui-monospace, Consolas, monospace;
+    }
     @media (max-width: 760px) {
       .pipeline-logs__header,
       .pipeline-step__header {
@@ -430,7 +504,65 @@ export class ExecutionPipelineLogsComponent {
     }),
   ).join('\n\n'));
 
+  private readonly telemetryService = inject(ExecutionTelemetry);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly liveHandle = signal<ExecutionTelemetryHandle | null>(null);
+  protected readonly selectedCommandId = signal<string | null>(null);
+  protected readonly followLive = signal(true);
+  private readonly liveViewport = viewChild<ElementRef<HTMLElement>>('liveViewport');
+  /** Le flux en direct ne remplace les journaux enregistrés que tant qu'il est vivant. */
+  protected readonly liveActive = computed(() => {
+    const handle = this.liveHandle();
+    return !!handle && this.hasRunningStep() && handle.connected() && !handle.ended();
+  });
+  protected readonly liveCommands = computed(() => {
+    const ids = new Set<string>();
+    for (const line of this.liveHandle()?.logs() ?? []) ids.add(line.commandId);
+    return [...ids];
+  });
+  protected readonly selectedLiveCommand = computed(() => {
+    const chosen = this.selectedCommandId();
+    const commands = this.liveCommands();
+    if (chosen && commands.includes(chosen)) return chosen;
+    return this.liveHandle()?.progress()?.commandId ?? commands.at(-1) ?? null;
+  });
+  protected readonly liveText = computed(() => {
+    const command = this.selectedLiveCommand();
+    return (this.liveHandle()?.logs() ?? [])
+      .filter((line) => line.commandId === command)
+      .map((line) => line.text)
+      .join('\n');
+  });
+  protected readonly livePercent = computed(() => {
+    const percent = this.liveHandle()?.progress()?.percent;
+    return percent == null ? null : `${percent.toFixed(1)} %`;
+  });
+  protected readonly liveElapsed = computed(() => {
+    const seconds = Math.floor((this.liveHandle()?.elapsedMs() ?? 0) / 1000);
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `${Math.floor(seconds / 3600)}:${pad(Math.floor(seconds / 60) % 60)}:${pad(seconds % 60)}`;
+  });
+
   constructor() {
+    effect((onCleanup) => {
+      const id = this.executionId();
+      if (!this.hasRunningStep() || id === 'execution') return;
+      const handle = untracked(() => this.telemetryService.execution(id));
+      this.liveHandle.set(handle);
+      onCleanup(() => {
+        handle.close();
+        this.liveHandle.set(null);
+      });
+    });
+    this.destroyRef.onDestroy(() => this.liveHandle()?.close());
+    effect(() => {
+      this.liveText();
+      const viewport = this.liveViewport()?.nativeElement;
+      if (!viewport || !this.followLive()) return;
+      requestAnimationFrame(() => {
+        if (this.followLive()) viewport.scrollTop = viewport.scrollHeight;
+      });
+    });
     effect(() => {
       this.rawConsole();
       const viewport = this.consoleViewport()?.nativeElement;
@@ -439,6 +571,17 @@ export class ExecutionPipelineLogsComponent {
         if (this.followConsole()) viewport.scrollTop = viewport.scrollHeight;
       });
     });
+  }
+
+  protected updateLiveScroll(event: Event): void {
+    const element = event.currentTarget as HTMLElement;
+    this.followLive.set(element.scrollHeight - element.scrollTop - element.clientHeight < 48);
+  }
+
+  protected resumeLive(): void {
+    this.followLive.set(true);
+    const viewport = this.liveViewport()?.nativeElement;
+    if (viewport) viewport.scrollTop = viewport.scrollHeight;
   }
 
   protected updateConsoleScroll(event: Event): void {
