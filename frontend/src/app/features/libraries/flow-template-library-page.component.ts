@@ -45,6 +45,7 @@ import {
   isTemplateConfigurableField,
   FlowTemplateDetails,
 } from '../../shared/models/flow-templates';
+import { formatShortDateTime } from '../../shared/models/date-format';
 
 interface FlowTemplateRow extends DataTableRow {
   readonly id: string;
@@ -429,7 +430,7 @@ export class FlowTemplateLibraryPageComponent {
     const mediaType =
       MEDIA_TYPE_OPTIONS.find((media) => media.value === template.mediaType)?.label ??
       template.mediaType;
-    const createdAt = new Date(template.createdAt).toLocaleString('fr-FR');
+    const createdAt = formatShortDateTime(template.createdAt);
 
     return [
       {
@@ -533,9 +534,9 @@ export class FlowTemplateLibraryPageComponent {
       .map((template) => ({
         id: `flow-template:${template.id}`,
         label: template.name,
-        description: `${template.sourceFlowName} · ${template.nodeCount} composant(s)`,
+        description: `${template.sourceFlowName} · ${template.nodeCount} ${template.nodeCount > 1 ? 'composants' : 'composant'}`,
         group: 'Modèles de flow',
-        glyph: '◫',
+        icon: 'flow' as const,
         run: () => this.openTemplate({ id: template.id }),
       }));
   }

@@ -4,10 +4,7 @@ import { AiToolsService } from '../../shared/services/ai-tools.service';
 import { CentralApi } from '../../shared/services/central-api';
 import { ExecutionTracking } from '../../shared/services/execution-tracking';
 import { FlowValidation } from '../../shared/services/flow-validation';
-import {
-  AiAssistantFileAttachment,
-  AiAssistantSource,
-} from '../../shared/models/ai-tools';
+import { AiAssistantFileAttachment, AiAssistantSource } from '../../shared/models/ai-tools';
 import { ExecutionResponse } from '../../shared/models/execution';
 import { LibraryResponse, WorkerResponse } from '../../shared/models/central';
 import {
@@ -294,7 +291,9 @@ export class AiContextStore {
         0,
       );
       if (totalBytes > 16 * 1024 * 1024) {
-        this.conversations.errorMessage.set('Les fichiers joints dépassent la limite cumulée de 16 Mo.');
+        this.conversations.errorMessage.set(
+          'Les fichiers joints dépassent la limite cumulée de 16 Mo.',
+        );
         return;
       }
       if (next.reduce((sum, item) => sum + item.content.length, 0) > 1_000_000) {
@@ -460,7 +459,12 @@ export class AiContextStore {
   }
 
   publishFlowFromAssistant(source: AiAssistantSource, isAdmin: boolean): void {
-    if (!isAdmin || source.kind !== 'flow' || source.version == null || this.conversations.actionBusy())
+    if (
+      !isAdmin ||
+      source.kind !== 'flow' ||
+      source.version == null ||
+      this.conversations.actionBusy()
+    )
       return;
     const conversations = this.conversations;
     conversations.actionBusy.set(true);
@@ -505,7 +509,12 @@ export class AiContextStore {
   }
 
   startLibraryFromAssistant(source: AiAssistantSource, isAdmin: boolean): void {
-    if (!isAdmin || source.kind !== 'library' || source.version == null || this.conversations.actionBusy())
+    if (
+      !isAdmin ||
+      source.kind !== 'library' ||
+      source.version == null ||
+      this.conversations.actionBusy()
+    )
       return;
     const conversations = this.conversations;
     conversations.actionBusy.set(true);
@@ -547,7 +556,7 @@ export class AiContextStore {
           conversations.actionMessage.set(
             conversations.errorText(
               error,
-              'Aucun traitement ne peut être lancé pour cette bibliothèque.',
+              'Aucune exécution ne peut être lancée pour cette bibliothèque.',
             ),
           );
         },

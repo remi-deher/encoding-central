@@ -6,10 +6,12 @@ import {
 } from '../../shared/models/execution';
 import { formatFileSize } from '../../shared/models/file-size';
 import { formatRelativeTime } from '../../shared/models/date-format';
+import { executionTone } from '../../shared/models/execution-tone';
+import type { StatusTone } from '../../shared/ui/status-badge.component';
 
 export type ActivityKind = 'execution' | 'ai';
 export type ActivityGroup = 'active' | 'queue' | 'errors' | 'cancelled' | 'done';
-export type ActivityTone = 'accent' | 'neutral' | 'danger' | 'success' | 'warning';
+export type ActivityTone = StatusTone;
 export const ACTIVITY_STATES: Readonly<Record<ActivityGroup, readonly ExecutionState[]>> = {
   active: ['running', 'cancelling'],
   queue: ['queued'],
@@ -101,22 +103,6 @@ export function executionGroup(state: ExecutionResponse['state']): ActivityGroup
       return 'cancelled';
     default:
       return 'done';
-  }
-}
-
-function executionTone(state: ExecutionResponse['state']): ActivityTone {
-  switch (state) {
-    case 'running':
-    case 'cancelling':
-      return 'accent';
-    case 'failed':
-      return 'danger';
-    case 'succeeded':
-      return 'success';
-    case 'deferred':
-      return 'warning';
-    default:
-      return 'neutral';
   }
 }
 

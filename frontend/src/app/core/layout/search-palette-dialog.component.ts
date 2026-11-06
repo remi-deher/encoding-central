@@ -1,6 +1,9 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { IconComponent } from '../../shared/ui/icon.component';
 import { AuthService } from '../auth/auth.service';
 import {
   getSearchableNavigationItems,
@@ -10,28 +13,27 @@ import {
 @Component({
   selector: 'app-search-palette-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatDialogModule],
+  imports: [IconComponent, MatDialogModule, MatFormFieldModule, MatInputModule],
   template: `
     <div class="palette-surface" role="search" aria-label="Recherche rapide">
       <div class="palette-input-bar">
-        <svg viewBox="0 0 24 24" class="palette-search-icon" aria-hidden="true">
-          <circle cx="10.8" cy="10.8" r="6.8" />
-          <path d="m16 16 5 5" />
-        </svg>
-        <input
-          type="search"
-          role="combobox"
-          aria-label="Rechercher une destination"
-          aria-autocomplete="list"
-          aria-controls="palette-results-listbox"
-          [attr.aria-expanded]="results().length > 0"
-          [attr.aria-activedescendant]="activeItemId()"
-          autocomplete="off"
-          placeholder="Rechercher une page, une librairie ou une section…"
-          [value]="query()"
-          (input)="onInput($event)"
-          (keydown)="onKeydown($event)"
-        />
+        <app-icon name="search" class="palette-search-icon" />
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="palette-field">
+          <mat-label>Rechercher une destination</mat-label>
+          <input
+            matInput
+            type="search"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls="palette-results-listbox"
+            [attr.aria-expanded]="results().length > 0"
+            [attr.aria-activedescendant]="activeItemId()"
+            autocomplete="off"
+            [value]="query()"
+            (input)="onInput($event)"
+            (keydown)="onKeydown($event)"
+          />
+        </mat-form-field>
         <button
           type="button"
           class="palette-esc-badge"
@@ -93,28 +95,13 @@ import {
       background: var(--surface-container-low);
       border-bottom: 1px solid var(--border-subtle);
 
-      svg {
-        width: 20px;
-        height: 20px;
-        flex: 0 0 20px;
-        stroke: var(--accent-strong);
-        fill: none;
-        stroke-width: 2;
+      app-icon {
+        color: var(--accent-strong);
       }
 
-      input {
+      .palette-field {
         flex: 1;
         min-width: 0;
-        border: none;
-        outline: none;
-        background: transparent;
-        font-size: var(--font-title-sm);
-        font-family: inherit;
-        color: var(--text-primary);
-
-        &::placeholder {
-          color: var(--text-muted);
-        }
       }
     }
 

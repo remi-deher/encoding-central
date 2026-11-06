@@ -2,15 +2,15 @@
 .store-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
-  gap: 16px;
-  padding: 16px 0;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
 }
 
 .tool-card,
 .store-card {
   background: var(--surface-container);
   border-radius: var(--radius-lg, 16px);
-  padding: 20px;
+  padding: var(--space-4);
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -30,13 +30,13 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .tool-icon,
 .store-icon {
-  font-size: 28px;
-  line-height: 1;
+  display: inline-flex;
+  color: var(--accent);
 }
 
 .tool-title-group,
@@ -46,16 +46,16 @@
 
   h3 {
     margin: 0;
-    font-size: 16px;
+    font-size: var(--font-title);
     font-weight: 600;
     color: var(--text-primary);
   }
 
   .tool-version,
   .store-author {
-    font-size: 12px;
+    font-size: var(--font-label);
     color: var(--text-secondary);
-    margin-top: 2px;
+    margin-top: var(--space-1);
   }
 }
 
@@ -63,7 +63,7 @@
 .store-badges {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .tool-description,
@@ -77,11 +77,11 @@
 .tool-details {
   background: var(--surface-container-lowest);
   border-radius: var(--radius-md, 12px);
-  padding: 12px;
-  font-size: 12px;
+  padding: var(--space-3);
+  font-size: var(--font-label);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-2);
   color: var(--text-secondary);
 
   strong {
@@ -98,21 +98,21 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--space-2);
   margin-top: auto;
-  padding-top: 8px;
+  padding-top: var(--space-2);
 }
 
 /* Section Dépôts */
 .repositories-section {
-  margin-bottom: 24px;
+  margin-bottom: var(--space-5);
   background: var(--surface-container-low);
   border-radius: var(--radius-xl, 20px);
-  padding: 20px;
+  padding: var(--space-4);
 
   h3 {
-    margin: 0 0 12px 0;
-    font-size: 15px;
+    margin: 0 0 var(--space-3);
+    font-size: var(--font-title-sm);
     font-weight: 600;
     color: var(--text-primary);
   }
@@ -121,31 +121,31 @@
 .repos-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 .repo-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
   background: var(--surface-container);
   border-radius: var(--radius-md, 12px);
-  gap: 16px;
+  gap: var(--space-4);
 
   .repo-info {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--space-1);
 
     .repo-name {
       font-weight: 600;
-      font-size: 14px;
+      font-size: var(--font-body);
       color: var(--text-primary);
     }
 
     .repo-url {
-      font-size: 12px;
+      font-size: var(--font-label);
       color: var(--text-secondary);
       font-family: monospace;
     }
@@ -153,20 +153,20 @@
 
   .repo-badges {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
   }
 }
 
 .rejected-plugins {
-  margin-bottom: 12px;
-  padding: 12px;
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
   background: var(--warning-soft);
   border: 1px solid var(--warning);
   border-radius: var(--radius-lg, 16px);
 
   ul {
-    margin: 4px 0 0;
-    padding-left: 20px;
+    margin: var(--space-1) 0 0;
+    padding-left: var(--space-5);
   }
 }
 
@@ -177,15 +177,15 @@
 .store-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
-  margin-top: 12px;
+  margin-top: var(--space-3);
 }
 
 .store-url {
   flex: 1 1 280px;
   min-width: 0;
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   color: inherit;
   background: transparent;
   border: 1px solid currentcolor;
@@ -194,7 +194,7 @@
 
 .store-note,
 .repo-error {
-  font-size: 0.85em;
+  font-size: var(--font-label);
   opacity: 0.75;
 }
 
@@ -300,7 +300,7 @@
   flex: 0 0 auto;
   width: 44px;
   height: 44px;
-  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  border: 1px solid var(--accent-soft);
   border-radius: var(--radius-md);
   background: var(--accent-soft, var(--surface-container-high));
   color: var(--accent);
@@ -323,27 +323,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--font-title-sm);
-}
-
-.plugin-title-button {
-  max-width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--text-primary);
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
-}
-
-.plugin-title-button:hover {
-  color: var(--accent);
-}
-
-.plugin-title-button:focus-visible {
-  border-radius: var(--radius-xs);
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
 }
 
 .plugin-subtitle {

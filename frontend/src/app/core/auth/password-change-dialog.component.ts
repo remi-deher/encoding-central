@@ -19,6 +19,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { MINIMUM_PASSWORD_LENGTH } from '../../shared/models/auth';
 import { NotificationService } from '../../shared/services/notification.service';
 import { UserAccounts } from '../../shared/services/user-accounts';
@@ -44,6 +45,7 @@ type PasswordField = 'currentPassword' | 'newPassword' | 'confirmation';
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,
+    MatTooltipModule,
     ReactiveFormsModule,
   ],
   template: `
@@ -64,10 +66,12 @@ type PasswordField = 'currentPassword' | 'newPassword' | 'confirmation';
                 required
               />
               <button
+                matIconButton
                 matSuffix
                 type="button"
                 class="reveal"
                 [attr.aria-label]="revealLabel('currentPassword', 'le mot de passe actuel')"
+                [matTooltip]="revealLabel('currentPassword', 'le mot de passe actuel')"
                 [attr.aria-pressed]="visible().currentPassword"
                 (click)="toggle('currentPassword')"
               >
@@ -91,10 +95,12 @@ type PasswordField = 'currentPassword' | 'newPassword' | 'confirmation';
               required
             />
             <button
+              matIconButton
               matSuffix
               type="button"
               class="reveal"
               [attr.aria-label]="revealLabel('newPassword', 'le nouveau mot de passe')"
+              [matTooltip]="revealLabel('newPassword', 'le nouveau mot de passe')"
               [attr.aria-pressed]="visible().newPassword"
               (click)="toggle('newPassword')"
             >
@@ -116,10 +122,12 @@ type PasswordField = 'currentPassword' | 'newPassword' | 'confirmation';
               required
             />
             <button
+              matIconButton
               matSuffix
               type="button"
               class="reveal"
               [attr.aria-label]="revealLabel('confirmation', 'la confirmation')"
+              [matTooltip]="revealLabel('confirmation', 'la confirmation')"
               [attr.aria-pressed]="visible().confirmation"
               (click)="toggle('confirmation')"
             >
@@ -161,8 +169,8 @@ type PasswordField = 'currentPassword' | 'newPassword' | 'confirmation';
     .reveal {
       display: inline-grid;
       place-items: center;
-      width: 40px;
-      height: 40px;
+      width: 48px;
+      height: 48px;
       margin-right: 4px;
       border: 0;
       border-radius: var(--radius-pill);

@@ -266,6 +266,7 @@
             <button
               matButton="text"
               type="button"
+              class="danger"
               [disabled]="!isAdmin() || savingSettings() || connecting()"
               (click)="removeProvider(provider.id)"
             >
@@ -415,8 +416,10 @@
             class="connection-status"
             [class.is-authorized]="tool.authStatus.state === 'authorized'"
           >
-            <span class="badge">{{ authLabel(tool.authStatus.state) }}</span
-            ><span>{{
+            <app-status-badge
+              [label]="authLabel(tool.authStatus.state)"
+              [tone]="authTone(tool.authStatus.state)"
+            /><span>{{
               tool.isInstalled ? 'Outil installé sur ce worker' : 'Outil non installé sur ce worker'
             }}</span>
           </div>
@@ -480,7 +483,13 @@
     }
     @if (selectedTool(); as tool) {
       @if (tool.authStatus.state === 'authorized' && isAdmin()) {
-        <button matButton="text" type="button" [disabled]="connecting()" (click)="revoke(tool.id)">
+        <button
+          matButton="text"
+          type="button"
+          class="danger"
+          [disabled]="connecting()"
+          (click)="revoke(tool.id)"
+        >
           Déconnecter le central
         </button>
       }

@@ -1,3 +1,5 @@
+@use '../../../styles/breakpoints' as bp;
+
 :host {
   position: absolute;
   top: var(--space-5);
@@ -218,7 +220,7 @@
   text-align: center;
 }
 
-@media (max-width: 1100px) and (min-width: 761px) {
+@include bp.medium {
   :host {
     width: min(880px, calc(100% - 300px));
   }
@@ -228,13 +230,13 @@
   }
 }
 
-@media (min-width: 1101px) {
+@include bp.expanded {
   :host {
     width: min(880px, 50%, calc(100% - 640px));
   }
 }
 
-@media (max-width: 760px) {
+@include bp.compact {
   :host {
     position: absolute;
     top: var(--space-2);

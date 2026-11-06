@@ -1,16 +1,8 @@
 import { HttpClient } from '@angular/common/http';
 import { computed, inject, Injectable, signal } from '@angular/core';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
-import {
-  catchError,
-  exhaustMap,
-  firstValueFrom,
-  map,
-  of,
-  startWith,
-  switchMap,
-  tap,
-} from 'rxjs';
+import { formatShortDateTime } from '../../shared/models/date-format';
+import { catchError, exhaustMap, firstValueFrom, map, of, startWith, switchMap, tap } from 'rxjs';
 import { LiveUpdates } from '../../shared/services/live-updates';
 import { CentralApi } from '../../shared/services/central-api';
 import { FlowValidation } from '../../shared/services/flow-validation';
@@ -28,19 +20,12 @@ import {
   DataTableRowAction,
   DataTableSelectionActionEvent,
 } from '../../shared/ui/data-table.component';
-import type {
-  ResourceListItem,
-  ResourceListGroup,
-} from '../../shared/ui/resource-list.component';
+import type { ResourceListItem, ResourceListGroup } from '../../shared/ui/resource-list.component';
 import type { RecordFormData } from '../../shared/ui/record-form.component';
 import type { LibraryWorkerAccessResponse } from '../../shared/ui/library-worker-access-types';
 import { LibraryCatalogStore } from './library-catalog.store';
 import { buildLibrarySheet } from './library-sheet';
-import {
-  LIBRARY_GROUPS,
-  LibraryRecord,
-  toLibraryListItem,
-} from './library-catalog.utils';
+import { LIBRARY_GROUPS, LibraryRecord, toLibraryListItem } from './library-catalog.utils';
 
 /**
  * Workflow de la bibliothèque sélectionnée : flow attribué, découverte des
@@ -62,7 +47,10 @@ export class LibraryWorkflowStore {
 
   readonly processingState = toSignal(
     toObservable(
-      computed(() => ({ library: this.catalog.selectedLibrary(), refresh: this.workflowRefresh() })),
+      computed(() => ({
+        library: this.catalog.selectedLibrary(),
+        refresh: this.workflowRefresh(),
+      })),
     ).pipe(
       switchMap(({ library }) =>
         library
@@ -103,7 +91,10 @@ export class LibraryWorkflowStore {
 
   readonly workflowState = toSignal(
     toObservable(
-      computed(() => ({ library: this.catalog.selectedLibrary(), refresh: this.workflowRefresh() })),
+      computed(() => ({
+        library: this.catalog.selectedLibrary(),
+        refresh: this.workflowRefresh(),
+      })),
     ).pipe(
       switchMap(({ library }) =>
         library
@@ -151,7 +142,7 @@ export class LibraryWorkflowStore {
       id: file.id,
       name: file.relativePath,
       size: formatFileSize(file.bytes),
-      modifiedAt: new Date(file.modifiedAt).toLocaleString('fr-FR'),
+      modifiedAt: formatShortDateTime(file.modifiedAt),
     })),
   );
 
@@ -218,12 +209,12 @@ export class LibraryWorkflowStore {
       .slice(0, 25);
   });
 
-  readonly detailTitle = computed(
-    () => this.catalog.selectedLibrary()?.name ?? 'Bibliothèque',
-  );
+  readonly detailTitle = computed(() => this.catalog.selectedLibrary()?.name ?? 'Bibliothèque');
 
   readonly detailDescription = computed(() =>
-    this.catalog.selectedLibrary() ? 'Définition et accès aux workers' : 'Détails de la bibliothèque',
+    this.catalog.selectedLibrary()
+      ? 'Définition et accès aux workers'
+      : 'Détails de la bibliothèque',
   );
 
   readonly actionTitle = computed(() => {
@@ -258,7 +249,9 @@ export class LibraryWorkflowStore {
       library: this.catalog.selectedLibrary(),
       assignment: this.workflowState()?.assignment,
       processing:
-        this.processingState() ?? this.catalog.processingByLibrary()[this.catalog.selectedLibrary()?.id ?? ''] ?? null,
+        this.processingState() ??
+        this.catalog.processingByLibrary()[this.catalog.selectedLibrary()?.id ?? ''] ??
+        null,
       scan: this.workflowState()?.scan,
       workflowError: this.workflowError(),
       workflowLabel: this.workflowLabel(),
@@ -367,8 +360,8 @@ export class LibraryWorkflowStore {
             workers.map((node) => [
               'limit_' + node.id,
               String(
-                settings.workerLimits.find((limit) => limit.workerId === node.id)?.maxConcurrentTasks ??
-                  '',
+                settings.workerLimits.find((limit) => limit.workerId === node.id)
+                  ?.maxConcurrentTasks ?? '',
               ),
             ]),
           ),

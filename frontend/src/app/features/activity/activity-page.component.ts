@@ -20,6 +20,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTabsModule } from '@angular/material/tabs';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import {
   catchError,
   debounceTime,
@@ -36,6 +37,7 @@ import {
   timer,
 } from 'rxjs';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
+import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
 import {
   PageShellContextService,
   PageShellSearchResult,
@@ -136,6 +138,7 @@ function isExecutionId(value: string): boolean {
   selector: 'app-activity-page',
   imports: [
     PageHeaderComponent,
+    EmptyStateComponent,
     DetailDrawerComponent,
     ExecutionPipelineLogsComponent,
     IconComponent,
@@ -145,6 +148,7 @@ function isExecutionId(value: string): boolean {
     MatProgressBarModule,
     MatSelectModule,
     MatTabsModule,
+    MatTooltipModule,
     SubnavComponent,
     SubnavTemplateComponent,
     StatusBadgeComponent,
@@ -400,8 +404,7 @@ export class ActivityPageComponent {
   protected readonly selectedCancelableFiles = computed(() =>
     this.selectedFiles().filter(
       (file) =>
-        file.executionId &&
-        ['running', 'queued', 'cancelling'].includes(file.executionState ?? ''),
+        file.executionId && ['running', 'queued', 'cancelling'].includes(file.executionState ?? ''),
     ),
   );
 
@@ -655,34 +658,38 @@ export class ActivityPageComponent {
       this.open(file);
       return;
     }
-    this.tracking.execution(executionId).pipe(
-      takeUntilDestroyed(this.destroyRef),
-      catchError(() => of(null)),
-    ).subscribe((execution) => {
-      if (this.requestedExecutionId !== executionId) return;
-      if (!execution) {
-        this.clearSelectedExecution();
-        this.clearExecutionQueryParam();
-        return;
-      }
-      const syntheticFile = this.fileForExecution(execution);
-      this.selectedFile.set(syntheticFile);
-      this.selectedExecution.set(execution);
-      this.executionLoading.set(false);
-      this.selectedDetailTab.set(0);
-    });
+    this.tracking
+      .execution(executionId)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        catchError(() => of(null)),
+      )
+      .subscribe((execution) => {
+        if (this.requestedExecutionId !== executionId) return;
+        if (!execution) {
+          this.clearSelectedExecution();
+          this.clearExecutionQueryParam();
+          return;
+        }
+        const syntheticFile = this.fileForExecution(execution);
+        this.selectedFile.set(syntheticFile);
+        this.selectedExecution.set(execution);
+        this.executionLoading.set(false);
+        this.selectedDetailTab.set(0);
+      });
   }
 
   private fileForExecution(execution: ExecutionResponse): LibraryActivityFile {
-    const status: LibraryActivityStatus = execution.state === 'succeeded'
-      ? 'done'
-      : execution.state === 'failed'
-        ? 'failed'
-        : execution.state === 'cancelled'
-          ? 'cancelled'
-          : execution.state === 'deferred'
-            ? 'untreated'
-            : 'active';
+    const status: LibraryActivityStatus =
+      execution.state === 'succeeded'
+        ? 'done'
+        : execution.state === 'failed'
+          ? 'failed'
+          : execution.state === 'cancelled'
+            ? 'cancelled'
+            : execution.state === 'deferred'
+              ? 'untreated'
+              : 'active';
     return {
       id: execution.id,
       libraryId: execution.libraryId ?? '',
@@ -763,9 +770,9 @@ export class ActivityPageComponent {
       this.dialog
         .open(ConfirmationDialogComponent, {
           data: {
-            title: `Annuler ${targets.length} tâche(s) ?`,
-            message: `${targets.length} tâche(s) recevront une demande d’interruption immédiate.`,
-            confirmLabel: 'Annuler les tâches',
+            title: `Annuler ${targets.length} exécution${targets.length === 1 ? '' : 's'} ?`,
+            message: `${targets.length} exécution${targets.length === 1 ? '' : 's'} recevront une demande d’interruption immédiate.`,
+            confirmLabel: 'Annuler les exécutions',
             variant: 'danger',
           } satisfies ConfirmationDialogData,
         })
@@ -781,7 +788,7 @@ export class ActivityPageComponent {
     this.tracking.refresh();
     this.refreshRevision.update((value) => value + 1);
     const succeeded = results.filter((result) => result.status === 'fulfilled').length;
-    this.notifications.show(`${succeeded}/${targets.length} tâche(s) annulée(s).`);
+    this.notifications.show(`${succeeded}/${targets.length} exécution(s) annulée(s).`);
   }
 
   protected async runBulkRetry(): Promise<void> {
@@ -791,9 +798,9 @@ export class ActivityPageComponent {
       this.dialog
         .open(ConfirmationDialogComponent, {
           data: {
-            title: `Relancer ${targets.length} tâche(s) ?`,
+            title: `Relancer ${targets.length} exécution${targets.length === 1 ? '' : 's'} ?`,
             message: `Une relance va être demandée pour les ${targets.length} élément(s) sélectionné(s).`,
-            confirmLabel: 'Relancer les tâches',
+            confirmLabel: 'Relancer les exécutions',
           } satisfies ConfirmationDialogData,
         })
         .afterClosed(),
@@ -808,9 +815,7 @@ export class ActivityPageComponent {
       promises.push(firstValueFrom(this.tracking.retry(f.executionId!)));
     }
 
-    const cancelledFiles = targets.filter(
-      (f) => f.executionId && f.executionState === 'cancelled',
-    );
+    const cancelledFiles = targets.filter((f) => f.executionId && f.executionState === 'cancelled');
     for (const f of cancelledFiles) {
       promises.push(firstValueFrom(this.tracking.resume(f.executionId!)));
     }
@@ -838,7 +843,7 @@ export class ActivityPageComponent {
     this.tracking.refresh();
     this.refreshRevision.update((value) => value + 1);
     const succeeded = results.filter((result) => result.status === 'fulfilled').length;
-    this.notifications.show(`${succeeded}/${targets.length} tâche(s) relancée(s).`);
+    this.notifications.show(`${succeeded}/${targets.length} exécution(s) relancée(s).`);
   }
 
   protected cancelSelected(): void {
@@ -847,7 +852,7 @@ export class ActivityPageComponent {
     this.confirm(
       {
         title: 'Annuler cette exécution ?',
-        message: `« ${execution.media} » recevra une demande d’annulation. Un traitement en cours attend la confirmation du worker.`,
+        message: `« ${execution.media} » recevra une demande d’annulation. L’exécution en cours attend la confirmation du worker.`,
         confirmLabel: 'Annuler l’exécution',
         variant: 'danger',
       },
@@ -910,7 +915,7 @@ export class ActivityPageComponent {
         label: baseName(file.relativePath),
         description: `${file.library} · ${this.statusLabel(file.status)}`,
         group: 'Activité',
-        glyph: '▣',
+        icon: 'video' as const,
         run: () => this.open(file),
       }));
   }
@@ -992,7 +997,7 @@ export class ActivityPageComponent {
       baseName(execution.media).replace(/[^a-zA-Z0-9._-]/g, '_') +
       '.log';
     this.downloads.save(new Blob([content], { type: 'text/plain;charset=utf-8' }), fileName);
-    this.notifications.show('Journal de traitement téléchargé.');
+    this.notifications.show('Journal d’exécution téléchargé.');
   }
 
   private executionDuration(execution: ExecutionResponse): string {

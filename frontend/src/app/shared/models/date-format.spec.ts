@@ -1,4 +1,9 @@
-import { formatFullDateTime, formatRelativeTime } from './date-format';
+import {
+  formatDateOnly,
+  formatFullDateTime,
+  formatRelativeTime,
+  formatShortDateTime,
+} from './date-format';
 
 describe('date-format', () => {
   const baseTime = new Date('2026-10-18T12:00:00Z').getTime();
@@ -46,6 +51,20 @@ describe('date-format', () => {
       const result = formatFullDateTime('2026-10-18T10:00:00Z');
       expect(result).not.toBe('—');
       expect(result).toContain('2026');
+    });
+  });
+
+  describe('shared short and date-only formats', () => {
+    it('formats date and time as dd/MM/yyyy HH:mm in French', () => {
+      expect(formatShortDateTime('2026-10-18T10:04:00Z')).toMatch(/^\d{2}\/\d{2}\/2026 \d{2}:04$/);
+      expect(formatFullDateTime('2026-10-18T10:04:00Z')).toBe(
+        formatShortDateTime('2026-10-18T10:04:00Z'),
+      );
+    });
+
+    it('formats a date without time and accepts the Unix epoch', () => {
+      expect(formatDateOnly('2026-10-18T10:04:00Z')).toMatch(/^\d{2}\/\d{2}\/2026$/);
+      expect(formatDateOnly(0)).not.toBe('—');
     });
   });
 });

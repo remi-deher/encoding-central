@@ -10,8 +10,8 @@ import { LocalWorkerStatus } from '../../shared/models/local-worker';
 const VALID_PASSWORD = 'un-mot-de-passe-long';
 
 function fillAdmin(component: SetupWizardPageComponent): void {
-  component['adminPassword'].set(VALID_PASSWORD);
-  component['adminConfirm'].set(VALID_PASSWORD);
+  component['form'].controls.adminPassword.setValue(VALID_PASSWORD);
+  component['form'].controls.adminConfirm.setValue(VALID_PASSWORD);
 }
 
 describe('SetupWizardPageComponent', () => {
@@ -258,7 +258,7 @@ describe('SetupWizardPageComponent', () => {
     const component = fixture.componentInstance;
 
     fillAdmin(component);
-    component['nodeName'].set('Mon Central Maison');
+    component['form'].controls.nodeName.setValue('Mon Central Maison');
     await component['submitCreateCluster']();
 
     expect(setupFn).toHaveBeenCalledWith({
@@ -282,20 +282,20 @@ describe('SetupWizardPageComponent', () => {
     expect(setupFn).not.toHaveBeenCalled();
     expect(el.textContent).toContain('au moins 12 caractères');
 
-    component['adminPassword'].set('court');
-    component['adminConfirm'].set('court');
+    component['form'].controls.adminPassword.setValue('court');
+    component['form'].controls.adminConfirm.setValue('court');
     await component['submitCreateCluster']();
     expect(setupFn).not.toHaveBeenCalled();
 
-    component['adminPassword'].set(VALID_PASSWORD);
-    component['adminConfirm'].set('autre-mot-de-passe');
+    component['form'].controls.adminPassword.setValue(VALID_PASSWORD);
+    component['form'].controls.adminConfirm.setValue('autre-mot-de-passe');
     await component['submitCreateCluster']();
     fixture.detectChanges();
     expect(setupFn).not.toHaveBeenCalled();
     expect(el.textContent).toContain('Les deux mots de passe sont différents.');
 
-    component['adminConfirm'].set(VALID_PASSWORD);
-    component['adminUsername'].set('nom invalide!');
+    component['form'].controls.adminConfirm.setValue(VALID_PASSWORD);
+    component['form'].controls.adminUsername.setValue('nom invalide!');
     await component['submitCreateCluster']();
     expect(setupFn).not.toHaveBeenCalled();
   });

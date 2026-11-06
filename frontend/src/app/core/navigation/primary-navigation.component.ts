@@ -10,14 +10,17 @@ import {
   viewChild,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { CdkTrapFocus } from '@angular/cdk/a11y';
-import { NgTemplateOutlet } from '@angular/common';
 import { NavigationEnd, Route, Router, RouterLink, RouterLinkActive } from '@angular/router';
-import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatBottomSheet, MatBottomSheetRef } from '@angular/material/bottom-sheet';
 import { filter, map } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
-import { AppearancePaletteComponent } from '../theme/appearance-palette.component';
-import { UserMenuComponent } from '../auth/user-menu.component';
+import { IconComponent } from '../../shared/ui/icon.component';
+import {
+  navigationIconName,
+  PrimaryNavigationSheetComponent,
+  PrimaryNavigationSheetData,
+  PrimaryNavigationSheetResult,
+} from './primary-navigation-sheet.component';
 
 export interface NavigationItem {
   readonly label: string;
@@ -128,24 +131,14 @@ export function getSearchableNavigationItems(routes: Route[]): readonly Navigati
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-primary-navigation',
-  imports: [
-    CdkTrapFocus,
-    MatTooltipModule,
-    NgTemplateOutlet,
-    RouterLink,
-    RouterLinkActive,
-    AppearancePaletteComponent,
-    UserMenuComponent,
-  ],
+  imports: [IconComponent, RouterLink, RouterLinkActive],
   templateUrl: './primary-navigation.component.html',
   styleUrl: './primary-navigation.component.scss',
-  host: {
-    '(document:keydown)': 'onDocumentKeydown($event)',
-  },
 })
 export class PrimaryNavigationComponent {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly bottomSheet = inject(MatBottomSheet);
   private readonly currentUrl = toSignal(
     this.router.events.pipe(
       filter((event): event is NavigationEnd => event instanceof NavigationEnd),
@@ -154,7 +147,10 @@ export class PrimaryNavigationComponent {
     { initialValue: this.router.url },
   );
   private readonly moreButton = viewChild<ElementRef<HTMLButtonElement>>('moreButton');
-  private readonly closeMenuButton = viewChild<ElementRef<HTMLButtonElement>>('closeMenuButton');
+  private sheetRef: MatBottomSheetRef<
+    PrimaryNavigationSheetComponent,
+    PrimaryNavigationSheetResult
+  > | null = null;
 
   readonly collapsed = input(false);
   readonly mobileDock = input(false);
@@ -162,6 +158,7 @@ export class PrimaryNavigationComponent {
   readonly mobileMenuOpenChange = output<boolean>();
   readonly openAssistant = output<void>();
   protected readonly mobileMenuOpen = signal(false);
+  protected readonly navigationIconName = navigationIconName;
 
   protected readonly groups = computed(() =>
     getPrimaryNavigationGroups(this.router.config)
@@ -196,30 +193,28 @@ export class PrimaryNavigationComponent {
 
   protected toggleMobileMenu(): void {
     if (this.mobileMenuOpen()) {
-      this.closeMobileMenu();
+      this.sheetRef?.dismiss();
       return;
     }
     this.mobileMenuOpen.set(true);
     this.mobileMenuOpenChange.emit(true);
-    setTimeout(() => this.closeMenuButton()?.nativeElement.focus(), 0);
-  }
-
-  protected closeMobileMenu(): void {
-    if (!this.mobileMenuOpen()) return;
-    this.mobileMenuOpen.set(false);
-    this.mobileMenuOpenChange.emit(false);
-    setTimeout(() => this.moreButton()?.nativeElement.focus(), 0);
-  }
-
-  protected openQuickAssistant(): void {
-    this.closeMobileMenu();
-    this.openAssistant.emit();
-  }
-
-  protected onDocumentKeydown(event: KeyboardEvent): void {
-    if (event.key !== 'Escape' || !this.mobileMenuOpen()) return;
-    event.preventDefault();
-    this.closeMobileMenu();
+    const data: PrimaryNavigationSheetData = {
+      groups: this.groups(),
+      activeExecutionCount: this.activeExecutionCount(),
+    };
+    const ref = this.bottomSheet.open<
+      PrimaryNavigationSheetComponent,
+      PrimaryNavigationSheetData,
+      PrimaryNavigationSheetResult
+    >(PrimaryNavigationSheetComponent, { data, ariaLabel: 'Navigation' });
+    this.sheetRef = ref;
+    ref.afterDismissed().subscribe((result) => {
+      this.sheetRef = null;
+      this.mobileMenuOpen.set(false);
+      this.mobileMenuOpenChange.emit(false);
+      if (result === 'assistant') this.openAssistant.emit();
+      setTimeout(() => this.moreButton()?.nativeElement.focus(), 0);
+    });
   }
 
   focusMoreButton(): void {

@@ -28,6 +28,8 @@ import { LibrarySectionTabsComponent } from './library-section-tabs.component';
 import { FileDownload } from '../../shared/services/file-download';
 import { NotificationService } from '../../shared/services/notification.service';
 import { FlowScripts } from '../../shared/services/flow-scripts';
+import { formatDateOnly } from '../../shared/models/date-format';
+import { AppDatePipe } from '../../shared/pipes/app-date.pipe';
 import { PageShellContextService } from '../../core/layout/page-shell-context';
 import {
   FlowScriptDetails,
@@ -55,6 +57,7 @@ const LANGUAGE_LABELS: Readonly<Record<FlowScriptLanguage, string>> = {
     MatInputModule,
     MatSelectModule,
     ReactiveFormsModule,
+    AppDatePipe,
   ],
   template: `
     <app-resource-catalog-template
@@ -156,18 +159,21 @@ const LANGUAGE_LABELS: Readonly<Record<FlowScriptLanguage, string>> = {
           @if (versions().length) {
             <section class="script-versions" aria-label="Versions publiées">
               <h3>Versions publiées</h3>
-              @for (version of versions(); track version.version) {
-                <mat-expansion-panel class="script-panel" (opened)="loadVersion(version.version)">
+              @for (entry of versionEntries(); track entry.version.version) {
+                <mat-expansion-panel
+                  class="script-panel"
+                  (opened)="loadVersion(entry.version.version)"
+                >
                   <mat-expansion-panel-header>
-                    v{{ version.version }} · {{ version.name }} ·
-                    {{ formatDate(version.createdAt) }}
+                    v{{ entry.version.version }} · {{ entry.version.name }} ·
+                    {{ entry.version.createdAt | appDate: 'date' }}
                   </mat-expansion-panel-header>
-                  @if (versionCode(version.version); as published) {
+                  @if (entry.code; as published) {
                     <app-code-editor
                       [value]="published.code"
                       [language]="published.language"
                       [disabled]="true"
-                      [label]="'Code publié v' + version.version"
+                      [label]="'Code publié v' + entry.version.version"
                     />
                     <button
                       matButton="outlined"
@@ -201,7 +207,7 @@ const LANGUAGE_LABELS: Readonly<Record<FlowScriptLanguage, string>> = {
       <ng-template #actionFooterActions>
         <button matButton="text" type="button" (click)="requestClose()">Fermer</button>
         <button
-          matButton="outlined"
+          matButton="filled"
           type="button"
           (click)="saveDraft()"
           [disabled]="busy() || form.invalid"
@@ -209,7 +215,7 @@ const LANGUAGE_LABELS: Readonly<Record<FlowScriptLanguage, string>> = {
           {{ busy() ? 'Enregistrement…' : 'Enregistrer le brouillon' }}
         </button>
         <button
-          matButton="filled"
+          matButton="tonal"
           type="button"
           [disabled]="busy() || form.invalid || !form.controls.code.value.trim()"
           (click)="publish()"
@@ -306,7 +312,7 @@ export class ScriptLibraryPageComponent {
         script.publishedVersion > 0 ? `Publié · v${script.publishedVersion}` : 'Non publié',
       revisionLabel: `r${script.draftRevision}`,
       updatedAt: script.updatedAt,
-      updatedLabel: this.formatDate(script.updatedAt),
+      updatedLabel: formatDateOnly(script.updatedAt),
       description: script.draftDescription || '—',
     })),
   );
@@ -331,12 +337,16 @@ export class ScriptLibraryPageComponent {
   protected readonly versions = computed(() =>
     [...(this.details()?.script.versions ?? [])].sort((a, b) => b.version - a.version),
   );
+  private readonly versionCodes = signal<Readonly<Record<number, FlowScriptVersion>>>({});
+  protected readonly versionEntries = computed(() => {
+    const codes = this.versionCodes();
+    return this.versions().map((version) => ({ version, code: codes[version.version] }));
+  });
   protected readonly publishedIds = computed(() =>
     this.summaries()
       .filter((script) => script.publishedVersion > 0)
       .map((script) => script.id),
   );
-  private readonly versionCodes = signal<Readonly<Record<number, FlowScriptVersion>>>({});
   private readonly dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
   private readonly pageShellContext = inject(PageShellContextService);
@@ -362,7 +372,7 @@ export class ScriptLibraryPageComponent {
     if (!current) return 'Nouveau brouillon · non publié';
     const publishedStatus =
       current.script.publishedVersion > 0
-        ? `${current.script.publishedVersion} version(s) publiée(s)`
+        ? `${current.script.publishedVersion} ${current.script.publishedVersion > 1 ? 'versions publiées' : 'version publiée'}`
         : 'aucune version publiée';
     return `Brouillon r${current.script.draftRevision} · ${publishedStatus}`;
   });
@@ -380,14 +390,6 @@ export class ScriptLibraryPageComponent {
       else this.form.enable({ emitEvent: false });
     });
     void this.loadList(true);
-  }
-
-  protected formatDate(value: string): string {
-    return new Date(value).toLocaleDateString('fr-FR');
-  }
-
-  protected versionCode(version: number): FlowScriptVersion | undefined {
-    return this.versionCodes()[version];
   }
 
   protected async loadVersion(version: number): Promise<void> {
@@ -429,8 +431,12 @@ export class ScriptLibraryPageComponent {
       await this.loadList();
       if (created.length || updated.length) {
         const parts = [
-          created.length ? `${created.length} brouillon(s) créé(s)` : '',
-          updated.length ? `${updated.length} brouillon(s) mis à jour` : '',
+          created.length
+            ? `${created.length} ${created.length > 1 ? 'brouillons créés' : 'brouillon créé'}`
+            : '',
+          updated.length
+            ? `${updated.length} ${updated.length > 1 ? 'brouillons mis à jour' : 'brouillon mis à jour'}`
+            : '',
         ].filter(Boolean);
         this.notifications.show(`${parts.join(', ')}. Publiez une version pour les utiliser.`);
       }

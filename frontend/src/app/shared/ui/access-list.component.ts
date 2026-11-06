@@ -5,6 +5,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { ConfirmationDialogComponent } from './confirmation-dialog.component';
 import { ConfirmationDialogData } from './confirmation-dialog.component';
 import { StatusBadgeComponent, StatusTone } from './status-badge.component';
+import { EmptyStateComponent } from './empty-state/empty-state.component';
 
 export interface AccessListBadge {
   readonly label: string;
@@ -40,7 +41,7 @@ export interface AccessListActionEvent<T extends AccessListRow = AccessListRow> 
 @Component({
   selector: 'app-access-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatMenuModule, StatusBadgeComponent],
+  imports: [MatButtonModule, MatMenuModule, StatusBadgeComponent, EmptyStateComponent],
   template: `
     @if (rows().length) {
       <ul class="access-list">
@@ -103,7 +104,7 @@ export interface AccessListActionEvent<T extends AccessListRow = AccessListRow> 
         }
       </ul>
     } @else {
-      <p class="access-empty">{{ emptyMessage() }}</p>
+      <app-empty-state icon="info" [title]="emptyMessage()" />
     }
   `,
   styles: `
@@ -202,12 +203,6 @@ export interface AccessListActionEvent<T extends AccessListRow = AccessListRow> 
     }
     .danger {
       color: var(--danger-strong);
-    }
-    .access-empty {
-      margin: 0;
-      padding: var(--space-4);
-      color: var(--text-secondary);
-      text-align: center;
     }
     @media (max-width: 720px) {
       .access-row {

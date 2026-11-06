@@ -16,10 +16,15 @@ import { flowDocumentNodes } from '../../../shared/models/flow-document-graph';
 import { layoutFlowCanvas } from '../../../shared/models/flow-canvas';
 import { FlowGraphConnection, FlowGraphNode } from '../../../shared/models/flow-component';
 import { FlowCanvasComponent } from '../../../shared/ui/flow-canvas/flow-canvas.component';
-import { ExecutionTelemetry, ExecutionTelemetryHandle } from '../../../shared/services/execution-telemetry';
+import {
+  ExecutionTelemetry,
+  ExecutionTelemetryHandle,
+} from '../../../shared/services/execution-telemetry';
 import { ExecutionTracking } from '../../../shared/services/execution-tracking';
 import { FlowValidation } from '../../../shared/services/flow-validation';
 import { StatusBadgeComponent } from '../../../shared/ui/status-badge.component';
+import { IconComponent } from '../../../shared/ui/icon.component';
+import { MatButtonModule } from '@angular/material/button';
 
 function stepDuration(step: ExecutionPipelineStep): string {
   if (!step.startedAt) return '—';
@@ -40,7 +45,13 @@ function stepDuration(step: ExecutionPipelineStep): string {
   selector: 'app-activity-flow-trace',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FlowCanvasComponent, StatusBadgeComponent],
+  imports: [
+    CommonModule,
+    FlowCanvasComponent,
+    StatusBadgeComponent,
+    IconComponent,
+    MatButtonModule,
+  ],
   template: `
     <div class="flow-trace-container">
       @if (loading()) {
@@ -80,19 +91,20 @@ function stepDuration(step: ExecutionPipelineStep): string {
                 <span class="inspector-kind">({{ step.componentKind }})</span>
               </span>
               <button
+                matIconButton
                 type="button"
                 class="inspector-close"
                 (click)="selectedNodeId.set(null)"
                 aria-label="Fermer les détails du bloc"
               >
-                ×
+                <app-icon name="close" />
               </button>
             </div>
             <div class="inspector-details">
               <div class="detail-item">
                 <span class="detail-lbl">Statut :</span>
                 <app-status-badge
-                  [label]="step.status"
+                  [label]="stepStatusLabel(step.status)"
                   [tone]="
                     step.status === 'completed'
                       ? 'success'
@@ -213,13 +225,13 @@ function stepDuration(step: ExecutionPipelineStep): string {
     }
 
     .inspector-close {
+      width: 48px;
+      height: 48px;
+      flex: 0 0 48px;
       border: 0;
       background: transparent;
-      font-size: 1.25rem;
-      line-height: 1;
       color: var(--text-muted);
       cursor: pointer;
-      padding: 0 4px;
 
       &:hover {
         color: var(--text-primary);
@@ -375,11 +387,16 @@ export class ActivityFlowTraceComponent {
     const result = [...base];
     for (const live of handle.steps()) {
       const index = result.map((s) => s.nodeId).lastIndexOf(live.nodeId);
-      const status = live.state === 'completed' ? 'completed' : live.state === 'failed' ? 'failed' : 'running';
+      const status =
+        live.state === 'completed' ? 'completed' : live.state === 'failed' ? 'failed' : 'running';
       if (index >= 0) {
         const current = result[index];
         if (current.status === 'running' && status !== 'running') {
-          result[index] = { ...current, status, completedAt: live.finishedAt ?? current.completedAt };
+          result[index] = {
+            ...current,
+            status,
+            completedAt: live.finishedAt ?? current.completedAt,
+          };
         }
       } else {
         const node = this.nodes().find((n) => n.id === live.nodeId);
@@ -401,7 +418,9 @@ export class ActivityFlowTraceComponent {
     return result;
   });
 
-  protected readonly activeNodeId = computed<string | null>(() => this.liveHandle()?.currentNodeId() ?? null);
+  protected readonly activeNodeId = computed<string | null>(
+    () => this.liveHandle()?.currentNodeId() ?? null,
+  );
 
   private liveLabel(handle: ExecutionTelemetryHandle, nodeId: string): string {
     const progress = handle.progress();
@@ -450,7 +469,10 @@ export class ActivityFlowTraceComponent {
     const active = handle?.currentNodeId() ?? null;
     for (const step of this.effectiveSteps()) {
       map.set(step.nodeId, {
-        duration: handle && step.nodeId === active ? this.liveLabel(handle, step.nodeId) : stepDuration(step),
+        duration:
+          handle && step.nodeId === active
+            ? this.liveLabel(handle, step.nodeId)
+            : stepDuration(step),
         output: step.outputLabel || step.outputId || undefined,
         status: step.status,
       });
@@ -474,5 +496,20 @@ export class ActivityFlowTraceComponent {
 
   protected formatDuration(step: ExecutionPipelineStep): string {
     return stepDuration(step);
+  }
+
+  protected stepStatusLabel(status: ExecutionPipelineStep['status']): string {
+    switch (status) {
+      case 'completed':
+        return 'Terminée';
+      case 'failed':
+        return 'Échec';
+      case 'cancelled':
+        return 'Annulée';
+      case 'cancelling':
+        return 'Annulation demandée';
+      case 'running':
+        return 'En cours';
+    }
   }
 }

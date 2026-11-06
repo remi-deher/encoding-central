@@ -101,10 +101,10 @@ test('overview uses backend counts and filtered records with accessible responsi
   await expect(home.locator('app-overview-execution')).toHaveCount(1);
   await expect(home.locator('app-overview-execution')).toContainText('En cours');
   await expect(home.locator('app-overview-execution')).toContainText('100 %');
-  await expect(home.locator('.remaining-link')).toContainText('3 autres traitements');
+  await expect(home.locator('.remaining-link')).toContainText('3 autres exécutions');
   await expect(home.locator('.publication')).toContainText('Severance');
   await expect(home.locator('.node-row')).toContainText('RTX 4070');
-  await expect(home.locator('.attention')).toContainText('2 tâches');
+  await expect(home.locator('.attention')).toContainText('2 exécutions');
   await expect(home).not.toContainText('fonctionne normalement');
   for (const theme of ['light', 'dark']) {
     await page.evaluate((value) => (document.documentElement.dataset['theme'] = value), theme);
@@ -160,7 +160,7 @@ test('initial outage displays unavailable metrics without claiming an empty hist
     home.locator('app-summary-tiles app-metric-card').first().locator('.metric-value'),
   ).toHaveText('—');
   await expect(home).not.toContainText('Aucune exécution en cours.');
-  await expect(home).not.toContainText('Aucun traitement terminé.');
+  await expect(home).not.toContainText('Aucune exécution terminée.');
 });
 
 test('AI overview is integrated into home and the former route redirects there', async ({

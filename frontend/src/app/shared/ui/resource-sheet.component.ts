@@ -1,5 +1,7 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { IconComponent, IconName } from './icon.component';
 import { StatusBadgeComponent, StatusTone } from './status-badge.component';
 
 export interface ResourceSheetBadge {
@@ -28,7 +30,7 @@ export interface ResourceSheetMetric {
 export interface ResourceSheetHeadAction {
   readonly id: string;
   readonly label: string;
-  readonly icon?: 'settings' | string;
+  readonly icon?: IconName;
 }
 
 export interface ResourceSheetItemAction {
@@ -78,7 +80,7 @@ export interface ResourceSheetNotice {
     '[class.resource-sheet-fill]': 'fill()',
   },
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, StatusBadgeComponent],
+  imports: [IconComponent, MatButtonModule, MatTooltipModule, StatusBadgeComponent],
   template: `
     <div
       class="sheet-stack"
@@ -105,18 +107,14 @@ export interface ResourceSheetNotice {
             </div>
             @if (headAction(); as action) {
               <button
+                matIconButton
                 type="button"
                 class="sheet-head-action-btn"
                 [attr.aria-label]="action.label"
-                [title]="action.label"
+                [matTooltip]="action.label"
                 (click)="actionSelected.emit(action.id)"
               >
-                <svg viewBox="0 0 24 24" class="sheet-head-action-icon" aria-hidden="true">
-                  <circle cx="12" cy="12" r="3.2" />
-                  <path
-                    d="M12 3v2.2m0 13.6V21M3 12h2.2m13.6 0H21m-2.6-6.4-1.6 1.6M7.2 16.8l-1.6 1.6m0-12.8 1.6 1.6m9.6 9.6 1.6 1.6"
-                  />
-                </svg>
+                <app-icon [name]="action.icon ?? 'settings'" />
               </button>
             }
           </div>
@@ -132,7 +130,7 @@ export interface ResourceSheetNotice {
                 <small>{{ section.caption }}</small>
               }
               @if (section.action; as action) {
-                <button matButton type="button" (click)="actionSelected.emit(action.id)">
+                <button matButton="text" type="button" (click)="actionSelected.emit(action.id)">
                   {{ action.label }}
                 </button>
               }

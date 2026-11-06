@@ -15,6 +15,8 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter, map } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { IconComponent } from '../../shared/ui/icon.component';
 import { FlowEditorAssistant } from '../../shared/services/flow-editor-assistant.service';
 import { AuthService } from '../auth/auth.service';
 import type { AiAssistantPageComponent as AssistantPage } from '../../features/ai/ai-assistant-page.component';
@@ -25,7 +27,14 @@ import { FlowAiAssistantPanelComponent } from '../../features/flows/editor/flow-
 @Component({
   selector: 'app-assistant-host',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, RouterLink, AiAssistantPageComponent, FlowAiAssistantPanelComponent],
+  imports: [
+    IconComponent,
+    MatButtonModule,
+    MatTooltipModule,
+    RouterLink,
+    AiAssistantPageComponent,
+    FlowAiAssistantPanelComponent,
+  ],
   templateUrl: './assistant-host.component.html',
   host: { '(window:resize)': 'onWindowResize()', '(document:keydown)': 'onKeydown($event)' },
 })

@@ -67,8 +67,7 @@
         <h3>Action proposée</h3>
         <p>{{ proposal.summary }}</p>
         <p class="muted">
-          Cette action n’aura lieu qu’après votre confirmation. Le lien expire dans cinq
-          minutes.
+          Cette action n’aura lieu qu’après votre confirmation. Le lien expire dans cinq minutes.
         </p>
         <div class="assistant-action-confirmation__buttons">
           <button
@@ -92,7 +91,7 @@
     }
   } @else if (!conversations.pendingPrompt()) {
     <div class="welcome">
-      <span aria-hidden="true">✦</span>
+      <app-icon name="auto_awesome" />
       <h2>{{ panelMode() ? 'Comment puis-je vous aider ?' : 'Que souhaitez-vous faire ?' }}</h2>
     </div>
   }

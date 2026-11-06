@@ -24,9 +24,8 @@
 }
 
 .node-overview-card.is-master {
-  border-left: 4px solid #facc15;
-  background: linear-gradient(90deg, rgba(234, 179, 8, 0.04) 0%, var(--surface-container) 120px);
-  box-shadow: 0 2px 12px rgba(234, 179, 8, 0.08);
+  border-left: 4px solid var(--warning);
+  background: linear-gradient(90deg, var(--warning-soft) 0%, var(--surface-container) 120px);
 }
 
 .node-overview-notice-banner {
@@ -166,14 +165,6 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-pill);
   color: var(--text-secondary);
-}
-
-.node-overview-menu-button span {
-  display: block;
-  transform: translateY(-3px);
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: 1px;
 }
 
 .node-overview-section-grid {
@@ -379,7 +370,6 @@
   border-radius: var(--radius-sm);
   background: var(--surface-container-highest);
   color: var(--accent-strong);
-  font-size: 19px;
 }
 
 .node-overview-path-block {

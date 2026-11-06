@@ -10,8 +10,9 @@ import {
 } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { ApiTokenResponse, CreatedApiTokenResponse } from '../../../shared/models/api-token';
-import { formatRelativeTime } from '../../../shared/models/date-format';
+import { formatDateOnly, formatRelativeTime } from '../../../shared/models/date-format';
 import { ApiTokenService } from '../../../shared/services/api-token.service';
 import { ClipboardService } from '../../../shared/services/clipboard.service';
 import { NotificationService } from '../../../shared/services/notification.service';
@@ -35,6 +36,7 @@ interface TokenRow extends AccessListRow {
   imports: [
     AccessListComponent,
     MatButtonModule,
+    MatProgressBarModule,
     ConfigurationSectionComponent,
     RecordFormComponent,
   ],
@@ -44,9 +46,9 @@ interface TokenRow extends AccessListRow {
       description="Un accès dédié à chaque application ou script. Le mot de passe du compte est requis pour afficher la clé, qui ne sera présentée qu’une fois."
       icon="api"
     >
-      <button section-actions matButton="tonal" (click)="openCreate()">Créer un jeton</button>
+      <button section-actions matButton="filled" (click)="openCreate()">Créer un jeton</button>
       @if (state() === 'loading') {
-        <p role="status">Chargement des jetons…</p>
+        <mat-progress-bar mode="indeterminate" aria-label="Chargement des jetons" />
       } @else if (state() === 'error') {
         <p role="alert">Impossible de charger les jetons.</p>
         <button matButton="text" (click)="refresh()">Réessayer</button>
@@ -195,9 +197,7 @@ export class ApiTokenTabComponent {
         isActive: token.isActive,
         monoDetail: `${token.tokenPrefix}…`,
         details: [
-          token.expiresAt
-            ? `Expire le ${new Date(token.expiresAt).toLocaleDateString('fr-FR')}`
-            : 'Sans expiration',
+          token.expiresAt ? `Expire le ${formatDateOnly(token.expiresAt)}` : 'Sans expiration',
         ],
         badges: [
           {

@@ -15,6 +15,9 @@ export interface PageShellSearchResult {
   readonly label: string;
   readonly description?: string;
   readonly group?: string;
+  /** Icône du registre `app-icon`, prioritaire sur `glyph`. */
+  readonly icon?: IconName;
+  /** @deprecated Utiliser `icon`. */
   readonly glyph?: string;
   readonly path?: string;
   readonly run?: () => void;

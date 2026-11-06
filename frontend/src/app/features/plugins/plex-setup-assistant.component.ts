@@ -57,7 +57,7 @@ const CUSTOM_URI = '__custom__';
         >
           @if (!servers().length) {
             <button
-              mat-flat-button
+              matButton="filled"
               type="button"
               (click)="connect()"
               [disabled]="signInBusy()"
@@ -107,7 +107,7 @@ const CUSTOM_URI = '__custom__';
                 </mat-form-field>
               }
               <button
-                mat-flat-button
+                matButton="filled"
                 type="button"
                 (click)="useServer()"
                 [disabled]="serverBusy() || !effectiveUri()"
@@ -126,7 +126,7 @@ const CUSTOM_URI = '__custom__';
         >
           @if (!libraries()) {
             <button
-              mat-stroked-button
+              matButton="outlined"
               type="button"
               (click)="loadLibraries()"
               [disabled]="librariesBusy()"
@@ -173,7 +173,7 @@ const CUSTOM_URI = '__custom__';
             }
             <div class="mapping-actions">
               <button
-                mat-button
+                matButton="text"
                 type="button"
                 (click)="loadLibraries()"
                 [disabled]="librariesBusy()"
@@ -181,7 +181,7 @@ const CUSTOM_URI = '__custom__';
                 Relire
               </button>
               <button
-                mat-flat-button
+                matButton="filled"
                 type="button"
                 (click)="saveMappings()"
                 [disabled]="mappingBusy() || duplicateRoots().length > 0"
@@ -224,7 +224,7 @@ const CUSTOM_URI = '__custom__';
     .mapping-table {
       display: flex;
       flex-direction: column;
-      gap: 3px;
+      gap: var(--space-1);
       min-width: 0;
     }
     .mapping-row {
@@ -243,7 +243,7 @@ const CUSTOM_URI = '__custom__';
     }
     .mapping-local code {
       font-family: ui-monospace, 'JetBrains Mono', Consolas, monospace;
-      font-size: var(--font-label, 12px);
+      font-size: var(--font-label);
       color: var(--text-secondary);
       overflow-wrap: anywhere;
     }
@@ -256,7 +256,7 @@ const CUSTOM_URI = '__custom__';
       width: 100%;
     }
     .mapping-hint {
-      font-size: var(--font-label, 12px);
+      font-size: var(--font-label);
       color: var(--text-secondary);
     }
     .mapping-actions {

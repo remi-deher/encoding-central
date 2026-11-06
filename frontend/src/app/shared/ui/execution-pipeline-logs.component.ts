@@ -28,12 +28,15 @@ import { NotificationService } from '../services/notification.service';
       <header class="pipeline-logs__header">
         <div>
           <h3>Pipeline d’exécution</h3>
-          <p>{{ stepCount() }} étape(s) · {{ commandCount() }} commande(s) · {{ operationCount() }} opération(s)</p>
+          <p>
+            {{ stepCount() }} étape(s) · {{ commandCount() }} commande(s) ·
+            {{ operationCount() }} opération(s)
+          </p>
         </div>
         <div class="pipeline-logs__actions" aria-label="Mode d’affichage et export des logs">
           <div class="pipeline-logs__view-toggle" role="group" aria-label="Affichage du pipeline">
             <button
-              matButton="outlined"
+              [matButton]="viewMode() === 'simple' ? 'tonal' : 'outlined'"
               type="button"
               [attr.aria-pressed]="viewMode() === 'simple'"
               (click)="viewMode.set('simple')"
@@ -41,7 +44,7 @@ import { NotificationService } from '../services/notification.service';
               Vue simplifiée
             </button>
             <button
-              matButton="outlined"
+              [matButton]="viewMode() === 'detailed' ? 'tonal' : 'outlined'"
               type="button"
               [attr.aria-pressed]="viewMode() === 'detailed'"
               (click)="viewMode.set('detailed')"
@@ -49,7 +52,7 @@ import { NotificationService } from '../services/notification.service';
               Vue détaillée
             </button>
             <button
-              matButton="outlined"
+              [matButton]="viewMode() === 'console' ? 'tonal' : 'outlined'"
               type="button"
               [attr.aria-pressed]="viewMode() === 'console'"
               (click)="viewMode.set('console')"
@@ -112,8 +115,7 @@ import { NotificationService } from '../services/notification.service';
             aria-label="Dernières lignes de la commande"
             aria-live="off"
             (scroll)="updateLiveScroll($event)"
-            >{{ liveText() || 'En attente de sortie…' }}</pre
-          >
+            >{{ liveText() || 'En attente de sortie…' }}</pre>
           @if (!followLive()) {
             <button matButton="outlined" type="button" (click)="resumeLive()">
               Reprendre le défilement automatique
@@ -143,7 +145,9 @@ import { NotificationService } from '../services/notification.service';
             <pre aria-live="off">{{ rawConsole() }}</pre>
           </section>
         } @else {
-          <p class="pipeline-logs__empty">Aucune sortie de commande enregistrée pour cette exécution.</p>
+          <p class="pipeline-logs__empty">
+            Aucune sortie de commande enregistrée pour cette exécution.
+          </p>
         }
       } @else {
         <ol class="pipeline-steps">
@@ -178,11 +182,24 @@ import { NotificationService } from '../services/notification.service';
                       <ol class="pipeline-commands">
                         @for (command of step.commands; track command.id) {
                           <li class="pipeline-command">
-                            <code class="pipeline-command__line">{{ command.kind === 'operation' ? 'Opération : ' + command.command : command.command }}</code>
+                            <code class="pipeline-command__line">{{
+                              command.kind === 'operation'
+                                ? 'Opération : ' + command.command
+                                : command.command
+                            }}</code>
                             <p class="pipeline-command__status">
                               @if (command.kind === 'operation') {
-                                {{ command.finishedAt === null ? 'Opération en cours' : command.exitCode === 0 ? 'Opération terminée' : 'Opération échouée' }}
-                                @if (command.bytesProcessed !== null && command.bytesProcessed !== undefined) {
+                                {{
+                                  command.finishedAt === null
+                                    ? 'Opération en cours'
+                                    : command.exitCode === 0
+                                      ? 'Opération terminée'
+                                      : 'Opération échouée'
+                                }}
+                                @if (
+                                  command.bytesProcessed !== null &&
+                                  command.bytesProcessed !== undefined
+                                ) {
                                   · {{ formatBytes(command.bytesProcessed) }}
                                 }
                               } @else if (command.exitCode === null) {
@@ -428,7 +445,10 @@ import { NotificationService } from '../services/notification.service';
       overflow-wrap: anywhere;
       white-space: pre-wrap;
       color: var(--text-primary);
-      font: 13px/1.5 ui-monospace, Consolas, monospace;
+      font:
+        13px/1.5 ui-monospace,
+        Consolas,
+        monospace;
     }
     .pipeline-live {
       display: grid;
@@ -457,7 +477,10 @@ import { NotificationService } from '../services/notification.service';
       color: var(--text-primary);
       white-space: pre-wrap;
       overflow-wrap: anywhere;
-      font: 13px/1.5 ui-monospace, Consolas, monospace;
+      font:
+        13px/1.5 ui-monospace,
+        Consolas,
+        monospace;
     }
     @media (max-width: 760px) {
       .pipeline-logs__header,
@@ -480,10 +503,16 @@ export class ExecutionPipelineLogsComponent {
   private readonly notifications = inject(NotificationService);
   protected readonly stepCount = computed(() => this.steps().length);
   protected readonly commandCount = computed(() =>
-    this.steps().reduce((count, step) => count + step.commands.filter((entry) => entry.kind !== 'operation').length, 0),
+    this.steps().reduce(
+      (count, step) => count + step.commands.filter((entry) => entry.kind !== 'operation').length,
+      0,
+    ),
   );
   protected readonly operationCount = computed(() =>
-    this.steps().reduce((count, step) => count + step.commands.filter((entry) => entry.kind === 'operation').length, 0),
+    this.steps().reduce(
+      (count, step) => count + step.commands.filter((entry) => entry.kind === 'operation').length,
+      0,
+    ),
   );
   protected readonly logCount = computed(() =>
     this.steps().reduce((count, step) => count + step.commands.length, 0),
@@ -491,18 +520,22 @@ export class ExecutionPipelineLogsComponent {
   protected readonly hasRunningStep = computed(() =>
     this.steps().some((step) => step.status === 'running' || step.status === 'cancelling'),
   );
-  protected readonly rawConsole = computed(() => this.steps().flatMap((step) =>
-    step.commands.flatMap((command) => {
-      const sections = [
-        command.standardOutput ? `[stdout]\n${command.standardOutput}` : '',
-        command.standardError ? `[stderr]\n${command.standardError}` : '',
-        command.truncated ? '[sortie tronquée dans le journal enregistré]' : '',
-      ].filter(Boolean);
-      if (!sections.length) return [];
-      const start = new Date(command.startedAt).toLocaleTimeString('fr-FR');
-      return [`[${start}] ${step.nodeName} · ${command.command}`, ...sections].join('\n');
-    }),
-  ).join('\n\n'));
+  protected readonly rawConsole = computed(() =>
+    this.steps()
+      .flatMap((step) =>
+        step.commands.flatMap((command) => {
+          const sections = [
+            command.standardOutput ? `[stdout]\n${command.standardOutput}` : '',
+            command.standardError ? `[stderr]\n${command.standardError}` : '',
+            command.truncated ? '[sortie tronquée dans le journal enregistré]' : '',
+          ].filter(Boolean);
+          if (!sections.length) return [];
+          const start = new Date(command.startedAt).toLocaleTimeString('fr-FR');
+          return [`[${start}] ${step.nodeName} · ${command.command}`, ...sections].join('\n');
+        }),
+      )
+      .join('\n\n'),
+  );
 
   private readonly telemetryService = inject(ExecutionTelemetry);
   private readonly destroyRef = inject(DestroyRef);
@@ -643,7 +676,9 @@ export class ExecutionPipelineLogsComponent {
     return [
       commands ? `${commands} commande(s)` : '',
       operations ? `${operations} opération(s)` : '',
-    ].filter(Boolean).join(' · ');
+    ]
+      .filter(Boolean)
+      .join(' · ');
   }
 
   protected duration(step: ExecutionPipelineStep): string {

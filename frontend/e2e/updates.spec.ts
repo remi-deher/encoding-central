@@ -29,7 +29,7 @@ const status = {
 test('shows versions, safely displays notes and works on desktop and mobile', async ({ page }) => {
   await page.route('**/api/v1/system/updates', (route) => route.fulfill({ json: status }));
   await page.goto('/updates');
-  await expect(page.getByRole('heading', { name: 'Mise à jour', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Mises à jour', exact: true })).toBeVisible();
   await expect(page.getByText('Une nouvelle version est disponible : 1.10.0.')).toBeVisible();
   await expect(page.getByText('Installée sur ce worker')).toBeVisible();
   await expect(

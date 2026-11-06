@@ -6,14 +6,16 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { HttpClient } from '@angular/common/http';
-import { catchError, exhaustMap, of, timeout, timer } from 'rxjs';
+import { catchError, exhaustMap, map, of, timeout, timer } from 'rxjs';
 import { SetupWorkerSheet } from '../../shared/models/local-worker';
 import { CommonModule, DOCUMENT } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { AuthService } from '../../core/auth/auth.service';
 import { LocalWorkerController } from '../../shared/services/local-worker-controller';
 import { NotificationService } from '../../shared/services/notification.service';
@@ -33,8 +35,10 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
   providers: [LocalWorkerController],
   imports: [
     CommonModule,
-    FormsModule,
+    ReactiveFormsModule,
     MatButtonModule,
+    MatFormFieldModule,
+    MatInputModule,
     AccessTemplateComponent,
     DetectedConfigurationComponent,
     IconComponent,
@@ -48,7 +52,7 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
       [busy]="busy()"
       progressLabel="Action en cours"
     >
-      <div access-content class="setup-stack">
+      <form access-content class="setup-stack" [formGroup]="form" novalidate>
         @if (!welcome()) {
           <p class="progress" aria-live="polite">Étape {{ currentStep() + 1 }} sur 3</p>
         }
@@ -81,155 +85,194 @@ const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
             [gpu]="gpuInfo()"
             [acceleration]="gpuAccelerationInfo()"
             [address]="networkAccessUrls().join(' · ')"
-            [addressLabel]="announcedUrls().length ? 'Adresse annoncée' : 'Adresse utilisée par ce navigateur'"
+            [addressLabel]="
+              announcedUrls().length ? 'Adresse annoncée' : 'Adresse utilisée par ce navigateur'
+            "
             [interfaces]="interfaceAddresses()"
             [interfacesEmpty]="setupSheet() ? 'Aucune adresse détectée' : 'Détection en cours…'"
           />
         } @else {
-        @switch (currentStep()) {
-          @case (0) {
-            <section class="card" aria-labelledby="step-admin-heading">
-              <div class="heading">
-                <h2 id="step-admin-heading">Créer l’administrateur</h2>
-                <p>Ce compte protège l’accès au central. Vous pourrez en ajouter d’autres.</p>
-              </div>
-
-              <label for="admin-username-input">Nom d’utilisateur</label>
-              <input
-                id="admin-username-input"
-                type="text"
-                [disabled]="busy() || accountCreated()"
-                [ngModel]="adminUsername()"
-                (ngModelChange)="adminUsername.set($event)"
-                maxlength="64"
-                autocomplete="username"
-                [attr.aria-invalid]="adminErrors().username ? 'true' : null"
-                aria-describedby="admin-username-error"
-              />
-              @if (adminErrors().username) {
-                <span id="admin-username-error" class="field-error">{{ adminErrors().username }}</span>
-              }
-
-              <label for="admin-password-input">Mot de passe</label>
-              <div class="field-row">
-                <input
-                  id="admin-password-input"
-                  [type]="passwordVisible() ? 'text' : 'password'"
-                  [disabled]="busy() || accountCreated()"
-                  [ngModel]="adminPassword()"
-                  (ngModelChange)="adminPassword.set($event)"
-                  autocomplete="new-password"
-                  [attr.aria-invalid]="adminErrors().password ? 'true' : null"
-                  aria-describedby="admin-password-hint"
-                />
-                <button
-                  matButton="text"
-                  type="button"
-                  [attr.aria-pressed]="passwordVisible()"
-                  (click)="passwordVisible.set(!passwordVisible())"
-                >
-                  {{ passwordVisible() ? 'Masquer' : 'Afficher' }}
-                </button>
-              </div>
-              <span
-                id="admin-password-hint"
-                [class]="adminErrors().password ? 'field-error' : 'field-hint'"
-              >
-                {{ adminErrors().password || minimumPasswordLength + ' caractères minimum.' }}
-              </span>
-
-              <label for="admin-confirm-input">Confirmer le mot de passe</label>
-              <input
-                id="admin-confirm-input"
-                [type]="passwordVisible() ? 'text' : 'password'"
-                [disabled]="busy() || accountCreated()"
-                [ngModel]="adminConfirm()"
-                (ngModelChange)="adminConfirm.set($event)"
-                autocomplete="new-password"
-                [attr.aria-invalid]="adminErrors().confirm ? 'true' : null"
-                aria-describedby="admin-confirm-error"
-              />
-              @if (adminErrors().confirm) {
-                <span id="admin-confirm-error" class="field-error">{{ adminErrors().confirm }}</span>
-              }
-
-              <div class="actions">
-                <button matButton="outlined" type="button" [disabled]="busy()" (click)="previousStep()">
-                  Retour
-                </button>
-                <button matButton="filled" type="button" [disabled]="busy()" (click)="nextFromAccount()">
-                  Continuer
-                </button>
-              </div>
-            </section>
-          }
-
-          @case (1) {
-            <section class="card" aria-labelledby="step-identity-heading">
-              <div class="heading">
-                <h2 id="step-identity-heading">Nommer le central</h2>
-                <p>Ce nom s’affiche dans l’interface et chez les workers.</p>
-              </div>
-
-              <label for="node-name-input">Nom du central</label>
-              <input
-                id="node-name-input"
-                type="text"
-                [disabled]="busy() || accountCreated()"
-                [placeholder]="defaultNodeName()"
-                [ngModel]="nodeName()"
-                (ngModelChange)="nodeName.set($event)"
-                maxlength="128"
-                autocomplete="off"
-              />
-
-              <div class="actions">
-                <button matButton="outlined" type="button" [disabled]="busy()" (click)="previousStep()">
-                  Retour
-                </button>
-                <button matButton="filled" type="button" [disabled]="busy()" (click)="advanceToReview()">
-                  Continuer
-                </button>
-              </div>
-            </section>
-          }
-
-          @case (2) {
-            <section class="card" aria-labelledby="step-review-heading" aria-live="polite">
-              <div class="heading">
-                <h2 id="step-review-heading">Vérifier le central</h2>
-                <p>Le central sera prêt à accueillir des workers après son initialisation.</p>
-              </div>
-
-              <dl class="summary">
-                <div>
-                  <dt>Central</dt>
-                  <dd>{{ effectiveNodeName() }}</dd>
+          @switch (currentStep()) {
+            @case (0) {
+              <section class="card" aria-labelledby="step-admin-heading">
+                <div class="heading">
+                  <h2 id="step-admin-heading">Créer l’administrateur</h2>
+                  <p>Ce compte protège l’accès au central. Vous pourrez en ajouter d’autres.</p>
                 </div>
-                <div>
-                  <dt>Administrateur</dt>
-                  <dd>{{ adminUsername().trim() }}</dd>
-                </div>
-              </dl>
 
-              <div class="actions">
-                <button matButton="outlined" type="button" [disabled]="busy()" (click)="previousStep()">
-                  Retour
-                </button>
-                <button
-                  matButton="filled"
-                  type="button"
-                  [disabled]="busy()"
-                  (click)="submitCreateCluster()"
+                <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                  <mat-label>Nom d’utilisateur</mat-label>
+                  <input
+                    matInput
+                    id="admin-username-input"
+                    type="text"
+                    formControlName="adminUsername"
+                    [disabled]="busy() || accountCreated()"
+                    maxlength="64"
+                    autocomplete="username"
+                    [attr.aria-invalid]="adminErrors().username ? 'true' : null"
+                    aria-describedby="admin-username-error"
+                  />
+                </mat-form-field>
+                @if (adminErrors().username) {
+                  <span id="admin-username-error" class="field-error">{{
+                    adminErrors().username
+                  }}</span>
+                }
+
+                <div class="field-row">
+                  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                    <mat-label>Mot de passe</mat-label>
+                    <input
+                      matInput
+                      id="admin-password-input"
+                      formControlName="adminPassword"
+                      [type]="passwordVisible() ? 'text' : 'password'"
+                      [disabled]="busy() || accountCreated()"
+                      autocomplete="new-password"
+                      [attr.aria-invalid]="adminErrors().password ? 'true' : null"
+                      aria-describedby="admin-password-hint"
+                    />
+                  </mat-form-field>
+                  <button
+                    matButton="text"
+                    type="button"
+                    [attr.aria-pressed]="passwordVisible()"
+                    (click)="passwordVisible.set(!passwordVisible())"
+                  >
+                    {{ passwordVisible() ? 'Masquer' : 'Afficher' }}
+                  </button>
+                </div>
+                <span
+                  id="admin-password-hint"
+                  [class]="adminErrors().password ? 'field-error' : 'field-hint'"
                 >
-                  Initialiser le central
-                </button>
-              </div>
-            </section>
+                  {{ adminErrors().password || minimumPasswordLength + ' caractères minimum.' }}
+                </span>
+
+                <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                  <mat-label>Confirmer le mot de passe</mat-label>
+                  <input
+                    matInput
+                    id="admin-confirm-input"
+                    formControlName="adminConfirm"
+                    [type]="passwordVisible() ? 'text' : 'password'"
+                    [disabled]="busy() || accountCreated()"
+                    autocomplete="new-password"
+                    [attr.aria-invalid]="adminErrors().confirm ? 'true' : null"
+                    aria-describedby="admin-confirm-error"
+                  />
+                </mat-form-field>
+                @if (adminErrors().confirm) {
+                  <span id="admin-confirm-error" class="field-error">{{
+                    adminErrors().confirm
+                  }}</span>
+                }
+
+                <div class="actions">
+                  <button
+                    matButton="outlined"
+                    type="button"
+                    [disabled]="busy()"
+                    (click)="previousStep()"
+                  >
+                    Retour
+                  </button>
+                  <button
+                    matButton="filled"
+                    type="button"
+                    [disabled]="busy()"
+                    (click)="nextFromAccount()"
+                  >
+                    Continuer
+                  </button>
+                </div>
+              </section>
+            }
+
+            @case (1) {
+              <section class="card" aria-labelledby="step-identity-heading">
+                <div class="heading">
+                  <h2 id="step-identity-heading">Nommer le central</h2>
+                  <p>Ce nom s’affiche dans l’interface et chez les workers.</p>
+                </div>
+
+                <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                  <mat-label>Nom du central</mat-label>
+                  <input
+                    matInput
+                    id="node-name-input"
+                    type="text"
+                    formControlName="nodeName"
+                    [disabled]="busy() || accountCreated()"
+                    [placeholder]="defaultNodeName()"
+                    maxlength="128"
+                    autocomplete="off"
+                  />
+                </mat-form-field>
+
+                <div class="actions">
+                  <button
+                    matButton="outlined"
+                    type="button"
+                    [disabled]="busy()"
+                    (click)="previousStep()"
+                  >
+                    Retour
+                  </button>
+                  <button
+                    matButton="filled"
+                    type="button"
+                    [disabled]="busy()"
+                    (click)="advanceToReview()"
+                  >
+                    Continuer
+                  </button>
+                </div>
+              </section>
+            }
+
+            @case (2) {
+              <section class="card" aria-labelledby="step-review-heading" aria-live="polite">
+                <div class="heading">
+                  <h2 id="step-review-heading">Vérifier le central</h2>
+                  <p>Le central sera prêt à accueillir des workers après son initialisation.</p>
+                </div>
+
+                <dl class="summary">
+                  <div>
+                    <dt>Central</dt>
+                    <dd>{{ effectiveNodeName() }}</dd>
+                  </div>
+                  <div>
+                    <dt>Administrateur</dt>
+                    <dd>{{ adminUsername().trim() }}</dd>
+                  </div>
+                </dl>
+
+                <div class="actions">
+                  <button
+                    matButton="outlined"
+                    type="button"
+                    [disabled]="busy()"
+                    (click)="previousStep()"
+                  >
+                    Retour
+                  </button>
+                  <button
+                    matButton="filled"
+                    type="button"
+                    [disabled]="busy()"
+                    (click)="submitCreateCluster()"
+                  >
+                    Initialiser le central
+                  </button>
+                </div>
+              </section>
+            }
           }
         }
-        }
-      </div>
+      </form>
     </app-access-template>
   `,
   styles: SETUP_SURFACE_STYLES,
@@ -250,10 +293,31 @@ export class SetupWizardPageComponent {
   protected readonly busy = signal(false);
   protected readonly errorMessage = signal('');
 
-  protected readonly nodeName = signal('');
-  protected readonly adminUsername = signal('admin');
-  protected readonly adminPassword = signal('');
-  protected readonly adminConfirm = signal('');
+  protected readonly form = new FormGroup({
+    nodeName: new FormControl('', { nonNullable: true, validators: [Validators.maxLength(128)] }),
+    adminUsername: new FormControl('admin', {
+      nonNullable: true,
+      validators: [Validators.required, Validators.maxLength(64)],
+    }),
+    adminPassword: new FormControl('', {
+      nonNullable: true,
+      validators: [
+        Validators.required,
+        Validators.minLength(MINIMUM_PASSWORD_LENGTH),
+        Validators.maxLength(MAXIMUM_PASSWORD_LENGTH),
+      ],
+    }),
+    adminConfirm: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+  });
+  /** Valeurs du formulaire en signal : les computed ci-dessous se recalculent à chaque saisie. */
+  private readonly formValue = toSignal(
+    this.form.valueChanges.pipe(map(() => this.form.getRawValue())),
+    { initialValue: this.form.getRawValue() },
+  );
+  protected readonly nodeName = () => this.formValue().nodeName;
+  protected readonly adminUsername = () => this.formValue().adminUsername;
+  protected readonly adminPassword = () => this.formValue().adminPassword;
+  protected readonly adminConfirm = () => this.formValue().adminConfirm;
   protected readonly passwordVisible = signal(false);
   protected readonly adminSubmitted = signal(false);
   protected readonly accountCreated = signal(false);
@@ -447,12 +511,10 @@ export class SetupWizardPageComponent {
     await this.completeSetup({ workerDisplayName: name, centralName: name });
   }
 
-  private async completeSetup(
-    payload: {
-      workerDisplayName: string;
-      centralName?: string;
-    },
-  ): Promise<void> {
+  private async completeSetup(payload: {
+    workerDisplayName: string;
+    centralName?: string;
+  }): Promise<void> {
     if (this.busy() || this.accountCreated()) return;
     this.errorMessage.set('');
     this.adminSubmitted.set(true);
@@ -469,8 +531,8 @@ export class SetupWizardPageComponent {
         password: this.adminPassword(),
       });
       this.accountCreated.set(true);
-      this.adminPassword.set('');
-      this.adminConfirm.set('');
+      this.form.controls.adminPassword.setValue('');
+      this.form.controls.adminConfirm.setValue('');
       this.notifications.show('Initialisation terminée avec succès !');
       await this.router.navigate(['/']);
     } catch (error) {

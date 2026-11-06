@@ -14,6 +14,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { StatusBadgeComponent } from '../../../shared/ui/status-badge.component';
+import { IconComponent } from '../../../shared/ui/icon.component';
 import {
   WorkerGroupCriteria,
   WorkerGroupMode,
@@ -29,6 +30,7 @@ import {
   validateLabelKey,
 } from '../../../shared/models/worker-group-rules';
 import { SearchFieldComponent } from '../../../shared/ui/search-field.component';
+import { nodeLifecycleBadge } from '../worker-catalog.utils';
 
 export interface SaveWorkerGroupPayload {
   readonly name: string;
@@ -44,6 +46,7 @@ export interface SaveWorkerGroupPayload {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     FormsModule,
+    IconComponent,
     MatButtonModule,
     MatCheckboxModule,
     MatFormFieldModule,
@@ -64,6 +67,7 @@ export class WorkerGroupEditorComponent {
   readonly cancelled = output<void>();
 
   protected readonly Math = Math;
+  protected readonly lifecycleBadge = nodeLifecycleBadge;
 
   // Form state
   protected readonly name = signal('');

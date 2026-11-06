@@ -43,7 +43,7 @@ export interface FlowDeleteDialogData {
         </p>
         @if (data.libraries.length) {
           <p class="message">
-            Les bibliothèques ci-dessous n’auront plus de flow : leur traitement automatique
+            Les bibliothèques ci-dessous n’auront plus de flow : leur exécution automatique
             s’arrêtera jusqu’à l’affectation d’un autre flow.
           </p>
           <table class="usage-table">
@@ -85,6 +85,7 @@ export interface FlowDeleteDialogData {
         <button matButton="text" type="button" (click)="dialogRef.close(false)">Annuler</button>
         <button
           matButton="filled"
+          class="danger"
           type="button"
           [disabled]="!confirmed()"
           (click)="dialogRef.close(true)"

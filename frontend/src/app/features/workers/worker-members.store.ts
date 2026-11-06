@@ -16,7 +16,11 @@ import {
 import { CategoryTabOption } from '../../shared/ui/category-tabs.component';
 import type { ResourceCardAction } from '../../shared/ui/resource-card.component';
 import type { SummaryTile } from '../../shared/ui/summary-tiles.component';
-import { workerLifecycle, NODE_LIFECYCLE_LABELS, NODE_LIFECYCLE_TONES } from '../../shared/models/central-health';
+import {
+  workerLifecycle,
+  NODE_LIFECYCLE_LABELS,
+  NODE_LIFECYCLE_TONES,
+} from '../../shared/models/central-health';
 import {
   formatWorkerLabel,
   WorkerRole,
@@ -80,7 +84,8 @@ export class WorkerMembersStore {
 
   readonly stateOptions = computed<readonly CategoryTabOption[]>(() => {
     const nodes = this.data.nodes();
-    const count = (group: string) => nodes.filter((node) => workerStateGroup(node) === group).length;
+    const count = (group: string) =>
+      nodes.filter((node) => workerStateGroup(node) === group).length;
     return [
       { value: 'all', label: 'Tous', count: nodes.length },
       { value: 'online', label: 'En ligne', count: count('online') },
@@ -140,9 +145,7 @@ export class WorkerMembersStore {
       return {
         id: node.id,
         title: formatWorkerLabel(node.name, node.displayName),
-        subtitle: isMaster
-          ? `Central de ${this.clusterName()}`
-          : `Worker de ${this.clusterName()}`,
+        subtitle: isMaster ? `Central de ${this.clusterName()}` : `Worker de ${this.clusterName()}`,
         statusLabel: NODE_LIFECYCLE_LABELS[lifecycle],
         statusTone: NODE_LIFECYCLE_TONES[lifecycle],
         isMaster,
@@ -201,8 +204,7 @@ export class WorkerMembersStore {
   });
 
   readonly clusterName = computed(
-    () =>
-      this.data.local.identity()?.name ?? this.data.local.status()?.centralName ?? 'Central',
+    () => this.data.local.identity()?.name ?? this.data.local.status()?.centralName ?? 'Central',
   );
 
   readonly clusterAddress = computed(
@@ -222,7 +224,7 @@ export class WorkerMembersStore {
       label: 'Supprimer',
       visibleWhen: () => !this.bulkBusy(),
       confirmation: (rows) => ({
-        title: 'Supprimer ' + rows.length + ' worker(s) ?',
+        title: 'Supprimer ' + rows.length + (rows.length > 1 ? ' workers ?' : ' worker ?'),
         message:
           'Les accès seront révoqués ; les fichiers et l’historique sont conservés. Les workers avec des traitements actifs peuvent refuser le retrait.',
         confirmLabel: 'Supprimer les workers',
@@ -346,8 +348,8 @@ export class WorkerMembersStore {
         const failed = results.filter((ok) => !ok).length;
         this.notifications.show(
           failed
-            ? `${label} : ${results.length - failed} worker(s) traité(s), ${failed} en échec.`
-            : `${label} : ${results.length} worker(s) traité(s).`,
+            ? `${label} : ${results.length - failed} ${results.length - failed > 1 ? 'workers traités' : 'worker traité'}, ${failed} en échec.`
+            : `${label} : ${results.length} ${results.length > 1 ? 'workers traités' : 'worker traité'}.`,
         );
         this.clusterApi
           .listNodes()
@@ -384,9 +386,7 @@ export class WorkerMembersStore {
   }
 
   private rawNode(): WorkerResponse | null {
-    return (
-      this.data.nodes().find((node) => node.id === this.data.selectedNode()?.id) ?? null
-    );
+    return this.data.nodes().find((node) => node.id === this.data.selectedNode()?.id) ?? null;
   }
 
   private async setNodeAdmission(node: WorkerResponse, enabled: boolean): Promise<void> {
@@ -478,7 +478,9 @@ export class WorkerMembersStore {
   clearQuarantine(): void {
     const node = this.rawNode();
     if (!node || this.lifecycleBusy()) return;
-    this.sendLifecycle(this.http.post<void>('/api/v1/workers/' + node.id + '/quarantine/clear', {}));
+    this.sendLifecycle(
+      this.http.post<void>('/api/v1/workers/' + node.id + '/quarantine/clear', {}),
+    );
   }
 
   private sendLifecycle(request: Observable<void>): void {
@@ -520,5 +522,4 @@ export class WorkerMembersStore {
   rawSelectedNode = computed(
     () => this.data.nodes().find((node) => node.id === this.data.selectedNode()?.id) ?? null,
   );
-
 }

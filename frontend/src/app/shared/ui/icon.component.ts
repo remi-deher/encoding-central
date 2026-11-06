@@ -1,6 +1,28 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 
 const ICONS = {
+  more_vert: 'M12 5h.01M12 12h.01M12 19h.01',
+  more_horiz: 'M5 12h.01M12 12h.01M19 12h.01',
+  chevron_left: 'm15 18-6-6 6-6',
+  chevron_right: 'm9 18 6-6-6-6',
+  remove: 'M5 12h14',
+  search: 'm20 20-4.5-4.5M18 10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z',
+  error: 'M12 8v5m0 3h.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z',
+  help: 'M9.5 9a2.5 2.5 0 1 1 4.7 1.2c-.9 1.1-2.2 1.5-2.2 3.3M12 17h.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z',
+  menu: 'M4 6h16M4 12h16M4 18h16',
+  visibility: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
+  visibility_off:
+    'M3 3l18 18M10.6 5.1A9.7 9.7 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9M6.6 6.6C3.7 8.4 2 12 2 12s4 7 10 7a9.6 9.6 0 0 0 4.4-1M9.9 9.9a3 3 0 0 0 4.2 4.2',
+  content_copy: 'M9 9h12v12H9ZM15 5V3H3v12h2',
+  delete: 'M3 6h18m-2 0-.9 14H5.9L5 6m4 0V4h6v2m-5 4v6m4-6v6',
+  play_arrow: 'm8 5 11 7-11 7Z',
+  attach_file:
+    'm20 11-8.5 8.5a5 5 0 0 1-7-7L13 4a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4L14.5 7',
+  auto_awesome:
+    'm12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Zm7 11 .9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14Z',
+  diamond: 'm12 3 9 9-9 9-9-9 9-9Z',
+  home: 'M4 10.5 12 4l8 6.5V20h-5v-6h-6v6H4Z',
+  key: 'M4 15a4 4 0 1 0 8 0 4 4 0 1 0-8 0ZM11.5 12.5 20 4M16 8l3 3M13.5 10.5l2 2',
   condition: 'm12 3 9 9-9 9-9-9ZM12 8v5m0 3h.01',
   warning: 'm12 3 10 18H2ZM12 9v4m0 4h.01',
   clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 7v5l3 2',

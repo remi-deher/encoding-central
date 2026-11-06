@@ -37,7 +37,7 @@
     background: var(--surface-container-high);
   }
 
-  &[aria-pressed='true'] {
+  &[aria-selected='true'] {
     background: color-mix(in srgb, var(--media-tone) 16%, var(--surface-container));
     box-shadow: inset 0 0 0 2px var(--media-tone);
   }

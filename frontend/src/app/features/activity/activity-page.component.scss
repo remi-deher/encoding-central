@@ -11,7 +11,7 @@
   background: var(--surface-container);
   border: 1px solid color-mix(in srgb, var(--border-subtle) 50%, transparent);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--font-label);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -62,7 +62,7 @@
   border: 1px solid var(--border-subtle);
 
   .selection-count {
-    font-size: 13px;
+    font-size: var(--font-body);
     font-weight: 600;
     color: var(--text-primary);
   }
@@ -79,14 +79,14 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  font-size: 13px;
+  font-size: var(--font-body);
 
   &.bulk-action-btn_danger {
     color: var(--danger);
-    border-color: rgba(239, 68, 68, 0.4);
+    border-color: color-mix(in srgb, var(--danger) 40%, transparent);
 
     &:hover {
-      background: rgba(239, 68, 68, 0.1);
+      background: color-mix(in srgb, var(--danger) 10%, transparent);
       border-color: var(--danger);
     }
   }
@@ -104,7 +104,7 @@
   }
 
   .select-all-label {
-    font-size: 13px;
+    font-size: var(--font-body);
     font-weight: 500;
     color: var(--text-secondary);
     user-select: none;

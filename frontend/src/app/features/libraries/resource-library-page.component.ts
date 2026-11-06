@@ -18,6 +18,7 @@ import { MatInputModule } from '@angular/material/input';
 import { ActivatedRoute, Router } from '@angular/router';
 import { map } from 'rxjs';
 import { FlowResourceDetails, FlowResourceSummary } from '../../shared/models/flow-resources';
+import { formatShortDateTime } from '../../shared/models/date-format';
 import { FlowResources } from '../../shared/services/flow-resources';
 import { PageShellContextService } from '../../core/layout/page-shell-context';
 import { NotificationService } from '../../shared/services/notification.service';
@@ -95,7 +96,7 @@ type ResourceSection = 'font' | 'subtitle-profile' | 'subtitle';
           <app-resource-sheet
             ariaLabel="Versions et fichiers de la ressource"
             [title]="details.summary.name"
-            [subtitle]="kindLabel(details.summary.kind) + ' · version ' + details.summary.latestVersion"
+            [subtitle]="selectedSubtitle()"
             [sections]="sections()"
           />
         }
@@ -126,66 +127,66 @@ type ResourceSection = 'font' | 'subtitle-profile' | 'subtitle';
             <p class="error" role="alert">{{ error() }}</p>
           }
         } @else {
-        <form class="resource-form" [formGroup]="form" (ngSubmit)="save()">
-          @if (editorMode() === 'create') {
-            <mat-form-field appearance="outline" subscriptSizing="dynamic">
-              <mat-label>Description</mat-label>
-              <textarea
-                matInput
-                rows="2"
-                formControlName="description"
-                maxlength="1000"
-                [readonly]="busy()"
-              ></textarea>
-            </mat-form-field>
-          }
-          <input
-            #picker
-            hidden
-            type="file"
-            [multiple]="editorMode() === 'create'"
-            [accept]="section() === 'subtitle' ? '.srt,.ass,.ssa,.vtt' : '.ttf,.otf,.ttc'"
-            (change)="pick(picker)"
-          />
-          <button matButton="outlined" type="button" [disabled]="busy()" (click)="picker.click()">
-            {{ fileButton() }}
-          </button>
-          <ul class="chosen" aria-label="Fichiers choisis">
-            @for (file of files(); track file.name) {
-              <li>
-                <span>{{ file.name }}</span>
-                <span class="size">{{ size(file.size) }}</span>
-                <button
-                  matButton="text"
-                  type="button"
-                  [disabled]="busy()"
-                  [attr.aria-label]="'Retirer ' + file.name"
-                  (click)="removeFile(file)"
-                >
-                  Retirer
-                </button>
-              </li>
+          <form class="resource-form" [formGroup]="form" (ngSubmit)="save()">
+            @if (editorMode() === 'create') {
+              <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                <mat-label>Description</mat-label>
+                <textarea
+                  matInput
+                  rows="2"
+                  formControlName="description"
+                  maxlength="1000"
+                  [readonly]="busy()"
+                ></textarea>
+              </mat-form-field>
             }
-          </ul>
-          <p class="hint">{{ fileHint() }}</p>
-          @if (error()) {
-            <p class="error" role="alert">{{ error() }}</p>
-          }
-          <div class="actions">
-            <button matButton="text" type="button" [disabled]="busy()" (click)="closeEditor()">
-              Annuler
+            <input
+              #picker
+              hidden
+              type="file"
+              [multiple]="editorMode() === 'create'"
+              [accept]="section() === 'subtitle' ? '.srt,.ass,.ssa,.vtt' : '.ttf,.otf,.ttc'"
+              (change)="pick(picker)"
+            />
+            <button matButton="outlined" type="button" [disabled]="busy()" (click)="picker.click()">
+              {{ fileButton() }}
             </button>
-            <button matButton="filled" type="submit" [disabled]="!canSave()">
-              {{
-                busy()
-                  ? 'Envoi en cours…'
-                  : editorMode() === 'version'
-                    ? 'Publier la version'
-                    : 'Ajouter'
-              }}
-            </button>
-          </div>
-        </form>
+            <ul class="chosen" aria-label="Fichiers choisis">
+              @for (chosen of chosenFiles(); track chosen.file.name) {
+                <li>
+                  <span>{{ chosen.file.name }}</span>
+                  <span class="size">{{ chosen.size }}</span>
+                  <button
+                    matButton="text"
+                    type="button"
+                    [disabled]="busy()"
+                    [attr.aria-label]="'Retirer ' + chosen.file.name"
+                    (click)="removeFile(chosen.file)"
+                  >
+                    Retirer
+                  </button>
+                </li>
+              }
+            </ul>
+            <p class="hint">{{ fileHint() }}</p>
+            @if (error()) {
+              <p class="error" role="alert">{{ error() }}</p>
+            }
+            <div class="actions">
+              <button matButton="text" type="button" [disabled]="busy()" (click)="closeEditor()">
+                Annuler
+              </button>
+              <button matButton="filled" type="submit" [disabled]="!canSave()">
+                {{
+                  busy()
+                    ? 'Envoi en cours…'
+                    : editorMode() === 'version'
+                      ? 'Publier la version'
+                      : 'Ajouter'
+                }}
+              </button>
+            </div>
+          </form>
         }
       </ng-template>
     </app-resource-catalog-template>
@@ -308,6 +309,15 @@ export class ResourceLibraryPageComponent {
         return 'Chaque police est envoyée comme une ressource séparée, puis copiée sur les workers.';
     }
   });
+  protected readonly chosenFiles = computed(() =>
+    this.files().map((file) => ({ file, size: formatResourceSize(file.size) })),
+  );
+  protected readonly selectedSubtitle = computed(() => {
+    const details = this.selected();
+    return details
+      ? `${this.kindLabel(details.summary.kind)} · version ${details.summary.latestVersion}`
+      : '';
+  });
   protected readonly canSave = computed(
     () =>
       !this.busy() &&
@@ -350,7 +360,7 @@ export class ResourceLibraryPageComponent {
           { label: 'Identifiant', value: summary.id, mono: true },
           {
             label: 'Mise à jour',
-            value: new Date(summary.updatedAt).toLocaleString('fr-FR'),
+            value: formatShortDateTime(summary.updatedAt),
           },
         ],
       },
@@ -359,7 +369,7 @@ export class ResourceLibraryPageComponent {
         title: `Version ${version.version}`,
         caption:
           (version.version === summary.latestVersion ? 'Dernière · ' : '') +
-          `${formatResourceSize(version.totalBytes)} · ${new Date(version.createdAt).toLocaleString('fr-FR')}`,
+          `${formatResourceSize(version.totalBytes)} · ${formatShortDateTime(version.createdAt)}`,
         items: version.files.map((file) => ({
           label: file.name,
           detail: `SHA-256 ${file.sha256.slice(0, 16)}…`,
@@ -403,10 +413,6 @@ export class ResourceLibraryPageComponent {
         void this.loadDetails(id);
       });
     });
-  }
-
-  protected size(bytes: number): string {
-    return formatResourceSize(bytes);
   }
 
   protected openResource(id: string): void {
@@ -500,10 +506,15 @@ export class ResourceLibraryPageComponent {
         let lastId = '';
         for (const file of chosen) {
           const uploaded = await this.api.uploadFile(file, this.section());
-          const created = await this.api.create(uploaded.name, description, {
-            name: uploaded.name,
-            sha256: uploaded.sha256,
-          }, this.section());
+          const created = await this.api.create(
+            uploaded.name,
+            description,
+            {
+              name: uploaded.name,
+              sha256: uploaded.sha256,
+            },
+            this.section(),
+          );
           lastId = created.summary.id;
         }
         this.editorMode.set(null);
@@ -522,7 +533,11 @@ export class ResourceLibraryPageComponent {
     }
   }
 
-  protected async saveProfile(event: { name: string; description: string; file: File }): Promise<void> {
+  protected async saveProfile(event: {
+    name: string;
+    description: string;
+    file: File;
+  }): Promise<void> {
     this.busy.set(true);
     this.error.set('');
     try {
@@ -535,10 +550,15 @@ export class ResourceLibraryPageComponent {
         await this.loadDetails(id);
         this.notifications.show('Nouvelle version publiée.');
       } else {
-        const created = await this.api.create(event.name, event.description, {
-          name: uploaded.name,
-          sha256: uploaded.sha256,
-        }, 'subtitle-profile');
+        const created = await this.api.create(
+          event.name,
+          event.description,
+          {
+            name: uploaded.name,
+            sha256: uploaded.sha256,
+          },
+          'subtitle-profile',
+        );
         this.editorMode.set(null);
         await this.load();
         this.openResource(created.summary.id);

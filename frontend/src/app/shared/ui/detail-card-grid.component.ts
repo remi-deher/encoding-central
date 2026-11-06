@@ -8,6 +8,7 @@ import {
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { CdkAccordion, CdkAccordionItem } from '@angular/cdk/accordion';
+import { EmptyStateComponent } from './empty-state/empty-state.component';
 
 export type DetailCardTone = 'neutral' | 'accent' | 'success' | 'warning';
 export type DetailCardIcon =
@@ -43,7 +44,7 @@ export interface DetailCard {
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-detail-card-grid',
-  imports: [CdkAccordion, CdkAccordionItem, NgTemplateOutlet],
+  imports: [CdkAccordion, CdkAccordionItem, NgTemplateOutlet, EmptyStateComponent],
   template: `
     @if (cards().length) {
       <div
@@ -203,7 +204,7 @@ export interface DetailCard {
         }
       </div>
     } @else {
-      <p class="detail-card-empty-state" role="status">{{ emptyMessage() }}</p>
+      <app-empty-state icon="info" [title]="emptyMessage()" />
     }
   `,
   styles: `
@@ -222,7 +223,9 @@ export interface DetailCard {
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-lg);
       background: var(--surface-container-low);
-      transition: border-color 120ms ease, box-shadow 120ms ease;
+      transition:
+        border-color 120ms ease,
+        box-shadow 120ms ease;
     }
     .detail-card_expanded {
       grid-column: 1 / -1;
@@ -311,15 +314,21 @@ export interface DetailCard {
       font-weight: 600;
       line-height: 1.25;
     }
-    .detail-card-status_success, .detail-card-tag_success, .detail-card-detail_success {
+    .detail-card-status_success,
+    .detail-card-tag_success,
+    .detail-card-detail_success {
       background: var(--success-soft);
       color: var(--success);
     }
-    .detail-card-status_warning, .detail-card-tag_warning, .detail-card-detail_warning {
+    .detail-card-status_warning,
+    .detail-card-tag_warning,
+    .detail-card-detail_warning {
       background: var(--warning-soft);
       color: var(--warning);
     }
-    .detail-card-status_accent, .detail-card-tag_accent, .detail-card-detail_accent {
+    .detail-card-status_accent,
+    .detail-card-tag_accent,
+    .detail-card-detail_accent {
       background: var(--accent-soft);
       color: var(--accent-strong);
     }
@@ -382,18 +391,11 @@ export interface DetailCard {
       font-weight: 600;
       text-align: right;
     }
-    .detail-card-empty,
-    .detail-card-empty-state {
+    .detail-card-empty {
       margin: 0;
       color: var(--text-muted);
-      font-size: var(--font-body, 14px);
+      font-size: var(--font-body);
       line-height: 1.5;
-    }
-    .detail-card-empty-state {
-      padding: var(--space-4, 16px);
-      border: 1px dashed var(--border-subtle);
-      border-radius: var(--radius-md, 12px);
-      background: var(--surface-muted);
     }
     @media (max-width: 600px) {
       .detail-card-grid,

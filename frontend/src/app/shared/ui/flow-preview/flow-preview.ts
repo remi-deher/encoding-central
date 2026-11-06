@@ -111,7 +111,7 @@ export class FlowPreviewComponent {
       );
       const colors = descriptor
         ? flowComponentColors(descriptor)
-        : { color: '#555e6b', background: '#f0f2f5' };
+        : { color: 'var(--text-muted)', background: 'var(--surface-container-high)' };
       return {
         id: node.id,
         title: node.name || descriptor?.name || node.component.componentId,

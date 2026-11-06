@@ -32,27 +32,8 @@ export const SETUP_SURFACE_STYLES = `
     color: var(--text-secondary);
     line-height: 1.5;
   }
-  label {
-    margin-bottom: calc(var(--space-3) * -1);
-    font-size: var(--font-label);
-    font-weight: 700;
-  }
-  input {
-    min-height: 48px;
-    box-sizing: border-box;
-    padding: 10px 14px;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-md);
-    background: transparent;
-    color: var(--text-primary);
-    font: inherit;
-  }
-  input:focus {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-  }
-  input[aria-invalid='true'] {
-    border-color: var(--danger);
+  mat-form-field {
+    width: 100%;
   }
   .field-hint {
     color: var(--text-secondary);
@@ -67,7 +48,7 @@ export const SETUP_SURFACE_STYLES = `
     gap: var(--space-2);
     align-items: center;
   }
-  .field-row input {
+  .field-row mat-form-field {
     flex: 1;
   }
   .notice {
@@ -87,7 +68,7 @@ export const SETUP_SURFACE_STYLES = `
   }
   .summary dt {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: var(--font-label);
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;

@@ -146,6 +146,111 @@
 }
 
 .sheet-head-action-btn {
+  flex-shrink: 0;
+}
+
+.sheet-section {
+  align-content: start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  background: var(--surface-container);
+}
+
+.sheet-stack_overview .sheet-section-state {
+  grid-area: state;
+}
+
+.sheet-stack_overview .sheet-section-hardware {
+  grid-area: hardware;
+}
+
+.sheet-stack_overview .sheet-section-capabilities {
+  grid-area: capabilities;
+}
+
+.sheet-stack_overview .sheet-section-identity {
+  grid-area: identity;
+}
+
+.sheet-stack_overview .sheet-section:last-child {
+  border-radius: var(--radius-xl);
+}
+
+.sheet-notice {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+.sheet-notice.tone-warning {
+  background: var(--warning-soft);
+  border-color: var(--warning);
+}
+
+.sheet-notice.tone-danger {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+}
+
+.sheet-notice span {
+  color: var(--text-secondary);
+}
+
+.sheet {
+  display: grid;
+  gap: 3px;
+  padding: 4px;
+  border-radius: var(--radius-2xl);
+  background: var(--surface-container-low);
+}
+
+.sheet-head {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-xl) var(--radius-xl) var(--radius-sm) var(--radius-sm);
+  background: var(--surface-container);
+}
+
+.sheet-head-content {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.sheet-head-favicon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md, 8px);
+  flex-shrink: 0;
+  object-fit: contain;
+  margin-top: 2px;
+}
+
+.sheet-head-titles {
+  min-width: 0;
+  flex: 1;
+}
+
+.sheet-head h2 {
+  margin: 0;
+  font-size: var(--font-title-lg);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+
+.sheet-head p {
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+}
+
+.sheet-head-action-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;

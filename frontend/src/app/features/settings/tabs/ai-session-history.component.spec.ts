@@ -52,6 +52,17 @@ describe('AiSessionHistoryComponent', () => {
     expect(fixture.nativeElement.querySelector('nav button:last-child').disabled).toBe(true);
   });
 
+  it('affiche un état vide quand aucune session n’est enregistrée', () => {
+    api.listSessions.mockReturnValue(of({ items: [], offset: 0, hasMore: false }));
+    const fixture = TestBed.createComponent(AiSessionHistoryComponent);
+    fixture.componentInstance.refresh();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('app-empty-state')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain(
+      'Aucune session enregistrée sur ce worker.',
+    );
+  });
+
   it('consulte et ferme un échange sans interpréter le texte comme du HTML', () => {
     const fixture = TestBed.createComponent(AiSessionHistoryComponent);
     fixture.componentInstance.refresh();

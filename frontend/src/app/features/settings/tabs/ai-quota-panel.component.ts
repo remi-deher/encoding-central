@@ -8,18 +8,26 @@ import {
   signal,
   untracked,
 } from '@angular/core';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DecimalPipe } from '@angular/common';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { interval } from 'rxjs';
 import { AiToolsService } from '../../../shared/services/ai-tools.service';
 import { AiWorkerQuotas, AiQuotaSnapshot } from '../../../shared/models/ai-tools';
+import { AppDatePipe } from '../../../shared/pipes/app-date.pipe';
 import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-section.component';
+import { EmptyStateComponent } from '../../../shared/ui/empty-state/empty-state.component';
 
 @Component({
   selector: 'app-ai-quota-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ConfigurationSectionComponent, DatePipe, DecimalPipe, MatProgressBarModule],
+  imports: [
+    ConfigurationSectionComponent,
+    DecimalPipe,
+    EmptyStateComponent,
+    AppDatePipe,
+    MatProgressBarModule,
+  ],
   template: `
     <app-configuration-section
       title="Quotas des abonnements"
@@ -32,6 +40,9 @@ import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-
       </p>
       @if (error()) {
         <p role="status">{{ error() }}</p>
+      }
+      @if (loading()) {
+        <mat-progress-bar mode="indeterminate" aria-label="Chargement des quotas" />
       }
       @for (node of nodes(); track node.workerId) {
         <h4>{{ node.name }}</h4>
@@ -84,24 +95,24 @@ import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-
                   }
                   <p>
                     Réinitialisation :
-                    {{
-                      window.resetsAt
-                        ? (window.resetsAt | date: 'dd/MM/yyyy HH:mm')
-                        : 'Indisponible'
-                    }}
+                    {{ window.resetsAt ? (window.resetsAt | appDate) : 'Indisponible' }}
                   </p>
                 </div>
               }
               <p>
                 Dernière observation :
-                {{ quota.observedAt ? (quota.observedAt | date: 'dd/MM/yyyy HH:mm') : 'Aucune' }}
+                {{ quota.observedAt ? (quota.observedAt | appDate) : 'Aucune' }}
               </p>
             </article>
           }
         </div>
       } @empty {
         @if (!loading()) {
-          <p>Aucune observation de quota disponible.</p>
+          <app-empty-state
+            icon="clock"
+            title="Aucune observation"
+            message="Aucune observation de quota disponible."
+          />
         }
       }
     </app-configuration-section>

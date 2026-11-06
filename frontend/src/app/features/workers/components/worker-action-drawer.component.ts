@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -12,12 +11,11 @@ import { MatButtonModule } from '@angular/material/button';
 import { RecordFormComponent } from '../../../shared/ui/record-form.component';
 import { GuidedSetupComponent } from '../../../shared/ui/guided-setup.component';
 import { IconComponent } from '../../../shared/ui/icon.component';
+import { AppDatePipe } from '../../../shared/pipes/app-date.pipe';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { LibraryWorkerAccessFormComponent } from '../../../shared/ui/library-worker-access-form.component';
 import { DataTableComponent } from '../../../shared/ui/data-table.component';
-import {
-  centralAddressForm,
-  centralJoinSteps,
-} from '../../../shared/models/worker-management';
+import { centralAddressForm, centralJoinSteps } from '../../../shared/models/worker-management';
 import { AuthService } from '../../../core/auth/auth.service';
 import { WorkerDataStore } from '../worker-data.store';
 import { WorkerDetailStore } from '../worker-detail.store';
@@ -35,8 +33,9 @@ import { CREATE_LIBRARY_FORM_DATA } from '../worker-catalog.utils';
   selector: 'app-worker-action-drawer',
   imports: [
     MatButtonModule,
-    DatePipe,
+    AppDatePipe,
     IconComponent,
+    MatProgressBarModule,
     DataTableComponent,
     GuidedSetupComponent,
     RecordFormComponent,
@@ -62,9 +61,7 @@ export class WorkerActionDrawerComponent {
   readonly createLibraryFormData = CREATE_LIBRARY_FORM_DATA;
 
   private readonly recordForms = viewChildren(RecordFormComponent);
-  readonly actionRecordForm = computed(() =>
-    this.recordForms().find((form) => form.embedded()),
-  );
+  readonly actionRecordForm = computed(() => this.recordForms().find((form) => form.embedded()));
   readonly actionStep = computed(() => {
     const form = this.actionRecordForm();
     return form ? { current: form.stepIndex() + 1, total: form.stepCount() } : null;

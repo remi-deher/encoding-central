@@ -91,10 +91,10 @@
         />
 
         <div class="selection-actions">
-          <button matButton="outlined" type="button" (click)="selectAllVisibleNodes()">
+          <button matButton="text" type="button" (click)="selectAllVisibleNodes()">
             Tout sélectionner
           </button>
-          <button matButton="outlined" type="button" (click)="clearNodeSelection()">
+          <button matButton="text" type="button" (click)="clearNodeSelection()">
             Désélectionner
           </button>
         </div>
@@ -121,8 +121,8 @@
                 <div class="node-item-primary">
                   <span class="node-item-name">{{ formatNode(node) }}</span>
                   <app-status-badge
-                    [label]="node.status === 'online' ? 'En ligne' : 'Hors ligne'"
-                    [tone]="node.status === 'online' ? 'success' : 'neutral'"
+                    [label]="lifecycleBadge(node).label"
+                    [tone]="lifecycleBadge(node).tone"
                   />
                   @for (role of node.roles; track role) {
                     <span class="node-role-badge">{{
@@ -145,7 +145,10 @@
                     <span>· {{ Math.round(node.inventory!.memoryMb / 1024) }} Go RAM</span>
                   }
                   @if (node.capabilities.length) {
-                    <span>· {{ node.capabilities.length }} outil(s)</span>
+                    <span
+                      >· {{ node.capabilities.length }}
+                      {{ node.capabilities.length > 1 ? 'outils' : 'outil' }}</span
+                    >
                   }
                 </div>
               </div>
@@ -291,9 +294,8 @@
         <div class="preview-header">
           <span>Aperçu des workers correspondants</span>
           <span class="preview-count">
-            {{ matchedNodes().length }} worker{{ matchedNodes().length > 1 ? 's' : '' }} éligible{{
-              matchedNodes().length > 1 ? 's' : ''
-            }}
+            {{ matchedNodes().length }}
+            {{ matchedNodes().length > 1 ? 'workers éligibles' : 'worker éligible' }}
           </span>
         </div>
 
@@ -301,19 +303,15 @@
           <div class="preview-nodes">
             @for (n of matchedNodes(); track n.id) {
               <span class="preview-node-pill">
-                <span
-                  class="status-dot"
-                  [class.online]="n.status === 'online'"
-                  [class.offline]="n.status === 'offline'"
-                ></span>
+                <span class="status-dot" [attr.data-tone]="lifecycleBadge(n).tone"></span>
                 {{ formatNode(n) }}
               </span>
             }
           </div>
         } @else {
           <p class="preview-empty-note">
-            ⚠️ Aucun worker du central ne remplit actuellement ces critères. Le groupe sera vide
-            jusqu'à ce qu'un worker compatible soit détecté ou enrôlé.
+            <app-icon name="warning" /> Aucun worker du central ne remplit actuellement ces
+            critères. Le groupe sera vide jusqu'à ce qu'un worker compatible soit détecté ou enrôlé.
           </p>
         }
       </div>
@@ -395,7 +393,7 @@
 
   <!-- Actions -->
   <div class="editor-actions">
-    <button matButton="outlined" type="button" [disabled]="busy()" (click)="cancelled.emit()">
+    <button matButton="text" type="button" [disabled]="busy()" (click)="cancelled.emit()">
       Annuler
     </button>
     <button matButton="filled" type="submit" [disabled]="!canSave() || busy()">

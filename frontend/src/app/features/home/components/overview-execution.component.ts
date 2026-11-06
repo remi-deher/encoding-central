@@ -1,15 +1,16 @@
 import { IconComponent } from '../../../shared/ui/icon.component';
-import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
 import { ExecutionResponse, executionStateLabel } from '../../../shared/models/execution';
+import { executionTone } from '../../../shared/models/execution-tone';
+import { AppDatePipe } from '../../../shared/pipes/app-date.pipe';
 import { StatusBadgeComponent } from '../../../shared/ui/status-badge.component';
 
 @Component({
   selector: 'app-overview-execution',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [IconComponent, DatePipe, MatProgressBarModule, RouterLink, StatusBadgeComponent],
+  imports: [IconComponent, AppDatePipe, MatProgressBarModule, RouterLink, StatusBadgeComponent],
   template: `
     <article class="job">
       <header>
@@ -19,13 +20,7 @@ import { StatusBadgeComponent } from '../../../shared/ui/status-badge.component'
         </div>
         <app-status-badge
           [label]="stateLabel(execution())"
-          [tone]="
-            execution().state === 'succeeded'
-                ? 'success'
-                : execution().state === 'failed'
-                  ? 'danger'
-                  : 'neutral'
-          "
+          [tone]="executionTone(execution().state)"
         />
       </header>
       <div class="status">
@@ -44,7 +39,7 @@ import { StatusBadgeComponent } from '../../../shared/ui/status-badge.component'
       <footer>
         <span
           >{{ execution().worker ?? 'Worker non attribué' }} ·
-          {{ execution().updatedAt | date: 'dd/MM HH:mm' }}</span
+          {{ execution().updatedAt | appDate: 'short' }}</span
         ><a
           routerLink="/activity"
           [queryParams]="{
@@ -55,7 +50,7 @@ import { StatusBadgeComponent } from '../../../shared/ui/status-badge.component'
                   ? 'errors'
                   : 'active',
           }"
-          >Voir le traitement <app-icon name="outward"
+          >Voir l’exécution <app-icon name="outward"
         /></a>
       </footer>
     </article>
@@ -131,4 +126,5 @@ import { StatusBadgeComponent } from '../../../shared/ui/status-badge.component'
 export class OverviewExecutionComponent {
   readonly execution = input.required<ExecutionResponse>();
   protected readonly stateLabel = executionStateLabel;
+  protected readonly executionTone = executionTone;
 }

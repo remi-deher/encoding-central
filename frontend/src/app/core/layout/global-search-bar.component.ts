@@ -13,7 +13,7 @@ import {
 import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
 import { MatButtonModule } from '@angular/material/button';
 import { AuthService } from '../auth/auth.service';
-import { IconComponent } from '../../shared/ui/icon.component';
+import { IconComponent, IconName } from '../../shared/ui/icon.component';
 import {
   getSearchableNavigationItems,
   NavigationItem,
@@ -27,6 +27,7 @@ interface SearchEntry {
   readonly label: string;
   readonly description?: string;
   readonly group?: string;
+  readonly icon?: IconName;
   readonly glyph?: string;
   readonly path?: string;
   readonly run?: () => void;
@@ -69,7 +70,7 @@ interface SearchEntry {
           @for (action of visibleActions(); track action.id) {
             <button
               search-actions
-              mat-button
+              matButton="text"
               type="button"
               class="search-action-button has-divider"
               [attr.aria-label]="action.label"
@@ -121,9 +122,13 @@ interface SearchEntry {
                   (mouseenter)="activeIndex.set(index)"
                   (click)="activate(item)"
                 >
-                  <span class="global-search-result-glyph" aria-hidden="true">{{
-                    item.glyph || '⌕'
-                  }}</span>
+                  <span class="global-search-result-glyph" aria-hidden="true">
+                    @if (item.icon) {
+                      <app-icon [name]="item.icon" />
+                    } @else {
+                      {{ item.glyph || '⌕' }}
+                    }
+                  </span>
                   <span class="global-search-result-copy">
                     <span class="global-search-result-label">{{ item.label }}</span>
                     @if (item.description || item.group) {
@@ -162,9 +167,13 @@ interface SearchEntry {
                   (mouseenter)="activeIndex.set(pageResults().length + index)"
                   (click)="activate(item)"
                 >
-                  <span class="global-search-result-glyph" aria-hidden="true">{{
-                    item.glyph || '◇'
-                  }}</span>
+                  <span class="global-search-result-glyph" aria-hidden="true">
+                    @if (item.icon) {
+                      <app-icon [name]="item.icon" />
+                    } @else {
+                      {{ item.glyph || '◇' }}
+                    }
+                  </span>
                   <span class="global-search-result-copy">
                     <span class="global-search-result-label">{{ item.label }}</span>
                     @if (item.description || item.group) {
