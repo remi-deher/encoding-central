@@ -1,8 +1,18 @@
-import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  inject,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { catchError, exhaustMap, of, timer } from 'rxjs';
 import { ConfigurationSectionComponent } from '../../shared/ui/configuration-section.component';
+import { PageHeaderComponent } from '../../shared/ui/page-header.component';
+import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
+import { AppDatePipe } from '../../shared/pipes/app-date.pipe';
 import { UpdatesService, UpdateStatus } from '../../shared/services/updates.service';
 import {
   PageShellContextService,
@@ -12,13 +22,19 @@ import {
 @Component({
   selector: 'app-updates-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, ConfigurationSectionComponent],
+  imports: [
+    AppDatePipe,
+    ConfigurationSectionComponent,
+    PageHeaderComponent,
+    EmptyStateComponent,
+    MatProgressBarModule,
+  ],
   template: `
-    <h1 class="visually-hidden">Mise à jour</h1>
+    <app-page-header title="Mises à jour" />
     <app-configuration-section title="Version installée" [badge]="data()?.installedVersion ?? ''">
       <div role="status" aria-live="polite">
         @if (loading()) {
-          <p>Vérification en cours…</p>
+          <mat-progress-bar mode="indeterminate" aria-label="Vérification des mises à jour" />
         }
         @if (error()) {
           <p>
@@ -45,7 +61,7 @@ import {
             }
           }
           @if (status.checkedAt) {
-            <p>Dernière vérification : {{ status.checkedAt | date: 'dd/MM/yyyy HH:mm' }}.</p>
+            <p>Dernière vérification : {{ status.checkedAt | appDate: 'short' }}.</p>
           }
         }
       </div>
@@ -58,17 +74,19 @@ import {
           [badge]="release.version === status.installedVersion ? 'Installée sur ce worker' : ''"
           [attr.id]="'release-' + release.version"
         >
-          <p>{{ release.publishedAt | date: 'dd/MM/yyyy' }}</p>
+          <p>{{ release.publishedAt | appDate: 'date' }}</p>
           <p class="release-notes">{{ release.notes }}</p>
         </app-configuration-section>
       } @empty {
-        <p>
-          {{
+        <app-empty-state
+          icon="search"
+          [title]="searchQuery().trim() ? 'Aucun résultat' : 'Aucune note de version'"
+          [message]="
             searchQuery().trim()
-              ? 'Aucune note de version ne correspond à « ' + searchQuery() + ' ». '
+              ? 'Aucune note ne correspond à « ' + searchQuery() + ' ». '
               : 'Aucune note de version embarquée.'
-          }}
-        </p>
+          "
+        />
       }
     }
   `,
@@ -144,11 +162,12 @@ export class UpdatesPageComponent {
         label: `Version ${release.version}`,
         description: release.notes.split('\n').find((line) => line.trim()) ?? release.publishedAt,
         group: 'Notes de version',
-        glyph: '↻',
-        run: () => document.getElementById(`release-${release.version}`)?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start',
-        }),
+        icon: 'refresh',
+        run: () =>
+          document.getElementById(`release-${release.version}`)?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+          }),
       }));
   }
 }

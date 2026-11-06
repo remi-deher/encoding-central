@@ -22,6 +22,7 @@ import { FlowDocument } from '../../../shared/models/flow-validation';
 import { FlowSimulation } from '../../../shared/services/flow-simulation';
 import { NotificationService } from '../../../shared/services/notification.service';
 import { createUuid } from '../../../shared/utils/uuid';
+import { IconComponent } from '../../../shared/ui/icon.component';
 
 export interface FlowAiAssistantPanelData {
   readonly mediaType: string;
@@ -43,16 +44,12 @@ export interface FlowAiAssistantPanelData {
     MatFormFieldModule,
     MatInputModule,
     MatProgressSpinnerModule,
+    IconComponent,
   ],
   template: `
     <section class="app-dialog flow-ai-dialog">
       <header class="app-dialog-header">
-        <span class="assistant-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none">
-            <path d="m12 2 1.55 6.45L20 10l-6.45 1.55L12 18l-1.55-6.45L4 10l6.45-1.55L12 2Z" />
-            <path d="m19 16 .7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7L19 16Z" />
-          </svg>
-        </span>
+        <app-icon class="assistant-mark" name="auto_awesome" />
         <div class="app-dialog-heading">
           <p class="app-dialog-eyebrow">Assistant de flow</p>
           <h2>Assistant de flow</h2>
@@ -72,7 +69,7 @@ export interface FlowAiAssistantPanelData {
           aria-label="Fermer l’assistant"
           (click)="close()"
         >
-          <span aria-hidden="true">×</span>
+          <app-icon name="close" />
         </button>
       </header>
 
@@ -87,15 +84,10 @@ export interface FlowAiAssistantPanelData {
               type="button"
               (click)="setMode('generate')"
             >
-              <span class="mode-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <rect x="4" y="4" width="16" height="16" rx="3" />
-                  <path d="M12 8v8M8 12h8" />
-                </svg>
-              </span>
+              <app-icon class="mode-icon" name="add" />
               <span class="mode-copy">
                 <strong>Nouveau flow</strong>
-                <span>Créer un traitement à partir d’une consigne</span>
+                <span>Créer un flow à partir d’une consigne</span>
               </span>
               <span class="mode-indicator" aria-hidden="true"></span>
             </button>
@@ -106,15 +98,7 @@ export interface FlowAiAssistantPanelData {
               type="button"
               (click)="setMode('refactor')"
             >
-              <span class="mode-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M4 19.5V20h.5l11.2-11.2-1.5-1.5L3 18.5v1Z" />
-                  <path
-                    d="m17.2 4.8 2 2a1.4 1.4 0 0 1 0 2l-1.5 1.5-4-4L15.2 4.8a1.4 1.4 0 0 1 2 0Z"
-                  />
-                  <path d="M4 4h7M4 8h4M4 12h2" />
-                </svg>
-              </span>
+              <app-icon class="mode-icon" name="edit" />
               <span class="mode-copy">
                 <strong>Modifier ce flow</strong>
                 <span>Ajuster les étapes du flow existant</span>
@@ -128,12 +112,7 @@ export interface FlowAiAssistantPanelData {
               type="button"
               (click)="setMode('explain')"
             >
-              <span class="mode-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M9.8 9a2.3 2.3 0 1 1 3.9 1.7c-1.2 1-1.7 1.4-1.7 2.8M12 17h.01" />
-                </svg>
-              </span>
+              <app-icon class="mode-icon" name="help" />
               <span class="mode-copy">
                 <strong>Expliquer ce flow</strong>
                 <span>Comprendre les étapes et leurs liens</span>
@@ -327,16 +306,7 @@ export interface FlowAiAssistantPanelData {
           [disabled]="loading() || proposal() || (mode() !== 'explain' && !prompt().trim())"
           (click)="submit()"
         >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            @if (mode() === 'explain') {
-              <circle cx="12" cy="12" r="9" />
-              <path d="M3 12s3.2-5 9-5 9 5 9 5-3.2 5-9 5-9-5-9-5Z" />
-              <circle cx="12" cy="12" r="2" />
-            } @else {
-              <path d="m12 2 1.55 6.45L20 10l-6.45 1.55L12 18l-1.55-6.45L4 10l6.45-1.55L12 2Z" />
-              <path d="m19 16 .7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7L19 16Z" />
-            }
-          </svg>
+          <app-icon [name]="mode() === 'explain' ? 'visibility' : 'auto_awesome'" />
           {{
             mode() === 'explain'
               ? 'Analyser le flow'

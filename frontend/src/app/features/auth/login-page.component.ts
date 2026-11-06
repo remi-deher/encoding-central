@@ -3,11 +3,13 @@ import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angula
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { safeReturnUrl } from '../../shared/models/auth';
 import { NotificationService } from '../../shared/services/notification.service';
 import { AccessTemplateComponent } from '../../shared/templates/access-template.component';
+import { IconComponent } from '../../shared/ui/icon.component';
 
 /** Connexion à l'application. */
 @Component({
@@ -18,7 +20,9 @@ import { AccessTemplateComponent } from '../../shared/templates/access-template.
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,
+    MatTooltipModule,
     AccessTemplateComponent,
+    IconComponent,
   ],
   template: `
     <app-access-template
@@ -58,29 +62,19 @@ import { AccessTemplateComponent } from '../../shared/templates/access-template.
           />
           <button
             matSuffix
+            matIconButton
             type="button"
             class="auth-eye"
             [attr.aria-label]="
               passwordVisible() ? 'Masquer le mot de passe' : 'Afficher le mot de passe'
             "
             [attr.aria-pressed]="passwordVisible()"
+            [matTooltip]="
+              passwordVisible() ? 'Masquer le mot de passe' : 'Afficher le mot de passe'
+            "
             (click)="passwordVisible.set(!passwordVisible())"
           >
-            <svg
-              viewBox="0 0 24 24"
-              width="20"
-              height="20"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              aria-hidden="true"
-            >
-              <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
-              <circle cx="12" cy="12" r="3" />
-              @if (passwordVisible()) {
-                <path d="M4 4l16 16" />
-              }
-            </svg>
+            <app-icon [name]="passwordVisible() ? 'visibility_off' : 'visibility'" />
           </button>
         </mat-form-field>
 
@@ -100,19 +94,9 @@ import { AccessTemplateComponent } from '../../shared/templates/access-template.
       width: 100%;
     }
     .auth-eye {
-      display: grid;
-      place-items: center;
-      width: 40px;
-      height: 40px;
-      margin-right: 4px;
-      border: 0;
-      border-radius: 50%;
-      background: none;
-      color: var(--text-muted);
-      cursor: pointer;
-    }
-    .auth-eye:hover {
-      background: var(--surface-container-high);
+      width: 48px;
+      height: 48px;
+      flex-shrink: 0;
     }
     .auth-submit {
       width: 100%;

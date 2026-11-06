@@ -26,6 +26,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatChipsModule } from '@angular/material/chips';
 import {
   DataTableListActionEvent,
   DataTableActionEvent,
@@ -91,6 +92,7 @@ const MEDIA_TYPE_TONES = {
     MatButtonModule,
     MatCheckboxModule,
     MatMenuModule,
+    MatChipsModule,
     RecordFormComponent,
     DrawerActionButtonComponent,
     FlowPreviewComponent,
@@ -599,7 +601,7 @@ export class FlowCatalogPageComponent {
                   : flow.backupStatus === 'failed'
                     ? 'En échec'
                     : 'En attente',
-            modifiedAt: new Date(flow.updatedAt).toLocaleString('fr-FR'),
+            modifiedAt: formatShortDateTime(flow.updatedAt),
             modifiedOrder: Date.parse(flow.updatedAt),
           })),
         }),
@@ -663,9 +665,6 @@ export class FlowCatalogPageComponent {
       count: this.records().filter((flow) => flow.category === type.value).length,
     })),
   );
-  protected toggleType(type: MediaType): void {
-    this.typeFilter.update((current) => (current === type ? null : type));
-  }
   protected readonly emptyState: CatalogEmptyState = {
     icon: '▶',
     eyebrow: 'FLOWS',
@@ -754,7 +753,7 @@ export class FlowCatalogPageComponent {
         label: flow.name,
         description: `${flow.mediaType} · ${flow.status}`,
         group: 'Flows',
-        glyph: '▶',
+        icon: 'flow',
         run: () => this.onFlowOpen(flow.id),
       }));
   }

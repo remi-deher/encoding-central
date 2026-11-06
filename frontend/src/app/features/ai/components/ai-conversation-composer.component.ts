@@ -1,7 +1,10 @@
 import { ChangeDetectionStrategy, Component, input, model, output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { IconComponent } from '../../../shared/ui/icon.component';
 import { AiAssistantModelOption } from '../../../shared/models/ai-tools';
 import { AiModelSelectorComponent } from './ai-model-selector.component';
@@ -15,7 +18,10 @@ export const AI_ASSISTANT_FILE_ACCEPT =
   imports: [
     FormsModule,
     MatButtonModule,
+    MatFormFieldModule,
+    MatInputModule,
     MatMenuModule,
+    MatTooltipModule,
     IconComponent,
     AiModelSelectorComponent,
   ],
@@ -24,40 +30,43 @@ export const AI_ASSISTANT_FILE_ACCEPT =
       <div class="prompt-area">
         @if (attachmentName()) {
           <div class="file-attachment">
-            <span aria-hidden="true">📎</span>
+            <app-icon name="attach_file" />
             <span class="file-name">{{ attachmentName() }}</span>
             <button
-              mat-icon-button
+              matIconButton
               type="button"
               aria-label="Retirer le fichier joint"
               [disabled]="locked()"
               (click)="clearAttachment()"
             >
-              ×
+              <app-icon name="close" />
             </button>
           </div>
         }
-        <textarea
-          class="prompt-input"
-          name="prompt"
-          aria-label="Votre question"
-          placeholder="Envoyer un message à l’Assistant"
-          rows="2"
-          maxlength="4000"
-          [ngModel]="text()"
-          (ngModelChange)="text.set($event)"
-          [disabled]="locked()"
-          (keydown)="onKeydown($event)"
-        ></textarea>
+        <mat-form-field class="prompt-field" appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Votre question</mat-label>
+          <textarea
+            matInput
+            class="prompt-input"
+            name="prompt"
+            placeholder="Envoyer un message à l’Assistant"
+            rows="2"
+            maxlength="4000"
+            [ngModel]="text()"
+            (ngModelChange)="text.set($event)"
+            [disabled]="locked()"
+            (keydown)="onKeydown($event)"
+          ></textarea>
+        </mat-form-field>
       </div>
       <div class="composer-tools">
         <div class="composer-attachments">
           <button
-            mat-icon-button
+            matIconButton
             type="button"
             class="attach-button"
             aria-label="Joindre un fichier ou une ressource"
-            title="Joindre un fichier ou une ressource"
+            matTooltip="Joindre un fichier ou une ressource"
             [disabled]="locked()"
             [matMenuTriggerFor]="attachMenu"
           >
@@ -67,7 +76,7 @@ export const AI_ASSISTANT_FILE_ACCEPT =
         </div>
         <mat-menu #attachMenu="matMenu">
           <button mat-menu-item type="button" (click)="fileInput.click()">
-            <app-icon name="attach" />
+            <app-icon name="attach_file" />
             <span>Joindre un fichier</span>
           </button>
           <button mat-menu-item type="button" (click)="resourceChosen.emit('flow')">
@@ -110,36 +119,24 @@ export const AI_ASSISTANT_FILE_ACCEPT =
         />
         @if (busy()) {
           <button
-            mat-mini-fab
-            class="send-button"
+            matButton="outlined"
+            class="send-button cancel-button"
             type="button"
             aria-label="Interrompre"
             [disabled]="cancelling()"
             (click)="cancel.emit()"
           >
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
-              <rect x="6" y="6" width="12" height="12" rx="2" />
-            </svg>
+            <app-icon name="close" />
           </button>
         } @else {
           <button
-            mat-mini-fab
+            matButton="filled"
             class="send-button"
             type="submit"
             [attr.aria-label]="resuming() ? 'Reprendre la demande' : 'Envoyer'"
             [disabled]="!canSend()"
           >
-            <svg
-              viewBox="0 0 24 24"
-              width="20"
-              height="20"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              aria-hidden="true"
-            >
-              <path d="M12 19V5m-6 6 6-6 6 6" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
+            <app-icon name="up" />
           </button>
         }
       </div>
@@ -173,7 +170,9 @@ export const AI_ASSISTANT_FILE_ACCEPT =
     .composer:focus-within {
       border-color: var(--accent-strong);
       background: var(--surface-container-high);
-      box-shadow: 0 0 0 1px var(--accent-strong), var(--elevation-1);
+      box-shadow:
+        0 0 0 1px var(--accent-strong),
+        var(--elevation-1);
     }
     .prompt-area {
       display: grid;
@@ -272,6 +271,13 @@ export const AI_ASSISTANT_FILE_ACCEPT =
       background: var(--accent-strong);
       color: var(--on-accent, #fff);
     }
+    .cancel-button {
+      background: var(--surface-container-highest);
+      color: var(--danger);
+    }
+    .prompt-field {
+      width: 100%;
+    }
     @container (max-width: 560px) {
       .composer-tools {
         flex-wrap: wrap;
@@ -294,16 +300,25 @@ export const AI_ASSISTANT_FILE_ACCEPT =
         grid-row: 1;
         margin: 0 0 var(--space-1);
       }
-      .composer-attachments { grid-column: 1; grid-row: 2; }
+      .composer-attachments {
+        grid-column: 1;
+        grid-row: 2;
+      }
       .send-button {
         grid-column: 2;
         grid-row: 2;
       }
-      .composer-hint { display: none; }
-      .composer { padding: var(--space-2) var(--space-3); }
+      .composer-hint {
+        display: none;
+      }
+      .composer {
+        padding: var(--space-2) var(--space-3);
+      }
     }
     @media (prefers-reduced-motion: reduce) {
-      .composer { transition: none; }
+      .composer {
+        transition: none;
+      }
     }
   `,
 })

@@ -71,7 +71,9 @@
         aria-label="Actions groupées sur les fichiers sélectionnés"
       >
         <span class="selection-count" aria-live="polite">
-          {{ selectedCount() }} fichier{{ selectedCount() > 1 ? 's' : '' }} sélectionné{{ selectedCount() > 1 ? 's' : '' }}
+          {{ selectedCount() }} fichier{{ selectedCount() > 1 ? 's' : '' }} sélectionné{{
+            selectedCount() > 1 ? 's' : ''
+          }}
         </span>
         <div class="selection-actions">
           @if (selectedRetriableFiles().length > 0) {
@@ -83,7 +85,7 @@
               (click)="runBulkRetry()"
             >
               <app-icon name="refresh" />
-              <span>Relancer la tâche ({{ selectedRetriableFiles().length }})</span>
+              <span>Relancer les exécutions ({{ selectedRetriableFiles().length }})</span>
             </button>
           }
           @if (selectedCancelableFiles().length > 0) {
@@ -95,15 +97,10 @@
               (click)="runBulkCancel()"
             >
               <app-icon name="close" />
-              <span>Annuler la tâche ({{ selectedCancelableFiles().length }})</span>
+              <span>Annuler les exécutions ({{ selectedCancelableFiles().length }})</span>
             </button>
           }
-          <button
-            matButton="text"
-            type="button"
-            class="bulk-action-btn"
-            (click)="clearSelection()"
-          >
+          <button matButton="text" type="button" class="bulk-action-btn" (click)="clearSelection()">
             Tout désélectionner
           </button>
         </div>
@@ -111,16 +108,19 @@
     }
 
     @if (!files().length) {
-      <div class="empty-state">
-        <h2>{{ pageState().status === 'error' ? 'Données indisponibles' : 'Aucun fichier' }}</h2>
-        <p>
-          @if (pageState().status === 'error') {
-            La liste sera actualisée dès que le serveur répond.
-          } @else {
-            Aucun fichier ne correspond à cet état et à ces filtres.
-          }
-        </p>
-      </div>
+      @if (pageState().status === 'loading') {
+        <mat-progress-bar mode="indeterminate" aria-label="Chargement de l’activité" />
+      } @else {
+        <app-empty-state
+          [icon]="pageState().status === 'error' ? 'error' : 'search'"
+          [title]="pageState().status === 'error' ? 'Données indisponibles' : 'Aucun fichier'"
+          [message]="
+            pageState().status === 'error'
+              ? 'La liste sera actualisée dès que le serveur répond.'
+              : 'Aucun fichier ne correspond à cet état et à ces filtres.'
+          "
+        />
+      }
     } @else {
       <div class="activity-list-header">
         <mat-checkbox
@@ -247,7 +247,7 @@
       type="button"
       class="header-action-btn"
       (click)="downloadExecutionLog()"
-      title="Télécharger le journal de l’exécution (.log)"
+      matTooltip="Télécharger le journal de l’exécution (.log)"
     >
       <app-icon name="download" />
       <span>Télécharger le journal</span>
@@ -259,7 +259,7 @@
         class="header-action-btn"
         [disabled]="actionBusy()"
         (click)="resumeSelected()"
-        title="Remettre en file depuis la source"
+        matTooltip="Remettre en file depuis la source"
       >
         <app-icon name="refresh" />
         <span>Remettre en file</span>
