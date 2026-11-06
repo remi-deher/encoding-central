@@ -536,7 +536,7 @@ export class FlowTemplateLibraryPageComponent {
         label: template.name,
         description: `${template.sourceFlowName} · ${template.nodeCount} ${template.nodeCount > 1 ? 'composants' : 'composant'}`,
         group: 'Modèles de flow',
-        icon: 'flow',
+        icon: 'flow' as const,
         run: () => this.openTemplate({ id: template.id }),
       }));
   }

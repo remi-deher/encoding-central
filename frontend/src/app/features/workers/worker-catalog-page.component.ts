@@ -241,7 +241,7 @@ export class WorkerCatalogPageComponent {
           label: group.name,
           description: group.description || 'Groupe de workers',
           group: 'Groupes de workers',
-          icon: 'folder',
+          icon: 'folder' as const,
           run: () => this.groups.openGroupDetail(group),
         }));
     }
@@ -262,7 +262,7 @@ export class WorkerCatalogPageComponent {
           label: formatWorkerLabel(node.name, node.displayName),
           description: `${NODE_LIFECYCLE_LABELS[workerLifecycle(node)]} · ${node.roles.map((role: WorkerRole) => NODE_ROLE_LABELS[role]).join(' · ')}`,
           group: 'Workers du central',
-          icon: 'server',
+          icon: 'server' as const,
           run: () => this.data.openNodeCard(node.id),
         }));
     }
@@ -274,7 +274,7 @@ export class WorkerCatalogPageComponent {
             label: formatWorkerLabel(local.name, local.displayName),
             description: 'Ce worker',
             group: 'Worker local',
-            icon: 'server',
+            icon: 'server' as const,
             run: () => this.pageTab.set('node'),
           },
         ]

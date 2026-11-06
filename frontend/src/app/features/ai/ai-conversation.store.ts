@@ -141,7 +141,7 @@ export class AiConversationStore {
       label: conversation.title,
       description: `${conversation.provider} · ${conversation.source.label}`,
       group: 'Conversations IA',
-      icon: 'auto_awesome',
+      icon: 'auto_awesome' as const,
       run: () => this.openConversation(conversation.id),
     }));
     const resultIds = new Set(knownMatches.map((conversation) => conversation.id));
@@ -153,7 +153,7 @@ export class AiConversationStore {
         label: result.title,
         description: result.snippet,
         group: 'Conversations IA',
-        icon: result.turnIndex === null ? 'auto_awesome' : 'document',
+        icon: result.turnIndex === null ? ('auto_awesome' as const) : ('document' as const),
         run: () =>
           this.openConversation(
             result.conversationId,

@@ -753,7 +753,7 @@ export class FlowCatalogPageComponent {
         label: flow.name,
         description: `${flow.mediaType} · ${flow.status}`,
         group: 'Flows',
-        icon: 'flow',
+        icon: 'flow' as const,
         run: () => this.onFlowOpen(flow.id),
       }));
   }

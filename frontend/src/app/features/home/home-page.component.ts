@@ -330,7 +330,7 @@ export class HomePageComponent {
         label: node.displayName?.trim() || node.name,
         description: `${node.status === 'online' ? 'En ligne' : 'Hors ligne'} · ${node.roles.join(' · ')}`,
         group: 'Workers',
-        icon: 'server',
+        icon: 'server' as const,
         path: '/workers?tab=cluster',
       }));
     const executions = [
@@ -346,7 +346,7 @@ export class HomePageComponent {
         label: item.media,
         description: `${item.library} · ${item.flow}`,
         group: item.state === 'succeeded' ? 'Exécutions terminées' : 'Exécutions en cours',
-        icon: 'video',
+        icon: 'video' as const,
         path: '/activity',
       }));
     const conversations = this.aiConversations()
@@ -357,7 +357,7 @@ export class HomePageComponent {
         label: item.title,
         description: `${this.providerLabel(item.provider)} · ${item.source.label}`,
         group: 'Conversations IA',
-        icon: 'auto_awesome',
+        icon: 'auto_awesome' as const,
         path: '/ai/assistant',
       }));
     return [...nodes, ...executions, ...conversations].slice(0, 8);

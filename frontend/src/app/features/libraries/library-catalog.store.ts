@@ -127,7 +127,7 @@ export class LibraryCatalogStore {
         label: library.name,
         description: `${library.state} · ${library.assignedFlow}`,
         group: 'Bibliothèques',
-        icon: 'library',
+        icon: 'library' as const,
         run: () => this.onLibraryOpen({ id: library.id }),
       }));
   }

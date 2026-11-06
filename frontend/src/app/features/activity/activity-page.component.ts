@@ -915,7 +915,7 @@ export class ActivityPageComponent {
         label: baseName(file.relativePath),
         description: `${file.library} · ${this.statusLabel(file.status)}`,
         group: 'Activité',
-        icon: 'video',
+        icon: 'video' as const,
         run: () => this.open(file),
       }));
   }

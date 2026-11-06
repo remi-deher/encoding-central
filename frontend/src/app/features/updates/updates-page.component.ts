@@ -162,7 +162,7 @@ export class UpdatesPageComponent {
         label: `Version ${release.version}`,
         description: release.notes.split('\n').find((line) => line.trim()) ?? release.publishedAt,
         group: 'Notes de version',
-        icon: 'refresh',
+        icon: 'refresh' as const,
         run: () =>
           document.getElementById(`release-${release.version}`)?.scrollIntoView({
             behavior: 'smooth',
