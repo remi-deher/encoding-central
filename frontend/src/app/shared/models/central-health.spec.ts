@@ -16,7 +16,12 @@ function node(id: string, extra: Partial<WorkerResponse> = {}): WorkerResponse {
 }
 const library = { id: 'l1', name: 'Films', isActive: true } as LibraryResponse;
 const access = (nodeId: string): LibraryWorkerAccessResponse =>
-  ({ libraryId: 'l1', workerId: nodeId, mode: 'direct', isEnabled: true }) as LibraryWorkerAccessResponse;
+  ({
+    libraryId: 'l1',
+    workerId: nodeId,
+    mode: 'direct',
+    isEnabled: true,
+  }) as LibraryWorkerAccessResponse;
 
 describe('assessClusterHealth', () => {
   it('uses one neutral tone for offline workers and success for online workers', () => {
