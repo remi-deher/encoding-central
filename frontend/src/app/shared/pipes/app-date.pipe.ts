@@ -8,7 +8,10 @@ import {
 
 @Pipe({ name: 'appDate', standalone: true, pure: true })
 export class AppDatePipe implements PipeTransform {
-  transform(value: string | number | Date | null | undefined, format: DateFormat = 'short'): string {
+  transform(
+    value: string | number | Date | null | undefined,
+    format: DateFormat = 'short',
+  ): string {
     switch (format) {
       case 'relative':
         return formatRelativeTime(value);

@@ -56,9 +56,7 @@ describe('date-format', () => {
 
   describe('shared short and date-only formats', () => {
     it('formats date and time as dd/MM/yyyy HH:mm in French', () => {
-      expect(formatShortDateTime('2026-10-18T10:04:00Z')).toMatch(
-        /^\d{2}\/\d{2}\/2026 \d{2}:04$/,
-      );
+      expect(formatShortDateTime('2026-10-18T10:04:00Z')).toMatch(/^\d{2}\/\d{2}\/2026 \d{2}:04$/);
       expect(formatFullDateTime('2026-10-18T10:04:00Z')).toBe(
         formatShortDateTime('2026-10-18T10:04:00Z'),
       );

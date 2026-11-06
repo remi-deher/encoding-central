@@ -19,7 +19,8 @@ function formatParts(value: string | number | Date | null | undefined, withTime:
     year: 'numeric',
     ...(withTime ? { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' as const } : {}),
   }).formatToParts(date);
-  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value;
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value;
   const formattedDate = `${part('day')}/${part('month')}/${part('year')}`;
   return withTime ? `${formattedDate} ${part('hour')}:${part('minute')}` : formattedDate;
 }
