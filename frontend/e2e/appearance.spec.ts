@@ -87,6 +87,8 @@ test('populated tools stay readable in four palettes and both modes without mobi
       })
       .click();
     await page.keyboard.press('Escape');
+    // Sur mobile, le menu « Plus » est une feuille modale : la fermer aussi.
+    await page.keyboard.press('Escape');
     colours.push(
       await page.evaluate(() =>
         getComputedStyle(document.documentElement).getPropertyValue('--mat-sys-primary'),
