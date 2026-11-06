@@ -203,7 +203,7 @@ import { aiEffortLabel, aiModelKey, aiTypeLabel } from './ai-model-selection';
       padding: var(--space-4);
       border-radius: var(--radius-xl);
       background: var(--surface-container-high);
-      box-shadow: var(--shadow-floating, 0 12px 36px rgb(0 0 0 / 28%));
+      box-shadow: var(--shadow-floating);
       opacity: 0;
       visibility: hidden;
       pointer-events: none;
