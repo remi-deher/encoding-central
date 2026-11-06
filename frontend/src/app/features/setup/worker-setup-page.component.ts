@@ -433,11 +433,6 @@ export class WorkerSetupPageComponent {
   }
 
   protected async login(): Promise<void> {
-    if (this.form.controls.username.invalid || this.form.controls.password.invalid) {
-      this.form.controls.username.markAsTouched();
-      this.form.controls.password.markAsTouched();
-      return;
-    }
     this.busy.set(true);
     this.errorMessage.set(null);
     try {

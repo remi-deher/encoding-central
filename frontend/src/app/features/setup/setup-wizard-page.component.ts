@@ -6,9 +6,9 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { HttpClient } from '@angular/common/http';
-import { catchError, exhaustMap, of, timeout, timer } from 'rxjs';
+import { catchError, exhaustMap, map, of, timeout, timer } from 'rxjs';
 import { SetupWorkerSheet } from '../../shared/models/local-worker';
 import { CommonModule, DOCUMENT } from '@angular/common';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -309,10 +309,15 @@ export class SetupWizardPageComponent {
     }),
     adminConfirm: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
   });
-  protected readonly nodeName = () => this.form.controls.nodeName.value;
-  protected readonly adminUsername = () => this.form.controls.adminUsername.value;
-  protected readonly adminPassword = () => this.form.controls.adminPassword.value;
-  protected readonly adminConfirm = () => this.form.controls.adminConfirm.value;
+  /** Valeurs du formulaire en signal : les computed ci-dessous se recalculent à chaque saisie. */
+  private readonly formValue = toSignal(
+    this.form.valueChanges.pipe(map(() => this.form.getRawValue())),
+    { initialValue: this.form.getRawValue() },
+  );
+  protected readonly nodeName = () => this.formValue().nodeName;
+  protected readonly adminUsername = () => this.formValue().adminUsername;
+  protected readonly adminPassword = () => this.formValue().adminPassword;
+  protected readonly adminConfirm = () => this.formValue().adminConfirm;
   protected readonly passwordVisible = signal(false);
   protected readonly adminSubmitted = signal(false);
   protected readonly accountCreated = signal(false);
