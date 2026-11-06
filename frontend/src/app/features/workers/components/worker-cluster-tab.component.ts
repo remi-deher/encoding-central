@@ -32,7 +32,12 @@ import { WorkerOverviewCardComponent } from '../worker-overview-card.component';
     }
     @if (members.selectedMemberIds().size && isAdmin()) {
       <div class="member-selection" role="group" aria-label="Actions sur la sélection">
-        <span>{{ members.selectedMemberIds().size }} worker(s) sélectionné(s)</span>
+        <span
+          >{{ members.selectedMemberIds().size }}
+          {{
+            members.selectedMemberIds().size > 1 ? 'workers sélectionnés' : 'worker sélectionné'
+          }}</span
+        >
         <button
           matButton="outlined"
           type="button"
@@ -52,6 +57,7 @@ import { WorkerOverviewCardComponent } from '../worker-overview-card.component';
         <button
           matButton="outlined"
           type="button"
+          class="danger"
           [disabled]="members.bulkBusy()"
           (click)="members.runMemberBulk('delete')"
         >

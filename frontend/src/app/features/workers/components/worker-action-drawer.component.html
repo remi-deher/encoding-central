@@ -31,11 +31,14 @@
 } @else if (data.actionType() === 'library-access' && data.selectedNode(); as node) {
   @if (data.nodeLibraryLoading()) {
     <p role="status">Chargement de la configuration…</p>
+    <mat-progress-bar mode="indeterminate" />
   } @else {
     <app-library-node-access-form
       [libraryName]="detail.selectedNodeLibrary()?.name ?? ''"
       [nodes]="[detail.nodeAccessOption(node)]"
-      [initialAccesses]="detail.selectedNodeLibraryAccess() ? [detail.selectedNodeLibraryAccess()!] : []"
+      [initialAccesses]="
+        detail.selectedNodeLibraryAccess() ? [detail.selectedNodeLibraryAccess()!] : []
+      "
       [busy]="detail.accessFormBusy()"
       (saved)="detail.saveNodeLibraryAccess($event)"
       (cancelled)="enrollment.closeCreateNode()"
@@ -55,8 +58,8 @@
       <h3>Repérer le worker</h3>
       <p>
         Sur le worker à ajouter, ouvrez la page Workers puis « Cluster
-        <app-icon name="forward" /> Rejoindre un central » : ajoutez l’adresse de ce central
-        puis choisissez « Demander à rejoindre ». La demande apparaîtra ici pour vérification.
+        <app-icon name="forward" /> Rejoindre un central » : ajoutez l’adresse de ce central puis
+        choisissez « Demander à rejoindre ». La demande apparaîtra ici pour vérification.
       </p>
     </div>
     @if (enrollment.enrollmentRows().length) {
@@ -73,8 +76,8 @@
     } @else {
       <p class="enrollment-empty" role="status">
         Aucune demande en attente. Depuis le worker à ajouter, ouvrez Workers
-        <app-icon name="forward" /> Cluster <app-icon name="forward" /> Rejoindre un central.
-        Les demandes et leurs clés expirent après 10 minutes.
+        <app-icon name="forward" /> Cluster <app-icon name="forward" /> Rejoindre un central. Les
+        demandes et leurs clés expirent après 10 minutes.
       </p>
     }
     <button matButton="text" type="button" (click)="enrollment.showPairingKey()">
@@ -86,16 +89,16 @@
         @if (enrollment.enrollmentWindow().isOpen) {
           <p role="status">
             Un worker peut rejoindre ce central sans validation jusqu’à
-            {{ enrollment.enrollmentWindow().openUntil | date: 'HH:mm' }}. Fermez la fenêtre dès
-            que le worker est rattaché.
+            {{ enrollment.enrollmentWindow().openUntil | appDate }}. Fermez la fenêtre dès que le
+            worker est rattaché.
           </p>
           <button matButton="outlined" type="button" (click)="enrollment.closeEnrollmentWindow()">
             Fermer l’enrôlement direct
           </button>
         } @else {
           <p>
-            Fermé : la confirmation locale d’un worker est refusée par défaut. Ouvrez-la 10
-            minutes pour rattacher un worker sans clé.
+            Fermé : la confirmation locale d’un worker est refusée par défaut. Ouvrez-la 10 minutes
+            pour rattacher un worker sans clé.
           </p>
           <button matButton="outlined" type="button" (click)="enrollment.openEnrollmentWindow()">
             Ouvrir l’enrôlement direct (10 min)
@@ -108,15 +111,15 @@
           <p role="status">
             La prochaine demande de rattachement sera acceptée
             <strong>sans vérification</strong> jusqu’à
-            {{ enrollment.firstLink().expiresAt | date: 'HH:mm' }}, puis ce mode s’éteindra seul.
+            {{ enrollment.firstLink().expiresAt | appDate }}, puis ce mode s’éteindra seul.
           </p>
           <button matButton="outlined" type="button" (click)="enrollment.disableFirstLink()">
             Désactiver maintenant
           </button>
         } @else {
           <p>
-            Désactivé : chaque demande est comparée puis approuvée à la main. Activez-le 10
-            minutes pour accepter sans vérification la toute première demande qui arrive.
+            Désactivé : chaque demande est comparée puis approuvée à la main. Activez-le 10 minutes
+            pour accepter sans vérification la toute première demande qui arrive.
           </p>
           <button matButton="outlined" type="button" (click)="enrollment.enableFirstLink()">
             Accepter la prochaine demande (10 min)
