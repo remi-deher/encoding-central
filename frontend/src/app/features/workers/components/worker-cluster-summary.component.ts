@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
+import { IconComponent } from '../../../shared/ui/icon.component';
 import { WorkerDataStore } from '../worker-data.store';
 import { WorkerMembersStore } from '../worker-members.store';
 
@@ -6,18 +7,17 @@ import { WorkerMembersStore } from '../worker-members.store';
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-worker-cluster-summary',
+  imports: [IconComponent],
   template: `
     @if (active() && local.pending()) {
       <div class="node-alert-banner node-alert-banner_warning" role="status">
-        <span class="node-alert-icon" aria-hidden="true">!</span>
-        <p>
-          <strong>Rattachement en attente</strong> vers {{ local.targetName() }}.
-        </p>
+        <span class="node-alert-icon" aria-hidden="true"><app-icon name="clock" /></span>
+        <p><strong>Rattachement en attente</strong> vers {{ local.targetName() }}.</p>
       </div>
     }
     @if (active() && local.agentUnavailable() && !local.loading()) {
       <div class="node-alert-banner node-alert-banner_warning" role="status">
-        <span class="node-alert-icon" aria-hidden="true">!</span>
+        <span class="node-alert-icon" aria-hidden="true"><app-icon name="warning" /></span>
         <p>
           <strong>L’agent de ce worker ne répond pas.</strong>
           Le suivi du rattachement est indisponible tant que l’agent ne répond pas.
@@ -26,7 +26,7 @@ import { WorkerMembersStore } from '../worker-members.store';
     }
     @if (local.identityUnavailable() && !local.loading()) {
       <div class="node-alert-banner node-alert-banner_warning" role="alert">
-        <span class="node-alert-icon" aria-hidden="true">⚠️</span>
+        <span class="node-alert-icon" aria-hidden="true"><app-icon name="warning" /></span>
         <p>
           L’identité du central n’a pas pu être actualisée. Réessayez avant de modifier son
           appartenance.
@@ -35,23 +35,20 @@ import { WorkerMembersStore } from '../worker-members.store';
     }
     @if (active() && local.status()?.enrollmentFailure; as failure) {
       <div class="node-alert-banner node-alert-banner_danger" role="alert">
-        <span class="node-alert-icon" aria-hidden="true">✕</span>
+        <span class="node-alert-icon" aria-hidden="true"><app-icon name="error" /></span>
         <p>Rattachement annulé : {{ failure }}</p>
       </div>
     }
     @if (active() && clusterIdentity()) {
       <section class="node-cluster-summary" aria-label="Synthèse du central">
         <div class="node-cluster-identity">
-          <span class="node-cluster-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <rect x="3" y="4" width="18" height="6" rx="2" />
-              <rect x="3" y="14" width="18" height="6" rx="2" />
-              <path d="M7 7h.01M7 17h.01M11 7h7M11 17h7" />
-            </svg>
-          </span>
+          <span class="node-cluster-icon" aria-hidden="true"><app-icon name="server" /></span>
           <span class="node-cluster-name">
             <strong>{{ clusterName() }}</strong>
-            <small>{{ nodes().length }} workers membres</small>
+            <small
+              >{{ nodes().length }}
+              {{ nodes().length > 1 ? 'workers membres' : 'worker membre' }}</small
+            >
           </span>
         </div>
         @for (tile of summaryTiles(); track tile.label) {

@@ -16,6 +16,8 @@ import { WorkerDetailStore } from '../worker-detail.store';
 import { WorkerMembersStore } from '../worker-members.store';
 import { WorkerProcessingStore } from '../worker-processing.store';
 import { WorkerRunningTasksComponent } from './worker-running-tasks.component';
+import { AppDatePipe } from '../../../shared/pipes/app-date.pipe';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 
 /** Contenu du tiroir de fiche d’un worker membre du central (onglets Général à Journaux). */
 @Component({
@@ -35,6 +37,8 @@ import { WorkerRunningTasksComponent } from './worker-running-tasks.component';
     WeeklyScheduleFormComponent,
     SystemLogViewerComponent,
     WorkerRunningTasksComponent,
+    AppDatePipe,
+    MatProgressBarModule,
   ],
   templateUrl: './worker-detail-drawer.component.html',
   styleUrl: './worker-detail-drawer.component.scss',

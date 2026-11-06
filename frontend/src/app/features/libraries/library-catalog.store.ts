@@ -2,15 +2,8 @@ import { HttpClient } from '@angular/common/http';
 import { computed, inject, Injectable, signal } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { Router, ActivatedRoute } from '@angular/router';
-import {
-  catchError,
-  EMPTY,
-  finalize,
-  firstValueFrom,
-  forkJoin,
-  map,
-  of,
-} from 'rxjs';
+import { catchError, EMPTY, finalize, firstValueFrom, forkJoin, map, of } from 'rxjs';
+import { formatDateOnly } from '../../shared/models/date-format';
 import { CentralApi } from '../../shared/services/central-api';
 import { NotificationService } from '../../shared/services/notification.service';
 import { ConfirmationDialogComponent } from '../../shared/ui/confirmation-dialog.component';
@@ -54,9 +47,7 @@ export class LibraryCatalogStore {
   readonly selectedLibraryIds = signal<ReadonlySet<string>>(new Set());
   readonly selectedLibrary = signal<LibraryRecord | null>(null);
   readonly selectedLibraryTabIndex = signal(0);
-  readonly processingByLibrary = signal<
-    Readonly<Record<string, LibraryProcessingSettings>>
-  >({});
+  readonly processingByLibrary = signal<Readonly<Record<string, LibraryProcessingSettings>>>({});
   readonly actionOpen = signal(false);
   readonly actionType = signal<LibraryActionType>('create');
   readonly accessSetupMode = signal(false);
@@ -136,7 +127,7 @@ export class LibraryCatalogStore {
         label: library.name,
         description: `${library.state} · ${library.assignedFlow}`,
         group: 'Bibliothèques',
-        glyph: '▱',
+        icon: 'library',
         run: () => this.onLibraryOpen({ id: library.id }),
       }));
   }
@@ -289,10 +280,13 @@ export class LibraryCatalogStore {
     this.actionOpen.set(false);
   }
 
-  onLibraryAction(event: DataTableActionEvent, hooks: {
-    onProcessing: (library: LibraryRecord) => void;
-    onFlow: (library: LibraryRecord) => void;
-  }): void {
+  onLibraryAction(
+    event: DataTableActionEvent,
+    hooks: {
+      onProcessing: (library: LibraryRecord) => void;
+      onFlow: (library: LibraryRecord) => void;
+    },
+  ): void {
     const library = this.libraries().find((item) => item.id === event.row['id']);
     if (!library) return;
 
@@ -550,7 +544,7 @@ export class LibraryCatalogStore {
       associatedFlows: assignedFlow,
       assignedFlow,
       monitoring,
-      modifiedAt: new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' }).format(date),
+      modifiedAt: formatDateOnly(date),
       modifiedOrder: date.getTime(),
     };
   }

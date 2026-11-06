@@ -1,7 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { StatusBadgeComponent } from '../../../shared/ui/status-badge.component';
-import { WorkerGroupResponse, WorkerResponse, formatWorkerLabel } from '../../../shared/models/central';
+import {
+  WorkerGroupResponse,
+  WorkerResponse,
+  formatWorkerLabel,
+} from '../../../shared/models/central';
+import { nodeLifecycleBadge, taskUnit } from '../worker-catalog.utils';
 import {
   formatGroupCriteriaBadges,
   matchesGroupCriteria,
@@ -54,8 +59,8 @@ import {
                   <div class="member-header">
                     <span class="member-name">{{ formatNode(node) }}</span>
                     <app-status-badge
-                      [label]="node.status === 'online' ? 'En ligne' : 'Hors ligne'"
-                      [tone]="node.status === 'online' ? 'success' : 'neutral'"
+                      [label]="lifecycleBadge(node).label"
+                      [tone]="lifecycleBadge(node).tone"
                     />
                   </div>
                   <div class="member-specs">
@@ -70,7 +75,10 @@ import {
                       <span>· {{ Math.round(node.inventory!.memoryMb / 1024) }} Go RAM</span>
                     }
                     @if (node.maxConcurrentTasks) {
-                      <span>· max {{ node.maxConcurrentTasks }} tâche(s)</span>
+                      <span
+                        >· max {{ node.maxConcurrentTasks }}
+                        {{ taskUnit(node.maxConcurrentTasks) }}</span
+                      >
                     }
                   </div>
                   @if (node.capabilities.length) {
@@ -322,4 +330,7 @@ export class WorkerGroupDetailComponent {
   protected formatNode(node: WorkerResponse): string {
     return formatWorkerLabel(node.name, node.displayName);
   }
+
+  protected readonly lifecycleBadge = nodeLifecycleBadge;
+  protected readonly taskUnit = taskUnit;
 }

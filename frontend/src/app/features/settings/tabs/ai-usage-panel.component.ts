@@ -10,38 +10,42 @@ import {
 } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { MatButtonModule } from '@angular/material/button';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { AiToolsService } from '../../../shared/services/ai-tools.service';
 import { AiCentralUsage, AiUsageTotals } from '../../../shared/models/ai-tools';
 import { aiTypeLabel } from '../../ai/components/ai-model-selection';
 import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-section.component';
+import { EmptyStateComponent } from '../../../shared/ui/empty-state/empty-state.component';
 
 /** Tokens rapportés par les fournisseurs, par worker exécutant et au global ; jamais estimés. */
 @Component({
   selector: 'app-ai-usage-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ConfigurationSectionComponent, DecimalPipe, MatButtonModule],
+  imports: [
+    ConfigurationSectionComponent,
+    DecimalPipe,
+    EmptyStateComponent,
+    MatButtonToggleModule,
+    MatProgressBarModule,
+  ],
   template: `
     <app-configuration-section
-      title="Consommation de tokens"
-      description="Tokens rapportés par les fournisseurs, regroupés par worker qui a exécuté la demande."
+      title="Consommation de jetons"
+      description="Jetons rapportés par les fournisseurs, regroupés par worker qui a exécuté la demande."
       icon="api"
     >
       <div section-actions>
-        <div class="periods" role="group" aria-label="Période">
+        <mat-button-toggle-group
+          aria-label="Période"
+          [value]="days()"
+          [disabled]="loading()"
+          (change)="select($event.value)"
+        >
           @for (option of periods; track option) {
-            <button
-              matButton="tonal"
-              type="button"
-              [disabled]="loading()"
-              [attr.aria-pressed]="days() === option"
-              [class.selected]="days() === option"
-              (click)="select(option)"
-            >
-              {{ option }} jours
-            </button>
+            <mat-button-toggle [value]="option">{{ option }} jours</mat-button-toggle>
           }
-        </div>
+        </mat-button-toggle-group>
       </div>
       @if (error()) {
         <p role="status">{{ error() }}</p>
@@ -49,7 +53,7 @@ import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-
       @if (usage(); as view) {
         <div class="total">
           <strong>Total du central</strong>
-          <span>{{ view.total.inputTokens | number }} tokens en entrée</span>
+          <span>{{ view.total.inputTokens | number }} jetons en entrée</span>
           <span>{{ view.total.outputTokens | number }} en sortie</span>
           @if (view.total.cachedInputTokens) {
             <span>{{ view.total.cachedInputTokens | number }} en cache</span>
@@ -85,11 +89,11 @@ import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-
               </ul>
             </article>
           } @empty {
-            <p>Aucune consommation sur cette période.</p>
+            <app-empty-state icon="info" title="Aucune consommation sur cette période." />
           }
         </div>
       } @else if (loading()) {
-        <p role="status">Calcul de la consommation…</p>
+        <mat-progress-bar mode="indeterminate" aria-label="Calcul de la consommation" />
       }
     </app-configuration-section>
   `,
@@ -100,13 +104,6 @@ import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-
       justify-content: space-between;
       flex-wrap: wrap;
       gap: 16px;
-    }
-    .periods {
-      display: flex;
-      gap: 8px;
-    }
-    .selected {
-      outline: 2px solid var(--text-primary);
     }
     p {
       color: var(--text-secondary);

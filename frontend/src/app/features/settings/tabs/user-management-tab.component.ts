@@ -21,6 +21,7 @@ import {
   USER_ROLE_LABELS,
   UserAccount,
 } from '../../../shared/models/auth';
+import { formatDateOnly } from '../../../shared/models/date-format';
 import { NotificationService } from '../../../shared/services/notification.service';
 import { UserAccounts } from '../../../shared/services/user-accounts';
 import {
@@ -28,7 +29,9 @@ import {
   SettingRowComponent,
 } from '../../../shared/ui/settings/setting-row.component';
 import { ConfirmationDialogComponent } from '../../../shared/ui/confirmation-dialog.component';
+import { EmptyStateComponent } from '../../../shared/ui/empty-state/empty-state.component';
 import { RecordFormComponent, RecordFormData } from '../../../shared/ui/record-form.component';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { PageShellContextService } from '../../../core/layout/page-shell-context';
 
 interface UserRow {
@@ -49,6 +52,8 @@ interface UserRow {
     SettingRowComponent,
     MatButtonModule,
     MatSlideToggleModule,
+    MatProgressBarModule,
+    EmptyStateComponent,
     RecordFormComponent,
   ],
   template: `
@@ -58,11 +63,11 @@ interface UserRow {
       icon="settings"
       [badge]="'' + users().length"
     >
-      <button section-actions matButton="tonal" type="button" (click)="newUser()">
+      <button section-actions matButton="filled" type="button" (click)="newUser()">
         Créer un compte
       </button>
       @if (state() === 'loading') {
-        <p role="status">Chargement des utilisateurs…</p>
+        <mat-progress-bar mode="indeterminate" aria-label="Chargement des utilisateurs" />
       } @else if (state() === 'error') {
         <p role="alert">Impossible de charger les utilisateurs.</p>
         <button matButton="text" (click)="refresh()">Réessayer</button>
@@ -87,7 +92,7 @@ interface UserRow {
               </button>
             </app-setting-row>
           } @empty {
-            <p>Aucun utilisateur.</p>
+            <app-empty-state icon="info" title="Aucun utilisateur." />
           }
         </app-setting-group>
       }
@@ -146,7 +151,7 @@ export class UserManagementTabComponent {
         meta: [
           USER_ROLE_LABELS[user.role],
           ...(isSelf ? ['vous'] : []),
-          `créé le ${new Date(user.createdAt).toLocaleDateString('fr-FR')}`,
+          `créé le ${formatDateOnly(user.createdAt)}`,
         ].join(' · '),
       };
     }),

@@ -34,9 +34,9 @@
           ariaLabel="Réglages de traitement du worker"
         />
         <p class="node-tab-note">
-          Les plafonds de bibliothèque et de couple worker et bibliothèque s’appliquent aussi.
-          Hors des plages du calendrier, aucun nouveau traitement ne démarre ; ceux en cours
-          ne sont pas interrompus.
+          Les plafonds de bibliothèque et de couple worker et bibliothèque s’appliquent aussi. Hors
+          des plages du calendrier, aucun nouveau traitement ne démarre ; ceux en cours ne sont pas
+          interrompus.
         </p>
       </div>
       <ng-template #processingLimitContent>
@@ -48,6 +48,7 @@
           />
         } @else {
           <p role="status">Chargement de la limite du worker…</p>
+          <mat-progress-bar mode="indeterminate" />
         }
       </ng-template>
       <ng-template #processingCalendarContent>
@@ -59,6 +60,7 @@
           />
         } @else {
           <p role="status">Chargement du calendrier…</p>
+          <mat-progress-bar mode="indeterminate" />
         }
       </ng-template>
     </mat-tab>
@@ -72,8 +74,8 @@
       emptyMessage="Aucune capacité déclarée par ce worker."
     />
     <p class="node-tab-note capability-note">
-      Les encodeurs « utilisables » ont réussi un test synthétique ; les bibliothèques,
-      limites et règles d’attribution déterminent aussi l’éligibilité à une tâche.
+      Les encodeurs « utilisables » ont réussi un test synthétique ; les bibliothèques, limites et
+      règles d’attribution déterminent aussi l’éligibilité à une tâche.
     </p>
   </mat-tab>
   @if (detail.rawNode()?.roles?.includes('worker')) {
@@ -81,18 +83,26 @@
       @if (detail.rawNode(); as worker) {
         <section class="node-processing-tab" aria-label="État Store du worker">
           <p class="node-tab-note">
-            Worker {{ worker.status === 'online' ? 'en ligne' : 'hors ligne' }} · dernière présence {{ worker.lastSeenAt }}
+            Worker {{ worker.status === 'online' ? 'en ligne' : 'hors ligne' }} · dernière présence
+            {{ worker.lastSeenAt | appDate }}
           </p>
           @if (detail.storeState(); as state) {
             <h3>État désiré · révision {{ state.desired.revision }}</h3>
             @for (item of state.desired.items; track item.kind + item.id + item.platform) {
               <p>{{ item.kind }} {{ item.id }} {{ item.version }} · SHA-256 {{ item.sha256 }}</p>
-            } @empty { <p>Aucun paquet désiré.</p> }
+            } @empty {
+              <p>Aucun paquet désiré.</p>
+            }
             <h3>État appliqué · révision {{ state.applied.revision }}</h3>
             <p>Dernière remontée : {{ state.applied.reportedAt ?? 'jamais' }}</p>
             @for (item of state.applied.items; track item.kind + item.id + item.platform) {
-              <p>{{ item.kind }} {{ item.id }} {{ item.version }} · {{ item.status }}{{ item.errorCode ? ' · ' + item.errorCode : '' }}</p>
-            } @empty { <p>Aucun état appliqué rapporté.</p> }
+              <p>
+                {{ item.kind }} {{ item.id }} {{ item.version }} · {{ item.status
+                }}{{ item.errorCode ? ' · ' + item.errorCode : '' }}
+              </p>
+            } @empty {
+              <p>Aucun état appliqué rapporté.</p>
+            }
           } @else {
             <p role="status">État Store indisponible ou en chargement.</p>
           }
@@ -107,8 +117,8 @@
           <div>
             <h3>Accès autorisés par le serveur</h3>
             <p>
-              Le serveur déclare les bibliothèques et autorise les workers. Configurez ici le
-              chemin visible depuis {{ node.name }}.
+              Le serveur déclare les bibliothèques et autorise les workers. Configurez ici le chemin
+              visible depuis {{ node.name }}.
             </p>
           </div>
           <button matButton="filled" type="button" (click)="detail.openAddLibrary()">
@@ -140,6 +150,7 @@
         }
         @if (data.nodeLibraryLoading()) {
           <p role="status">Chargement des bibliothèques autorisées…</p>
+          <mat-progress-bar mode="indeterminate" />
         } @else if (detail.nodeLibraryRows().length) {
           <app-data-table
             [columns]="detail.nodeLibraryColumns"
@@ -154,8 +165,7 @@
           <div class="node-libraries-empty">
             <strong>Aucune bibliothèque autorisée</strong>
             <p>
-              Choisissez une bibliothèque déjà déclarée par le serveur ou créez-en une
-              nouvelle.
+              Choisissez une bibliothèque déjà déclarée par le serveur ou créez-en une nouvelle.
             </p>
           </div>
         }

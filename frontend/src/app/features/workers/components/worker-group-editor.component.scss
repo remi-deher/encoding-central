@@ -229,18 +229,23 @@
     font-size: var(--font-label);
     font-weight: 500;
     color: var(--text-primary);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    box-shadow: var(--elevation-1);
 
     .status-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
 
-      &.online {
+      background-color: var(--text-muted);
+
+      &[data-tone='success'] {
         background-color: var(--success);
       }
-      &.offline {
-        background-color: var(--text-muted);
+      &[data-tone='warning'] {
+        background-color: var(--warning);
+      }
+      &[data-tone='danger'] {
+        background-color: var(--danger);
       }
     }
   }
@@ -380,7 +385,7 @@
     border-radius: 50%;
     background: var(--surface-container-highest);
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: var(--font-body);
     cursor: pointer;
     line-height: 1;
 

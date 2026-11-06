@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, signal, viewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatMenuModule } from '@angular/material/menu';
@@ -32,6 +40,7 @@ import { WorkerDetailDrawerComponent } from './components/worker-detail-drawer.c
 import { WorkerActionDrawerComponent } from './components/worker-action-drawer.component';
 import { WorkerGroupDetailComponent } from './components/worker-group-detail.component';
 import { ENROLLMENT_FORM_DATA } from './worker-catalog.utils';
+import { IconComponent } from '../../shared/ui/icon.component';
 
 /**
  * Page Workers : onglets « Ce worker », « Central » et « Groupes de workers ».
@@ -52,6 +61,7 @@ import { ENROLLMENT_FORM_DATA } from './worker-catalog.utils';
   ],
   imports: [
     CentralMaintenanceTemplateComponent,
+    IconComponent,
     MatButtonModule,
     MatMenuModule,
     MatFormFieldModule,
@@ -98,7 +108,9 @@ export class WorkerCatalogPageComponent {
   protected readonly managementTabs = NODE_MANAGEMENT_TABS;
 
   private readonly actionDrawer = viewChild(WorkerActionDrawerComponent);
-  protected readonly actionRecordForm = computed(() => this.actionDrawer()?.actionRecordForm() ?? null);
+  protected readonly actionRecordForm = computed(
+    () => this.actionDrawer()?.actionRecordForm() ?? null,
+  );
   protected readonly actionStep = computed(() => this.actionDrawer()?.actionStep() ?? null);
 
   protected readonly clusterIdentity = this.local.identity;
@@ -229,7 +241,7 @@ export class WorkerCatalogPageComponent {
           label: group.name,
           description: group.description || 'Groupe de workers',
           group: 'Groupes de workers',
-          glyph: '▦',
+          icon: 'folder',
           run: () => this.groups.openGroupDetail(group),
         }));
     }
@@ -250,7 +262,7 @@ export class WorkerCatalogPageComponent {
           label: formatWorkerLabel(node.name, node.displayName),
           description: `${NODE_LIFECYCLE_LABELS[workerLifecycle(node)]} · ${node.roles.map((role: WorkerRole) => NODE_ROLE_LABELS[role]).join(' · ')}`,
           group: 'Workers du central',
-          glyph: '▤',
+          icon: 'server',
           run: () => this.data.openNodeCard(node.id),
         }));
     }
@@ -262,7 +274,7 @@ export class WorkerCatalogPageComponent {
             label: formatWorkerLabel(local.name, local.displayName),
             description: 'Ce worker',
             group: 'Worker local',
-            glyph: '▤',
+            icon: 'server',
             run: () => this.pageTab.set('node'),
           },
         ]

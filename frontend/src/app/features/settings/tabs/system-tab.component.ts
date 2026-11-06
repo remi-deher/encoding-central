@@ -19,6 +19,8 @@ import {
 import { SettingsNoticeComponent } from '../../../shared/ui/settings/settings-notice.component';
 import { ClipboardService } from '../../../shared/services/clipboard.service';
 import { NotificationService } from '../../../shared/services/notification.service';
+import { AppDatePipe } from '../../../shared/pipes/app-date.pipe';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 
 interface HealthCheckEntry {
   readonly name: string;
@@ -45,7 +47,9 @@ const STATUS_ORDER = { unhealthy: 0, degraded: 1, healthy: 2 } as const;
   selector: 'app-system-tab',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    AppDatePipe,
     MatButtonModule,
+    MatProgressBarModule,
     ConfigurationSectionComponent,
     SettingGroupComponent,
     SettingRowComponent,
@@ -69,8 +73,8 @@ const STATUS_ORDER = { unhealthy: 0, degraded: 1, healthy: 2 } as const;
           <strong>{{ healthLabel(value.status) }}</strong>
           <span class="banner-detail">{{ summary() }}</span>
           <span class="banner-spacer"></span>
-          @if (lastChecked()) {
-            <span class="banner-detail">Dernier contrôle : {{ lastChecked() }}</span>
+          @if (lastChecked(); as checked) {
+            <span class="banner-detail">Dernier contrôle : {{ checked | appDate }}</span>
           }
         </div>
         <app-setting-group>
@@ -87,9 +91,11 @@ const STATUS_ORDER = { unhealthy: 0, degraded: 1, healthy: 2 } as const;
           }
         </app-setting-group>
       } @else {
-        <app-settings-notice [tone]="refreshing() ? 'neutral' : 'warning'">
-          {{ refreshing() ? 'Chargement des diagnostics…' : 'Diagnostics indisponibles.' }}
-        </app-settings-notice>
+        @if (refreshing()) {
+          <mat-progress-bar mode="indeterminate" aria-label="Chargement des diagnostics" />
+        } @else {
+          <app-settings-notice tone="warning">Diagnostics indisponibles.</app-settings-notice>
+        }
       }
     </app-configuration-section>
 
@@ -105,7 +111,7 @@ const STATUS_ORDER = { unhealthy: 0, degraded: 1, healthy: 2 } as const;
           </app-setting-row>
           <app-setting-row label="Identifiant">
             <code>{{ value.id }}</code>
-            <button matButton="outlined" (click)="copyId(value.id)">Copier</button>
+            <button matButton="tonal" (click)="copyId(value.id)">Copier</button>
           </app-setting-row>
         </app-setting-group>
       } @else {
@@ -161,7 +167,7 @@ const STATUS_ORDER = { unhealthy: 0, degraded: 1, healthy: 2 } as const;
     }
     .duration,
     code {
-      font-family: var(--font-mono, ui-monospace, monospace);
+      font-family: ui-monospace, monospace;
       font-size: var(--font-label);
       color: var(--text-secondary);
       overflow-wrap: anywhere;
@@ -171,7 +177,7 @@ const STATUS_ORDER = { unhealthy: 0, degraded: 1, healthy: 2 } as const;
 export class SystemTabComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly http = inject(HttpClient);
-  protected readonly lastChecked = signal('');
+  protected readonly lastChecked = signal<Date | null>(null);
   private readonly notifications = inject(NotificationService);
 
   protected readonly refreshing = signal(false);
@@ -231,7 +237,7 @@ export class SystemTabComponent {
     if (identity.status === 'fulfilled') this.cluster.set(identity.value);
     if (diagnostics.status === 'fulfilled') {
       this.health.set(diagnostics.value);
-      this.lastChecked.set(new Date().toLocaleTimeString('fr-FR'));
+      this.lastChecked.set(new Date());
     }
     this.refreshError.set(outcomes.some((result) => result.status === 'rejected'));
     this.refreshing.set(false);

@@ -67,6 +67,8 @@ describe('AiModelCatalogComponent', () => {
     const element = await setup();
     expect(element.querySelectorAll('section.provider')).toHaveLength(1);
     expect(element.textContent).toContain('2 workers sur 2');
+    expect(element.querySelectorAll('app-status-badge').length).toBeGreaterThan(0);
+    expect(element.querySelector('.chip')).toBeNull();
     expect(element.querySelectorAll('mat-slide-toggle')).toHaveLength(2);
     expect(element.textContent).toContain('seulement Salon');
     expect(element.textContent).toContain('claude-opus-5-5');

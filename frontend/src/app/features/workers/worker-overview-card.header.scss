@@ -46,7 +46,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(var(--accent-rgb, 12, 175, 96), 0.12);
+  background: var(--accent-soft);
   color: var(--accent);
 }
 
@@ -124,21 +124,20 @@
   gap: 5px;
   padding: 2px 9px;
   border-radius: var(--radius-pill);
-  background: rgba(234, 179, 8, 0.2);
-  color: #facc15;
-  border: 1px solid rgba(234, 179, 8, 0.45);
-  font-size: 11px;
+  background: var(--warning-soft);
+  color: var(--warning);
+  border: 1px solid var(--warning);
+  font-size: var(--mat-sys-label-small-size);
   font-weight: 800;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   flex-shrink: 0;
-  box-shadow: 0 0 8px rgba(234, 179, 8, 0.15);
 }
 
 .node-overview-master-icon {
   width: 13px;
   height: 13px;
-  color: #facc15;
+  color: var(--warning);
   flex-shrink: 0;
 }
 
@@ -151,7 +150,7 @@
   background: var(--surface-container-highest);
   color: var(--text-secondary);
   border: 1px solid var(--border-subtle);
-  font-size: 11px;
+  font-size: var(--mat-sys-label-small-size);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -202,8 +201,8 @@
   }
 
   &.is-active {
-    background: rgba(46, 125, 50, 0.15);
-    border-color: rgba(46, 125, 50, 0.4);
+    background: var(--success-soft);
+    border-color: var(--success);
     color: var(--text-primary);
 
     .node-overview-role-dot {
@@ -235,7 +234,7 @@
 }
 
 .node-overview-role-status {
-  font-size: 10px;
+  font-size: var(--mat-sys-label-small-size);
   color: var(--text-tertiary);
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -255,7 +254,7 @@
 .node-overview-role-note {
   margin: var(--space-1) 0 0;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--mat-sys-label-small-size);
 }
 
 @keyframes rolePulse {
@@ -312,7 +311,7 @@
 
 .node-overview-hw-tag {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--mat-sys-label-small-size);
   font-weight: 750;
   letter-spacing: 0.05em;
   flex: 0 0 auto;
@@ -355,7 +354,7 @@
 
 .node-overview-control-state {
   color: var(--success);
-  font-size: 11px;
+  font-size: var(--mat-sys-label-small-size);
   font-weight: 700;
 
   &.is-suspended {
@@ -380,7 +379,7 @@
 
   dt {
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: var(--mat-sys-label-small-size);
     font-weight: 600;
   }
 
@@ -398,7 +397,7 @@
   align-items: center;
   gap: 5px;
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: var(--mat-sys-label-small-size);
   font-weight: 600;
 }
 

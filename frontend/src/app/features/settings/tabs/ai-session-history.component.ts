@@ -6,19 +6,27 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DecimalPipe } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { interval } from 'rxjs';
 import { AiToolsService } from '../../../shared/services/ai-tools.service';
 import { NotificationService } from '../../../shared/services/notification.service';
 import { AiSessionPage, AiSessionState, AiSessionSummary } from '../../../shared/models/ai-tools';
+import { AppDatePipe } from '../../../shared/pipes/app-date.pipe';
 import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-section.component';
+import { EmptyStateComponent } from '../../../shared/ui/empty-state/empty-state.component';
 
 @Component({
   selector: 'app-ai-session-history',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ConfigurationSectionComponent, DatePipe, DecimalPipe, MatButtonModule],
+  imports: [
+    ConfigurationSectionComponent,
+    AppDatePipe,
+    DecimalPipe,
+    EmptyStateComponent,
+    MatButtonModule,
+  ],
   template: `
     <app-configuration-section
       title="Sessions et traitements IA"
@@ -41,9 +49,7 @@ import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-
               <div>
                 <strong>{{ session.provider }}</strong> · {{ statusLabel(session.status) }}
                 <p>
-                  {{
-                    session.updatedAt ? (session.updatedAt | date: 'short') : 'Date indisponible'
-                  }}
+                  {{ session.updatedAt ? (session.updatedAt | appDate) : 'Date indisponible' }}
                 </p>
               </div>
               <button
@@ -99,7 +105,11 @@ import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-
             }
           </article>
         } @empty {
-          <p>Aucune session enregistrée sur ce worker.</p>
+          <app-empty-state
+            icon="history"
+            title="Aucune session"
+            message="Aucune session enregistrée sur ce worker."
+          />
         }
         <nav aria-label="Pages de sessions IA">
           <button

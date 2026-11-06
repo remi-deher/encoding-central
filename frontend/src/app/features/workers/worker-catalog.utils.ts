@@ -4,7 +4,12 @@ import type { StatusTone } from '../../shared/ui/status-badge.component';
 import type { DetailCard } from '../../shared/ui/detail-card-grid.component';
 import type { GuidedStep } from '../../shared/ui/guided-setup.component';
 import type { DataTableRow } from '../../shared/ui/data-table.component';
-import { workerLifecycle, NODE_LIFECYCLE_LABELS } from '../../shared/models/central-health';
+import {
+  workerLifecycle,
+  NODE_LIFECYCLE_LABELS,
+  NODE_LIFECYCLE_TONES,
+} from '../../shared/models/central-health';
+import { formatRelativeTime, formatShortDateTime } from '../../shared/models/date-format';
 import {
   formatWorkerLabel,
   WorkerRole,
@@ -83,10 +88,11 @@ export interface WorkerRecord extends DataTableRow {
   readonly lastSignal: string;
 }
 
-export const NODE_ROLE_OPTIONS: readonly { readonly value: WorkerRole; readonly label: string }[] = [
-  { value: 'server', label: 'Serveur' },
-  { value: 'worker', label: 'Worker' },
-];
+export const NODE_ROLE_OPTIONS: readonly { readonly value: WorkerRole; readonly label: string }[] =
+  [
+    { value: 'server', label: 'Serveur' },
+    { value: 'worker', label: 'Worker' },
+  ];
 
 export const ENROLLMENT_FORM_DATA: RecordFormData = {
   title: 'Ajouter un worker',
@@ -119,17 +125,19 @@ export function workerStateGroup(node: WorkerResponse): 'online' | 'offline' | '
   return lifecycle === 'online' ? 'online' : lifecycle === 'offline' ? 'offline' : 'attention';
 }
 
+/** Unité « tâche » ou « tâches » selon le nombre. */
+export function taskUnit(count: number): string {
+  return count > 1 ? 'tâches' : 'tâche';
+}
+
+/** Libellé et ton du cycle de vie d'un worker, partagés avec le reste de l'application. */
+export function nodeLifecycleBadge(node: WorkerResponse): { label: string; tone: StatusTone } {
+  const lifecycle = workerLifecycle(node);
+  return { label: NODE_LIFECYCLE_LABELS[lifecycle], tone: NODE_LIFECYCLE_TONES[lifecycle] };
+}
+
 export function formatLastSeen(value: string): string {
-  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
-  if (elapsedSeconds < 5) return 'À l’instant';
-  if (elapsedSeconds < 60) return `Il y a ${elapsedSeconds} s`;
-  const minutes = Math.floor(elapsedSeconds / 60);
-  if (minutes < 60) return `Il y a ${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `Il y a ${hours} h`;
-  return new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }).format(
-    new Date(value),
-  );
+  return formatRelativeTime(value);
 }
 
 export function formatExpiry(value: string): string {
@@ -139,9 +147,7 @@ export function formatExpiry(value: string): string {
 }
 
 export function formatExpiryTime(value: string): string {
-  return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(
-    new Date(value),
-  );
+  return formatShortDateTime(value);
 }
 
 export function capabilitiesLabel(capabilities: readonly WorkerToolCapability[]): string {
@@ -231,15 +237,14 @@ export function memberTaskCapacity(
   const accepted = activityKnown ? (activeTasks[node.id] ?? 0) : null;
   const maximum = workerEnabled ? node.maxConcurrentTasks : null;
   const remaining =
-    workerEnabled && accepted !== null && maximum !== null
-      ? Math.max(0, maximum - accepted)
-      : null;
+    workerEnabled && accepted !== null && maximum !== null ? Math.max(0, maximum - accepted) : null;
   let note = '';
   if (!workerEnabled) note = 'Fonction Worker désactivée.';
   else if (accepted === null) note = 'Comptage des tâches indisponible.';
   else if (workerLifecycle(node) === 'draining')
     note = 'Admission suspendue : les places libres ne sont pas attribuées.';
-  else if (workerLifecycle(node) !== 'online') note = 'Worker indisponible pour recevoir des tâches.';
+  else if (workerLifecycle(node) !== 'online')
+    note = 'Worker indisponible pour recevoir des tâches.';
 
   return { accepted, remaining, maximum, note };
 }
@@ -251,9 +256,7 @@ export function nodeOverviewLibraries(
 ): readonly WorkerOverviewLibrary[] {
   if (!nodeId) return [];
   return allLibraries.flatMap((library) => {
-    const access = nodeAccessByLibrary
-      .get(library.id)
-      ?.find((item) => item.workerId === nodeId);
+    const access = nodeAccessByLibrary.get(library.id)?.find((item) => item.workerId === nodeId);
     if (!access) return [];
 
     const stateLabel = !library.isActive
@@ -308,17 +311,15 @@ export function libraryAccessSummary(
   if (loadState === 'loading') return 'Chargement…';
   if (loadState === 'error') return 'Indisponible';
   const accesses = allLibraries.flatMap((library) => {
-    const access = nodeAccessByLibrary
-      .get(library.id)
-      ?.find((item) => item.workerId === nodeId);
+    const access = nodeAccessByLibrary.get(library.id)?.find((item) => item.workerId === nodeId);
     return access && access.isEnabled && access.mode !== 'unsupported' ? [{ library, access }] : [];
   });
   if (!accesses.length) return 'À configurer';
   const activeCount = accesses.filter(({ library }) => library.isActive).length;
   const inactiveCount = accesses.length - activeCount;
   return inactiveCount
-    ? `${activeCount} active(s) · ${inactiveCount} désactivée(s)`
-    : `${activeCount} bibliothèque(s) active(s)`;
+    ? `${activeCount} ${activeCount > 1 ? 'actives' : 'active'} · ${inactiveCount} ${inactiveCount > 1 ? 'désactivées' : 'désactivée'}`
+    : `${activeCount} ${activeCount > 1 ? 'bibliothèques actives' : 'bibliothèque active'}`;
 }
 
 export interface WorkerRecordContext {
@@ -345,8 +346,15 @@ export function toWorkerRecord(node: WorkerResponse, ctx: WorkerRecordContext): 
     ),
     workerLoad: worker
       ? ctx.activityKnown
-        ? String(ctx.activeTasks[node.id] ?? 0) + ' / ' + node.maxConcurrentTasks + ' tâche(s)'
-        : String(node.maxConcurrentTasks) + ' tâche(s) max. · charge indisponible'
+        ? String(ctx.activeTasks[node.id] ?? 0) +
+          ' / ' +
+          node.maxConcurrentTasks +
+          ' ' +
+          taskUnit(node.maxConcurrentTasks)
+        : String(node.maxConcurrentTasks) +
+          ' ' +
+          taskUnit(node.maxConcurrentTasks) +
+          ' max. · charge indisponible'
       : 'Non applicable',
     queueStatus: 'Non disponible',
     state: NODE_LIFECYCLE_LABELS[workerLifecycle(node)],
@@ -384,7 +392,7 @@ export function buildEnrollmentSteps(
           },
           {
             label: 'Exécution simultanée',
-            description: `${request.maxConcurrentTasks} tâche(s)`,
+            description: `${request.maxConcurrentTasks} ${taskUnit(request.maxConcurrentTasks)}`,
           },
           {
             label: 'Demande valable jusqu’au',
@@ -498,5 +506,3 @@ export function processingLimitForm(
     },
   };
 }
-
-

@@ -1,15 +1,18 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   OnDestroy,
   computed,
   inject,
   signal,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { concat, last } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { AuthService } from '../../../core/auth/auth.service';
 import { PageShellContextService } from '../../../core/layout/page-shell-context';
 import { AiToolsService } from '../../../shared/services/ai-tools.service';
@@ -17,6 +20,10 @@ import { NotificationService } from '../../../shared/services/notification.servi
 import { AiCentralModelCatalog, AiDiscoveredModel } from '../../../shared/models/ai-tools';
 import { ConfigurationSectionComponent } from '../../../shared/ui/configuration-section.component';
 import { SearchFieldComponent } from '../../../shared/ui/search-field.component';
+import { StatusBadgeComponent, StatusTone } from '../../../shared/ui/status-badge.component';
+import { IconComponent } from '../../../shared/ui/icon.component';
+import { EmptyStateComponent } from '../../../shared/ui/empty-state/empty-state.component';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import {
   SettingGroupComponent,
   SettingRowComponent,
@@ -35,7 +42,7 @@ interface ProviderGroup {
   readonly id: string;
   readonly name: string;
   readonly stateLabel: string;
-  readonly stateTone: 'ok' | 'warning' | 'muted';
+  readonly stateTone: StatusTone;
   readonly nodeSummary: string;
   readonly message: string | null;
   readonly total: number;
@@ -55,9 +62,14 @@ interface ProviderGroup {
     SettingGroupComponent,
     SettingRowComponent,
     SearchFieldComponent,
+    StatusBadgeComponent,
+    IconComponent,
+    EmptyStateComponent,
+    MatProgressBarModule,
     MatButtonModule,
     MatButtonToggleModule,
     MatSlideToggleModule,
+    MatTooltipModule,
   ],
   template: `
     <app-configuration-section
@@ -66,7 +78,7 @@ interface ProviderGroup {
       icon="pack"
     >
       @if (loading()) {
-        <p class="status" role="status">Lecture des catalogues fournisseurs…</p>
+        <mat-progress-bar mode="indeterminate" aria-label="Lecture des catalogues fournisseurs" />
       }
       @if (error()) {
         <p class="status" role="alert">{{ error() }}</p>
@@ -95,9 +107,9 @@ interface ProviderGroup {
         <section class="provider" [attr.aria-label]="group.name">
           <header>
             <h3>{{ group.name }}</h3>
-            <span class="chip" [attr.data-tone]="group.stateTone">{{ group.stateLabel }}</span>
+            <app-status-badge [label]="group.stateLabel" [tone]="group.stateTone" />
             @if (group.nodeSummary) {
-              <span class="chip">{{ group.nodeSummary }}</span>
+              <app-status-badge [label]="group.nodeSummary" tone="neutral" />
             }
             <span class="spacer"></span>
             @if (isAdmin() && group.total > 1) {
@@ -113,11 +125,13 @@ interface ProviderGroup {
             <button
               matButton="text"
               type="button"
+              class="icon-toggle"
               [attr.aria-expanded]="!collapsed().has(group.id)"
               [attr.aria-label]="(collapsed().has(group.id) ? 'Déplier ' : 'Replier ') + group.name"
+              [matTooltip]="(collapsed().has(group.id) ? 'Déplier ' : 'Replier ') + group.name"
               (click)="toggleCollapsed(group.id)"
             >
-              {{ collapsed().has(group.id) ? '▸' : '▾' }}
+              <app-icon [name]="collapsed().has(group.id) ? 'chevron_right' : 'down'" />
             </button>
           </header>
           @if (group.message) {
@@ -167,7 +181,7 @@ interface ProviderGroup {
         </section>
       }
       @if (!loading() && !groups().length && !error()) {
-        <p class="status">Aucune connexion disponible.</p>
+        <app-empty-state icon="pack" title="Aucune connexion disponible." />
       }
     </app-configuration-section>
   `,
@@ -205,22 +219,9 @@ interface ProviderGroup {
     .spacer {
       flex: 1;
     }
-    .chip {
-      padding: 2px var(--space-3);
-      border-radius: var(--radius-pill);
-      background: var(--surface-container-highest);
-      font-size: var(--font-label);
-    }
-    .chip[data-tone='ok'] {
-      background: var(--success-soft);
-      color: var(--success);
-    }
-    .chip[data-tone='warning'] {
-      background: var(--warning-soft);
-      color: var(--warning);
-    }
-    .chip[data-tone='muted'] {
-      color: var(--text-secondary);
+    .icon-toggle {
+      min-width: 48px;
+      min-height: 48px;
     }
     .status,
     .detail {
@@ -293,6 +294,7 @@ export class AiModelCatalogComponent implements OnDestroy {
       ),
     }));
   });
+  private readonly destroyRef = inject(DestroyRef);
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   constructor() {
     this.refresh();
@@ -305,20 +307,23 @@ export class AiModelCatalogComponent implements OnDestroy {
     this.pollTimer = null;
     this.loading.set(true);
     this.error.set(null);
-    this.api.getModelCatalog().subscribe({
-      next: (catalog) => {
-        this.catalog.set(catalog);
-        const catalogLoading = catalog.workers.some((node) =>
-          node.providers.some((provider) => provider.state === 'loading'),
-        );
-        this.loading.set(catalogLoading);
-        if (catalogLoading) this.pollTimer = window.setTimeout(() => this.refresh(), 750);
-      },
-      error: () => {
-        this.loading.set(false);
-        this.error.set('Impossible de lire les modèles annoncés par les workers.');
-      },
-    });
+    this.api
+      .getModelCatalog()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (catalog) => {
+          this.catalog.set(catalog);
+          const catalogLoading = catalog.workers.some((node) =>
+            node.providers.some((provider) => provider.state === 'loading'),
+          );
+          this.loading.set(catalogLoading);
+          if (catalogLoading) this.pollTimer = window.setTimeout(() => this.refresh(), 750);
+        },
+        error: () => {
+          this.loading.set(false);
+          this.error.set('Impossible de lire les modèles annoncés par les workers.');
+        },
+      });
   }
   protected enabled(provider: string, model: string): boolean {
     return !this.catalog()?.policy.disabledModels.some(
@@ -340,7 +345,7 @@ export class AiModelCatalogComponent implements OnDestroy {
     concat(
       ...pending.map((entry) => this.api.updateModelPolicy(providerId, entry.model.id, enabled)),
     )
-      .pipe(last())
+      .pipe(last(), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (policy) => {
           this.catalog.update((value) => (value ? { ...value, policy } : value));
@@ -417,7 +422,7 @@ export class AiModelCatalogComponent implements OnDestroy {
             : partial
               ? 'Partiellement disponible'
               : 'Disponible',
-        stateTone: loading || unavailable ? 'muted' : partial ? 'warning' : 'ok',
+        stateTone: loading || unavailable ? 'neutral' : partial ? 'warning' : 'ok',
         nodeSummary:
           nodeCount > 1 && !loading
             ? `${entry.available.length} ${entry.available.length > 1 ? 'workers' : 'worker'} sur ${nodeCount}`
@@ -431,17 +436,20 @@ export class AiModelCatalogComponent implements OnDestroy {
   }
   protected setEnabled(provider: string, model: string, enabled: boolean): void {
     this.saving.set(true);
-    this.api.updateModelPolicy(provider, model, enabled).subscribe({
-      next: (policy) => {
-        this.catalog.update((value) => (value ? { ...value, policy } : value));
-        this.saving.set(false);
-        this.notifications.show(enabled ? 'Modèle activé.' : 'Modèle désactivé.');
-      },
-      error: () => {
-        this.saving.set(false);
-        this.notifications.show('Impossible de modifier ce modèle.');
-        this.refresh();
-      },
-    });
+    this.api
+      .updateModelPolicy(provider, model, enabled)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (policy) => {
+          this.catalog.update((value) => (value ? { ...value, policy } : value));
+          this.saving.set(false);
+          this.notifications.show(enabled ? 'Modèle activé.' : 'Modèle désactivé.');
+        },
+        error: () => {
+          this.saving.set(false);
+          this.notifications.show('Impossible de modifier ce modèle.');
+          this.refresh();
+        },
+      });
   }
 }
