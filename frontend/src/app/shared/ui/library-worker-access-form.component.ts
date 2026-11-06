@@ -19,8 +19,12 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
+import { EmptyStateComponent } from './empty-state/empty-state.component';
 import { WorkerGroupResponse } from '../models/central';
-import { LibraryWorkerAccessMode, LibraryWorkerAccessResponse } from './library-worker-access-types';
+import {
+  LibraryWorkerAccessMode,
+  LibraryWorkerAccessResponse,
+} from './library-worker-access-types';
 
 export interface LibraryWorkerAccessOption {
   readonly id: string;
@@ -65,6 +69,7 @@ interface WorkerAccessControls {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-library-node-access-form',
   imports: [
+    EmptyStateComponent,
     MatExpansionModule,
     MatButtonModule,
     MatCheckboxModule,
@@ -76,14 +81,17 @@ interface WorkerAccessControls {
   ],
   template: `
     @if (!nodes().length) {
-      <div class="access-empty" role="status">
-        <strong>Aucun worker n’est encore enregistré</strong>
-        <p>
-          Ajoutez un worker au central avant de configurer l’accès aux médias de «
-          {{ libraryName() }} ».
-        </p>
+      <app-empty-state
+        icon="server"
+        title="Aucun worker n’est encore enregistré"
+        [message]="
+          'Ajoutez un worker au central avant de configurer l’accès aux médias de « ' +
+          libraryName() +
+          ' ».'
+        "
+      >
         <button matButton="filled" type="button" (click)="cancelled.emit()">Fermer</button>
-      </div>
+      </app-empty-state>
     } @else {
       <section class="access-form" [attr.aria-label]="'Accès aux médias pour ' + libraryName()">
         <div class="access-context">
@@ -149,8 +157,8 @@ interface WorkerAccessControls {
                     </mat-select>
                     @if (!groups().length) {
                       <mat-hint
-                        >Aucun groupe n’est encore créé. Créez-en dans la section « Groupes de workers
-                        ».</mat-hint
+                        >Aucun groupe n’est encore créé. Créez-en dans la section « Groupes de
+                        workers ».</mat-hint
                       >
                     }
                   </mat-form-field>
@@ -226,7 +234,8 @@ interface WorkerAccessControls {
                       Parcourir les dossiers sur {{ node.name }}
                     </button>
                     <p class="mode-help">
-                      Les dossiers affichés sont ceux visibles par le service Encoding sur ce worker.
+                      Les dossiers affichés sont ceux visibles par le service Encoding sur ce
+                      worker.
                     </p>
                     @if (browserNodeId() === node.id) {
                       <section
@@ -343,8 +352,8 @@ interface WorkerAccessControls {
                       </p>
                       <p>
                         Les cases Lecture et Écriture déclarent les besoins ; elles n’accordent
-                        aucun droit système. Avant traitement, le worker vérifie les droits effectifs
-                        dans un dossier temporaire dédié.
+                        aucun droit système. Avant traitement, le worker vérifie les droits
+                        effectifs dans un dossier temporaire dédié.
                       </p>
                       <p>
                         Un groupe ajouté au conteneur s’applique à tout le processus. Pour limiter
@@ -610,19 +619,6 @@ interface WorkerAccessControls {
       justify-content: flex-end;
       gap: 8px;
       padding-top: 4px;
-    }
-    .access-empty {
-      display: grid;
-      justify-items: start;
-      gap: 12px;
-    }
-    .access-empty strong {
-      color: var(--text-primary);
-    }
-    .access-empty p {
-      margin: 0;
-      color: var(--text-secondary);
-      line-height: 1.5;
     }
     .review-heading {
       display: grid;

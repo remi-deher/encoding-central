@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { MatChipListbox, MatChipListboxChange } from '@angular/material/chips';
 import { CategoryTabsComponent } from './category-tabs.component';
 
 describe('CategoryTabsComponent', () => {
@@ -8,7 +10,7 @@ describe('CategoryTabsComponent', () => {
     { value: 'encoding', label: 'Profils d’encodage' },
   ] as const;
 
-  it('renders a labelled group of filter buttons with the selected state', () => {
+  it('renders a labelled chip listbox with the selected option', () => {
     const fixture = TestBed.createComponent(CategoryTabsComponent);
     fixture.componentRef.setInput('label', 'Type de librairie');
     fixture.componentRef.setInput('options', options);
@@ -16,18 +18,18 @@ describe('CategoryTabsComponent', () => {
     fixture.detectChanges();
 
     const host = fixture.nativeElement as HTMLElement;
-    const tablist = host.querySelector('[role="group"]');
-    expect(tablist).toBeTruthy();
-    expect(tablist?.getAttribute('aria-label')).toBe('Type de librairie');
+    const listbox = host.querySelector('mat-chip-listbox');
+    expect(listbox).toBeTruthy();
+    expect(listbox?.getAttribute('aria-label')).toBe('Type de librairie');
 
-    const tabs = Array.from(host.querySelectorAll('button')) as HTMLButtonElement[];
-    expect(tabs.length).toBe(3);
-    expect(tabs[0].getAttribute('aria-pressed')).toBe('false');
-    expect(tabs[1].getAttribute('aria-pressed')).toBe('true');
-    expect(tabs[2].getAttribute('aria-pressed')).toBe('false');
+    const chips = Array.from(host.querySelectorAll('mat-chip-option')) as HTMLElement[];
+    expect(chips.length).toBe(3);
+    expect(chips[0].getAttribute('aria-selected')).toBe('false');
+    expect(chips[1].getAttribute('aria-selected')).toBe('true');
+    expect(chips[2].getAttribute('aria-selected')).toBe('false');
   });
 
-  it('supports ArrowRight, ArrowLeft, Home and End keyboard navigation', () => {
+  it('emits the new value when the listbox selection changes', () => {
     const fixture = TestBed.createComponent(CategoryTabsComponent);
     fixture.componentRef.setInput('label', 'Type de librairie');
     fixture.componentRef.setInput('options', options);
@@ -37,20 +39,9 @@ describe('CategoryTabsComponent', () => {
     const emitted: string[] = [];
     fixture.componentInstance.selectedChange.subscribe((val) => emitted.push(val));
 
-    const tabs = Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll('button'),
-    ) as HTMLButtonElement[];
-
-    tabs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-    expect(emitted.at(-1)).toBe('scripts');
-
-    tabs[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
-    expect(emitted.at(-1)).toBe('encoding');
-
-    tabs[2].dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
-    expect(emitted.at(-1)).toBe('media');
-
-    tabs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    const listbox = fixture.debugElement.query(By.directive(MatChipListbox))
+      .componentInstance as MatChipListbox;
+    listbox.change.emit({ value: 'encoding' } as MatChipListboxChange);
     expect(emitted.at(-1)).toBe('encoding');
   });
 });

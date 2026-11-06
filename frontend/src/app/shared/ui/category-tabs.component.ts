@@ -1,4 +1,3 @@
-import { selectionNavigationIndex } from './selection-navigation';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -8,6 +7,7 @@ import {
   output,
   viewChildren,
 } from '@angular/core';
+import { MatChipListboxChange, MatChipsModule } from '@angular/material/chips';
 
 export interface CategoryTabOption {
   readonly value: string;
@@ -15,34 +15,29 @@ export interface CategoryTabOption {
   readonly count?: number;
 }
 
+/** Filtres par catégorie, rendus en `mat-chip-listbox` (sélection unique). */
 @Component({
   selector: 'app-category-tabs',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [],
+  imports: [MatChipsModule],
   template: `
-    <div
+    <mat-chip-listbox
       class="category-tabs"
       [class.is-underline]="variant() === 'underline'"
       [attr.aria-label]="label()"
-      role="group"
+      [value]="selected()"
+      hideSingleSelectionIndicator
+      (change)="onSelectionChange($event)"
     >
-      @for (option of options(); track option.value; let index = $index) {
-        <button
-          #tabButton
-          type="button"
-          class="category-tab-pill"
-          [class.is-active]="option.value === selected()"
-          [attr.aria-pressed]="option.value === selected()"
-          (click)="selectedChange.emit(option.value)"
-          (keydown)="onKeydown($event, index)"
-        >
+      @for (option of options(); track option.value) {
+        <mat-chip-option #tabButton class="category-tab-pill" [value]="option.value">
           <span class="tab-label">{{ option.label }}</span>
           @if (option.count !== undefined) {
             <span class="option-count">{{ option.count }}</span>
           }
-        </button>
+        </mat-chip-option>
       }
-    </div>
+    </mat-chip-listbox>
   `,
   styleUrl: './category-tabs.component.scss',
 })
@@ -53,7 +48,9 @@ export class CategoryTabsComponent {
   readonly variant = input<'pill' | 'underline'>('pill');
   readonly selectedChange = output<string>();
 
-  private readonly tabButtons = viewChildren<ElementRef<HTMLButtonElement>>('tabButton');
+  private readonly tabButtons = viewChildren<ElementRef<HTMLElement>>('tabButton', {
+    read: ElementRef,
+  });
 
   constructor() {
     effect(() => {
@@ -68,19 +65,9 @@ export class CategoryTabsComponent {
     });
   }
 
-  protected onKeydown(event: KeyboardEvent, index: number): void {
-    const list = this.options();
-    if (!list.length) return;
-
-    const nextIndex = selectionNavigationIndex(event.key, index, list.length);
-
-    if (nextIndex >= 0) {
-      event.preventDefault();
-      const target = list[nextIndex];
-      if (target) {
-        this.selectedChange.emit(target.value);
-        this.tabButtons()[nextIndex]?.nativeElement.focus();
-      }
+  protected onSelectionChange(event: MatChipListboxChange): void {
+    if (event.value !== this.selected() && event.value != null) {
+      this.selectedChange.emit(event.value);
     }
   }
 }

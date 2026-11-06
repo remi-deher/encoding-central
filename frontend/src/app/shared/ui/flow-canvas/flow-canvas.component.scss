@@ -341,6 +341,11 @@ path {
   padding-inline: 0;
   text-align: center;
 }
+.minimap-tools .mat-mdc-icon-button {
+  width: var(--touch-target);
+  height: var(--touch-target);
+  padding: 0;
+}
 // A pending connection must reach ports beneath this navigation overlay.
 .minimap:disabled {
   pointer-events: none;

@@ -6,7 +6,6 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NotificationService } from '../services/notification.service';
 import { Subscription } from 'rxjs';
@@ -37,7 +36,6 @@ export interface DeviceAuthDialogData {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-device-auth-dialog',
   imports: [
-    CommonModule,
     FormsModule,
     MatButtonModule,
     MatDialogActions,
@@ -51,7 +49,7 @@ export interface DeviceAuthDialogData {
   template: `
     <app-dialog-frame
       eyebrow="Authentification sécurisée"
-      icon="⚿"
+      icon="diamond"
       [heading]="'Associer ' + data.toolName"
     >
       <mat-dialog-content class="app-dialog-body device-auth-body">

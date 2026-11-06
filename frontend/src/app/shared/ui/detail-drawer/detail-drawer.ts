@@ -1,4 +1,5 @@
 import { MatButtonModule } from '@angular/material/button';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
@@ -14,14 +15,15 @@ import {
 } from '@angular/core';
 import { DrawerModalState } from './drawer-modal-state.service';
 import { MatDrawer, MatSidenavModule } from '@angular/material/sidenav';
+import { IconComponent, IconName } from '../icon.component';
 
 export type DrawerVariant = 'neutral' | 'info' | 'danger' | 'success';
 
-const VARIANT_GLYPHS: Record<DrawerVariant, string | null> = {
+const VARIANT_ICONS: Record<DrawerVariant, IconName | null> = {
   neutral: null,
-  info: 'i',
-  danger: '!',
-  success: '✓',
+  info: 'info',
+  danger: 'error',
+  success: 'check',
 };
 
 @Component({
@@ -32,7 +34,7 @@ const VARIANT_GLYPHS: Record<DrawerVariant, string | null> = {
     '(document:keydown.escape)': 'onEscape($event)',
   },
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatSidenavModule, NgTemplateOutlet],
+  imports: [IconComponent, MatButtonModule, MatSidenavModule, MatTooltipModule, NgTemplateOutlet],
   template: `
     <mat-drawer-container
       class="detail-drawer-container"
@@ -65,8 +67,10 @@ const VARIANT_GLYPHS: Record<DrawerVariant, string | null> = {
             [class.drawer-header_danger]="variant() === 'danger'"
             [class.drawer-header_success]="variant() === 'success'"
           >
-            @if (glyph(); as glyphText) {
-              <span class="drawer-icon" aria-hidden="true">{{ glyphText }}</span>
+            @if (glyph(); as glyphName) {
+              <span class="drawer-icon" aria-hidden="true">
+                <app-icon [name]="glyphName" />
+              </span>
             }
             <div class="drawer-heading">
               @if (eyebrow()) {
@@ -80,14 +84,15 @@ const VARIANT_GLYPHS: Record<DrawerVariant, string | null> = {
             <div class="drawer-header-controls">
               <ng-container [ngTemplateOutlet]="headerActions() ?? null" />
               <button
-                mat-icon-button
+                matIconButton
                 class="drawer-close"
                 type="button"
                 aria-label="Fermer le panneau"
+                matTooltip="Fermer le panneau"
                 [disabled]="!dismissible() || closePending()"
                 (click)="requestClose()"
               >
-                <span aria-hidden="true">×</span>
+                <app-icon name="close" />
               </button>
             </div>
           </header>
@@ -292,6 +297,8 @@ const VARIANT_GLYPHS: Record<DrawerVariant, string | null> = {
 
     .drawer-close {
       flex: 0 0 auto;
+      width: var(--touch-target);
+      height: var(--touch-target);
       color: var(--text-secondary);
     }
 
@@ -417,11 +424,11 @@ export class DetailDrawerComponent {
   readonly opened = input(false);
   /** Teinte du bandeau : même vocabulaire que les modales (`DialogFrameComponent`). */
   readonly variant = input<DrawerVariant>('neutral');
-  /** Glyphe de la pastille ; par défaut celui de la variante, aucune pastille en neutre. */
-  readonly icon = input<string>();
+  /** Icône de la pastille (registre `app-icon`) ; par défaut celle de la variante, aucune pastille en neutre. */
+  readonly icon = input<IconName>();
   /** Avancement d'un parcours en plusieurs étapes (« Étape 1 sur 2 »). */
   readonly step = input<{ readonly current: number; readonly total: number } | null>(null);
-  protected readonly glyph = computed(() => this.icon() ?? VARIANT_GLYPHS[this.variant()]);
+  protected readonly glyph = computed(() => this.icon() ?? VARIANT_ICONS[this.variant()]);
   readonly eyebrow = input('');
   readonly title = input('Détails');
   readonly description = input('');

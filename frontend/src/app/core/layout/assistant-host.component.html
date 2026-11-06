@@ -14,6 +14,7 @@
     [style.bottom]="assistantLauncherPosition() ? 'auto' : null"
     #assistantLauncher
     aria-label="Ouvrir l’assistant IA"
+    matTooltip="Ouvrir l’assistant IA"
     aria-description="Glissez pour déplacer. Alt plus les flèches déplace par pas de grille."
     aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Alt+ArrowUp Alt+ArrowDown"
     aria-controls="assistant-widget-panel"
@@ -25,9 +26,7 @@
     (keydown)="onAssistantLauncherKeydown($event)"
     (click)="onAssistantLauncherClick($event)"
   >
-    <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="currentColor">
-      <path d="m12 2 2.8 7.2L22 12l-7.2 2.8L12 22l-2.8-7.2L2 12l7.2-2.8Z" />
-    </svg>
+    <app-icon name="auto_awesome" />
   </button>
 }
 @if (assistantWidgetMounted()) {
@@ -59,43 +58,26 @@
     <header class="assistant-widget-header">
       <h2>✦ Assistant</h2>
       <a
-        mat-icon-button
+        matIconButton
         aria-label="Ouvrir la conversation dans Assistant"
+        matTooltip="Ouvrir la conversation dans Assistant"
         routerLink="/ai/assistant"
         [queryParams]="
           generalAssistant()?.conversationId()
             ? { conversation: generalAssistant()?.conversationId() }
             : {}
         "
-        ><svg
-          viewBox="0 0 24 24"
-          width="20"
-          height="20"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.8"
-          aria-hidden="true"
-        >
-          <path d="M14 4h6v6m0-6-9 9M10 4H4v16h16v-6" /></svg
-      ></a>
+        ><app-icon name="outward"
+      /></a>
       <button
-        mat-icon-button
+        matIconButton
         type="button"
         #assistantCloseButton
         aria-label="Fermer le panneau de l’assistant"
+        matTooltip="Fermer le panneau de l’assistant"
         (click)="closeAssistantPanel()"
       >
-        <svg
-          viewBox="0 0 24 24"
-          width="20"
-          height="20"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          aria-hidden="true"
-        >
-          <path d="M5 12h14" />
-        </svg>
+        <app-icon name="remove" />
       </button>
     </header>
     @if (flowAssistant.session(); as session) {

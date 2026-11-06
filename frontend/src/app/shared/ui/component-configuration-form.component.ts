@@ -37,6 +37,7 @@ import {
 } from '../models/encoding-profiles';
 import { CodeEditorComponent } from './code-editor.component';
 import { SchemaFormFieldComponent } from './schema-form-field.component';
+import { EmptyStateComponent } from './empty-state/empty-state.component';
 import {
   FlowComponentConfiguration,
   FlowComponentConfigurationField,
@@ -64,6 +65,7 @@ type ConfigurationFormGroup = FormGroup<
     ConditionTreeEditorComponent,
     CodeEditorComponent,
     SchemaFormFieldComponent,
+    EmptyStateComponent,
   ],
   template: `
     <form class="configuration-form" [formGroup]="form" (ngSubmit)="save()">
@@ -331,7 +333,7 @@ type ConfigurationFormGroup = FormGroup<
           </div>
         </ng-template>
       } @else {
-        <p class="empty-configuration">Ce composant ne demande aucun réglage.</p>
+        <app-empty-state icon="settings" title="Ce composant ne demande aucun réglage." />
       }
 
       @if (progressiveDisclosure()) {
@@ -449,10 +451,6 @@ type ConfigurationFormGroup = FormGroup<
     .profile-target-row span {
       color: var(--text-secondary);
     }
-    .empty-configuration {
-      margin: 0;
-      color: var(--text-secondary);
-    }
     .form-actions {
       display: flex;
       justify-content: flex-end;
@@ -463,10 +461,10 @@ type ConfigurationFormGroup = FormGroup<
     }
     .connection-test-result {
       margin: var(--space-2) 0 0;
-      color: var(--color-success, #237a45);
+      color: var(--color-success);
     }
     .connection-test-failed {
-      color: var(--color-error, #b3261e);
+      color: var(--color-error);
     }
     @media (max-width: 600px) {
       .form-actions {

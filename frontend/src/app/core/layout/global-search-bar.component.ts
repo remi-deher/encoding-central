@@ -69,7 +69,7 @@ interface SearchEntry {
           @for (action of visibleActions(); track action.id) {
             <button
               search-actions
-              mat-button
+              matButton="text"
               type="button"
               class="search-action-button has-divider"
               [attr.aria-label]="action.label"

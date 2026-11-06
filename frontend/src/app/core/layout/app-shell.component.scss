@@ -1,3 +1,5 @@
+@use '../../../styles/breakpoints' as bp;
+
 app-shell {
   display: block;
   height: 100dvh;
@@ -131,7 +133,7 @@ button.assistant-launcher {
     font-size: var(--font-title-sm);
   }
 }
-@media (max-width: 760px) {
+@include bp.compact {
   button.assistant-launcher {
     right: var(--space-4);
     bottom: calc(80px + env(safe-area-inset-bottom, 0px));
@@ -360,9 +362,11 @@ button.assistant-launcher {
   z-index: 2;
 }
 
-@media (min-width: 1101px) and (max-width: 1600px) {
-  .application-header {
-    padding-inline: clamp(12px, 1.25vw, 20px);
+@include bp.expanded {
+  @media (max-width: 1600px) {
+    .application-header {
+      padding-inline: clamp(12px, 1.25vw, 20px);
+    }
   }
 }
 
@@ -373,7 +377,7 @@ button.assistant-launcher {
   );
 }
 
-@media (min-width: 1101px) {
+@include bp.expanded {
   .application-shell.rail-navigation-shell app-global-search-bar {
     width: min(980px, 50%, calc(100% - 740px));
   }
@@ -435,7 +439,7 @@ button.assistant-launcher {
 }
 
 /* Responsive Rules */
-@media (max-width: 760px) {
+@include bp.compact {
   .application-shell {
     --shell-header-sticky-offset: 116px;
   }

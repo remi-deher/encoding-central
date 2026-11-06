@@ -1,11 +1,11 @@
 @if (canUndoLayout() || expandedPacks().length || pending()) {
   <div class="canvas-tools" role="toolbar" aria-label="Navigation du canvas">
     @if (canUndoLayout()) {
-      <button mat-button (click)="undoLayout()">Annuler la disposition</button>
+      <button matButton="text" (click)="undoLayout()">Annuler la disposition</button>
     }
     @for (pack of expandedPacks(); track pack.id) {
       <button
-        mat-button
+        matButton="outlined"
         (click)="packToggle.emit(pack.id)"
         [attr.aria-label]="'Replier le pack ' + pack.label"
       >
@@ -15,7 +15,7 @@
     @if (pending(); as selection) {
       <span role="status"
         >{{ selection.output.label }} <app-icon name="forward" /> choisissez une entrée</span
-      ><button mat-button (click)="pending.set(null)">Annuler la liaison</button>
+      ><button matButton="text" (click)="pending.set(null)">Annuler la liaison</button>
     }
   </div>
 }
@@ -216,9 +216,11 @@
 </div>
 <div class="minimap-panel" aria-label="Vue d’ensemble du flow">
   <div class="minimap-tools" role="toolbar" aria-label="Zoom et affichage du canvas">
-    <button mat-icon-button (click)="zoom(-0.1)" aria-label="Dézoomer">−</button>
+    <button matIconButton (click)="zoom(-0.1)" aria-label="Dézoomer" matTooltip="Dézoomer">
+      <app-icon name="remove" />
+    </button>
     <button
-      mat-button
+      matButton="text"
       class="minimap-zoom-reset"
       (click)="resetOrFit()"
       [attr.aria-label]="fitActive() ? 'Revenir à 100 %' : 'Tout afficher'"
@@ -227,7 +229,9 @@
     >
       {{ (scale() * 100).toFixed(0) }} %
     </button>
-    <button mat-icon-button (click)="zoom(0.1)" aria-label="Zoomer">＋</button>
+    <button matIconButton (click)="zoom(0.1)" aria-label="Zoomer" matTooltip="Zoomer">
+      <app-icon name="add" />
+    </button>
   </div>
   <button
     [disabled]="pending() !== null"
@@ -259,7 +263,7 @@
 <div class="connection-list" role="group" aria-label="Actions accessibles sur les liaisons">
   @for (edge of connections(); track edge.id) {
     <button
-      mat-button
+      matButton="outlined"
       [attr.aria-label]="'Liaison ' + edge.sourceOutputId + ' vers ' + edge.targetNodeId"
       (click)="menu({ x: $event.clientX, y: $event.clientY, origin: viewport }, undefined, edge)"
     >

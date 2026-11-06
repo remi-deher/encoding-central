@@ -11,9 +11,9 @@ export type DrawerActionRoute = string | readonly string[];
   template: `
     @if (routerLink(); as route) {
       <a
-        matButton="filled"
+        [matButton]="variant()"
         class="drawer-action-button"
-        [class.drawer-action-button_danger]="tone() === 'danger'"
+        [class.danger]="tone() === 'danger'"
         [routerLink]="route"
         [info]="navigationInfo()"
         >{{ label() }}</a
@@ -22,7 +22,7 @@ export type DrawerActionRoute = string | readonly string[];
       <button
         [matButton]="variant()"
         class="drawer-action-button"
-        [class.drawer-action-button_danger]="tone() === 'danger'"
+        [class.danger]="tone() === 'danger'"
         type="button"
         [disabled]="disabled()"
         (click)="activated.emit()"

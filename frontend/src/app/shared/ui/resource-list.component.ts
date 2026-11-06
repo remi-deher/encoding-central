@@ -24,6 +24,7 @@ import type {
   DataTableSelectionAction,
 } from './data-table.component';
 import { IconComponent, IconName } from './icon.component';
+import { EmptyStateComponent } from './empty-state/empty-state.component';
 
 export interface ResourceListTag {
   readonly label: string;
@@ -70,7 +71,14 @@ export interface ResourceListToggleEvent {
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-resource-list',
-  imports: [IconComponent, MatButtonModule, MatCheckboxModule, MatMenuModule, MatSlideToggleModule],
+  imports: [
+    EmptyStateComponent,
+    IconComponent,
+    MatButtonModule,
+    MatCheckboxModule,
+    MatMenuModule,
+    MatSlideToggleModule,
+  ],
   template: `
     @if (items().length) {
       @if (selectable() && selectedItems().length) {
@@ -221,7 +229,7 @@ export interface ResourceListToggleEvent {
         }
       </div>
     } @else {
-      <p class="resource-empty">{{ emptyMessage() }}</p>
+      <app-empty-state icon="search" [title]="emptyMessage()" />
     }
   `,
   styleUrl: './resource-list.component.scss',

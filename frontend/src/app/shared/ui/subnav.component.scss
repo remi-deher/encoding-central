@@ -11,26 +11,13 @@
   max-width: 100%;
 }
 
+/* Conteneur mat-tab-nav-bar : le défilement et la pagination sont gérés par Material. */
 .subnav-items {
-  display: flex;
   flex: 1 1 auto;
-  align-items: center;
-  gap: 3px;
   min-width: 0;
   max-width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
   padding: 3px;
   border-radius: var(--radius-pill);
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  overscroll-behavior-inline: contain;
-  scroll-padding-inline: 4px;
-  -webkit-overflow-scrolling: touch;
-}
-
-.subnav-items::-webkit-scrollbar {
-  display: none;
 }
 
 .subnav-item {
@@ -38,15 +25,15 @@
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--space-2);
   min-height: 36px;
-  padding: 0 12px;
+  padding: 0 var(--space-3);
   border: 0;
   border-radius: var(--radius-pill);
   background: transparent;
   color: var(--text-secondary);
-  font: inherit;
-  font-size: 13px;
+  font-family: inherit;
+  font-size: var(--font-body);
   font-weight: 500;
   letter-spacing: 0.01em;
   text-decoration: none;
@@ -81,9 +68,9 @@
   justify-content: center;
   min-width: 18px;
   height: 18px;
-  padding: 0 5px;
+  padding: 0 var(--space-1);
   border-radius: var(--radius-pill);
-  font-size: 11px;
+  font-size: var(--font-label);
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -109,7 +96,7 @@
   border: 1px solid color-mix(in srgb, var(--border-subtle) 60%, transparent);
   border-radius: var(--radius-pill);
   background: var(--surface-container);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--elevation-1);
   transition: box-shadow 160ms ease;
 }
 
@@ -121,21 +108,18 @@
 :host(.subnav-capsule) .subnav-items {
   flex: 0 1 auto;
   padding: 0;
-  gap: 2px;
 }
 
 :host(.subnav-capsule) .subnav-item {
   min-height: 32px;
-  padding: 0 10px;
-  gap: 5px;
-  font-size: 13px;
+  padding: 0 var(--space-2);
+  gap: var(--space-1);
+  font-size: var(--font-body);
 
   &.is-active {
     background: var(--surface-container-lowest);
     color: var(--text-primary);
     font-weight: 600;
-    box-shadow:
-      0 1px 3px rgba(0, 0, 0, 0.08),
-      0 1px 2px rgba(0, 0, 0, 0.04);
+    box-shadow: var(--elevation-1);
   }
 }

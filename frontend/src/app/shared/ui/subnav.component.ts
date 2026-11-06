@@ -1,4 +1,3 @@
-import { selectionNavigationIndex } from './selection-navigation';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -9,6 +8,7 @@ import {
   viewChildren,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { MatTabLink, MatTabNav } from '@angular/material/tabs';
 
 export interface SubnavOption {
   readonly value: string;
@@ -18,25 +18,29 @@ export interface SubnavOption {
   readonly count?: number;
 }
 
-/** Navigation de second niveau commune : liens entre routes ou vues locales. */
+/**
+ * Navigation de second niveau commune : liens entre routes ou vues locales,
+ * rendus en `mat-tab-nav-bar` (navigation clavier native de Material).
+ */
 @Component({
   selector: 'app-subnav',
   host: {
     '[class.subnav-capsule]': "presentation() === 'capsule'",
   },
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink],
+  imports: [RouterLink, MatTabNav, MatTabLink],
   template: `
     <div class="page-subnav">
-      @if (variant() === 'links') {
-        <nav class="subnav-items" [attr.aria-label]="label()">
-          @for (option of options(); track option.value; let index = $index) {
+      <nav mat-tab-nav-bar class="subnav-items" [attr.aria-label]="label()">
+        @for (option of options(); track option.value) {
+          @if (variant() === 'links') {
             @if (option.route) {
               <a
                 #subnavItem
+                mat-tab-link
                 class="subnav-item"
-                [class.is-active]="option.value === selected()"
                 [routerLink]="option.route"
+                [active]="option.value === selected()"
                 [attr.aria-current]="option.value === selected() ? 'page' : null"
               >
                 <span>{{ option.label }}</span>
@@ -45,26 +49,16 @@ export interface SubnavOption {
                 }
               </a>
             }
-          }
-        </nav>
-      } @else {
-        <div
-          class="subnav-items"
-          role="tablist"
-          [attr.aria-label]="label()"
-          (keydown)="onKeydown($event, focusedIndex($event))"
-        >
-          @for (option of options(); track option.value; let index = $index) {
+          } @else {
             <button
               #subnavItem
               type="button"
+              mat-tab-link
               class="subnav-item"
-              role="tab"
               [id]="panelId() ? tabId(option.value) : null"
               [attr.aria-controls]="panelId() || null"
-              [class.is-active]="option.value === selected()"
+              [active]="option.value === selected()"
               [attr.aria-selected]="option.value === selected()"
-              [attr.tabindex]="option.value === selected() ? 0 : -1"
               (click)="selectedChange.emit(option.value)"
             >
               <span>{{ option.label }}</span>
@@ -73,8 +67,8 @@ export interface SubnavOption {
               }
             </button>
           }
-        </div>
-      }
+        }
+      </nav>
     </div>
   `,
   styleUrl: './subnav.component.scss',
@@ -92,7 +86,9 @@ export class SubnavComponent {
   readonly presentation = input<'default' | 'capsule'>('default');
   readonly selectedChange = output<string>();
 
-  private readonly items = viewChildren<ElementRef<HTMLElement>>('subnavItem');
+  private readonly items = viewChildren<ElementRef<HTMLElement>>('subnavItem', {
+    read: ElementRef,
+  });
 
   constructor() {
     effect(() => {
@@ -104,25 +100,5 @@ export class SubnavComponent {
         );
       }
     });
-  }
-
-  protected focusedIndex(event: KeyboardEvent): number {
-    return this.items().findIndex((item) => item.nativeElement === event.target);
-  }
-
-  protected onKeydown(event: KeyboardEvent, index: number): void {
-    const options = this.options();
-    if (index < 0 || !options.length) return;
-
-    const nextIndex = selectionNavigationIndex(event.key, index, options.length);
-
-    if (nextIndex >= 0) {
-      event.preventDefault();
-      const option = options[nextIndex];
-      if (option) {
-        this.selectedChange.emit(option.value);
-        this.items()[nextIndex]?.nativeElement.focus();
-      }
-    }
   }
 }
