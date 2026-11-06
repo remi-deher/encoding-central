@@ -28,6 +28,7 @@ import {
 import { FlowComponentDefinition } from '../../shared/models/flow-component';
 import { FlowComponentListComponent } from '../../shared/ui/flow-component-list.component';
 import { PlexSetupAssistantComponent } from './plex-setup-assistant.component';
+import { IconComponent, IconName } from '../../shared/ui/icon.component';
 import {
   ResourceSheetComponent,
   ResourceSheetSection,
@@ -49,6 +50,14 @@ import {
 } from '../../core/layout/page-shell-context';
 
 type PluginFamily = 'base' | 'cluster' | 'media' | 'automation' | 'custom';
+
+/** Icône du registre selon la nature du paquet du Store (l’icône d’origine est une émoji). */
+const STORE_KIND_ICONS: Readonly<Record<StorePackage['kind'], IconName>> = {
+  plugin: 'pack',
+  tool: 'terminal',
+  resource: 'library',
+  flow: 'flow',
+};
 
 interface PluginRecord {
   readonly id: string;
@@ -289,6 +298,7 @@ const PLUGIN_FAMILY_DESCRIPTIONS: Readonly<Record<PluginFamily, string>> = {
     ComponentConfigurationFormComponent,
     FlowComponentListComponent,
     PlexSetupAssistantComponent,
+    IconComponent,
     MatTabsModule,
     MatButtonModule,
     MatSlideToggleModule,
@@ -318,10 +328,11 @@ export class PluginCatalogPageComponent {
   protected readonly selectedStoreCategory = signal('all');
   protected readonly searchQuery = signal('');
 
+  protected readonly storeKindIcons = STORE_KIND_ICONS;
   protected readonly extensionTabs = computed<readonly CategoryTabOption[]>(() => [
     { value: 'plugins', label: 'Plugins', count: this.pluginRecords().length },
     { value: 'tools', label: 'Outils média', count: this.clusterTools().length },
-    { value: 'store', label: 'Store & Dépôts', count: this.storePackages().length },
+    { value: 'store', label: 'Store et dépôts', count: this.storePackages().length },
   ]);
 
   protected readonly storeCategoryOptions = computed<readonly CategoryTabOption[]>(() => [
@@ -427,7 +438,7 @@ export class PluginCatalogPageComponent {
         components: plugin.components.map((component) => component.name).join(', '),
         runtime: 'Processus isolé installé sur chaque worker',
         configuration: plugin.configurationSchema
-          ? `${plugin.configurationSchema.fields.length} champ(s) déclaré(s)`
+          ? `${plugin.configurationSchema.fields.length} ${plugin.configurationSchema.fields.length > 1 ? 'champs déclarés' : 'champ déclaré'}`
           : 'Aucune configuration globale',
         state: plugin.enabled === false ? 'Désactivé' : 'Actif',
         iconUrl: '/plugins/base.svg',
@@ -514,7 +525,9 @@ export class PluginCatalogPageComponent {
       {
         id: 'plugin-runtime',
         title: 'Exécution et configuration',
-        caption: schema ? `${schema.fields.length} champ(s)` : 'Sans schéma',
+        caption: schema
+          ? `${schema.fields.length} ${schema.fields.length > 1 ? 'champs' : 'champ'}`
+          : 'Sans schéma',
         fields: [
           { label: 'Mode d’exécution', value: plugin.runtime },
           { label: 'Configuration', value: plugin.configuration },
@@ -523,11 +536,11 @@ export class PluginCatalogPageComponent {
       {
         id: 'plugin-components',
         title: 'Catalogue des composants',
-        caption: `${components.length} composant(s)`,
+        caption: `${components.length} ${components.length > 1 ? 'composants' : 'composant'}`,
         items: [
           {
             label: 'Blocs déclarés',
-            detail: `${components.length} composant(s) · consulter l’onglet Composants`,
+            detail: `${components.length} ${components.length > 1 ? 'composants' : 'composant'} · consulter l’onglet Composants`,
             badges: [
               {
                 label: components.length ? 'Catalogue chargé' : 'Aucun bloc',
@@ -675,7 +688,9 @@ export class PluginCatalogPageComponent {
       );
     } catch (error) {
       this.setPluginActivationView(plugin.id, plugin.enabled);
-      this.notifications.show(this.storeError(error, 'Impossible de modifier l’activation du plugin.'));
+      this.notifications.show(
+        this.storeError(error, 'Impossible de modifier l’activation du plugin.'),
+      );
     } finally {
       this.setActivationBusy(busyKey, false);
     }
@@ -696,7 +711,9 @@ export class PluginCatalogPageComponent {
       );
     } catch (error) {
       this.setToolActivationView(tool.id, tool.enabled);
-      this.notifications.show(this.storeError(error, 'Impossible de modifier l’activation de l’outil.'));
+      this.notifications.show(
+        this.storeError(error, 'Impossible de modifier l’activation de l’outil.'),
+      );
     } finally {
       this.setActivationBusy(busyKey, false);
     }
@@ -762,13 +779,14 @@ export class PluginCatalogPageComponent {
 
   protected installPackage(pkg: StorePackage): void {
     void this.runStoreAction(
-      () => pkg.kind === 'tool'
-        ? this.extensionsService.installToolPackage(pkg.repositoryId, pkg.id, pkg.version)
-        : pkg.kind === 'resource'
-          ? this.extensionsService.installCatalogResource(pkg.repositoryId, pkg.id, pkg.version)
-          : pkg.kind === 'flow'
-            ? this.extensionsService.installCatalogFlow(pkg.repositoryId, pkg.id, pkg.version)
-            : this.extensionsService.installPackage(pkg.repositoryId, pkg.id, pkg.version),
+      () =>
+        pkg.kind === 'tool'
+          ? this.extensionsService.installToolPackage(pkg.repositoryId, pkg.id, pkg.version)
+          : pkg.kind === 'resource'
+            ? this.extensionsService.installCatalogResource(pkg.repositoryId, pkg.id, pkg.version)
+            : pkg.kind === 'flow'
+              ? this.extensionsService.installCatalogFlow(pkg.repositoryId, pkg.id, pkg.version)
+              : this.extensionsService.installPackage(pkg.repositoryId, pkg.id, pkg.version),
       pkg.kind === 'resource' || pkg.kind === 'flow'
         ? `« ${pkg.name} » version ${pkg.version} est dans le catalogue.`
         : `« ${pkg.name} » ${pkg.version} est installé ; les workers le téléchargent dans la minute.`,
@@ -777,9 +795,10 @@ export class PluginCatalogPageComponent {
 
   protected removePackage(pkg: StorePackage): void {
     void this.runStoreAction(
-      () => pkg.kind === 'tool'
-        ? this.extensionsService.removeToolPackage(pkg.id, pkg.platform ?? 'unsupported')
-        : this.extensionsService.removePackage(pkg.id),
+      () =>
+        pkg.kind === 'tool'
+          ? this.extensionsService.removeToolPackage(pkg.id, pkg.platform ?? 'unsupported')
+          : this.extensionsService.removePackage(pkg.id),
       `« ${pkg.name} » est retiré.`,
     );
   }
@@ -857,12 +876,12 @@ export class PluginCatalogPageComponent {
           ]),
         )
         .slice(0, 8)
-        .map((plugin) => ({
+        .map<PageShellSearchResult>((plugin) => ({
           id: `plugin:${plugin.id}`,
           label: plugin.name,
           description: `${plugin.familyLabel} · ${plugin.category}`,
           group: 'Plugins',
-          glyph: '◇',
+          icon: 'diamond',
           run: () => this.onPluginOpen(plugin.id),
         }));
     }
@@ -879,12 +898,12 @@ export class PluginCatalogPageComponent {
           ]),
         )
         .slice(0, 8)
-        .map((tool) => ({
+        .map<PageShellSearchResult>((tool) => ({
           id: `tool:${tool.id}`,
           label: tool.name,
           description: `${tool.clusterReadiness} · ${tool.executables.join(', ')}`,
           group: 'Outils média',
-          glyph: '⚙',
+          icon: 'settings',
           run: () =>
             document.getElementById(`cluster-tool-${tool.id}`)?.scrollIntoView({ block: 'center' }),
         }));
@@ -897,7 +916,7 @@ export class PluginCatalogPageComponent {
         label: repo.name,
         description: repo.url,
         group: 'Dépôts',
-        glyph: '↗',
+        icon: 'library',
         run: () =>
           document
             .getElementById(`store-repository-${repo.id}`)
@@ -911,7 +930,7 @@ export class PluginCatalogPageComponent {
         label: pkg.name,
         description: `${pkg.categoryLabel} · v${pkg.version}`,
         group: 'Store',
-        glyph: pkg.icon,
+        icon: STORE_KIND_ICONS[pkg.kind],
         run: () =>
           document.getElementById(`store-package-${pkg.id}`)?.scrollIntoView({ block: 'center' }),
       }));
