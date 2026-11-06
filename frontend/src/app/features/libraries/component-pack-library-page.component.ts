@@ -124,7 +124,7 @@ export class ComponentPackLibraryPageComponent {
       subtitle: row.description || undefined,
       tags: [
         { label: row.mediaType },
-        { label: `${row.components} ${row.components > 1 ? 'composants' : 'composant'}` },
+        { label: `${row.components} ${Number(row.components) > 1 ? 'composants' : 'composant'}` },
         { label: `${row.source} · ${row.version}`, tone: 'ok' as const },
       ],
     })),

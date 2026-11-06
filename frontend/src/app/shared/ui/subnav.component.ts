@@ -86,9 +86,7 @@ export class SubnavComponent {
   readonly presentation = input<'default' | 'capsule'>('default');
   readonly selectedChange = output<string>();
 
-  private readonly items = viewChildren<ElementRef<HTMLElement>>('subnavItem', {
-    read: ElementRef,
-  });
+  private readonly items = viewChildren<ElementRef<HTMLElement>>('subnavItem');
 
   constructor() {
     effect(() => {

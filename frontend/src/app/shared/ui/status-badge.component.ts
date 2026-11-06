@@ -27,9 +27,10 @@ export class StatusBadgeComponent {
   readonly label = input.required<string>();
   readonly tone = input<StatusTone>('neutral');
   readonly icon = input<IconName>();
-  protected readonly normalizedTone = computed(() =>
-    this.tone() === 'ok' ? 'success' : this.tone(),
-  );
+  protected readonly normalizedTone = computed<Exclude<StatusTone, 'ok'>>(() => {
+    const tone = this.tone();
+    return tone === 'ok' ? 'success' : tone;
+  });
   protected readonly resolvedIcon = computed(
     () => this.icon() ?? TONE_ICONS[this.normalizedTone()],
   );

@@ -48,9 +48,7 @@ export class CategoryTabsComponent {
   readonly variant = input<'pill' | 'underline'>('pill');
   readonly selectedChange = output<string>();
 
-  private readonly tabButtons = viewChildren<ElementRef<HTMLElement>>('tabButton', {
-    read: ElementRef,
-  });
+  private readonly tabButtons = viewChildren<ElementRef<HTMLElement>>('tabButton');
 
   constructor() {
     effect(() => {

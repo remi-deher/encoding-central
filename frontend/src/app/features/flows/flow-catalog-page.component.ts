@@ -56,6 +56,7 @@ import {
   PageShellSearchResult,
 } from '../../core/layout/page-shell-context';
 import { LiveUpdates } from '../../shared/services/live-updates';
+import { formatShortDateTime } from '../../shared/models/date-format';
 
 interface FlowRecord extends DataTableRow {
   readonly id: string;
