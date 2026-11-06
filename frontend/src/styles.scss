@@ -1,4 +1,6 @@
+@use 'sass:map';
 @use '@angular/material' as mat;
+@use './styles/breakpoints' as bp;
 @use './app/core/layout/app-shell.component';
 
 @include mat.core();
@@ -116,18 +118,9 @@ $brand-palette: (
         use-system-variables: true,
       ),
       typography: (
-        plain-family: (
-          Inter,
-          'Segoe UI',
-          system-ui,
-          sans-serif,
-        ),
-        brand-family: (
-          Inter,
-          'Segoe UI',
-          system-ui,
-          sans-serif,
-        ),
+        // Inter n'est ni chargée ni embarquée : pile système, identique partout.
+        plain-family: (system-ui, 'Segoe UI', Roboto, sans-serif),
+        brand-family: (system-ui, 'Segoe UI', Roboto, sans-serif),
       ),
       density: (
         scale: -1,
@@ -140,13 +133,17 @@ $app-theme: app-theme($brand-palette);
 html {
   @include mat.all-component-themes($app-theme);
   @include mat.system-level-colors($app-theme);
+  @include mat.system-level-typography($app-theme);
+  @include mat.system-level-shape($app-theme);
+  @include mat.system-level-elevation($app-theme);
   color-scheme: light;
+  // Boutons en pilule : forme unique, définie ici seulement.
   @include mat.button-overrides(
     (
-      filled-container-shape: 999px,
-      tonal-container-shape: 999px,
-      outlined-container-shape: 999px,
-      text-container-shape: 999px,
+      filled-container-shape: var(--radius-pill),
+      tonal-container-shape: var(--radius-pill),
+      outlined-container-shape: var(--radius-pill),
+      text-container-shape: var(--radius-pill),
       outlined-outline-color: var(--border-strong),
       outlined-label-text-color: var(--text-primary),
     )
@@ -190,7 +187,7 @@ html:not([data-palette])[data-theme='dark'] {
   --border-strong: var(--mat-sys-outline);
   --text-primary: var(--mat-sys-on-surface);
   --text-secondary: var(--mat-sys-on-surface-variant);
-  --text-muted: var(--mat-sys-on-surface-variant);
+  --text-muted: var(--text-secondary);
   --accent: var(--mat-sys-primary);
   --accent-strong: var(--mat-sys-primary);
   --accent-soft: var(--mat-sys-primary-container);
@@ -198,9 +195,21 @@ html:not([data-palette])[data-theme='dark'] {
   --tertiary-soft: var(--mat-sys-tertiary-container);
   --danger: var(--mat-sys-error);
   --danger-soft: var(--mat-sys-error-container);
-  --danger-strong: var(--mat-sys-error);
-  --danger-stronger: var(--mat-sys-error);
+  --danger-strong: var(--danger);
+  --danger-stronger: var(--danger);
   --on-danger: var(--mat-sys-on-error);
+
+  /* Alias de compatibilité : variables utilisées par des composants mais jamais définies jusqu'ici. */
+  --color-error: var(--danger);
+  --color-success: var(--success);
+  --shadow-floating: var(--elevation-3);
+  /* `--accent-rgb` n'existe plus : écrire color-mix(in srgb, var(--accent) 12%, transparent). */
+
+  /* Pastilles du sélecteur de palette : primaire (ton 40) de chaque palette. */
+  --palette-swatch-forest: #{map.get($brand-palette, 40)};
+  --palette-swatch-ocean: #{map.get(mat.$azure-palette, 40)};
+  --palette-swatch-iris: #{map.get(mat.$violet-palette, 40)};
+  --palette-swatch-rose: #{map.get(mat.$rose-palette, 40)};
   --sidebar-background: var(--mat-sys-surface-container-low);
   --sidebar-surface: var(--mat-sys-surface-container);
   --sidebar-border: var(--mat-sys-outline-variant);
@@ -216,17 +225,20 @@ html:not([data-palette])[data-theme='dark'] {
   --on-accent: var(--mat-sys-on-primary);
   --tone-os-linux: #946000;
   --tone-os-windows: #196799;
-  --font-page-title: 36px;
+  --font-page-title: var(--mat-sys-display-small-size, 36px);
   --content-max-width: 1360px;
   --content-wide-width: 1680px;
+  /* Statuts sans rôle M3 : teinte de base, dérivés « soft » mélangés à la surface. */
   --success: #1f6e4a;
+  --on-success: #ffffff;
+  --success-soft: color-mix(in srgb, var(--success) 14%, var(--mat-sys-surface));
+  --warning: #855306;
+  --on-warning: #ffffff;
+  --warning-soft: color-mix(in srgb, var(--warning) 14%, var(--mat-sys-surface));
   /* Tons catégoriels neutres (ex. familles d'accélérateurs) : mêmes valeurs dans les deux thèmes, mélangés à la surface. */
   --tone-lime: #7ba832;
   --tone-blue: #3d7abd;
   --tone-purple: #9258a6;
-  --success-soft: #e2f4ea;
-  --warning: #855306;
-  --warning-soft: #fbf2e1;
 
   /* Surfaces persistantes du shell en mode clair */
   --sidebar-status-halo: rgb(19 94 70 / 16%);
@@ -239,35 +251,50 @@ html:not([data-palette])[data-theme='dark'] {
   --space-5: 24px;
   --space-6: 32px;
 
-  /* Formes expressives Material 3 */
-  --radius-xs: 6px;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
-  --radius-2xl: 28px;
-  --radius-pill: 999px;
+  /* Formes : coins Material 3 (--mat-sys-corner-*) */
+  --radius-xs: var(--mat-sys-corner-extra-small, 4px);
+  --radius-sm: var(--mat-sys-corner-small, 8px);
+  --radius-md: var(--mat-sys-corner-medium, 12px);
+  --radius-lg: var(--mat-sys-corner-large, 16px);
+  --radius-xl: var(--mat-sys-corner-large-increased, 20px);
+  --radius-2xl: var(--mat-sys-corner-extra-large, 28px);
+  --radius-pill: var(--mat-sys-corner-full, 999px);
 
-  /* Échelle typographique éditoriale (Material Design 3 Expressive) */
-  --font-label: 12px;
-  --font-body: 14px;
-  --font-title-sm: 15px;
-  --font-title: 16px;
-  --font-title-md: 18px;
-  --font-title-lg: 20px;
-  --font-headline: 24px;
-  --font-display-sm: 28px;
-  --font-display-md: 36px;
-  --font-display-lg: 44px;
+  /* Typographie : échelle M3 (--mat-sys-*), poids 400 / 500 / 700 */
+  --font-label: var(--mat-sys-label-medium-size, 12px);
+  --font-body: var(--mat-sys-body-medium-size, 14px);
+  --font-title-sm: var(--mat-sys-title-small-size, 14px);
+  --font-title: var(--mat-sys-title-medium-size, 16px);
+  --font-title-md: var(--mat-sys-title-large-size, 22px);
+  --font-title-lg: var(--mat-sys-title-large-size, 22px);
+  --font-headline: var(--mat-sys-headline-small-size, 24px);
+  --font-display-sm: var(--mat-sys-headline-medium-size, 28px);
+  --font-display-md: var(--mat-sys-headline-large-size, 32px);
+  --font-display-lg: var(--mat-sys-display-small-size, 36px);
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 700;
+  --font-family-base: system-ui, 'Segoe UI', Roboto, sans-serif;
 
   /* Physique du mouvement (Ressorts Material 3 Expressive) */
   --motion-spring-fast: cubic-bezier(0.42, 1.67, 0.21, 0.9);
   --motion-spring-standard: cubic-bezier(0.27, 1.06, 0.18, 1);
   --motion-emphasized: cubic-bezier(0.2, 0, 0, 1);
 
-  /* Élévations */
-  --elevation-1: 0 2px 10px rgb(20 36 30 / 4%);
-  --elevation-2: 0 10px 28px rgb(16 30 25 / 12%);
+  /* Élévations : niveaux M3 */
+  --elevation-1: var(--mat-sys-level1);
+  --elevation-2: var(--mat-sys-level2);
+  --elevation-3: var(--mat-sys-level3);
+
+  /* Empilement : une seule échelle pour tout z-index */
+  --z-raised: 1;
+  --z-sticky: 10;
+  --z-dropdown: 20;
+  --z-overlay: 50;
+  --z-nav: 80;
+  --z-drawer: 90;
+  --z-scrim: 999;
+  --z-modal: 1000;
 
   /* Cartes du canevas : les bornes du texte ne réduisent jamais l’espacement des ports. */
   --flow-node-min-width: 200px;
@@ -278,13 +305,6 @@ html:not([data-palette])[data-theme='dark'] {
   --flow-video-soft: color-mix(in srgb, var(--flow-video) 12%, var(--surface-container-lowest));
   --flow-audio: var(--tertiary);
   --flow-audio-soft: var(--tertiary-soft);
-  --elevation-3: 0 12px 36px color-mix(in srgb, var(--text-primary) 18%, transparent);
-
-  /* Boutons : forme en pilule (Material 3), hauteur de 40 px */
-  --mat-button-filled-container-shape: var(--radius-pill);
-  --mat-button-tonal-container-shape: var(--radius-pill);
-  --mat-button-outlined-container-shape: var(--radius-pill);
-  --mat-button-text-container-shape: var(--radius-pill);
 
   /* Champs de saisie, listes déroulantes et menus : coins arrondis Material 3 */
   --mat-form-field-outlined-container-shape: var(--radius-lg);
@@ -295,7 +315,7 @@ html:not([data-palette])[data-theme='dark'] {
 
   /* Cible tactile minimale recommandée */
   --touch-target: 48px;
-  font-family: Inter, 'Segoe UI', system-ui, sans-serif;
+  font-family: var(--font-family-base);
   color: var(--text-primary);
   background: var(--page-background);
 }
@@ -303,15 +323,12 @@ html:not([data-palette])[data-theme='dark'] {
 :root[data-theme='dark'] {
   --tone-os-linux: #f0bd67;
   --tone-os-windows: #91c9f6;
-  --elevation-3: var(--elevation-2), var(--elevation-1);
   --flow-video: color-mix(in srgb, var(--tone-purple) 70%, var(--text-primary));
   --success: #6fcf9f;
-  --success-soft: #1d3829;
+  --on-success: #00210f;
   --warning: #e2b35e;
-  --warning-soft: #3b301e;
+  --on-warning: #2b1d00;
   --sidebar-status-halo: rgb(111 207 159 / 16%);
-  --elevation-1: 0 2px 10px rgb(0 0 0 / 28%);
-  --elevation-2: 0 12px 30px rgb(0 0 0 / 50%);
 }
 
 * {
@@ -350,10 +367,12 @@ html:not([data-palette])[data-theme='dark'] {
 .confirmation-dialog-panel {
   --mat-dialog-container-shape: var(--radius-2xl);
   --mat-dialog-container-color: var(--surface-container-high);
+  --mat-dialog-container-min-width: min(280px, calc(100vw - 24px));
+  --mat-dialog-container-max-width: calc(100vw - 24px);
+  // `!important` limité à la largeur : MatDialog pose width/max-width en style en ligne sur le panneau.
   width: min(480px, calc(100vw - 24px)) !important;
-  min-width: min(280px, calc(100vw - 24px)) !important;
   max-width: calc(100vw - 24px) !important;
-  max-height: calc(100dvh - 24px) !important;
+  max-height: calc(100dvh - 24px);
 }
 
 .compact-confirmation-dialog-panel {
@@ -455,21 +474,38 @@ html:not([data-palette])[data-theme='dark'] {
   flex: 0 0 auto;
 }
 
-.app-dialog .app-dialog-footer .mdc-button {
-  border-radius: var(--radius-pill);
-}
-
 .app-dialog .app-dialog-footer .mat-mdc-button:not(.mat-mdc-button-disabled) {
   background: var(--surface-container-highest);
 }
 
-/* Bouton principal d'une modale de danger : couleur portée par la variante, pas par l'appelant. */
+/* Bouton principal d'une modale de danger : même rendu que la classe partagée `.danger`. */
 .app-dialog_danger .app-dialog-footer .mat-mdc-unelevated-button:not(.mat-mdc-button-disabled) {
-  --mat-button-filled-container-color: var(--danger-strong);
+  --mat-button-filled-container-color: var(--danger);
   --mat-button-filled-label-text-color: var(--on-danger);
 }
 
-@media (max-width: 600px) {
+/*
+ * Action destructive partagée : ajouter la classe `danger` au bouton.
+ *   - filled (confirmation) : <button matButton="filled" class="danger">
+ *   - text / outlined (ailleurs) : <button matButton="text" class="danger">
+ */
+.mat-mdc-button-base.danger {
+  --mat-button-text-label-text-color: var(--danger);
+  --mat-button-text-state-layer-color: var(--danger);
+  --mat-button-text-ripple-color: color-mix(in srgb, var(--danger) 12%, transparent);
+  --mat-button-outlined-label-text-color: var(--danger);
+  --mat-button-outlined-outline-color: var(--danger);
+  --mat-button-outlined-state-layer-color: var(--danger);
+  --mat-button-outlined-ripple-color: color-mix(in srgb, var(--danger) 12%, transparent);
+  --mat-button-tonal-container-color: var(--danger-soft);
+  --mat-button-tonal-label-text-color: var(--mat-sys-on-error-container);
+  --mat-button-filled-container-color: var(--danger);
+  --mat-button-filled-label-text-color: var(--on-danger);
+  --mat-button-filled-state-layer-color: var(--on-danger);
+  --mat-button-filled-ripple-color: color-mix(in srgb, var(--on-danger) 12%, transparent);
+}
+
+@include bp.compact {
   .app-dialog-panel,
   .confirmation-dialog-panel {
     width: calc(100vw - 24px) !important;
@@ -514,7 +550,7 @@ app-root {
 }
 
 .cdk-overlay-backdrop.global-search-backdrop.cdk-overlay-backdrop-showing {
-  background-color: color-mix(in srgb, var(--text-primary) 24%, transparent);
+  background-color: color-mix(in srgb, var(--mat-sys-scrim) 32%, transparent);
 }
 
 .cdk-overlay-pane.global-search-sheet-pane {
@@ -551,7 +587,7 @@ a {
 }
 
 .detail-drawer-container.mat-drawer-container.drawer-layer-active {
-  z-index: 90;
+  z-index: var(--z-drawer);
 }
 
 .pack-expanded {
@@ -587,8 +623,8 @@ a {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 999 !important;
-  background-color: rgb(0 0 0 / 42%);
+  z-index: var(--z-scrim) !important;
+  background-color: color-mix(in srgb, var(--mat-sys-scrim) 42%, transparent);
   backdrop-filter: blur(2px);
   pointer-events: auto;
 }

@@ -1,0 +1,43 @@
+// Points de rupture Material 3 (fenêtre) : compact < 600, medium 600–839, expanded ≥ 840.
+// Source unique côté SCSS : `@use '<chemin>/styles/breakpoints' as bp;` puis `@include bp.compact { … }`.
+// Côté TypeScript, utiliser `BreakpointObserver` avec les mêmes valeurs.
+
+$compact-max: 599px;
+$medium-min: 600px;
+$medium-max: 839px;
+$expanded-min: 840px;
+
+/// Écrans compacts (< 600 px).
+@mixin compact {
+  @media (max-width: #{$compact-max}) {
+    @content;
+  }
+}
+
+/// Écrans medium uniquement (600–839 px).
+@mixin medium {
+  @media (min-width: #{$medium-min}) and (max-width: #{$medium-max}) {
+    @content;
+  }
+}
+
+/// Medium et au-delà (≥ 600 px).
+@mixin medium-up {
+  @media (min-width: #{$medium-min}) {
+    @content;
+  }
+}
+
+/// Medium et en deçà (< 840 px).
+@mixin medium-down {
+  @media (max-width: #{$medium-max}) {
+    @content;
+  }
+}
+
+/// Écrans expanded (≥ 840 px).
+@mixin expanded {
+  @media (min-width: #{$expanded-min}) {
+    @content;
+  }
+}
