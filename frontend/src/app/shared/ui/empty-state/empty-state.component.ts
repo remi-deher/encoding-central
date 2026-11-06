@@ -17,7 +17,9 @@ import { IconComponent, IconName } from '../icon.component';
     </section>
   `,
   styles: `
-    :host { display: block; }
+    :host {
+      display: block;
+    }
     .empty-state {
       display: grid;
       justify-items: center;
@@ -42,8 +44,12 @@ import { IconComponent, IconName } from '../icon.component';
       color: var(--mat-sys-on-surface-variant);
       font-size: var(--font-body);
     }
-    .empty-state__action { margin-top: var(--space-2); }
-    .empty-state__action:empty { display: none; }
+    .empty-state__action {
+      margin-top: var(--space-2);
+    }
+    .empty-state__action:empty {
+      display: none;
+    }
   `,
 })
 export class EmptyStateComponent {
