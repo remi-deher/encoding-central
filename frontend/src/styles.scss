@@ -5,6 +5,11 @@
 
 @include mat.core();
 
+// Rôles sémantiques « succès » et « avertissement » : M3 n'en définit pas, ils sont donc
+// générés depuis les palettes Material (ton 40 en clair, ton 80 en sombre, texte sur ton 100 / 20).
+$success-palette: mat.$green-palette;
+$warning-palette: mat.$orange-palette;
+
 // Palette tonale de la marque (teal), à la place du vert Material trop saturé.
 $brand-palette: (
   0: #000000,
@@ -229,11 +234,11 @@ html:not([data-palette])[data-theme='dark'] {
   --content-max-width: 1360px;
   --content-wide-width: 1680px;
   /* Statuts sans rôle M3 : teinte de base, dérivés « soft » mélangés à la surface. */
-  --success: #1f6e4a;
-  --on-success: #ffffff;
+  --success: #{map.get($success-palette, 40)};
+  --on-success: #{map.get($success-palette, 100)};
   --success-soft: color-mix(in srgb, var(--success) 14%, var(--mat-sys-surface));
-  --warning: #855306;
-  --on-warning: #ffffff;
+  --warning: #{map.get($warning-palette, 40)};
+  --on-warning: #{map.get($warning-palette, 100)};
   --warning-soft: color-mix(in srgb, var(--warning) 14%, var(--mat-sys-surface));
   /* Tons catégoriels neutres (ex. familles d'accélérateurs) : mêmes valeurs dans les deux thèmes, mélangés à la surface. */
   --tone-lime: #7ba832;
@@ -324,11 +329,11 @@ html:not([data-palette])[data-theme='dark'] {
   --tone-os-linux: #f0bd67;
   --tone-os-windows: #91c9f6;
   --flow-video: color-mix(in srgb, var(--tone-purple) 70%, var(--text-primary));
-  --success: #6fcf9f;
-  --on-success: #00210f;
-  --warning: #e2b35e;
-  --on-warning: #2b1d00;
-  --sidebar-status-halo: rgb(111 207 159 / 16%);
+  --success: #{map.get($success-palette, 80)};
+  --on-success: #{map.get($success-palette, 20)};
+  --warning: #{map.get($warning-palette, 80)};
+  --on-warning: #{map.get($warning-palette, 20)};
+  --sidebar-status-halo: color-mix(in srgb, var(--success) 16%, transparent);
 }
 
 * {
