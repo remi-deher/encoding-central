@@ -36,7 +36,7 @@ import {
     DialogFrameComponent,
   ],
   template: `
-    <app-dialog-frame eyebrow="Reverse proxy" icon="◈" heading="Générer une configuration">
+    <app-dialog-frame eyebrow="Reverse proxy" icon="server" heading="Générer une configuration">
       <mat-dialog-content class="app-dialog-body">
         <mat-button-toggle-group
           aria-label="Reverse proxy"
@@ -109,14 +109,14 @@ import {
       <mat-dialog-actions class="app-dialog-footer" align="end">
         <button matButton="text" type="button" mat-dialog-close>Fermer</button>
         <button
-          matButton="tonal"
+          matButton="outlined"
           type="button"
           [disabled]="!backends().length"
           (click)="download()"
         >
           Télécharger
         </button>
-        <button matButton="filled" type="button" [disabled]="!backends().length" (click)="copy()">
+        <button matButton="tonal" type="button" [disabled]="!backends().length" (click)="copy()">
           Copier
         </button>
       </mat-dialog-actions>

@@ -21,6 +21,7 @@ import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { IconComponent } from '../../../shared/ui/icon.component';
+import { StatusBadgeComponent, StatusTone } from '../../../shared/ui/status-badge.component';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDialog } from '@angular/material/dialog';
@@ -67,6 +68,7 @@ import { aiEffortLabel, aiTypeLabel } from '../../ai/components/ai-model-selecti
     FormsModule,
     MatButtonModule,
     IconComponent,
+    StatusBadgeComponent,
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
@@ -686,6 +688,20 @@ export class AiToolsTabComponent implements OnInit, OnDestroy {
   }
   effortName(value: string): string {
     return aiEffortLabel(value);
+  }
+  authTone(state: string): StatusTone {
+    switch (state) {
+      case 'authorized':
+        return 'success';
+      case 'pending':
+      case 'checking':
+        return 'warning';
+      case 'expired':
+      case 'failed':
+        return 'danger';
+      default:
+        return 'neutral';
+    }
   }
   authLabel(state: string): string {
     return (
