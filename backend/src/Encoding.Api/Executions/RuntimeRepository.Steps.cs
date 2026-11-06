@@ -186,7 +186,7 @@ public sealed partial class RuntimeRepository
         return new(source,map);
     }
 
-    private static async Task<bool> ValidVideoEncodingsAsync(FlowDefinition flow,Guid executionId,Guid worker,string currentNodeId,
+    private async Task<bool> ValidVideoEncodingsAsync(FlowDefinition flow,Guid executionId,Guid worker,string currentNodeId,
         IReadOnlyList<ResolvedVideoEncoding>? resolutions,DbConnection c,DbTransaction tx,CancellationToken ct)
     {
         foreach(var resolution in resolutions??[])
@@ -208,28 +208,69 @@ public sealed partial class RuntimeRepository
                     executionWorker=await plannedOwner.ScalarGuidAsync(ct) is {} plannedWorkerId?plannedWorkerId:null;
                 }
             }
-            if(executionWorker!=resolution.WorkerId || string.IsNullOrWhiteSpace(resolution.FfmpegVersion)
-                || resolution.FfmpegVersion.Length>128 || resolution.ResolvedAt==default) return false;
+            if(WorkerClause(resolution,executionWorker) is {} workerClause) return RefuseVideoEncoding(workerClause,resolution,executionId,worker,currentNodeId);
             var node=flow.Nodes.SingleOrDefault(item=>item.Id==resolution.FlowNodeId);
-            if(node is null || (node.Component.PluginId!="base" && node.Component.PluginId!="video")
-                || (node.Component.ComponentId!="base-transcode-video" && node.Component.ComponentId!="video-transcode")
-                || !node.Configuration.TryGetValue("encodingProfile",out var profileValue)
-                || profileValue.ValueKind!=JsonValueKind.Object) return false;
+            if(NodeClause(node) is {} nodeClause) return RefuseVideoEncoding(nodeClause,resolution,executionId,worker,currentNodeId);
+            var profileValue=node!.Configuration["encodingProfile"];
             var profile=profileValue.Deserialize<EncodingProfileSnapshot>(Json);
             var codec=node.Configuration.TryGetValue("videoCodec",out var codecValue)?codecValue.GetString():"hevc";
             var retryWithCpu=node.Configuration.TryGetValue("retryWithCpu",out var retryFlag)&&retryFlag.ValueKind==JsonValueKind.True;
             var encoder=VideoEncoderCatalog.Find(resolution.EncoderId);
             var target=profile is null||string.IsNullOrEmpty(codec)?null:MediaCodecPolicy.AcceptedEncodingTarget(profile,codec,resolution.EncoderId,retryWithCpu);
             var preset=encoder?.Presets.FirstOrDefault(item=>item.Id==target?.Preset)?.Value;
-            if(profile is null || encoder is null || target is null || resolution.Codec!=codec || encoder.Codec!=codec
-                || resolution.ProfileId!=profile.Id || resolution.ProfileVersion!=profile.Version || resolution.ProfileName!=profile.Name
-                || resolution.Acceleration!=encoder.Acceleration || resolution.QualityMode!=encoder.QualityMode
-                || resolution.QualityOption!=encoder.QualityOption || resolution.Quality!=target.Quality
-                || resolution.PresetId!=target.Preset || resolution.Priority!=target.Priority
-                || resolution.PresetOption!=(string.IsNullOrEmpty(encoder.PresetOption)?null:encoder.PresetOption)
-                || resolution.PresetValue!=preset) return false;
+            if(FieldClause(resolution,profile,encoder,target,codec,preset) is {} fieldClause) return RefuseVideoEncoding(fieldClause,resolution,executionId,worker,currentNodeId);
         }
         return true;
+    }
+
+    private bool RefuseVideoEncoding(string clause,ResolvedVideoEncoding resolution,Guid executionId,Guid worker,string currentNodeId)
+    {
+        logger?.LogWarning("Encodage vidéo refusé, clause {Clause} — FlowNodeId {FlowNodeId}, EncoderId {EncoderId}, exécution {ExecutionId}, nœud courant {NodeId}, worker {WorkerId}",
+            clause,resolution.FlowNodeId,resolution.EncoderId,executionId,currentNodeId,worker);
+        return false;
+    }
+
+    /// <summary>Clause « worker », « version_ffmpeg » ou « resolved_at » qui échoue (diagnostic seul, mêmes tests et même ordre que la validation).</summary>
+    internal static string? WorkerClause(ResolvedVideoEncoding resolution,Guid? executionWorker)
+    {
+        if(executionWorker!=resolution.WorkerId) return $"worker : attendu {executionWorker?.ToString()??"aucun"}, reçu {resolution.WorkerId}";
+        if(string.IsNullOrWhiteSpace(resolution.FfmpegVersion)) return "version_ffmpeg : vide";
+        if(resolution.FfmpegVersion.Length>128) return $"version_ffmpeg : longueur {resolution.FfmpegVersion.Length} > 128";
+        return resolution.ResolvedAt==default?"resolved_at : valeur par défaut":null;
+    }
+
+    /// <summary>Clause « node » (nœud inconnu, mauvais plugin ou composant) ou « profile » (encodingProfile absent ou non objet) qui échoue.</summary>
+    internal static string? NodeClause(FlowNodeDefinition? node)
+    {
+        if(node is null) return "node : nœud introuvable dans le flow";
+        if(node.Component.PluginId!="base" && node.Component.PluginId!="video") return $"node : plugin {node.Component.PluginId} (attendu base ou video)";
+        if(node.Component.ComponentId!="base-transcode-video" && node.Component.ComponentId!="video-transcode")
+            return $"node : composant {node.Component.ComponentId} (attendu base-transcode-video ou video-transcode)";
+        if(!node.Configuration.TryGetValue("encodingProfile",out var profileValue)) return "profile : encodingProfile absent de la configuration du nœud";
+        return profileValue.ValueKind!=JsonValueKind.Object?$"profile : encodingProfile de type {profileValue.ValueKind} (attendu Object)":null;
+    }
+
+    /// <summary>Clause « profile », « encoder », « target » ou champ précis (attendu / reçu) qui échoue.</summary>
+    internal static string? FieldClause(ResolvedVideoEncoding r,EncodingProfileSnapshot? profile,VideoEncoderDescriptor? encoder,
+        EncodingProfileTarget? target,string? codec,string? preset)
+    {
+        if(profile is null) return "profile : encodingProfile non désérialisable";
+        if(encoder is null) return $"encoder : {r.EncoderId} absent du catalogue";
+        if(target is null) return $"target : aucune cible acceptée pour le profil {profile.Name}, codec {codec}, encodeur {r.EncoderId}";
+        if(r.Codec!=codec) return $"codec : attendu {codec}, reçu {r.Codec}";
+        if(encoder.Codec!=codec) return $"codec_encodeur : attendu {codec}, encodeur {encoder.Id} fournit {encoder.Codec}";
+        if(r.ProfileId!=profile.Id) return $"profile_id : attendu {profile.Id}, reçu {r.ProfileId}";
+        if(r.ProfileVersion!=profile.Version) return $"profile_version : attendu {profile.Version}, reçu {r.ProfileVersion}";
+        if(r.ProfileName!=profile.Name) return $"profile_name : attendu {profile.Name}, reçu {r.ProfileName}";
+        if(r.Acceleration!=encoder.Acceleration) return $"acceleration : attendu {encoder.Acceleration}, reçu {r.Acceleration}";
+        if(r.QualityMode!=encoder.QualityMode) return $"quality_mode : attendu {encoder.QualityMode}, reçu {r.QualityMode}";
+        if(r.QualityOption!=encoder.QualityOption) return $"quality_option : attendu {encoder.QualityOption}, reçu {r.QualityOption}";
+        if(r.Quality!=target.Quality) return $"quality : attendu {target.Quality}, reçu {r.Quality}";
+        if(r.PresetId!=target.Preset) return $"preset_id : attendu {target.Preset}, reçu {r.PresetId}";
+        if(r.Priority!=target.Priority) return $"priority : attendu {target.Priority}, reçu {r.Priority}";
+        var presetOption=string.IsNullOrEmpty(encoder.PresetOption)?null:encoder.PresetOption;
+        if(r.PresetOption!=presetOption) return $"preset_option : attendu {presetOption??"null"}, reçu {r.PresetOption??"null"}";
+        return r.PresetValue!=preset?$"preset_value : attendu {preset??"null"}, reçu {r.PresetValue??"null"}":null;
     }
 
     /// <summary>Lecture seule : un worker à accès direct en ligne, autre que celui qui réclame, peut-il exécuter ce segment ?</summary>
