@@ -51,6 +51,34 @@ public sealed class VideoEncodingClauseTests
         Assert.Equal("preset_value : attendu " + preset + ", reçu null", RuntimeRepository.FieldClause(resolution with { PresetValue = null }, profile, encoder, target, encoder.Codec, preset));
     }
 
+    private static string? QualityClause(string encoderId, string tier, int? width, int? height, decimal quality)
+    {
+        var encoder = VideoEncoderCatalog.Find(encoderId)!;
+        var target = new EncodingProfileTarget(encoder.Id, 23, encoder.Presets[0].Id, 1);
+        var profile = new EncodingProfileSnapshot(Guid.NewGuid(), 1, "Profil", "", [target]);
+        var resolution = Resolution(Guid.NewGuid(), encoder, profile, target) with { Quality = quality, SourceWidth = width, SourceHeight = height };
+        var preset = encoder.Presets.First(item => item.Id == target.Preset).Value;
+        return RuntimeRepository.FieldClause(resolution, profile, encoder, target, encoder.Codec, preset, tier);
+    }
+
+    [Fact]
+    public void QualityFollowsTheWorkerResolutionForTierAndSourceSize()
+    {
+        Assert.Null(QualityClause("libx264", "high", 640, 360, 19));
+        Assert.Null(QualityClause("libx265", "balanced", 640, 360, 21));
+        Assert.Null(QualityClause("libx264", "balanced", 1920, 1080, 23));
+        Assert.Null(QualityClause("libx264", "custom", 640, 360, 23));
+    }
+
+    [Fact]
+    public void AnyOtherQualityIsStillRefused()
+    {
+        Assert.StartsWith("quality : attendu 19", QualityClause("libx264", "high", 640, 360, 23));
+        Assert.StartsWith("quality : attendu 21", QualityClause("libx265", "balanced", 640, 360, 23));
+        Assert.StartsWith("quality : attendu 23", QualityClause("libx264", "balanced", 1920, 1080, 21));
+        Assert.StartsWith("quality : attendu 23", QualityClause("libx264", "balanced", null, null, 21));
+    }
+
     [Fact]
     public void NodeClausesAreNamed()
     {

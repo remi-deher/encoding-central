@@ -46,7 +46,8 @@ public sealed record RuntimeSourceObservation(long Bytes, long LastWriteUtcTicks
 public sealed record ResolvedVideoEncoding(string FlowNodeId, Guid WorkerId, string Codec, string EncoderId,
     string FfmpegVersion, string Acceleration, string QualityMode, string QualityOption, decimal Quality,
     string PresetId, string? PresetOption, string? PresetValue,
-    Guid ProfileId, int ProfileVersion, string ProfileName, int Priority, DateTimeOffset ResolvedAt);
+    Guid ProfileId, int ProfileVersion, string ProfileName, int Priority, DateTimeOffset ResolvedAt,
+    int? SourceWidth = null, int? SourceHeight = null);
 public sealed record RuntimePlanStep(string ComponentId, IReadOnlyDictionary<string,JsonElement> Configuration, string? FlowNodeId = null);
 public sealed record RuntimeCheckpoint(string NodeId, Guid InvocationId, string? OutputId, string? NextNodeId, RuntimeContext Context, string? TerminalResult,
     RuntimeHandoffSelector? Handoff = null, RuntimeWait? Wait = null, bool PlacementHandoff = false);
