@@ -84,8 +84,8 @@ export function toAccessSummaryFromCounts(library: LibraryResponse): LibraryAcce
   const transferCount = library.transferWorkerCount;
   const configuredCount = library.configuredWorkerCount;
   const modes = [
-    directCount ? `${directCount} direct(s)` : '',
-    transferCount ? `${transferCount} transfert(s)` : '',
+    directCount ? `${directCount} ${directCount > 1 ? 'accès directs' : 'accès direct'}` : '',
+    transferCount ? `${transferCount} ${transferCount > 1 ? 'transferts' : 'transfert'}` : '',
   ]
     .filter(Boolean)
     .join(' · ');
@@ -94,7 +94,9 @@ export function toAccessSummaryFromCounts(library: LibraryResponse): LibraryAcce
     configuredWorkerCount: configuredCount,
     directAccessWorkerCount: directCount,
     transferWorkerCount: transferCount,
-    configuredNodes: configuredCount ? `${configuredCount} worker(s) utilisable(s)` : 'Aucun accès',
+    configuredNodes: configuredCount
+      ? `${configuredCount} ${configuredCount > 1 ? 'workers utilisables' : 'worker utilisable'}`
+      : 'Aucun accès',
     accessModes: modes || 'Non configuré',
     nodePaths: directCount ? 'Consulter les chemins configurés' : 'Aucun chemin direct',
     state: libraryState(library.isActive, configuredCount),
@@ -113,8 +115,8 @@ export function toAccessSummary(
   ).length;
   const configuredCount = directCount + transferCount;
   const modes = [
-    directCount ? `${directCount} direct(s)` : '',
-    transferCount ? `${transferCount} transfert(s)` : '',
+    directCount ? `${directCount} ${directCount > 1 ? 'accès directs' : 'accès direct'}` : '',
+    transferCount ? `${transferCount} ${transferCount > 1 ? 'transferts' : 'transfert'}` : '',
   ]
     .filter(Boolean)
     .join(' · ');
@@ -123,7 +125,9 @@ export function toAccessSummary(
     configuredWorkerCount: configuredCount,
     directAccessWorkerCount: directCount,
     transferWorkerCount: transferCount,
-    configuredNodes: configuredCount ? `${configuredCount} worker(s) utilisable(s)` : 'Aucun accès',
+    configuredNodes: configuredCount
+      ? `${configuredCount} ${configuredCount > 1 ? 'workers utilisables' : 'worker utilisable'}`
+      : 'Aucun accès',
     accessModes: modes || 'Non configuré',
     nodePaths:
       accesses

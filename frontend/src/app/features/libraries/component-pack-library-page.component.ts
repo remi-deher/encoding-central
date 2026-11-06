@@ -1,4 +1,5 @@
 import { ResourceListItem } from '../../shared/ui/resource-list.component';
+import { formatDateOnly } from '../../shared/models/date-format';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
@@ -123,7 +124,7 @@ export class ComponentPackLibraryPageComponent {
       subtitle: row.description || undefined,
       tags: [
         { label: row.mediaType },
-        { label: `${row.components} composant(s)` },
+        { label: `${row.components} ${row.components > 1 ? 'composants' : 'composant'}` },
         { label: `${row.source} · ${row.version}`, tone: 'ok' as const },
       ],
     })),
@@ -163,8 +164,10 @@ export class ComponentPackLibraryPageComponent {
             detail: pack.description || 'Aucune description.',
             badges: [
               { label: 'Disponible', tone: 'success' },
-              { label: `${pack.componentCount} composant(s)` },
-              { label: new Date(pack.createdAt).toLocaleDateString('fr-FR'), tone: 'neutral' },
+              {
+                label: `${pack.componentCount} ${pack.componentCount > 1 ? 'composants' : 'composant'}`,
+              },
+              { label: formatDateOnly(pack.createdAt), tone: 'neutral' },
             ],
           },
         ],

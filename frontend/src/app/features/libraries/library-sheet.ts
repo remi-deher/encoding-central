@@ -1,3 +1,4 @@
+import { formatShortDateTime } from '../../shared/models/date-format';
 import { LibraryProcessingSettings } from '../../shared/models/library-workflow';
 import type {
   ResourceSheetNotice,
@@ -10,7 +11,8 @@ export function buildLibrarySheet(input: {
   readonly library: LibraryRecord | null;
   readonly assignment: { readonly name: string; readonly version: number } | null | undefined;
   readonly processing: LibraryProcessingSettings | null;
-  readonly scan: { readonly state?: string; readonly completedAt?: string | null } | null | undefined;
+  readonly scan:
+    { readonly state?: string; readonly completedAt?: string | null } | null | undefined;
   readonly workflowError: string;
   readonly workflowLabel: string;
   readonly processingSummary: string;
@@ -78,7 +80,7 @@ export function buildLibrarySheet(input: {
                   },
                   {
                     label: processing.maxConcurrentTasks
-                      ? `${processing.maxConcurrentTasks} tâche(s) max.`
+                      ? `${processing.maxConcurrentTasks} ${processing.maxConcurrentTasks > 1 ? 'tâches max.' : 'tâche max.'}`
                       : 'Sans plafond global',
                     tone: 'neutral',
                   },
@@ -90,22 +92,24 @@ export function buildLibrarySheet(input: {
       {
         id: 'library-access',
         title: 'Accès du central',
-        caption: accessCount ? `${accessCount} worker(s) configuré(s)` : 'Aucun worker configuré',
+        caption: accessCount
+          ? `${accessCount} ${accessCount > 1 ? 'workers configurés' : 'worker configuré'}`
+          : 'Aucun worker configuré',
         metrics: [
           {
             label: 'Accès direct',
-            value: `${library.directAccessWorkerCount} worker(s)`,
+            value: `${library.directAccessWorkerCount} ${library.directAccessWorkerCount > 1 ? 'workers' : 'worker'}`,
           },
           {
             label: 'Transfert vers worker',
-            value: `${library.transferWorkerCount} worker(s)`,
+            value: `${library.transferWorkerCount} ${library.transferWorkerCount > 1 ? 'workers' : 'worker'}`,
           },
         ],
       },
       {
         id: 'library-discovery',
         title: 'Découverte et activité',
-        caption: `${input.mediaCount} fichier(s) détecté(s)`,
+        caption: `${input.mediaCount} ${input.mediaCount > 1 ? 'fichiers détectés' : 'fichier détecté'}`,
         metrics: [
           {
             label: 'Dernière découverte',
@@ -121,7 +125,7 @@ export function buildLibrarySheet(input: {
           {
             label: 'Terminée le',
             value: scan?.completedAt
-              ? new Date(scan.completedAt).toLocaleString('fr-FR')
+              ? formatShortDateTime(scan.completedAt)
               : 'Aucune date enregistrée',
           },
           { label: 'Créée le', value: library.modifiedAt },
@@ -137,5 +141,3 @@ export function buildLibrarySheet(input: {
     };
   }
 }
-
-
