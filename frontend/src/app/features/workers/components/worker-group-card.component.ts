@@ -1,8 +1,15 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { IconComponent } from '../../../shared/ui/icon.component';
 import { StatusBadgeComponent } from '../../../shared/ui/status-badge.component';
-import { WorkerGroupResponse, WorkerResponse, formatWorkerLabel } from '../../../shared/models/central';
+import {
+  WorkerGroupResponse,
+  WorkerResponse,
+  formatWorkerLabel,
+} from '../../../shared/models/central';
+import { nodeLifecycleBadge } from '../worker-catalog.utils';
 import {
   formatGroupCriteriaBadges,
   matchesGroupCriteria,
@@ -11,7 +18,7 @@ import {
 @Component({
   selector: 'app-worker-group-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatMenuModule, StatusBadgeComponent],
+  imports: [IconComponent, MatButtonModule, MatMenuModule, MatTooltipModule, StatusBadgeComponent],
   template: `
     <article class="group-card" [attr.aria-label]="group().name">
       <header class="group-card-head">
@@ -42,12 +49,13 @@ import {
               class="group-card-menu-btn"
               [matMenuTriggerFor]="cardMenu"
               [attr.aria-label]="'Actions pour le groupe ' + group().name"
+              [matTooltip]="'Actions pour le groupe ' + group().name"
             >
-              <span aria-hidden="true">⋮</span>
+              <app-icon name="more_vert" />
             </button>
             <mat-menu #cardMenu="matMenu">
               <button mat-menu-item (click)="edit.emit()">Modifier</button>
-              <button mat-menu-item class="danger-action" (click)="delete.emit()">Supprimer</button>
+              <button mat-menu-item class="danger" (click)="delete.emit()">Supprimer</button>
             </mat-menu>
           </div>
         }
@@ -63,11 +71,7 @@ import {
             } @else {
               @for (node of displayedMembers(); track node.id) {
                 <span class="node-pill">
-                  <span
-                    class="status-dot"
-                    [class.online]="node.status === 'online'"
-                    [class.offline]="node.status === 'offline'"
-                  ></span>
+                  <span class="status-dot" [attr.data-tone]="lifecycleBadge(node).tone"></span>
                   {{ formatNode(node) }}
                 </span>
               }
@@ -158,4 +162,6 @@ export class WorkerGroupCardComponent {
   protected formatNode(node: WorkerResponse): string {
     return formatWorkerLabel(node.name, node.displayName);
   }
+
+  protected readonly lifecycleBadge = nodeLifecycleBadge;
 }

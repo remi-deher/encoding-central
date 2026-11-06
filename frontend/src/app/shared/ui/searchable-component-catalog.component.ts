@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, output, signal } f
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { SearchFieldComponent } from './search-field.component';
+import { EmptyStateComponent } from './empty-state/empty-state.component';
 import {
   FLOW_COMPONENT_KIND_LABELS,
   FlowComponentDefinition,
@@ -11,7 +12,7 @@ import {
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-searchable-component-catalog',
-  imports: [MatFormFieldModule, MatSelectModule, SearchFieldComponent],
+  imports: [MatFormFieldModule, MatSelectModule, SearchFieldComponent, EmptyStateComponent],
   template: `
     <section class="component-catalog" aria-label="Catalogue des composants">
       <app-search-field
@@ -82,7 +83,7 @@ import {
             <span class="component-meta">{{ mediaTypeLabel(component.mediaType) }}</span>
           </button>
         } @empty {
-          <p class="empty-state">Aucun composant ne correspond à ces filtres.</p>
+          <app-empty-state icon="search" title="Aucun composant ne correspond à ces filtres." />
         }
       </div>
     </section>
@@ -146,12 +147,6 @@ import {
     .component-description {
       color: var(--text-secondary);
       line-height: 1.45;
-    }
-    .empty-state {
-      margin: 0;
-      padding: var(--space-5) var(--space-3);
-      color: var(--text-muted);
-      text-align: center;
     }
     @media (max-width: 620px) {
       .catalog-filters {

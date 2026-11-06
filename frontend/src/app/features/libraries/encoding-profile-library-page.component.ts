@@ -1,6 +1,13 @@
 import { ResourceListItem } from '../../shared/ui/resource-list.component';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import {
   FormControl,
   FormGroup,
@@ -183,14 +190,14 @@ interface EncoderGroup {
             } @else {
               <button matButton="text" type="button" (click)="closeEditor()">Annuler</button>
               <button
-                matButton="outlined"
+                matButton="filled"
                 type="submit"
                 [disabled]="busy() || metadataForm.invalid || targetsForm.invalid"
               >
                 {{ busy() ? 'Enregistrement…' : 'Enregistrer le brouillon' }}
               </button>
               <button
-                matButton="filled"
+                matButton="tonal"
                 type="button"
                 [disabled]="busy() || metadataForm.invalid || targetsForm.invalid || !editingId()"
                 (click)="publish()"

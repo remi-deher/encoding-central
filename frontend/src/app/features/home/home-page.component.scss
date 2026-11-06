@@ -260,7 +260,7 @@ time {
   box-shadow: 0 0 0 4px var(--accent-soft);
 }
 .ai-status-dot.is-failed {
-  background: var(--danger, #c62828);
+  background: var(--danger);
 }
 .ai-overview-list .ai-empty-row {
   min-height: 80px;

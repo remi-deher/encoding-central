@@ -73,13 +73,13 @@ describe('DetailDrawerComponent header template', () => {
   it('shows no icon for the neutral variant and the variant glyph otherwise', () => {
     expect(render({ opened: true }).querySelector('.drawer-icon')).toBeNull();
     const danger = render({ opened: true, variant: 'danger' });
-    expect(danger.querySelector('.drawer-icon')?.textContent?.trim()).toBe('!');
+    expect(danger.querySelector('.drawer-icon app-icon')).not.toBeNull();
     expect(danger.querySelector('.drawer-header_danger')).not.toBeNull();
   });
 
   it('prefers an explicit icon over the variant glyph', () => {
-    const element = render({ opened: true, variant: 'info', icon: '+' });
-    expect(element.querySelector('.drawer-icon')?.textContent?.trim()).toBe('+');
+    const element = render({ opened: true, variant: 'info', icon: 'add' });
+    expect(element.querySelector('.drawer-icon app-icon')).not.toBeNull();
   });
 
   it('exposes the step progress to assistive technology', () => {

@@ -6,7 +6,7 @@
       [modal]="true"
       title="Créer un flow"
       description="Choisissez un nom, un média et un point de départ avant d’ouvrir l’éditeur."
-      icon="+"
+      icon="add"
       eyebrow="Nouveau"
       [step]="flowStep()"
       [content]="flowFormTemplate()"
@@ -58,12 +58,12 @@
         <div class="panel-heading">
           <div>
             <h2 id="active-tasks-heading">
-              Traitements en cours
+              Exécutions en cours
               <span class="count">{{ count(executionState().data?.activeCount) }}</span>
             </h2>
           </div>
           <a class="subtle-link" routerLink="/activity"
-            >Toutes les tâches <span aria-hidden="true"><app-icon name="forward" /></span
+            >Toutes les exécutions <span aria-hidden="true"><app-icon name="forward" /></span
           ></a>
         </div>
 
@@ -87,7 +87,7 @@
         @if (remainingActive() > 0) {
           <a class="remaining-link" routerLink="/activity" [queryParams]="{ view: 'active' }"
             >{{ remainingActive() }}
-            {{ remainingActive() === 1 ? 'autre traitement' : 'autres traitements' }} en cours
+            {{ remainingActive() === 1 ? 'autre exécution' : 'autres exécutions' }} en cours
             <app-icon name="outward"
           /></a>
         }
@@ -106,9 +106,7 @@
             <h2 id="nodes-heading">Workers du central</h2>
           </div>
           <a class="subtle-link" routerLink="/workers"
-            
-            >Voir les workers
-            <span aria-hidden="true"><app-icon name="forward" /></span
+            >Voir les workers <span aria-hidden="true"><app-icon name="forward" /></span
           ></a>
         </div>
 
@@ -140,24 +138,23 @@
                   >Concurrence configurée
                   <strong>{{ count(node.maxConcurrentTasks) }}</strong></span
                 ><span
-                  >Dernier signal <strong>{{ node.lastSeenAt | date: 'dd/MM HH:mm' }}</strong></span
+                  >Dernier signal <strong>{{ node.lastSeenAt | appDate: 'short' }}</strong></span
                 >
               </div>
             </article>
           } @empty {
             @if (state().status === 'ready') {
-              <p class="empty-panel-message">
-                Aucun worker enregistré dans le central.
-              </p>
+              <p class="empty-panel-message">Aucun worker enregistré dans le central.</p>
             }
           }
         </div>
         @if (failedCount() > 0) {
           <aside class="attention">
             <strong
-              >{{ failedCount() }} {{ failedCount() === 1 ? 'tâche' : 'tâches' }} à examiner</strong
+              >{{ failedCount() }} {{ failedCount() === 1 ? 'exécution' : 'exécutions' }} à
+              examiner</strong
             >
-            <p>Consultez les erreurs avant de relancer les traitements.</p>
+            <p>Consultez les erreurs avant de relancer les exécutions.</p>
             <a routerLink="/activity" [queryParams]="{ view: 'errors' }"
               >Examiner les échecs <app-icon name="outward"
             /></a>
@@ -191,7 +188,7 @@
       @if (overviewView() !== 'infrastructure') {
         <div class="panel-heading">
           <div>
-            <h2 id="activity-heading">Derniers traitements terminés</h2>
+            <h2 id="activity-heading">Dernières exécutions terminées</h2>
           </div>
           <a class="subtle-link" routerLink="/activity" [queryParams]="{ view: 'history' }"
             >Historique <span aria-hidden="true"><app-icon name="forward" /></span
@@ -199,7 +196,7 @@
         </div>
         @if (homeExecutionState().status === 'error') {
           <p role="alert">
-            Les derniers traitements terminés n’ont pas pu être actualisés. Les valeurs conservées
+            Les dernières exécutions terminées n’ont pas pu être actualisées. Les valeurs conservées
             peuvent être obsolètes.
           </p>
         }
@@ -213,12 +210,12 @@
               </div>
               <span class="publication-state">Réussi</span
               ><time [attr.datetime]="execution.finishedAt ?? execution.updatedAt">{{
-                execution.finishedAt ?? execution.updatedAt | date: 'dd/MM HH:mm'
+                execution.finishedAt ?? execution.updatedAt | appDate: 'short'
               }}</time>
             </article>
           } @empty {
             @if (homeExecutionState().status === 'ready') {
-              <p class="empty-panel-message">Aucun traitement terminé.</p>
+              <p class="empty-panel-message">Aucune exécution terminée.</p>
             }
           }
         </div>
@@ -235,9 +232,7 @@
         <div class="panel-heading">
           <div>
             <h2 id="matrix-heading">Accès aux bibliothèques</h2>
-            <p>
-              Comment chaque worker atteint chaque bibliothèque.
-            </p>
+            <p>Comment chaque worker atteint chaque bibliothèque.</p>
           </div>
           <a class="subtle-link" routerLink="/libraries"
             >Bibliothèques <span aria-hidden="true"><app-icon name="forward" /></span
@@ -299,7 +294,7 @@
                     }}</small>
                   </div>
                   <time [attr.datetime]="activity.updatedAt">{{
-                    activity.updatedAt | date: 'dd/MM HH:mm'
+                    activity.updatedAt | appDate: 'short'
                   }}</time>
                 </li>
               } @empty {
@@ -321,7 +316,7 @@
             <ul class="ai-overview-list">
               @for (conversation of recentAiConversations(); track conversation.id) {
                 <li>
-                  <span class="ai-conversation-icon" aria-hidden="true">✦</span>
+                  <app-icon class="ai-conversation-icon" name="auto_awesome" />
                   <div>
                     <strong>{{ conversation.title }}</strong>
                     <small
@@ -330,7 +325,7 @@
                     >
                   </div>
                   <time [attr.datetime]="conversation.updatedAt">{{
-                    conversation.updatedAt | date: 'dd/MM HH:mm'
+                    conversation.updatedAt | appDate: 'short'
                   }}</time>
                 </li>
               } @empty {

@@ -28,7 +28,9 @@
         : actionDescription()
   "
   [detailTitle]="
-    pageTab() === 'groups' ? (groups.selectedGroupForDetail()?.name ?? 'Détails du groupe') : detailTitle()
+    pageTab() === 'groups'
+      ? (groups.selectedGroupForDetail()?.name ?? 'Détails du groupe')
+      : detailTitle()
   "
   [detailDescription]="
     pageTab() === 'groups' ? 'Membres et critères résolus du groupe' : detailDescription()
@@ -59,7 +61,7 @@
       }
     } @else if (pageTab() === 'cluster' && clusterIdentity()) {
       @if (isAdmin()) {
-        <button matButton="filled" type="button" (click)="enrollment.addNode()">
+        <button matButton="tonal" type="button" (click)="enrollment.addNode()">
           Ajouter un worker
         </button>
       }
@@ -72,7 +74,10 @@
         <strong>{{ clusterName() }}</strong>
       } @else {
         <span>Organisation</span>
-        <strong>{{ groups.filteredGroups().length }} groupe(s)</strong>
+        <strong
+          >{{ groups.filteredGroups().length }}
+          {{ groups.filteredGroups().length > 1 ? 'groupes' : 'groupe' }}</strong
+        >
       }
     </div>
   }
@@ -108,7 +113,10 @@
   <div catalogue-filters class="catalogue-filters-container">
     <mat-form-field appearance="outline" subscriptSizing="dynamic">
       <mat-label>Fonctions</mat-label
-      ><mat-select [value]="members.selectedRole()" (selectionChange)="members.onRoleChange($event.value)">
+      ><mat-select
+        [value]="members.selectedRole()"
+        (selectionChange)="members.onRoleChange($event.value)"
+      >
         @for (option of members.roleOptions(); track option.value) {
           <mat-option [value]="option.value">{{ option.label }} · {{ option.count }}</mat-option>
         }
@@ -135,7 +143,7 @@
           [attr.aria-label]="'Retirer le filtre ' + filter.label"
           (click)="filter.clear()"
         >
-          {{ filter.label }} <span aria-hidden="true">✕</span>
+          {{ filter.label }} <app-icon name="close" />
         </button>
       }
       <button type="button" class="filter-chip is-plain" (click)="members.clearNodeFilters()">

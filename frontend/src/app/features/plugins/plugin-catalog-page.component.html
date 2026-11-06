@@ -31,7 +31,11 @@
       </p>
       @if (rejectedPlugins().length > 0) {
         <div class="rejected-plugins" role="alert">
-          <strong>{{ rejectedPlugins().length }} manifeste(s) de plugin ignoré(s) :</strong>
+          <strong
+            >{{ rejectedPlugins().length }}
+            {{ rejectedPlugins().length > 1 ? 'manifestes' : 'manifeste' }} de plugin
+            {{ rejectedPlugins().length > 1 ? 'ignorés' : 'ignoré' }} :</strong
+          >
           <ul>
             @for (item of rejectedPlugins(); track item.file) {
               <li>
@@ -65,11 +69,7 @@
                       <img class="plugin-icon" [src]="plugin.iconUrl" alt="" />
                       <div>
                         <h3>
-                          <button
-                            class="plugin-title-button"
-                            type="button"
-                            (click)="onPluginOpen(plugin.id)"
-                          >
+                          <button matButton="text" type="button" (click)="onPluginOpen(plugin.id)">
                             {{ plugin.name }}
                           </button>
                         </h3>
@@ -116,25 +116,25 @@
                 <span class="tool-icon" aria-hidden="true">
                   @switch (tool.id) {
                     @case ('ffmpeg') {
-                      🎞️
+                      <app-icon [name]="'video'" />
                     }
                     @case ('mkvtoolnix') {
-                      📦
+                      <app-icon [name]="'pack'" />
                     }
                     @case ('ffprobe') {
-                      🔍
+                      <app-icon [name]="'search'" />
                     }
                     @case ('mediainfo') {
-                      📊
+                      <app-icon [name]="'info'" />
                     }
                     @case ('imagemagick') {
-                      🖼️
+                      <app-icon [name]="'image'" />
                     }
                     @case ('python') {
-                      🐍
+                      <app-icon [name]="'terminal'" />
                     }
                     @default {
-                      ⚙️
+                      <app-icon [name]="'settings'" />
                     }
                   }
                 </span>
@@ -200,7 +200,9 @@
                   [label]="repo.enabled ? 'Actif' : 'Désactivé'"
                   [tone]="repo.enabled ? 'success' : 'neutral'"
                 />
-                <app-status-badge [label]="repo.packagesCount + ' paquets'" />
+                <app-status-badge
+                  [label]="repo.packagesCount + (repo.packagesCount > 1 ? ' paquets' : ' paquet')"
+                />
                 <button
                   matButton="outlined"
                   type="button"
@@ -219,6 +221,7 @@
                     {{ repo.enabled ? 'Désactiver' : 'Activer' }}
                   </button>
                   <button
+                    class="danger"
                     matButton="outlined"
                     type="button"
                     [disabled]="storeBusy()"
@@ -276,7 +279,9 @@
         @for (pkg of filteredStorePackages(); track pkg.id) {
           <div class="store-card" [id]="'store-package-' + pkg.id">
             <div class="store-card-header">
-              <span class="store-icon" aria-hidden="true">{{ pkg.icon }}</span>
+              <span class="store-icon" aria-hidden="true">
+                <app-icon [name]="storeKindIcons[pkg.kind]" />
+              </span>
               <div class="store-title-group">
                 <h3>{{ pkg.name }}</h3>
                 <span class="store-author">Par {{ pkg.author }} • v{{ pkg.version }}</span>
@@ -322,14 +327,14 @@
                   />
                 }
                 @if (pkg.kind === 'plugin' || pkg.kind === 'tool') {
-                <button
-                  matButton="outlined"
-                  type="button"
-                  [disabled]="storeBusy()"
-                  (click)="removePackage(pkg)"
-                >
-                  Retirer
-                </button>
+                  <button
+                    matButton="outlined"
+                    type="button"
+                    [disabled]="storeBusy()"
+                    (click)="removePackage(pkg)"
+                  >
+                    Retirer
+                  </button>
                 }
               } @else {
                 <button

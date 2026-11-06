@@ -24,7 +24,10 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSort, MatSortModule } from '@angular/material/sort';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { IconComponent } from './icon.component';
 import { BadgeListComponent } from './badge-list.component';
+import { EmptyStateComponent } from './empty-state/empty-state.component';
 import { splitBadges } from '../models/media-badges';
 import {
   ConfirmationDialogComponent,
@@ -122,6 +125,8 @@ export interface DataTableListActionEvent {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     BadgeListComponent,
+    EmptyStateComponent,
+    IconComponent,
     MatButtonModule,
     MatButtonToggleModule,
     MatCheckboxModule,
@@ -131,6 +136,7 @@ export interface DataTableListActionEvent {
     MatSelectModule,
     MatSortModule,
     MatTableModule,
+    MatTooltipModule,
     NgTemplateOutlet,
   ],
   template: `
@@ -170,6 +176,7 @@ export interface DataTableListActionEvent {
               </button>
             } @else {
               <button
+                matButton="tonal"
                 class="selection-action"
                 type="button"
                 (click)="listAction.emit({ actionId: action.id })"
@@ -182,6 +189,7 @@ export interface DataTableListActionEvent {
       }
       @if (selectable() && layout() === 'table') {
         <button
+          matButton="outlined"
           class="mobile-select-all"
           type="button"
           [attr.aria-label]="
@@ -310,7 +318,7 @@ export interface DataTableListActionEvent {
           </div>
         }
         @if (cardRows().length === 0) {
-          <p class="card-empty">{{ emptyMessage() }}</p>
+          <app-empty-state icon="search" [title]="emptyMessage()" />
         } @else {
           <ul class="resource-list">
             @for (row of cardRows(); track rowKey(row)) {
@@ -368,12 +376,8 @@ export interface DataTableListActionEvent {
                     ) {
                       @for (action of visibleRowActions(row); track action.id) {
                         <button
-                          [matButton]="
-                            action.tone === 'danger' && action.id !== 'delete'
-                              ? 'filled'
-                              : 'outlined'
-                          "
-                          [class.data-card-action_danger]="action.tone === 'danger'"
+                          matButton="outlined"
+                          [class.danger]="action.tone === 'danger'"
                           type="button"
                           [attr.aria-label]="
                             rowActionLabel(action, row) + ' ' + rowActionSubject(row)
@@ -393,8 +397,9 @@ export interface DataTableListActionEvent {
                         class="resource-row-menu"
                         [matMenuTriggerFor]="resourceMenu"
                         [attr.aria-label]="'Autres actions pour ' + rowActionSubject(row)"
+                        [matTooltip]="'Autres actions pour ' + rowActionSubject(row)"
                       >
-                        <span aria-hidden="true">⋮</span>
+                        <app-icon name="more_vert" />
                       </button>
                       <mat-menu #resourceMenu="matMenu">
                         @for (action of visibleRowActions(row); track action.id) {
@@ -475,7 +480,7 @@ export interface DataTableListActionEvent {
           </div>
         }
         @if (cardRows().length === 0) {
-          <p class="card-empty">{{ emptyMessage() }}</p>
+          <app-empty-state icon="search" [title]="emptyMessage()" />
         } @else {
           <ul class="card-grid">
             @for (row of cardRows(); track rowKey(row)) {
@@ -522,8 +527,8 @@ export interface DataTableListActionEvent {
                     @for (action of rowActions(); track action.id) {
                       @if (!action.visibleWhen || action.visibleWhen(row)) {
                         <button
-                          [matButton]="action.tone === 'danger' ? 'filled' : 'outlined'"
-                          [class.data-card-action_danger]="action.tone === 'danger'"
+                          matButton="outlined"
+                          [class.danger]="action.tone === 'danger'"
                           type="button"
                           [attr.aria-label]="
                             rowActionLabel(action, row) + ' ' + rowActionSubject(row)
@@ -615,7 +620,7 @@ export interface DataTableListActionEvent {
                     <button
                       matButton="outlined"
                       class="row-action"
-                      [class.row-action_danger]="action.tone === 'danger'"
+                      [class.danger]="action.tone === 'danger'"
                       type="button"
                       [attr.aria-label]="rowActionLabel(action, row) + ' ' + rowActionSubject(row)"
                       [attr.aria-expanded]="rowDetail() ? isExpandedRow(row) : null"
@@ -639,7 +644,7 @@ export interface DataTableListActionEvent {
                     <button
                       matButton="outlined"
                       class="row-action"
-                      [class.row-action_danger]="action.tone === 'danger'"
+                      [class.danger]="action.tone === 'danger'"
                       type="button"
                       [attr.aria-label]="rowActionLabel(action, row) + ' ' + rowActionSubject(row)"
                       [attr.aria-expanded]="rowDetail() ? isExpandedRow(row) : null"
@@ -682,7 +687,7 @@ export interface DataTableListActionEvent {
           }
           <tr class="mat-row empty-row" *matNoDataRow>
             <td class="mat-cell" [attr.colspan]="displayedColumnKeys().length">
-              {{ emptyMessage() }}
+              <app-empty-state icon="search" [title]="emptyMessage()" />
             </td>
           </tr>
         </table>

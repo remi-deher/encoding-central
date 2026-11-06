@@ -29,7 +29,7 @@
     (validateRequested)="validateGraph()"
     (simulateRequested)="openSimulator()"
     (simulationSettingsRequested)="openSimulator(true)"
-    (packCreationRequested)="persistence.openPackCreation()"
+    (packCreationRequested)="openPackCreation()"
     (restoreAiProposalRequested)="persistence.restoreAiProposal()"
     (togglePalette)="togglePalette()"
     (toggleTray)="trayOpen.set(!trayOpen())"
@@ -152,7 +152,7 @@
         @if (current.component.kind !== 'input') {
           <button
             matButton="text"
-            class="component-editor-delete"
+            class="danger"
             form-secondary-actions
             type="button"
             (click)="inspector.deleteConfiguredNode(current.id, (id) => editing.removeNode(id))"
@@ -163,23 +163,4 @@
       </app-component-configuration-form>
     }
   </ng-template>
-  <!-- Modal Dialog : Création de Pack -->
-  @if (persistence.packCreationOpen()) {
-    <div
-      flow-workspace-overlay
-      class="modal-backdrop"
-      (click)="persistence.packCreationOpen.set(false)"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Créer un pack depuis la version publiée"
-    >
-      <div class="modal-card" (click)="$event.stopPropagation()">
-        <app-record-form
-          [data]="persistence.packCreationForm()"
-          (submitted)="persistence.createPackFromPublishedFlow($event)"
-          (cancelled)="persistence.packCreationOpen.set(false)"
-        />
-      </div>
-    </div>
-  }
 </app-flow-workspace-template>

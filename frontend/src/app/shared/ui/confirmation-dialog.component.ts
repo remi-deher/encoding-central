@@ -32,7 +32,7 @@ export interface ConfirmationDialogData {
       [variant]="variant"
       [eyebrow]="data.eyebrow ?? (data.mode === 'information' ? 'Information' : 'Confirmation')"
       [heading]="data.title"
-      [icon]="data.mode === 'information' ? 'i' : variant === 'danger' ? '!' : '?'"
+      [icon]="data.mode === 'information' ? 'info' : variant === 'danger' ? 'error' : 'help'"
     >
       <mat-dialog-content class="app-dialog-body confirmation-dialog-content">
         @if (data.message) {
@@ -61,7 +61,12 @@ export interface ConfirmationDialogData {
           </button>
         } @else {
           <button matButton="text" type="button" (click)="dialogRef.close(false)">Annuler</button>
-          <button matButton="filled" type="button" (click)="dialogRef.close(true)">
+          <button
+            matButton="filled"
+            type="button"
+            [class.danger]="variant === 'danger'"
+            (click)="dialogRef.close(true)"
+          >
             {{ data.confirmLabel ?? 'Confirmer' }}
           </button>
         }

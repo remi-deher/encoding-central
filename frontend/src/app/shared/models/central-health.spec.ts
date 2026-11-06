@@ -1,4 +1,4 @@
-import { assessCentralHealth } from './central-health';
+import { assessCentralHealth, NODE_LIFECYCLE_TONES } from './central-health';
 import { LibraryResponse, WorkerResponse } from './central';
 import { LibraryWorkerAccessResponse } from '../ui/library-worker-access-types';
 
@@ -16,9 +16,19 @@ function node(id: string, extra: Partial<WorkerResponse> = {}): WorkerResponse {
 }
 const library = { id: 'l1', name: 'Films', isActive: true } as LibraryResponse;
 const access = (nodeId: string): LibraryWorkerAccessResponse =>
-  ({ libraryId: 'l1', workerId: nodeId, mode: 'direct', isEnabled: true }) as LibraryWorkerAccessResponse;
+  ({
+    libraryId: 'l1',
+    workerId: nodeId,
+    mode: 'direct',
+    isEnabled: true,
+  }) as LibraryWorkerAccessResponse;
 
 describe('assessClusterHealth', () => {
+  it('uses one neutral tone for offline workers and success for online workers', () => {
+    expect(NODE_LIFECYCLE_TONES.online).toBe('success');
+    expect(NODE_LIFECYCLE_TONES.offline).toBe('neutral');
+  });
+
   it('is healthy when a worker reaches every active library', () => {
     const health = assessCentralHealth([node('a')], [library], [access('a')]);
     expect(health.tone).toBe('success');

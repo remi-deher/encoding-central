@@ -221,13 +221,6 @@
   color: var(--danger-strong);
 }
 
-.resource-empty {
-  margin: 0;
-  padding: var(--space-4);
-  color: var(--text-secondary);
-  text-align: center;
-}
-
 @media (max-width: 760px) {
   .resource-item {
     grid-template-columns: 44px minmax(0, 1fr) auto;

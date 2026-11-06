@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 import { MatExpansionModule } from '@angular/material/expansion';
 import { FlowComponentDefinition, FLOW_COMPONENT_KIND_LABELS } from '../models/flow-component';
 import { flowComponentColors } from '../models/flow-presentation';
+import { EmptyStateComponent } from './empty-state/empty-state.component';
 
 const MEDIA_LABELS: Record<FlowComponentDefinition['mediaType'], string> = {
   image: 'Image',
@@ -28,7 +29,7 @@ interface FlowComponentGroup {
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-flow-component-list',
-  imports: [MatExpansionModule],
+  imports: [MatExpansionModule, EmptyStateComponent],
   template: `
     @if (groups().length) {
       <mat-accordion class="component-groups" multi aria-label="Blocs par type de média">
@@ -73,7 +74,7 @@ interface FlowComponentGroup {
         }
       </mat-accordion>
     } @else {
-      <p class="empty-message">{{ emptyMessage() }}</p>
+      <app-empty-state icon="pack" [title]="emptyMessage()" />
     }
   `,
   styles: `
@@ -175,9 +176,6 @@ interface FlowComponentGroup {
       border: 2px solid var(--component-color);
       border-radius: 50%;
       background: var(--surface);
-    }
-    .empty-message {
-      padding: var(--space-4) var(--space-1);
     }
     @media (max-width: 480px) {
       .component-heading {

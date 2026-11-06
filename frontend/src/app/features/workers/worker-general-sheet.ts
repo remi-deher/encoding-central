@@ -3,7 +3,11 @@ import {
   WorkerResponse,
   NODE_ROLE_LABELS,
 } from '../../shared/models/central';
-import { workerLifecycle, NODE_LIFECYCLE_LABELS, NODE_LIFECYCLE_TONES } from '../../shared/models/central-health';
+import {
+  workerLifecycle,
+  NODE_LIFECYCLE_LABELS,
+  NODE_LIFECYCLE_TONES,
+} from '../../shared/models/central-health';
 import { runtimeEnvironmentLabel } from '../../shared/models/worker-management';
 import {
   formatMemory,
@@ -13,6 +17,7 @@ import {
 } from '../../shared/models/worker-hardware';
 import type { ResourceSheetSection } from '../../shared/ui/resource-sheet.component';
 import type { WorkerLibraryRecord } from './worker-catalog.utils';
+import { formatShortDateTime } from '../../shared/models/date-format';
 
 /** Fiche « Général » du tiroir de détail d’un worker (fonction pure). */
 export function buildWorkerGeneralSheet(
@@ -72,7 +77,7 @@ export function buildWorkerGeneralSheet(
       {
         id: 'node-general-activity',
         title: 'Disponibilité et activité',
-        caption: `Dernier signal · ${new Date(node.lastSeenAt).toLocaleString('fr-FR')}`,
+        caption: `Dernier signal · ${formatShortDateTime(node.lastSeenAt)}`,
         metrics: [
           {
             label: 'Tâches actives / limite',
@@ -105,7 +110,7 @@ export function buildWorkerGeneralSheet(
             label: 'Dernière activité',
             value: activity
               ? activity.lastActivity
-                ? new Date(activity.lastActivity).toLocaleString('fr-FR')
+                ? formatShortDateTime(activity.lastActivity)
                 : 'Aucune activité enregistrée'
               : 'Indisponible',
             unavailable: !activity,
@@ -177,10 +182,16 @@ export function buildWorkerGeneralSheet(
       {
         id: 'node-general-libraries',
         title: 'Accès aux bibliothèques',
-        caption: `${libraries.length} autorisée(s)`,
+        caption: `${libraries.length} ${libraries.length > 1 ? 'autorisées' : 'autorisée'}`,
         metrics: [
-          { label: 'Accès direct', value: `${directLibraries} bibliothèque(s)` },
-          { label: 'Transfert WebDAV', value: `${transferLibraries} bibliothèque(s)` },
+          {
+            label: 'Accès direct',
+            value: `${directLibraries} ${directLibraries > 1 ? 'bibliothèques' : 'bibliothèque'}`,
+          },
+          {
+            label: 'Transfert WebDAV',
+            value: `${transferLibraries} ${transferLibraries > 1 ? 'bibliothèques' : 'bibliothèque'}`,
+          },
         ],
       },
     ];
@@ -192,5 +203,3 @@ export function buildWorkerGeneralSheet(
     };
   }
 }
-
-

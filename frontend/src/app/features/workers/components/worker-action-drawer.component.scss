@@ -14,7 +14,7 @@
 
 .enrollment-step > span {
   color: var(--accent);
-  font-size: 14px;
+  font-size: var(--font-body);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -23,7 +23,7 @@
 .enrollment-step h3 {
   margin: 0;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: var(--font-title-sm);
 }
 
 .enrollment-step p,

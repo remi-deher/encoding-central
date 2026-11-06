@@ -114,12 +114,16 @@
     width: 7px;
     height: 7px;
     border-radius: 50%;
+    background: var(--text-muted);
 
-    &.online {
+    &[data-tone='success'] {
       background: var(--success);
     }
-    &.offline {
-      background: var(--text-muted);
+    &[data-tone='warning'] {
+      background: var(--warning);
+    }
+    &[data-tone='danger'] {
+      background: var(--danger);
     }
   }
 }

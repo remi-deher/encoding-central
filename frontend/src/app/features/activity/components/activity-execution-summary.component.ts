@@ -13,6 +13,7 @@ import {
 } from '../../../shared/models/library-activity';
 import { formatFileSize } from '../../../shared/models/file-size';
 import { formatFullDateTime } from '../../../shared/models/date-format';
+import { executionTone } from '../../../shared/models/execution-tone';
 import { StatusBadgeComponent } from '../../../shared/ui/status-badge.component';
 import { IconComponent } from '../../../shared/ui/icon.component';
 import { NotificationService } from '../../../shared/services/notification.service';
@@ -91,8 +92,9 @@ function stepDuration(step: ExecutionPipelineStep): string {
               <button
                 type="button"
                 class="copy-chip-btn"
+                matButton="outlined"
                 (click)="copy(detail, 'Détail')"
-                title="Copier le message de détail"
+                matTooltip="Copier le message de détail"
                 aria-label="Copier le message de détail"
               >
                 <app-icon name="copy" />
@@ -114,12 +116,13 @@ function stepDuration(step: ExecutionPipelineStep): string {
             <div class="path-block">
               <span class="block-label">Chemin relatif</span>
               <div class="path-content">
-                <span class="path-text" [title]="fullPath()">{{ fullPath() }}</span>
+                <span class="path-text" [matTooltip]="fullPath()">{{ fullPath() }}</span>
                 <button
+                  matIconButton
                   type="button"
                   class="copy-btn"
                   (click)="copy(fullPath(), 'Chemin relatif')"
-                  title="Copier le chemin relatif"
+                  matTooltip="Copier le chemin relatif"
                   aria-label="Copier le chemin relatif"
                 >
                   <app-icon name="copy" />
@@ -144,12 +147,13 @@ function stepDuration(step: ExecutionPipelineStep): string {
                 <div class="field-item full-row">
                   <span class="field-label">Emplacement publié</span>
                   <div class="path-content published-path">
-                    <span class="path-text" [title]="pub">{{ pub }}</span>
+                    <span class="path-text" [matTooltip]="pub">{{ pub }}</span>
                     <button
+                      matIconButton
                       type="button"
                       class="copy-btn"
                       (click)="copy(pub, 'Emplacement publié')"
-                      title="Copier l’emplacement publié"
+                      matTooltip="Copier l’emplacement publié"
                       aria-label="Copier l’emplacement publié"
                     >
                       <app-icon name="copy" />
@@ -160,11 +164,11 @@ function stepDuration(step: ExecutionPipelineStep): string {
             </div>
           </section>
 
-          <!-- Carte B : Traitement & Exécution -->
-          <section class="summary-card" aria-label="Traitement et exécution">
+          <!-- Carte B : Exécution -->
+          <section class="summary-card" aria-label="Exécution">
             <header class="card-header">
               <span class="card-icon"><app-icon name="play" /></span>
-              <h4 class="card-title">Traitement & Exécution</h4>
+              <h4 class="card-title">Exécution</h4>
             </header>
 
             <div class="card-fields-grid">
@@ -198,12 +202,13 @@ function stepDuration(step: ExecutionPipelineStep): string {
               <div class="execution-id-block">
                 <span class="block-label">Identifiant d’exécution</span>
                 <div class="id-content">
-                  <code class="id-code" [title]="execId">{{ execId }}</code>
+                  <code class="id-code" [matTooltip]="execId">{{ execId }}</code>
                   <button
+                    matIconButton
                     type="button"
                     class="copy-btn"
                     (click)="copy(execId, 'Identifiant d’exécution')"
-                    title="Copier l’identifiant d’exécution"
+                    matTooltip="Copier l’identifiant d’exécution"
                     aria-label="Copier l’identifiant d’exécution"
                   >
                     <app-icon name="copy" />
@@ -406,7 +411,8 @@ function stepDuration(step: ExecutionPipelineStep): string {
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      padding: 4px 10px;
+      min-height: 48px;
+      padding: var(--space-1) var(--space-3);
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-pill);
       background: var(--surface-container-lowest);
@@ -522,14 +528,14 @@ function stepDuration(step: ExecutionPipelineStep): string {
     .copy-btn {
       display: grid;
       place-items: center;
-      width: 28px;
-      height: 28px;
+      width: 48px;
+      height: 48px;
       border: 0;
       background: transparent;
       color: var(--text-muted);
       border-radius: var(--radius-xs);
       cursor: pointer;
-      flex: 0 0 28px;
+      flex: 0 0 48px;
 
       &:hover {
         color: var(--accent-strong);
@@ -857,20 +863,16 @@ export class ActivityExecutionSummaryComponent {
     return st && ACTIVITY_STATUS_LABELS[st] ? ACTIVITY_STATUS_LABELS[st] : 'À traiter';
   });
 
-  protected readonly statusTone = computed<'accent' | 'neutral' | 'danger' | 'success' | 'warning'>(
-    () => {
-      const exec = this.execution();
-      if (exec) {
-        return this.stateTone(exec.state);
-      }
-      const st = this.file()?.status;
-      if (st === 'failed') return 'danger';
-      if (st === 'done') return 'success';
-      if (st === 'active') return 'accent';
-      if (st === 'disabled') return 'warning';
-      return 'neutral';
-    },
-  );
+  protected readonly statusTone = computed(() => {
+    const exec = this.execution();
+    if (exec) return executionTone(exec.state);
+    const st = this.file()?.status;
+    if (st === 'failed') return 'danger';
+    if (st === 'done') return 'success';
+    if (st === 'active') return 'accent';
+    if (st === 'disabled') return 'warning';
+    return 'neutral';
+  });
 
   protected readonly flowDescription = computed(() => {
     const exec = this.execution();
@@ -946,7 +948,7 @@ export class ActivityExecutionSummaryComponent {
         condition: 'Condition',
         input: 'Entrée',
         terminal: 'Sortie',
-        execution: 'Traitement',
+        execution: 'Exécution',
         preparation: 'Préparation',
         action: 'Action',
         variable: 'Variable',
@@ -954,24 +956,6 @@ export class ActivityExecutionSummaryComponent {
         unknown: 'Bloc',
       }[kind] ?? kind
     );
-  }
-
-  protected stateTone(
-    state: ExecutionResponse['state'],
-  ): 'accent' | 'neutral' | 'danger' | 'success' | 'warning' {
-    switch (state) {
-      case 'succeeded':
-        return 'success';
-      case 'running':
-        return 'accent';
-      case 'failed':
-        return 'danger';
-      case 'cancelled':
-      case 'cancelling':
-        return 'warning';
-      default:
-        return 'neutral';
-    }
   }
 
   protected stepStatusTone(

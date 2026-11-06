@@ -95,11 +95,6 @@ p {
 .connection-status.is-authorized {
   background: var(--success-soft);
 }
-.badge {
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-pill);
-  background: var(--surface-container-high);
-}
 .connection-error {
   background: var(--danger-soft);
   color: var(--danger);

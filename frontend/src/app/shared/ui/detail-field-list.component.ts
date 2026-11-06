@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, input, signal, TemplateRef } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  input,
+  signal,
+  TemplateRef,
+} from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { MatTabsModule } from '@angular/material/tabs';
 
@@ -238,7 +245,7 @@ export interface DetailField {
 
     .copy-feedback {
       font-weight: 600;
-      color: var(--color-success, #10b981);
+      color: var(--success);
     }
   `,
 })

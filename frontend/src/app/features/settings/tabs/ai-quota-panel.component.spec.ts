@@ -53,6 +53,14 @@ describe('AiQuotaPanelComponent', () => {
     expect(api.getQuotas).toHaveBeenCalledTimes(1);
   });
 
+  it('affiche une barre de progression pendant le chargement, sans état vide', () => {
+    api.getQuotas.mockReturnValueOnce(new Subject<AiCentralQuotas>());
+    const fixture = TestBed.createComponent(AiQuotaPanelComponent);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('mat-progress-bar')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('app-empty-state')).toBeNull();
+  });
+
   it('conserve les dernières observations sans jauge actuelle si la lecture échoue', () => {
     const fixture = TestBed.createComponent(AiQuotaPanelComponent);
     fixture.detectChanges();

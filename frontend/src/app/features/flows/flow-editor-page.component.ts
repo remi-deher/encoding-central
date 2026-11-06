@@ -1,4 +1,5 @@
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { FlowComponentDrop, FlowPaletteDrop } from '../../shared/ui/flow-palette-drag';
 import { FlowValidation } from '../../shared/services/flow-validation';
 import { FlowContinuationSource } from '../../shared/models/flow-sequence';
@@ -17,7 +18,6 @@ import { ActivatedRoute } from '@angular/router';
 import { FlowEditorAssistant } from '../../shared/services/flow-editor-assistant.service';
 import { MEDIA_INPUT_COMPONENTS } from '../../shared/models/flow-control-components';
 import { NotificationService } from '../../shared/services/notification.service';
-import { RecordFormComponent } from '../../shared/ui/record-form.component';
 import { FlowGraphEditorComponent } from '../../shared/ui/flow-graph-editor.component';
 import { ComponentConfigurationFormComponent } from '../../shared/ui/component-configuration-form.component';
 import { FlowSimulation } from '../../shared/services/flow-simulation';
@@ -33,6 +33,7 @@ import { FlowPackInsertionStore } from './editor/flow-pack-insertion.store';
 import { FlowInspectorStore } from './editor/flow-inspector.store';
 import { FlowPersistenceStore } from './editor/flow-persistence.store';
 import { FlowComponentsStore } from './editor/flow-components.store';
+import { FlowPackCreationDialogComponent } from './flow-pack-creation-dialog.component';
 
 /**
  * Page d’édition d’un flow : canevas, palette, inspecteur, bac de simulation et
@@ -65,7 +66,7 @@ import { FlowComponentsStore } from './editor/flow-components.store';
     ComponentConfigurationFormComponent,
     FlowSimulationTrayComponent,
     FlowGraphEditorComponent,
-    RecordFormComponent,
+    FlowPackCreationDialogComponent,
   ],
   templateUrl: './flow-editor-page.component.html',
   styleUrl: './flow-editor-page.component.scss',
@@ -74,6 +75,7 @@ export class FlowEditorPageComponent {
   protected readonly simulator = inject(FlowSimulation);
   private readonly route = inject(ActivatedRoute);
   private readonly notifications = inject(NotificationService);
+  private readonly dialog = inject(MatDialog);
   private readonly serverValidation = inject(FlowValidation);
   private readonly flowAssistant = inject(FlowEditorAssistant);
 
@@ -188,9 +190,7 @@ export class FlowEditorPageComponent {
       event.preventDefault();
       void this.openSimulator();
     } else if (event.key === 'Escape') {
-      if (this.persistence.packCreationOpen()) {
-        this.persistence.packCreationOpen.set(false);
-      } else if (this.inspector.configuringNodeId()) {
+      if (this.inspector.configuringNodeId()) {
         this.inspector.closeComponentEditor();
       } else if (this.graph.componentDestination()) {
         this.editing.cancelInsertion();
@@ -200,6 +200,18 @@ export class FlowEditorPageComponent {
 
   protected toggleFlowConnections(): void {
     this.connectionVisibilityOverride.set(!this.showFlowConnections());
+  }
+
+  protected openPackCreation(): void {
+    this.dialog.open(FlowPackCreationDialogComponent, {
+      data: {
+        form: this.persistence.packCreationForm(),
+        create: (values: Record<string, string>) =>
+          this.persistence.createPackFromPublishedFlow(values),
+      },
+      ariaLabel: 'Créer un pack depuis la version publiée',
+      maxWidth: 'min(560px, calc(100vw - 2rem))',
+    });
   }
 
   protected setFlowConnections(visible: boolean): void {

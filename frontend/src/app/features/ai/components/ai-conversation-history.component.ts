@@ -1,14 +1,21 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import {
-  AiAssistantConversation,
-} from '../../../shared/models/ai-tools';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { AiAssistantConversation } from '../../../shared/models/ai-tools';
+import { IconComponent } from '../../../shared/ui/icon.component';
+import { AppDatePipe } from '../../../shared/pipes/app-date.pipe';
 
 @Component({
   selector: 'app-ai-conversation-history',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatProgressSpinnerModule],
+  imports: [
+    MatButtonModule,
+    MatProgressSpinnerModule,
+    MatTooltipModule,
+    IconComponent,
+    AppDatePipe,
+  ],
   template: `
     <section
       assistant-history
@@ -19,7 +26,9 @@ import {
       <header class="conversation-heading">
         <div class="conversation-heading__title">
           <h2 id="assistant-history-title">Conversations</h2>
-          <span class="conversation-count" aria-label="Nombre de conversations">{{ totalCount() }}</span>
+          <span class="conversation-count" aria-label="Nombre de conversations">{{
+            totalCount()
+          }}</span>
         </div>
       </header>
       @if (loading()) {
@@ -44,43 +53,31 @@ import {
                   [disabled]="sending() || deletingId() === conversation.id"
                   (click)="conversationSelected.emit(conversation.id)"
                 >
-                  <span class="conversation-mark" aria-hidden="true">✦</span>
+                  <app-icon class="conversation-mark" name="auto_awesome" />
                   <span class="conversation-copy">
                     <strong>{{ conversation.title }}</strong>
                     <span class="conversation-meta">
                       <span>{{ conversation.source.label }}</span>
                       <span aria-hidden="true">·</span>
-                      <time [attr.datetime]="conversation.updatedAt">{{ timeLabel(conversation.updatedAt) }}</time>
+                      <time [attr.datetime]="conversation.updatedAt">{{
+                        conversation.updatedAt | appDate: 'relative'
+                      }}</time>
                     </span>
                   </span>
                 </button>
                 <button
                   class="conversation-delete"
-                  mat-icon-button
+                  matIconButton
                   type="button"
                   [disabled]="sending() || deletingId() !== null"
                   [attr.aria-label]="'Supprimer la conversation ' + conversation.title"
-                  title="Supprimer la conversation"
+                  matTooltip="Supprimer la conversation"
                   (click)="deleteRequested.emit(conversation)"
                 >
                   @if (deletingId() === conversation.id) {
                     <mat-spinner diameter="16" />
                   } @else {
-                    <svg
-                      viewBox="0 0 24 24"
-                      width="18"
-                      height="18"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.8"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M4 7h16M10 11v6M14 11v6M5 7l1 14h12l1-14M9 7V4h6v3"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      />
-                    </svg>
+                    <app-icon name="delete" />
                   }
                 </button>
               </article>
@@ -128,15 +125,4 @@ export class AiConversationHistoryComponent {
     if (today.getTime() - date.getTime() <= 7 * 24 * 60 * 60 * 1000) return '7 derniers jours';
     return 'Plus anciennes';
   }
-
-  protected timeLabel(updatedAt: string): string {
-    const date = new Date(updatedAt);
-    if (Number.isNaN(date.getTime())) return '';
-    const options: Intl.DateTimeFormatOptions =
-      this.dateGroup(updatedAt) === 'Aujourd’hui'
-        ? { hour: '2-digit', minute: '2-digit' }
-        : { day: 'numeric', month: 'short' };
-    return new Intl.DateTimeFormat('fr-FR', options).format(date);
-  }
-
 }

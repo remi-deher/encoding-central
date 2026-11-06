@@ -117,10 +117,6 @@
 .row-action {
   min-height: var(--touch-target);
 }
-.row-action_danger {
-  --mat-button-outlined-outline-color: var(--danger);
-  --mat-button-outlined-label-text-color: var(--danger);
-}
 .row-toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -223,17 +219,9 @@
   }
 
   .mobile-select-all {
-    min-height: 42px;
+    min-height: var(--touch-target);
     margin: 0 12px 10px;
-    padding: 0 12px;
-    display: block;
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-    background: var(--surface);
-    color: var(--accent-strong);
-    font: inherit;
-    font-size: 14px;
-    font-weight: 650;
+    display: flex;
   }
 
   .selection-actions {
@@ -242,7 +230,7 @@
 
   .selection-action,
   .selection-clear {
-    min-height: 42px;
+    min-height: var(--touch-target);
     flex: 1 1 auto;
   }
 
@@ -294,6 +282,12 @@
 
 .resource-open {
   flex: 0 0 auto;
+}
+
+.resource-row-menu {
+  flex: 0 0 auto;
+  width: var(--touch-target);
+  height: var(--touch-target);
 }
 
 .resource-menu-item_danger {
@@ -436,13 +430,6 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-2);
-}
-
-.data-card-action_danger {
-  --mat-button-filled-container-color: var(--danger-strong);
-  --mat-button-filled-label-text-color: var(--on-danger);
-  --mat-button-outlined-outline-color: var(--danger);
-  --mat-button-outlined-label-text-color: var(--danger);
 }
 
 .data-card-detail {

@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { DataTableComponent } from '../../../shared/ui/data-table.component';
+import { EmptyStateComponent } from '../../../shared/ui/empty-state/empty-state.component';
 import { LibraryAccessStore } from '../library-access.store';
 import { LibraryCatalogStore } from '../library-catalog.store';
 
@@ -8,7 +9,7 @@ import { LibraryCatalogStore } from '../library-catalog.store';
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-library-access-tab',
-  imports: [MatButtonModule, DataTableComponent],
+  imports: [MatButtonModule, DataTableComponent, EmptyStateComponent],
   template: `
     @if (catalog.selectedLibrary()) {
       <section class="library-access-summary" aria-labelledby="library-access-heading">
@@ -40,10 +41,11 @@ import { LibraryCatalogStore } from '../library-catalog.store';
           emptyMessage="Aucun accès configuré."
         />
       } @else {
-        <p class="library-access-empty">
-          Aucun worker n’a encore accès à cette bibliothèque. Elle ne sera pas traitée tant qu’un
-          accès n’est pas configuré.
-        </p>
+        <app-empty-state
+          icon="key"
+          title="Aucun accès configuré"
+          message="Aucun worker n’a encore accès à cette bibliothèque. Elle ne sera pas traitée tant qu’un accès n’est pas configuré."
+        />
       }
     }
   `,

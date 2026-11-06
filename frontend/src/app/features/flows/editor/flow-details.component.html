@@ -12,7 +12,7 @@
           <p>Lecture seule · la définition et les connexions sont conservées.</p>
         </div>
         <button
-          mat-button
+          matButton="text"
           type="button"
           [disabled]="!current() || busy()"
           (click)="preview({ kind: 'current' })"
@@ -99,7 +99,7 @@
                 </p>
               </div>
               <button
-                mat-button
+                matButton="text"
                 [disabled]="busy() || !current()"
                 (click)="preview({ kind: 'published', version: version.version })"
                 [attr.aria-label]="'Prévisualiser la version ' + version.version"
@@ -232,7 +232,7 @@
           (click)="download('json')"
         >
           Exporter l’aperçu JSON</button
-        ><button mat-button (click)="download('zip')">Exporter le flow ZIP</button>
+        ><button matButton="text" (click)="download('zip')">Exporter le flow ZIP</button>
       </div>
       @if (document()) {
         <p>Sauvegarde de l’aperçu : {{ backupLabel(selectedBackup()) }}</p>
@@ -260,7 +260,7 @@
                 </p>
               </div>
               <button
-                mat-button
+                matButton="text"
                 [disabled]="busy()"
                 (click)="preview({ kind: 'backup', revision: backup.revision })"
                 [attr.aria-label]="'Prévisualiser la sauvegarde ' + backup.revision"

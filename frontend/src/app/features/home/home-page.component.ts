@@ -5,7 +5,7 @@ import {
   INITIAL_EXECUTION_TRACKING,
 } from '../../shared/services/execution-tracking';
 import { HomeExecutions, INITIAL_HOME_EXECUTIONS } from './home-executions';
-import { DatePipe } from '@angular/common';
+import { AppDatePipe } from '../../shared/pipes/app-date.pipe';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { CentralOverview, INITIAL_CLUSTER_OVERVIEW } from '../../shared/services/central-overview';
 import {
@@ -68,7 +68,7 @@ type OverviewView = 'general' | 'ai' | 'activity' | 'infrastructure';
     IconComponent,
     AiProviderOverviewComponent,
     MatButtonModule,
-    DatePipe,
+    AppDatePipe,
     DetailDrawerComponent,
     OverviewExecutionComponent,
     HealthBannerComponent,
@@ -222,11 +222,12 @@ export class HomePageComponent {
   protected readonly recentAiActivity = computed(() => {
     const query = this.searchQuery().trim().toLocaleLowerCase('fr-FR');
     return [...this.aiActivity()]
-      .filter((item) =>
-        !query ||
-        [item.provider, item.operation, item.progressDetail, item.status].some((value) =>
-          (value ?? '').toLocaleLowerCase('fr-FR').includes(query),
-        ),
+      .filter(
+        (item) =>
+          !query ||
+          [item.provider, item.operation, item.progressDetail, item.status].some((value) =>
+            (value ?? '').toLocaleLowerCase('fr-FR').includes(query),
+          ),
       )
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .slice(0, 5);
@@ -234,11 +235,12 @@ export class HomePageComponent {
   protected readonly recentAiConversations = computed(() => {
     const query = this.searchQuery().trim().toLocaleLowerCase('fr-FR');
     return [...this.aiConversations()]
-      .filter((item) =>
-        !query ||
-        [item.title, item.provider, item.source.label].some((value) =>
-          value.toLocaleLowerCase('fr-FR').includes(query),
-        ),
+      .filter(
+        (item) =>
+          !query ||
+          [item.title, item.provider, item.source.label].some((value) =>
+            value.toLocaleLowerCase('fr-FR').includes(query),
+          ),
       )
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .slice(0, 5);
@@ -252,20 +254,22 @@ export class HomePageComponent {
   });
   protected readonly activePreview = computed(() => {
     const query = this.searchQuery().trim().toLocaleLowerCase('fr-FR');
-    return this.homeExecutionState().active.filter((item) =>
-      !query ||
-      [item.media, item.library, item.flow, item.worker ?? '', item.detail].some((value) =>
-        value.toLocaleLowerCase('fr-FR').includes(query),
-      ),
+    return this.homeExecutionState().active.filter(
+      (item) =>
+        !query ||
+        [item.media, item.library, item.flow, item.worker ?? '', item.detail].some((value) =>
+          value.toLocaleLowerCase('fr-FR').includes(query),
+        ),
     );
   });
   protected readonly publications = computed(() => {
     const query = this.searchQuery().trim().toLocaleLowerCase('fr-FR');
-    return this.homeExecutionState().publications.filter((item) =>
-      !query ||
-      [item.media, item.library, item.flow, item.worker ?? '', item.detail].some((value) =>
-        value.toLocaleLowerCase('fr-FR').includes(query),
-      ),
+    return this.homeExecutionState().publications.filter(
+      (item) =>
+        !query ||
+        [item.media, item.library, item.flow, item.worker ?? '', item.detail].some((value) =>
+          value.toLocaleLowerCase('fr-FR').includes(query),
+        ),
     );
   });
   protected readonly remainingActive = computed(() =>
@@ -319,27 +323,30 @@ export class HomePageComponent {
     const matches = (...values: readonly string[]) =>
       values.some((value) => value.toLocaleLowerCase('fr-FR').includes(normalized));
     const nodes = (this.state().snapshot?.nodes ?? [])
-      .filter((node) =>
-        matches(node.name, node.displayName ?? '', node.roles.join(' '), node.id),
-      )
+      .filter((node) => matches(node.name, node.displayName ?? '', node.roles.join(' '), node.id))
       .slice(0, 4)
       .map((node) => ({
         id: `overview-node:${node.id}`,
         label: node.displayName?.trim() || node.name,
         description: `${node.status === 'online' ? 'En ligne' : 'Hors ligne'} · ${node.roles.join(' · ')}`,
         group: 'Workers',
-        glyph: '▤',
+        icon: 'server' as const,
         path: '/workers?tab=cluster',
       }));
-    const executions = [...this.homeExecutionState().active, ...this.homeExecutionState().publications]
-      .filter((item) => matches(item.media, item.library, item.flow, item.worker ?? '', item.detail))
+    const executions = [
+      ...this.homeExecutionState().active,
+      ...this.homeExecutionState().publications,
+    ]
+      .filter((item) =>
+        matches(item.media, item.library, item.flow, item.worker ?? '', item.detail),
+      )
       .slice(0, 4)
       .map((item) => ({
         id: `overview-execution:${item.id}`,
         label: item.media,
         description: `${item.library} · ${item.flow}`,
-        group: item.state === 'succeeded' ? 'Traitements terminés' : 'Traitements en cours',
-        glyph: '▣',
+        group: item.state === 'succeeded' ? 'Exécutions terminées' : 'Exécutions en cours',
+        icon: 'video' as const,
         path: '/activity',
       }));
     const conversations = this.aiConversations()
@@ -350,7 +357,7 @@ export class HomePageComponent {
         label: item.title,
         description: `${this.providerLabel(item.provider)} · ${item.source.label}`,
         group: 'Conversations IA',
-        glyph: '✦',
+        icon: 'auto_awesome' as const,
         path: '/ai/assistant',
       }));
     return [...nodes, ...executions, ...conversations].slice(0, 8);
@@ -410,7 +417,7 @@ export class HomePageComponent {
       {
         label: 'En cours',
         value: this.count(data?.activeCount),
-        detail: 'Traitements en cours d’exécution',
+        detail: 'Exécutions en cours',
         link: '/activity',
         queryParams: { view: 'active' },
         stale: executionIsStale,
@@ -418,7 +425,7 @@ export class HomePageComponent {
       {
         label: 'En attente',
         value: this.count(data?.queuedCount),
-        detail: 'Dans la file de traitement',
+        detail: 'Dans la file d’exécution',
         link: '/activity',
         queryParams: { view: 'queue' },
         stale: executionIsStale,
@@ -444,20 +451,21 @@ export class HomePageComponent {
   });
   protected readonly nodes = computed(() => {
     const query = this.searchQuery().trim().toLocaleLowerCase('fr-FR');
-    return (this.state().snapshot?.nodes ?? []).filter((node) =>
-      !query ||
-      [node.name, node.displayName ?? '', node.roles.join(' '), node.inventory?.operatingSystem ?? '']
-        .some((value) => value.toLocaleLowerCase('fr-FR').includes(query)),
+    return (this.state().snapshot?.nodes ?? []).filter(
+      (node) =>
+        !query ||
+        [
+          node.name,
+          node.displayName ?? '',
+          node.roles.join(' '),
+          node.inventory?.operatingSystem ?? '',
+        ].some((value) => value.toLocaleLowerCase('fr-FR').includes(query)),
     );
   });
   protected readonly health = computed(() => {
     const snapshot = this.state().snapshot;
     return snapshot
-      ? assessCentralHealth(
-          snapshot.nodes,
-          snapshot.libraries,
-          snapshot.accesses,
-        )
+      ? assessCentralHealth(snapshot.nodes, snapshot.libraries, snapshot.accesses)
       : null;
   });
   protected readonly matrixRows = computed(() =>

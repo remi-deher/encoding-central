@@ -24,11 +24,13 @@ import { PageSystemActionsComponent } from '../../shared/ui/page-system-actions.
 import { GlobalSearchBarComponent } from './global-search-bar.component';
 import { UserMenuComponent } from '../auth/user-menu.component';
 import { PageShellContextService } from './page-shell-context';
+import { IconComponent } from '../../shared/ui/icon.component';
 
 @Component({
   selector: 'app-shell',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    IconComponent,
     MatTooltipModule,
     PrimaryNavigationComponent,
     RouterLink,
@@ -70,16 +72,17 @@ export class AppShellComponent {
     { initialValue: this.getCurrentPageContext() },
   );
 
+  // Mêmes valeurs que styles/_breakpoints.scss (compact < 600, medium 600–839, expanded ≥ 840).
   private readonly compactNavigation = toSignal(
     inject(BreakpointObserver)
-      .observe('(max-width: 760px)')
+      .observe('(max-width: 599px)')
       .pipe(map((state) => state.matches)),
     { initialValue: false },
   );
   protected readonly isCompactNavigation = this.compactNavigation;
   protected readonly isTabletNavigation = toSignal(
     inject(BreakpointObserver)
-      .observe('(min-width: 761px) and (max-width: 1100px)')
+      .observe('(min-width: 600px) and (max-width: 839px)')
       .pipe(map((state) => state.matches)),
     { initialValue: false },
   );

@@ -200,7 +200,7 @@ type ClientPlatform = 'claude' | 'cursor' | 'antigravity' | 'stdio';
         }
         <pre><code>{{ configSnippet() }}</code></pre>
         <p>{{ clientInstructions() }}</p>
-        <button matButton="filled" [disabled]="!configReady()" (click)="copyConfigSnippet()">
+        <button matButton="tonal" [disabled]="!configReady()" (click)="copyConfigSnippet()">
           Copier la configuration
         </button>
       </div></ng-template

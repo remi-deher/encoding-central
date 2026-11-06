@@ -9,10 +9,12 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient } from '@angular/common/http';
-import { FormsModule } from '@angular/forms';
+import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { AuthService } from '../../core/auth/auth.service';
 import { WorkerInventory } from '../../shared/models/central';
 import { DiscoveredCentral } from '../../shared/models/local-worker';
@@ -26,7 +28,10 @@ import { SETUP_SURFACE_STYLES } from './setup-surface.styles';
 /** Matériel détecté, lu sans secret avant le rattachement (`GET /api/v1/worker/hardware`). */
 interface WorkerHardware {
   readonly inventory: WorkerInventory;
-  readonly tools: readonly { readonly toolId: string; readonly accelerationTypes: readonly string[] }[];
+  readonly tools: readonly {
+    readonly toolId: string;
+    readonly accelerationTypes: readonly string[];
+  }[];
 }
 
 const DETECTED_STYLES = `
@@ -46,9 +51,11 @@ const DETECTED_STYLES = `
   imports: [
     AccessTemplateComponent,
     DetectedConfigurationComponent,
-    FormsModule,
+    ReactiveFormsModule,
     IconComponent,
     MatButtonModule,
+    MatFormFieldModule,
+    MatInputModule,
   ],
   template: `
     <app-access-template
@@ -59,7 +66,7 @@ const DETECTED_STYLES = `
       [busy]="busy()"
       progressLabel="Configuration du worker"
     >
-      <div access-content class="setup-stack">
+      <form access-content class="setup-stack" [formGroup]="form" novalidate>
         @if (!welcome()) {
           <p class="progress" aria-live="polite">Étape {{ step() + 1 }} sur 3</p>
         }
@@ -74,8 +81,8 @@ const DETECTED_STYLES = `
               <h2 id="welcome-heading">Bienvenue</h2>
               <p>
                 Ce guide en trois étapes rattache cette machine à un central : choisir le central,
-                s’y connecter avec un compte administrateur, puis rattacher le worker. Vérifiez d’abord que la machine détectée
-                ci-dessous est la bonne.
+                s’y connecter avec un compte administrateur, puis rattacher le worker. Vérifiez
+                d’abord que la machine détectée ci-dessous est la bonne.
               </p>
             </div>
             <div class="actions">
@@ -95,153 +102,170 @@ const DETECTED_STYLES = `
             [address]="workerAddress()"
           />
         } @else {
-        @if (step() === 0) {
-          <section class="card" aria-labelledby="central-address-heading">
-            <div class="heading">
-              <div>
-                <h2 id="central-address-heading">Choisir le central</h2>
-                <p>L’adresse est enregistrée localement et utilisée pour tous les échanges.</p>
+          @if (step() === 0) {
+            <section class="card" aria-labelledby="central-address-heading">
+              <div class="heading">
+                <div>
+                  <h2 id="central-address-heading">Choisir le central</h2>
+                  <p>L’adresse est enregistrée localement et utilisée pour tous les échanges.</p>
+                </div>
               </div>
-            </div>
-            <div class="detected" aria-live="polite">
-              <div class="detected-heading">
-                <h3>Centraux détectés sur le réseau</h3>
-                <button
-                  matButton="outlined"
-                  type="button"
-                  [disabled]="busy() || discovering()"
-                  (click)="refreshDetected()"
-                >
-                  Actualiser la découverte
-                </button>
+              <div class="detected" aria-live="polite">
+                <div class="detected-heading">
+                  <h3>Centraux détectés sur le réseau</h3>
+                  <button
+                    matButton="outlined"
+                    type="button"
+                    [disabled]="busy() || discovering()"
+                    (click)="refreshDetected()"
+                  >
+                    Actualiser la découverte
+                  </button>
+                </div>
+                @if (detected().length) {
+                  <ul>
+                    @for (central of detected(); track central.id) {
+                      <li>
+                        <button
+                          matButton="outlined"
+                          type="button"
+                          [disabled]="busy()"
+                          (click)="chooseDetected(central)"
+                        >
+                          <strong>{{ central.name }}</strong>
+                          <span>{{ central.apiBaseUrl }}</span>
+                        </button>
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <p>
+                    {{
+                      discovering()
+                        ? 'Recherche en cours…'
+                        : 'Aucun central détecté. La découverte DNS-SD ne traverse pas toujours les conteneurs ni les sous-réseaux : saisissez son adresse ci-dessous.'
+                    }}
+                  </p>
+                }
               </div>
-              @if (detected().length) {
-                <ul>
-                  @for (central of detected(); track central.id) {
-                    <li>
-                      <button
-                        matButton="outlined"
-                        type="button"
-                        [disabled]="busy()"
-                        (click)="chooseDetected(central)"
-                      >
-                        <strong>{{ central.name }}</strong>
-                        <span>{{ central.apiBaseUrl }}</span>
-                      </button>
-                    </li>
-                  }
-                </ul>
-              } @else {
-                <p>
-                  {{
-                    discovering()
-                      ? 'Recherche en cours…'
-                      : 'Aucun central détecté. La découverte DNS-SD ne traverse pas toujours les conteneurs ni les sous-réseaux : saisissez son adresse ci-dessous.'
-                  }}
-                </p>
-              }
-            </div>
 
-            <label for="central-address">Adresse du central</label>
-            <input
-              id="central-address"
-              type="url"
-              [(ngModel)]="centralAddress"
-              [disabled]="busy()"
-              placeholder="https://encoding.example.net"
-              autocomplete="url"
-              required
-            />
-            <div class="actions">
-              <button matButton="outlined" type="button" [disabled]="busy()" (click)="back()">
-                Retour
-              </button>
-              <button matButton="filled" type="button" [disabled]="busy()" (click)="connect()">
-                Vérifier et continuer
-              </button>
-            </div>
-          </section>
-        }
-
-        @if (step() === 1) {
-          <section class="card" aria-labelledby="worker-login-heading">
-            <div class="heading">
-              <div>
-                <h2 id="worker-login-heading">Se connecter au central</h2>
-                <p>Utilisez un compte administrateur du central sélectionné.</p>
-              </div>
-            </div>
-            <label for="worker-username">Nom d’utilisateur</label>
-            <input
-              id="worker-username"
-              type="text"
-              [(ngModel)]="username"
-              [disabled]="busy()"
-              autocomplete="username"
-            />
-            <label for="worker-password">Mot de passe</label>
-            <input
-              id="worker-password"
-              type="password"
-              [(ngModel)]="password"
-              [disabled]="busy()"
-              autocomplete="current-password"
-            />
-            <div class="actions">
-              <button matButton="outlined" type="button" [disabled]="busy()" (click)="back()">
-                Retour
-              </button>
-              <button matButton="filled" type="button" [disabled]="busy()" (click)="login()">
-                Se connecter
-              </button>
-            </div>
-          </section>
-        }
-
-        @if (step() === 2) {
-          <section class="card" aria-labelledby="worker-enrollment-heading">
-            <div class="heading">
-              <h2 id="worker-enrollment-heading">Rattacher le worker</h2>
-              <p>Votre compte administrateur du central autorise ce rattachement : aucune validation n’est à faire ailleurs.</p>
-            </div>
-            @if (signedInAs(); as account) {
-              <div class="notice" role="status">
-                Session déjà ouverte sur ce central en tant que <strong>{{ account }}</strong> :
-                elle sera utilisée pour le rattachement, sans nouvelle saisie d’identifiants.
-              </div>
-            }
-            @if (local.status()?.isEnrolled) {
-              <div class="notice" role="status">
-                Ce worker est rattaché à <strong>{{ local.status()?.centralName }}</strong>.
-              </div>
-              <div class="actions">
-                <button matButton="filled" type="button" (click)="openNodes()">
-                  Voir le worker
-                </button>
-              </div>
-            } @else {
-              <div class="notice">
-                Le worker ne gère ni bibliothèques ni flows : il reçoit uniquement les capacités,
-                plugins, outils et traitements décidés par le central.
-              </div>
+              <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                <mat-label>Adresse du central</mat-label>
+                <input
+                  matInput
+                  id="central-address"
+                  type="url"
+                  formControlName="centralAddress"
+                  [disabled]="busy()"
+                  placeholder="https://encoding.example.net"
+                  autocomplete="url"
+                  required
+                />
+              </mat-form-field>
               <div class="actions">
                 <button matButton="outlined" type="button" [disabled]="busy()" (click)="back()">
                   Retour
                 </button>
-                <button
-                  matButton="filled"
-                  type="button"
-                  [disabled]="busy() || local.busy() || local.loading() || local.agentUnavailable()"
-                  (click)="attach()"
-                >
-                  Rattacher ce worker
+                <button matButton="filled" type="button" [disabled]="busy()" (click)="connect()">
+                  Vérifier et continuer
                 </button>
               </div>
-            }
-          </section>
+            </section>
+          }
+
+          @if (step() === 1) {
+            <section class="card" aria-labelledby="worker-login-heading">
+              <div class="heading">
+                <div>
+                  <h2 id="worker-login-heading">Se connecter au central</h2>
+                  <p>Utilisez un compte administrateur du central sélectionné.</p>
+                </div>
+              </div>
+              <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                <mat-label>Nom d’utilisateur</mat-label>
+                <input
+                  matInput
+                  id="worker-username"
+                  type="text"
+                  formControlName="username"
+                  [disabled]="busy()"
+                  autocomplete="username"
+                  required
+                />
+              </mat-form-field>
+              <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                <mat-label>Mot de passe</mat-label>
+                <input
+                  matInput
+                  id="worker-password"
+                  type="password"
+                  formControlName="password"
+                  [disabled]="busy()"
+                  autocomplete="current-password"
+                  required
+                />
+              </mat-form-field>
+              <div class="actions">
+                <button matButton="outlined" type="button" [disabled]="busy()" (click)="back()">
+                  Retour
+                </button>
+                <button matButton="filled" type="button" [disabled]="busy()" (click)="login()">
+                  Se connecter
+                </button>
+              </div>
+            </section>
+          }
+
+          @if (step() === 2) {
+            <section class="card" aria-labelledby="worker-enrollment-heading">
+              <div class="heading">
+                <h2 id="worker-enrollment-heading">Rattacher le worker</h2>
+                <p>
+                  Votre compte administrateur du central autorise ce rattachement : aucune
+                  validation n’est à faire ailleurs.
+                </p>
+              </div>
+              @if (signedInAs(); as account) {
+                <div class="notice" role="status">
+                  Session déjà ouverte sur ce central en tant que <strong>{{ account }}</strong> :
+                  elle sera utilisée pour le rattachement, sans nouvelle saisie d’identifiants.
+                </div>
+              }
+              @if (local.status()?.isEnrolled) {
+                <div class="notice" role="status">
+                  Ce worker est rattaché à <strong>{{ local.status()?.centralName }}</strong
+                  >.
+                </div>
+                <div class="actions">
+                  <button matButton="filled" type="button" (click)="openNodes()">
+                    Voir le worker
+                  </button>
+                </div>
+              } @else {
+                <div class="notice">
+                  Le worker ne gère ni bibliothèques ni flows : il reçoit uniquement les capacités,
+                  plugins, outils et traitements décidés par le central.
+                </div>
+                <div class="actions">
+                  <button matButton="outlined" type="button" [disabled]="busy()" (click)="back()">
+                    Retour
+                  </button>
+                  <button
+                    matButton="filled"
+                    type="button"
+                    [disabled]="
+                      busy() || local.busy() || local.loading() || local.agentUnavailable()
+                    "
+                    (click)="attach()"
+                  >
+                    Rattacher ce worker
+                  </button>
+                </div>
+              }
+            </section>
+          }
         }
-        }
-      </div>
+      </form>
     </app-access-template>
   `,
   styles: SETUP_SURFACE_STYLES + DETECTED_STYLES,
@@ -254,18 +278,40 @@ export class WorkerSetupPageComponent {
   private readonly destroyRef = inject(DestroyRef);
   protected readonly local = inject(LocalWorkerController);
 
-  protected centralAddress = '';
+  protected readonly form = new FormGroup({
+    centralAddress: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+    username: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+    password: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+  });
+  protected get centralAddress(): string {
+    return this.form.controls.centralAddress.value;
+  }
+  protected set centralAddress(value: string) {
+    this.form.controls.centralAddress.setValue(value);
+  }
   protected readonly detected = signal<readonly DiscoveredCentral[]>([]);
   protected readonly discovering = signal(false);
   /** Compte administrateur déjà connecté au central choisi (session relayée) : l'étape de connexion est alors inutile. */
   protected readonly signedInAs = signal<string | null>(null);
-  protected username = '';
-  protected password = '';
+  protected get username(): string {
+    return this.form.controls.username.value;
+  }
+  protected set username(value: string) {
+    this.form.controls.username.setValue(value);
+  }
+  protected get password(): string {
+    return this.form.controls.password.value;
+  }
+  protected set password(value: string) {
+    this.form.controls.password.setValue(value);
+  }
   protected readonly step = signal(0);
   /** Accueil : n'est pas une étape, il présente la machine détectée avant de commencer. */
   protected readonly welcome = signal(true);
   private readonly hardware = signal<WorkerHardware | null>(null);
-  private readonly inventory = computed(() => this.local.status()?.inventory ?? this.hardware()?.inventory ?? null);
+  private readonly inventory = computed(
+    () => this.local.status()?.inventory ?? this.hardware()?.inventory ?? null,
+  );
   private readonly capabilities = computed(
     () => this.local.status()?.capabilities ?? this.hardware()?.tools ?? [],
   );
@@ -316,7 +362,9 @@ export class WorkerSetupPageComponent {
     }
     return accelerators.size ? [...accelerators].join(' · ') : 'Validation en cours';
   });
-  protected readonly workerAddress = computed(() => this.document.location.hostname || 'Indisponible');
+  protected readonly workerAddress = computed(
+    () => this.document.location.hostname || 'Indisponible',
+  );
 
   constructor() {
     // Route ouverte tant que le worker n'est pas rattaché : le matériel est lisible avant la connexion au central.
@@ -332,7 +380,9 @@ export class WorkerSetupPageComponent {
     this.discovering.set(true);
     try {
       this.detected.set(
-        await firstValueFrom(this.http.get<readonly DiscoveredCentral[]>('/api/v1/worker/centrals')),
+        await firstValueFrom(
+          this.http.get<readonly DiscoveredCentral[]>('/api/v1/worker/centrals'),
+        ),
       );
     } catch {
       this.detected.set([]);
@@ -347,6 +397,10 @@ export class WorkerSetupPageComponent {
   }
 
   protected async connect(): Promise<void> {
+    if (this.form.controls.centralAddress.invalid) {
+      this.form.controls.centralAddress.markAsTouched();
+      return;
+    }
     this.busy.set(true);
     this.errorMessage.set(null);
     try {

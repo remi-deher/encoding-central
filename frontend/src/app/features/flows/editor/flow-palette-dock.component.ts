@@ -37,10 +37,10 @@ import { MediaType } from '../../../shared/models/media-type';
       @if (opened()) {
         <div class="dock-header">
           <div class="header-title-row">
-            <span class="dock-glyph" aria-hidden="true">▦</span>
+            <span class="dock-glyph" aria-hidden="true"><app-icon name="flow" /></span>
             <h2 class="dock-title">Composants & Packs</h2>
             <button
-              mat-icon-button
+              matIconButton
               type="button"
               [attr.aria-pressed]="pinned()"
               aria-label="Garder la palette ouverte après un ajout"
@@ -80,7 +80,7 @@ import { MediaType } from '../../../shared/models/media-type';
           }
 
           <div class="search-box">
-            <span class="search-icon" aria-hidden="true">🔍</span>
+            <span class="search-icon" aria-hidden="true"><app-icon name="search" /></span>
             <input
               type="search"
               class="search-input"
@@ -96,7 +96,7 @@ import { MediaType } from '../../../shared/models/media-type';
                 (click)="clearSearch()"
                 aria-label="Effacer la recherche"
               >
-                ✕
+                <app-icon name="close" />
               </button>
             }
           </div>
@@ -162,7 +162,7 @@ import { MediaType } from '../../../shared/models/media-type';
                       <span class="component-kind">{{ kindLabel(component.kind) }}</span>
                       <span class="component-title">{{ component.name }}</span>
                       <span class="component-plugin">{{ component.pluginName }}</span>
-                      <span class="add-hint" aria-hidden="true">+</span>
+                      <span class="add-hint" aria-hidden="true"><app-icon name="add" /></span>
                     </div>
                   }
                 </div>
@@ -271,7 +271,6 @@ import { MediaType } from '../../../shared/models/media-type';
       gap: 8px;
     }
     .dock-glyph {
-      font-size: 16px;
       color: var(--accent);
     }
     .dock-title {
@@ -282,14 +281,12 @@ import { MediaType } from '../../../shared/models/media-type';
       flex: 1;
     }
     .dock-close-btn {
-      width: 28px;
-      height: 28px;
+      width: 48px;
+      height: 48px;
       border-radius: var(--radius-xs);
       border: none;
       background: transparent;
       color: var(--text-secondary);
-      font-size: 20px;
-      line-height: 1;
       display: grid;
       place-items: center;
       cursor: pointer;
@@ -306,7 +303,7 @@ import { MediaType } from '../../../shared/models/media-type';
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-      font-size: 11px;
+      font-size: var(--font-label);
       color: var(--accent);
       font-weight: 600;
     }
@@ -318,7 +315,7 @@ import { MediaType } from '../../../shared/models/media-type';
       line-height: 1.3;
     }
     .banner-indicator {
-      font-size: 8px;
+      font-size: var(--font-label);
       animation: blink 1.2s infinite ease-in-out;
     }
     @keyframes blink {
@@ -334,7 +331,7 @@ import { MediaType } from '../../../shared/models/media-type';
       border: none;
       background: transparent;
       color: var(--text-primary);
-      font-size: 11px;
+      font-size: var(--font-label);
       font-weight: 700;
       cursor: pointer;
       text-decoration: underline;
@@ -348,7 +345,7 @@ import { MediaType } from '../../../shared/models/media-type';
     .search-icon {
       position: absolute;
       left: 10px;
-      font-size: 12px;
+      font-size: var(--font-label);
       color: var(--text-muted);
       pointer-events: none;
     }
@@ -360,7 +357,7 @@ import { MediaType } from '../../../shared/models/media-type';
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-pill);
       color: var(--text-primary);
-      font-size: 12px;
+      font-size: var(--font-label);
       outline: none;
       &:focus {
         border-color: var(--accent);
@@ -373,13 +370,13 @@ import { MediaType } from '../../../shared/models/media-type';
       background: transparent;
       color: var(--text-muted);
       cursor: pointer;
-      font-size: 12px;
+      font-size: var(--font-label);
     }
     .plugin-filter {
       display: grid;
       gap: 8px;
       color: var(--text-secondary);
-      font-size: 12px;
+      font-size: var(--font-label);
     }
     .plugin-filter summary,
     .category-group summary {
@@ -398,7 +395,7 @@ import { MediaType } from '../../../shared/models/media-type';
     .plugin-filter summary::before,
     .category-group summary::before {
       content: '›';
-      font-size: 18px;
+      font-size: var(--font-title);
       color: var(--text-muted);
       transform: rotate(0deg);
       transition: transform 0.15s ease;
@@ -417,7 +414,7 @@ import { MediaType } from '../../../shared/models/media-type';
       border-radius: var(--radius-pill);
       background: var(--surface-container-highest);
       color: var(--text-secondary);
-      font-size: 11px;
+      font-size: var(--font-label);
     }
     .clear-filter {
       justify-self: start;
@@ -430,7 +427,7 @@ import { MediaType } from '../../../shared/models/media-type';
     }
     .plugin-filter label {
       color: var(--text-secondary);
-      font-size: 12px;
+      font-size: var(--font-label);
       font-weight: 700;
       letter-spacing: 0.03em;
       text-transform: uppercase;
@@ -445,7 +442,7 @@ import { MediaType } from '../../../shared/models/media-type';
       background: var(--surface);
       color: var(--text-primary);
       font: inherit;
-      font-size: 12px;
+      font-size: var(--font-label);
     }
     .plugin-select:focus-visible {
       outline: 2px solid var(--accent);
@@ -454,7 +451,7 @@ import { MediaType } from '../../../shared/models/media-type';
     .catalog-summary {
       margin: 0;
       color: var(--text-muted);
-      font-size: 12px;
+      font-size: var(--font-label);
     }
     .dock-body {
       flex: 1;
@@ -474,7 +471,7 @@ import { MediaType } from '../../../shared/models/media-type';
     .category-group summary {
       min-height: 40px;
       color: var(--text-primary);
-      font-size: 13px;
+      font-size: var(--font-body);
       font-weight: 600;
     }
     .pack-group {
@@ -518,19 +515,19 @@ import { MediaType } from '../../../shared/models/media-type';
       }
     }
     .component-kind {
-      font-size: 12px;
+      font-size: var(--font-label);
       font-weight: 600;
       color: var(--component-accent, var(--accent));
     }
     .component-plugin {
       color: var(--text-muted);
-      font-size: 12px;
+      font-size: var(--font-label);
     }
     .component-plugin {
       white-space: nowrap;
     }
     .component-title {
-      font-size: 12px;
+      font-size: var(--font-label);
       font-weight: 500;
       color: var(--text-primary);
       overflow: hidden;
@@ -544,7 +541,7 @@ import { MediaType } from '../../../shared/models/media-type';
     }
     .unavailable-tag {
       color: var(--text-muted);
-      font-size: 12px;
+      font-size: var(--font-label);
       font-weight: 600;
     }
     .pack-card {
@@ -563,11 +560,11 @@ import { MediaType } from '../../../shared/models/media-type';
       cursor: pointer;
     }
     .pack-name {
-      font-size: 12px;
+      font-size: var(--font-label);
       font-weight: 600;
     }
     .pack-badge {
-      font-size: 12px;
+      font-size: var(--font-label);
       padding: 2px 6px;
       border-radius: var(--radius-pill);
       background: var(--accent-soft);
@@ -578,7 +575,7 @@ import { MediaType } from '../../../shared/models/media-type';
       padding: 24px 12px;
       text-align: center;
       color: var(--text-muted);
-      font-size: 12px;
+      font-size: var(--font-label);
       line-height: 1.5;
     }
   `,

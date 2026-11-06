@@ -22,11 +22,10 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { AuthService } from '../../core/auth/auth.service';
-import {
-  PageShellContextService,
-} from '../../core/layout/page-shell-context';
+import { PageShellContextService } from '../../core/layout/page-shell-context';
 import { AssistantWorkspaceTemplateComponent } from '../../shared/templates/assistant-workspace-template.component';
 import { IconComponent } from '../../shared/ui/icon.component';
+import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { AiConversationComposerComponent } from './components/ai-conversation-composer.component';
 import { AiConversationHistoryComponent } from './components/ai-conversation-history.component';
 import { AiChatThreadComponent } from './components/ai-chat-thread.component';
@@ -49,6 +48,7 @@ import type { AssistantResourceType } from './ai-conversation.store';
   providers: [AiConversationStore, AiModelStore, AiContextStore],
   imports: [
     IconComponent,
+    PageHeaderComponent,
     FormsModule,
     MatButtonModule,
     MatChipsModule,
@@ -127,7 +127,8 @@ export class AiAssistantPageComponent implements OnDestroy {
       this.context.selectedResource.set(null);
     };
     this.conversations.reloadAfterAction = (action) => {
-      if (action === 'start-library' || action === 'cancel-execution') this.context.loadExecutions();
+      if (action === 'start-library' || action === 'cancel-execution')
+        this.context.loadExecutions();
       if (action === 'delete-flow' || action === 'publish-flow') this.context.loadFlows();
       if (action === 'assign-library-flow') this.context.loadLibraries();
     };
@@ -173,8 +174,7 @@ export class AiAssistantPageComponent implements OnDestroy {
           if (this.conversations.detail()) this.conversations.detail.set(null);
           return;
         }
-        if (this.conversations.detail()?.conversation.id !== id)
-          this.openConversation(id, false);
+        if (this.conversations.detail()?.conversation.id !== id) this.openConversation(id, false);
       });
     });
   }
@@ -258,7 +258,8 @@ export class AiAssistantPageComponent implements OnDestroy {
     event.preventDefault();
     this.context.draggingFiles.set(false);
     if (this.conversations.sending() || this.conversations.hasPendingRequest()) return;
-    for (const file of Array.from(event.dataTransfer.files)) await this.context.selectAttachment(file);
+    for (const file of Array.from(event.dataTransfer.files))
+      await this.context.selectAttachment(file);
   }
 
   private setConversationUrl(id: string | null): void {

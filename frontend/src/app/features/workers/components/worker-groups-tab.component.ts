@@ -24,11 +24,11 @@ import { WorkerGroupCardComponent } from './worker-group-card.component';
           } @else {
             <h3 class="empty-title">Aucun groupe de workers</h3>
             <p class="empty-desc">
-              Les groupes permettent d’organiser vos serveurs et workers, d’attribuer des
-              étiquettes partagées et de contraindre l’exécution des flows.
+              Les groupes permettent d’organiser vos serveurs et workers, d’attribuer des étiquettes
+              partagées et de contraindre l’exécution des flows.
             </p>
             @if (isAdmin()) {
-              <button matButton="filled" type="button" (click)="groups.createGroup()">
+              <button matButton="tonal" type="button" (click)="groups.createGroup()">
                 Créer un groupe
               </button>
             }

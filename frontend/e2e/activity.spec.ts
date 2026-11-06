@@ -360,7 +360,7 @@ test('batch selection provides select all and contextual actions', async ({ page
   const toolbar = activity.getByRole('toolbar', { name: 'Actions groupées' });
   await expect(toolbar).toBeVisible();
   await expect(toolbar).toContainText('2 fichiers sélectionnés');
-  await expect(toolbar.getByRole('button', { name: /Annuler la tâche/ })).toBeVisible();
+  await expect(toolbar.getByRole('button', { name: /Annuler les exécutions/ })).toBeVisible();
 
   await toolbar.getByRole('button', { name: 'Tout désélectionner' }).click();
   await expect(toolbar).not.toBeVisible();
