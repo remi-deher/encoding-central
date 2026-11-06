@@ -218,7 +218,8 @@ public sealed partial class RuntimeRepository
             var encoder=VideoEncoderCatalog.Find(resolution.EncoderId);
             var target=profile is null||string.IsNullOrEmpty(codec)?null:MediaCodecPolicy.AcceptedEncodingTarget(profile,codec,resolution.EncoderId,retryWithCpu);
             var preset=encoder?.Presets.FirstOrDefault(item=>item.Id==target?.Preset)?.Value;
-            if(FieldClause(resolution,profile,encoder,target,codec,preset) is {} fieldClause) return RefuseVideoEncoding(fieldClause,resolution,executionId,worker,currentNodeId);
+            var tier=node.Configuration.TryGetValue("qualityTier",out var tierValue)&&tierValue.ValueKind==JsonValueKind.String?tierValue.GetString()!:"custom";
+            if(FieldClause(resolution,profile,encoder,target,codec,preset,tier) is {} fieldClause) return RefuseVideoEncoding(fieldClause,resolution,executionId,worker,currentNodeId);
         }
         return true;
     }
@@ -252,7 +253,7 @@ public sealed partial class RuntimeRepository
 
     /// <summary>Clause « profile », « encoder », « target » ou champ précis (attendu / reçu) qui échoue.</summary>
     internal static string? FieldClause(ResolvedVideoEncoding r,EncodingProfileSnapshot? profile,VideoEncoderDescriptor? encoder,
-        EncodingProfileTarget? target,string? codec,string? preset)
+        EncodingProfileTarget? target,string? codec,string? preset,string tier="custom")
     {
         if(profile is null) return "profile : encodingProfile non désérialisable";
         if(encoder is null) return $"encoder : {r.EncoderId} absent du catalogue";
@@ -265,7 +266,9 @@ public sealed partial class RuntimeRepository
         if(r.Acceleration!=encoder.Acceleration) return $"acceleration : attendu {encoder.Acceleration}, reçu {r.Acceleration}";
         if(r.QualityMode!=encoder.QualityMode) return $"quality_mode : attendu {encoder.QualityMode}, reçu {r.QualityMode}";
         if(r.QualityOption!=encoder.QualityOption) return $"quality_option : attendu {encoder.QualityOption}, reçu {r.QualityOption}";
-        if(r.Quality!=target.Quality) return $"quality : attendu {target.Quality}, reçu {r.Quality}";
+        // Le worker applique ResolveQuality (palier du nœud + dimensions de la source) : le central attend exactement la même valeur.
+        var quality=MediaCodecPolicy.ResolveQuality(encoder,tier,r.SourceWidth??0,r.SourceHeight??0,target.Quality);
+        if(r.Quality!=quality) return $"quality : attendu {quality} (palier {tier}, source {r.SourceWidth??0}x{r.SourceHeight??0}), reçu {r.Quality}";
         if(r.PresetId!=target.Preset) return $"preset_id : attendu {target.Preset}, reçu {r.PresetId}";
         if(r.Priority!=target.Priority) return $"priority : attendu {target.Priority}, reçu {r.Priority}";
         var presetOption=string.IsNullOrEmpty(encoder.PresetOption)?null:encoder.PresetOption;

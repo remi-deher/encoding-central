@@ -212,7 +212,7 @@ public sealed partial class MediaActions
             resolutions.Add(new(flowNodeId, workerId, codec, encoder.Id, ffmpeg.Version, encoder.Acceleration,
                 encoder.QualityMode, encoder.QualityOption, quality, target.Preset,
                 string.IsNullOrEmpty(encoder.PresetOption) ? null : encoder.PresetOption, preset,
-                profile.Id, profile.Version, profile.Name, target.Priority, DateTimeOffset.UtcNow));
+                profile.Id, profile.Version, profile.Name, target.Priority, DateTimeOffset.UtcNow, sourceWidth, sourceHeight));
         return hardwareMode;
     }
 
