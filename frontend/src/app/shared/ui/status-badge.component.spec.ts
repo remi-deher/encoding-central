@@ -22,7 +22,10 @@ describe('StatusBadgeComponent', () => {
     );
   });
 
-  it('hides the decorative dot from assistive technology', () => {
-    expect(render('OK').querySelector('.status-dot')!.getAttribute('aria-hidden')).toBe('true');
+  it('shows an icon alongside the text and maps the legacy ok tone to success', () => {
+    const badge = render('OK', 'ok').querySelector('.status-badge')!;
+    expect(badge.textContent).toContain('OK');
+    expect(badge.querySelector('app-icon')).not.toBeNull();
+    expect(badge.classList).toContain('tone-success');
   });
 });

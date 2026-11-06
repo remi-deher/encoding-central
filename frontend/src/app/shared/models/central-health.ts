@@ -14,7 +14,7 @@ export const NODE_LIFECYCLE_LABELS: Record<WorkerLifecycleState, string> = {
 
 export const NODE_LIFECYCLE_TONES: Record<WorkerLifecycleState, StatusTone> = {
   online: 'success',
-  offline: 'warning',
+  offline: 'neutral',
   draining: 'neutral',
   incompatible: 'danger',
   quarantined: 'danger',
