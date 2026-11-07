@@ -209,7 +209,7 @@ public sealed class RuntimeTransferService(WorkerAgentOptions options,WorkerIden
         catch(OperationCanceledException) when(ct.IsCancellationRequested) { }
         catch(Exception exception)
         {
-            logger.LogWarning("Transfert {ExecutionId} refusé : {Type}.",transfer.ExecutionId,exception.GetType().Name);
+            logger.LogWarning(exception,"Transfert {ExecutionId} refusé : {Type} : {Reason}",transfer.ExecutionId,exception.GetType().Name,exception.Message);
             try
             {
                 var status=await client.ExecutionAsync(transfer.ExecutionId,ct);
