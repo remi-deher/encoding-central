@@ -139,14 +139,22 @@ public sealed class WorkerStoreStateTests
         var (database, _, _, _, _) = await CreateAsync();
         await using var _ = database;
         var handler = new ManagementAccessHandler(new WorkerRepository(database.Db));
+        // Un worker retiré (départ ou suppression) : son ancien jeton ne vaut plus rien.
+        await using (var retired = database.Db.CreateCommand("INSERT INTO workers(id,name,roles,max_concurrent_tasks,capabilities,last_seen_at,worker_token_hash,deleted_at) VALUES(@id,'w','worker',1,'[]',(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'),@hash,(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'))"))
+        {
+            retired.Parameters.AddWithValue("id", Guid.NewGuid());
+            retired.Parameters.AddWithValue("hash", SqlKind.Bytes, SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("token-gone")));
+            await retired.ExecuteNonQueryAsync();
+        }
 
-        async Task<bool> Succeeds(string method, string? token, ClaimsPrincipal user, bool nodeCredentials)
+        async Task<bool> Succeeds(string method, string? token, ClaimsPrincipal user, bool nodeCredentials, bool report = false)
         {
             var http = new DefaultHttpContext { User = user };
             http.Request.Method = method;
             if (token is not null) http.Request.Headers["X-Node-Token"] = token;
             http.Request.Headers[ManagementAccessHandler.CsrfHeader] = "1";
-            var metadata = nodeCredentials ? new EndpointMetadataCollection(new WorkerCredentialAccessMetadata()) : EndpointMetadataCollection.Empty;
+            var metadata = report ? new EndpointMetadataCollection(new WorkerCredentialAccessMetadata(), new WorkerReportAccessMetadata())
+                : nodeCredentials ? new EndpointMetadataCollection(new WorkerCredentialAccessMetadata()) : EndpointMetadataCollection.Empty;
             http.SetEndpoint(new Endpoint(null, metadata, "test"));
             var context = new AuthorizationHandlerContext([new ManagementAccessRequirement()], user, http);
             await handler.HandleAsync(context);
@@ -162,5 +170,14 @@ public sealed class WorkerStoreStateTests
         Assert.False(await Succeeds("PUT", null, Person("viewer"), nodeCredentials: false)); // un lecteur ne modifie pas
         Assert.True(await Succeeds("PUT", null, Person("admin"), nodeCredentials: false));
         Assert.True(await Succeeds("GET", null, Person("viewer"), nodeCredentials: false)); // un lecteur peut lire
+
+        // #23 : le rapport d'état appliqué (PUT, AllowNodeCredentialReport) accepte le jeton d'un worker enrôlé, et lui seul.
+        Assert.True(await Succeeds("PUT", "token-one", anonymous, nodeCredentials: true, report: true));
+        Assert.False(await Succeeds("PUT", null, anonymous, nodeCredentials: true, report: true));          // jeton absent
+        Assert.False(await Succeeds("PUT", "token-unknown", anonymous, nodeCredentials: true, report: true)); // jeton inconnu
+        Assert.False(await Succeeds("PUT", "token-gone", anonymous, nodeCredentials: true, report: true));    // worker retiré
+        Assert.False(await Succeeds("PUT", null, Person("viewer"), nodeCredentials: true, report: true));    // un lecteur ne remet pas de rapport
+        Assert.False(await Succeeds("POST", "token-one", anonymous, nodeCredentials: true)); // AllowNodeCredentials seul n'ouvre aucune écriture
+        Assert.False(await Succeeds("DELETE", "token-one", anonymous, nodeCredentials: true));
     }
 }

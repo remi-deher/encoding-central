@@ -12,6 +12,12 @@ public sealed record AssistantConversationAccessMetadata;
 /// <summary>Marque une lecture appelée aussi par les workers, authentifiés par leur jeton de worker plutôt que par une session.</summary>
 public sealed record WorkerCredentialAccessMetadata;
 
+/// <summary>
+/// Étend <see cref="WorkerCredentialAccessMetadata"/> à l'écriture pour une route précise où un worker remet un rapport sur LUI-MÊME
+/// (identité déduite du jeton par la route, jamais d'identifiant fourni). Ne s'emploie qu'avec une décision explicite (voir auth-ops).
+/// </summary>
+public sealed record WorkerReportAccessMetadata;
+
 public static class ManagementAccessExtensions
 {
     public static TBuilder AllowViewer<TBuilder>(this TBuilder builder) where TBuilder : IEndpointConventionBuilder =>
@@ -22,6 +28,10 @@ public static class ManagementAccessExtensions
 
     public static TBuilder AllowNodeCredentials<TBuilder>(this TBuilder builder) where TBuilder : IEndpointConventionBuilder =>
         builder.WithMetadata(new WorkerCredentialAccessMetadata());
+
+    /// <summary>Rapport d'un worker sur son propre état (écriture) : jeton worker accepté pour cette route seulement, hors session et hors CSRF.</summary>
+    public static TBuilder AllowNodeCredentialReport<TBuilder>(this TBuilder builder) where TBuilder : IEndpointConventionBuilder =>
+        builder.WithMetadata(new WorkerCredentialAccessMetadata(), new WorkerReportAccessMetadata());
 }
 
 public sealed class ManagementAccessRequirement : IAuthorizationRequirement;
@@ -40,7 +50,12 @@ public sealed class ManagementAccessHandler(WorkerRepository workers) : Authoriz
         var endpoint = http.GetEndpoint();
         var safe = HttpMethods.IsGet(http.Request.Method) || HttpMethods.IsHead(http.Request.Method);
 
-        if (safe && endpoint?.Metadata.GetMetadata<WorkerCredentialAccessMetadata>() is not null
+        // Jeton worker : lectures marquées AllowNodeCredentials ; écriture seulement si la route porte en plus WorkerReportAccessMetadata
+        // (AllowNodeCredentialReport). Un jeton worker n'ouvre jamais une autre route d'écriture. Pas de CSRF ici : l'en-tête X-Node-Token
+        // n'est jamais envoyé automatiquement par un navigateur.
+        var nodeAllowed = endpoint?.Metadata.GetMetadata<WorkerCredentialAccessMetadata>() is not null
+            && (safe || endpoint.Metadata.GetMetadata<WorkerReportAccessMetadata>() is not null);
+        if (nodeAllowed
             && http.Request.Headers["X-Node-Token"].ToString() is { Length: > 0 } token
             && await workers.AuthenticateTokenAsync(token, http.RequestAborted))
         {
