@@ -1,6 +1,6 @@
 ---
 domain: workers
-updated: 2026-11-03
+updated: 2026-11-07
 legacy_adr: [0001, 0002, 0017, 0034, 0036, 0037, 0038, 0039, 0040, 0041, 0044, 0045, 0046, 0047, 0048, 0050, 0051, 0052, 0053, 0066]
 code:
   - backend/src/Encoding.Api/Workers/
@@ -28,7 +28,7 @@ Il n'y a qu'un **central**, unique autorité et unique base de données, et des 
 ### Deux images, un central
 - Le Dockerfile publie `central` et `worker`. `central` embarque `Encoding.Api` (8080), l'interface, la base SQLite, `Encoding.WorkerAgent` (worker intégré, 8081, boucle locale) et `Encoding.Launcher`, qui démarre et surveille les deux processus sans jamais changer de mode.
 - `worker` n'embarque que l'agent et son interface Angular (8081) : ni API, ni lanceur, ni base. Il n'est jamais autonome : tant qu'il n'a pas de central, son interface ne propose que le choix du central. Son interface est alimentée par l'API du central (relayée par `CentralUiProxy`) et son flux SSE.
-- Le worker intégré du central est enrôlé d'office par un secret de conteneur (`local-enrollment.secret`, présenté seulement à un serveur en boucle locale).
+- Le worker intégré du central est enrôlé d'office par un secret de conteneur (`local-enrollment.secret`, présenté seulement à un serveur en boucle locale). Le lanceur impose à l'agent intégré `Central__ApiBaseUrl=http://127.0.0.1:<port de l'API>` **quelle que soit** la valeur de `Central:ApiBaseUrl` fournie à l'image central (l'enrôlement local exige cette adresse loopback exacte) ; une autre adresse est ignorée avec un avertissement au démarrage (`[launcher] Central:ApiBaseUrl est ignoré…`). Pour joindre un autre central, utiliser un worker distinct.
 - Un worker doit avoir **exactement la version du central** ([ADR 0039](../adr/0039-version-exacte-worker-central.md)) : la version est fixée à la construction de l'image (`APP_VERSION`).
 
 ### Installation, rattachement, départ
