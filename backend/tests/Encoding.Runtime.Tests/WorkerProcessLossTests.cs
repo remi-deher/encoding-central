@@ -141,6 +141,7 @@ public sealed class WorkerProcessLossTests
             Assert.Equal("failed", lost.GetProperty("state").GetString());
             Assert.Equal(executionId, lost.GetProperty("id").GetGuid());
             Assert.Contains("worker_perdu", lost.GetProperty("detail").GetString(), StringComparison.Ordinal);
+            Assert.Equal("worker_lost", lost.GetProperty("failure").GetProperty("code").GetString()); // #26 : code dédié, pas execution_failed
             var events = (await client.GetFromJsonAsync<JsonElement>($"executions/{executionId}/events")).ToString();
             Assert.DoesNotContain("reprise", events, StringComparison.OrdinalIgnoreCase);
             Assert.Equal(sourceSha, Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(source))));

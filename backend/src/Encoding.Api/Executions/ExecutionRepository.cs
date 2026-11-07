@@ -44,11 +44,26 @@ public sealed class ExecutionRepository(DbDataSource dataSource, FlowComponentRe
     private static ExecutionFailureInfo? ReadFailure(DbDataReader reader)
     {
         if (reader.GetString(5) != "failed") return null;
-        var prefix = reader.GetString(9).Split(':', 2)[0].Trim();
-        var code = prefix is "permission_denied" or "media_tool_failed" or "operation_timeout" or "execution_infrastructure_failed"
-            or "integration_infrastructure_failed" or "plugin_configuration_missing" or "publication_failed" or "source_transfer_failed" or "cluster_refused" or "placement_impossible" ? prefix : "execution_failed";
-        return new(code, reader.IsDBNull(21) ? null : reader.GetString(21), reader.IsDBNull(18) ? null : true);
+        return new(FailureCode(reader.GetString(9)), reader.IsDBNull(21) ? null : reader.GetString(21), reader.IsDBNull(18) ? null : true);
     }
+
+    /// <summary>Code d'échec stable déduit du préfixe du détail (« code : texte ») ; <c>execution_failed</c> pour une cause non reconnue.</summary>
+    internal static string FailureCode(string detail)
+    {
+        var prefix = detail.Split(':', 2)[0].Trim();
+        return prefix switch
+        {
+            // Perte du bail du worker (ADR 0044, RuntimeRecoveryService) : le détail garde son préfixe historique « worker_perdu ».
+            "worker_perdu" => WorkerLostFailureCode,
+            "permission_denied" or "media_tool_failed" or "operation_timeout" or "execution_infrastructure_failed"
+                or "integration_infrastructure_failed" or "plugin_configuration_missing" or "publication_failed" or "source_transfer_failed"
+                or "cluster_refused" or "placement_impossible" => prefix,
+            _ => "execution_failed"
+        };
+    }
+
+    /// <summary>Tentative en échec parce que son worker a perdu son bail (arrêt, coupure réseau) ; jamais réattribuée (ADR 0044).</summary>
+    public const string WorkerLostFailureCode = "worker_lost";
 
     private static System.Text.Json.JsonElement? ReadMetadata(DbDataReader reader,
         int index) => reader.IsDBNull(index)?null:System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(reader.GetString(index));
