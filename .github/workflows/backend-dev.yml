@@ -26,6 +26,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - id: diff
         env:
@@ -39,10 +40,10 @@ jobs:
           else
             echo "backend=false" >> "$GITHUB_OUTPUT"
           fi
-
   dev-ancestry:
-    name: Vérifier dev ⊆ test
+    name: "Vérifier dev ⊆ test (contre-épreuve : ref=head.sha explicite)"
     # Exécuté seulement sur PR test → dev depuis ce dépôt
+    # Contre-épreuve : checkout avec ref=head.sha pour s'assurer de travailler sur le SHA exact de la PR
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.ref == 'test' &&
@@ -53,18 +54,21 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
       - name: Récupérer dev
         run: git fetch origin dev
       - name: Vérifier ascendance
         run: |
-          MISSING="$(git rev-list --no-merges origin/dev ^HEAD)"
-          if [ -n "$MISSING" ]; then
+          # Vérification principale : dev ⊆ test (dev ne porte aucun commit absent de test)
+          MISSING_IN_TEST="$(git rev-list --no-merges origin/dev ^HEAD)"
+          if [ -n "$MISSING_IN_TEST" ]; then
             echo "::error::dev porte des commits absents de test : les reporter dans test par PR"
             echo "Commits manquants dans test :"
             git rev-list --no-merges origin/dev ^HEAD | head -20
             exit 1
           fi
+          echo "Ascendance vérifiée : dev ⊆ test"
 
   backend-dev-fast:
     needs: changes
@@ -93,7 +97,6 @@ jobs:
           name: backend-dev-architecture-results
           path: test-results
           retention-days: 7
-
   # Contrôle agrégateur à rendre requis dans la protection de dev (et lui seul).
   dev-ci:
     if: always()
