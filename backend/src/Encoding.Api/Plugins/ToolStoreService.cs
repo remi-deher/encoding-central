@@ -72,12 +72,22 @@ public sealed class ToolStoreService(IConfiguration configuration, ILogger<ToolS
         return null;
     }
 
-    public IReadOnlyList<InstalledToolPackage> Installed()
+    /// <summary>Index installé ; vide si le fichier n'existe pas, mais <see cref="StoreIndexUnreadableException"/> s'il est illisible (état inconnu, pas « aucun paquet »).</summary>
+    public IReadOnlyList<InstalledToolPackage> InstalledStrict()
     {
         try { return File.Exists(IndexPath) ? JsonSerializer.Deserialize<List<InstalledToolPackage>>(File.ReadAllText(IndexPath), Json) ?? [] : []; }
         catch (Exception exception) when (exception is JsonException or IOException)
         {
-            logger.LogError(exception, "L'index des outils installés est illisible : {Path}.", IndexPath);
+            throw new StoreIndexUnreadableException("outils", exception);
+        }
+    }
+
+    public IReadOnlyList<InstalledToolPackage> Installed()
+    {
+        try { return InstalledStrict(); }
+        catch (StoreIndexUnreadableException exception)
+        {
+            logger.LogError(exception.InnerException, "L'index des outils installés est illisible : {Path}.", IndexPath);
             return [];
         }
     }
@@ -194,12 +204,16 @@ public sealed class ToolStoreService(IConfiguration configuration, ILogger<ToolS
         finally { gate.Release(); }
     }
 
+    /// <summary>Signalé après chaque écriture de l'index (installation, mise à jour, retrait) : l'état Store global du central s'aligne (ADR 0046).</summary>
+    public event Action? Changed;
+
     private void Save(List<InstalledToolPackage> current)
     {
         System.IO.Directory.CreateDirectory(Directory);
         var temporary = IndexPath + ".tmp";
         File.WriteAllText(temporary, JsonSerializer.Serialize(current, Json));
         File.Move(temporary, IndexPath, overwrite: true);
+        Changed?.Invoke();
     }
 
     private static bool TryVersion(string value, out Version version)

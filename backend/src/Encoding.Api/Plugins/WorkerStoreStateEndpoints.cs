@@ -3,9 +3,8 @@ using Encoding.Api.Auth;
 namespace Encoding.Api.Plugins;
 
 /// <summary>
-/// État Store par worker (issue #17, P0) : lecture seule pour tout rôle authentifié. L'écriture de l'état désiré (PUT, administrateur,
-/// empreinte résolue par le central depuis le catalogue officiel en cache) est en P1 ; le rapport d'état appliqué (jeton worker) arrive en P3.
-/// Seul le flux `/api/v1/store/events` est ouvert aux jetons worker.
+/// État Store des workers (ADR 0046) : l'état désiré est global (paquets installés sur le central), il n'y a plus d'écriture par worker.
+/// Lecture de l'état d'un worker pour tout rôle authentifié ; rapport d'état appliqué et flux `/api/v1/store/events` ouverts aux jetons worker.
 /// </summary>
 public static class WorkerStoreStateEndpoints
 {
@@ -13,15 +12,10 @@ public static class WorkerStoreStateEndpoints
     public static void MapWorkerStoreStateEndpoints(this WebApplication app)
     {
         app.MapGet("/api/v1/workers/{workerId:guid}/store-state", async (Guid workerId, WorkerStoreStateService states, CancellationToken ct) =>
-            await states.GetAsync(workerId, ct) is { } state ? Results.Ok(state) : Results.NotFound())
-            .WithTags("Store").WithName("GetWorkerStoreState");
-
-        // Écriture réservée aux administrateurs (règle commune de ManagementAccessHandler : méthode non sûre, pas de jeton worker).
-        app.MapPut("/api/v1/workers/{workerId:guid}/store-state", async (Guid workerId, SetStoreStateRequest request, WorkerStoreStateService states, CancellationToken ct) =>
         {
-            try { return await states.SetDesiredAsync(workerId, request, ct) is { } result ? Results.Ok(result) : Results.NotFound(); }
-            catch (StoreCatalogException exception) { return Results.UnprocessableEntity(new { title = exception.Message }); }
-        }).WithTags("Store").WithName("SetWorkerStoreState");
+            try { return await states.GetAsync(workerId, ct) is { } state ? Results.Ok(state) : Results.NotFound(); }
+            catch (StoreIndexUnreadableException) { return Unavailable(); }
+        }).WithTags("Store").WithName("GetWorkerStoreState");
 
         app.MapPut("/api/v1/store/applied-state", async (HttpContext http, AppliedStateRequest request, WorkerStoreStateService states, CancellationToken ct) =>
         {
@@ -49,34 +43,58 @@ public static class WorkerStoreStateEndpoints
             var ct = http.RequestAborted;
             var token = http.Request.Headers["X-Node-Token"].ToString();
             if (token.Length == 0 || await states.WorkerIdForTokenAsync(token, ct) is not { } workerId) { http.Response.StatusCode = StatusCodes.Status401Unauthorized; return; }
+            if (await states.IsIncompatibleAsync(workerId, ct))
+            {
+                // ADR 0046, point 14 : pas de flux Store pour un worker de version d'application incompatible (ADR 0039).
+                http.Response.StatusCode = StatusCodes.Status409Conflict;
+                await http.Response.WriteAsJsonAsync(new { code = "version_incompatible" }, ct);
+                return;
+            }
+            var version = states.Changes.CurrentVersion; // lu avant l'état : un changement concurrent réveille la boucle
+            StoreDesiredState initial;
+            try { initial = await states.CurrentAsync(ct); }
+            catch (StoreIndexUnreadableException)
+            {
+                // État du central inconnu (index illisible) : aucun flux, donc aucun état vide diffusé ; le worker réessaie plus tard.
+                http.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                http.Response.Headers.RetryAfter = "30";
+                await http.Response.WriteAsJsonAsync(new { code = "store_state_unavailable" }, ct);
+                return;
+            }
             Encoding.Api.Executions.ExecutionStreamBroadcaster.PrepareResponse(http.Response);
             await http.Response.Body.FlushAsync(ct);
-            await StreamAsync(http, states, workerId, http.Request.Headers["Last-Event-ID"].ToString(), ct);
+            await StreamAsync(http, states, workerId, initial, version, http.Request.Headers["Last-Event-ID"].ToString(), ct);
         }).AllowNodeCredentials().WithTags("Store").WithName("StreamStoreEvents");
     }
 
     public static TimeSpan HeartbeatInterval { get; set; } = TimeSpan.FromSeconds(20);
 
-    private static async Task StreamAsync(HttpContext http, WorkerStoreStateService states, Guid workerId, string lastEventId, CancellationToken ct)
+    private static IResult Unavailable() => Results.Json(new { code = "store_state_unavailable" }, statusCode: StatusCodes.Status503ServiceUnavailable);
+
+    private static async Task StreamAsync(HttpContext http, WorkerStoreStateService states, Guid workerId, StoreDesiredState state, long version, string lastEventId, CancellationToken ct)
     {
         try
         {
-            var version = states.Changes.CurrentVersion; // lu avant l'état : un changement concurrent réveille la boucle
-            if (await states.GetAsync(workerId, ct) is not { } state) return;
-            var sent = state.Desired.Revision;
-            var first = StoreEventStream.Initial(string.IsNullOrEmpty(lastEventId) ? null : lastEventId, state.Desired.Revision);
-            if (first != StoreEventKind.None) await Write(http, StoreEventStream.Frame(first, state.Desired), ct);
+            var sent = state.Revision;
+            var first = StoreEventStream.Initial(string.IsNullOrEmpty(lastEventId) ? null : lastEventId, state.Revision);
+            if (first != StoreEventKind.None) await Write(http, StoreEventStream.Frame(first, state), ct);
             else await Write(http, StoreEventStream.Heartbeat, ct);
             while (!ct.IsCancellationRequested)
             {
                 var next = await states.Changes.WaitAsync(version, HeartbeatInterval, ct);
                 if (next == version) { await Write(http, StoreEventStream.Heartbeat, ct); continue; }
                 version = next;
-                if (await states.GetAsync(workerId, ct) is not { } current) return; // worker retiré
-                if (current.Desired.Revision > sent)
+                StoreDesiredState current;
+                try
                 {
-                    sent = current.Desired.Revision;
-                    await Write(http, StoreEventStream.Frame(StoreEventKind.DesiredState, current.Desired), ct);
+                    if (await states.GetAsync(workerId, ct) is null) return; // worker retiré
+                    current = await states.CurrentAsync(ct);
+                }
+                catch (StoreIndexUnreadableException) { continue; } // état inconnu : on ne diffuse rien, le flux attend le prochain changement lisible
+                if (current.Revision > sent)
+                {
+                    sent = current.Revision;
+                    await Write(http, StoreEventStream.Frame(StoreEventKind.DesiredState, current), ct);
                 }
             }
         }

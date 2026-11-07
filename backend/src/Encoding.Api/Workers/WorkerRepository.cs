@@ -324,6 +324,14 @@ public sealed partial class WorkerRepository(DbDataSource dataSource)
         await command.ExecuteNonQueryAsync(ct);
     }
 
+    /// <summary>Vrai si le worker (non retiré) est marqué de version d'application incompatible avec le central (0041, ADR 0039).</summary>
+    public async Task<bool> IsIncompatibleAsync(Guid workerId, CancellationToken ct)
+    {
+        await using var command = dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM workers WHERE id = @id AND deleted_at IS NULL AND incompatible_reason IS NOT NULL)");
+        command.Parameters.AddWithValue("id", workerId);
+        return await command.ScalarBoolAsync(ct);
+    }
+
     /// <summary>Ajoute l'état de cycle de vie (0041) aux workers lus : le plus restrictif l'emporte sur la présence.</summary>
     private async Task<IReadOnlyList<WorkerResponse>> WithLifecycleAsync(IReadOnlyList<WorkerResponse> workers, CancellationToken ct)
     {

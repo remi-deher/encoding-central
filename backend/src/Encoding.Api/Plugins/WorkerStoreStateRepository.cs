@@ -5,7 +5,7 @@ using Encoding.Api.Infrastructure.Data;
 
 namespace Encoding.Api.Plugins;
 
-/// <summary>Élément désiré d'un worker : version exacte et empreinte SHA-256 vérifiée par le central (jamais fournie par un client).</summary>
+/// <summary>Paquet installé sur le central, donc désiré par tous les workers : version exacte et empreinte SHA-256 de l'archive (jamais fournie par un client).</summary>
 public sealed record StoreDesiredItem(string Kind, string Id, string Version, string? Platform, string Sha256);
 
 /// <summary>Élément appliqué rapporté par le worker. <c>ErrorCode</c> est un code court, jamais un message d'exception.</summary>
@@ -13,7 +13,15 @@ public sealed record StoreAppliedItem(string Kind, string Id, string Version, st
 
 public sealed record StoreDesiredState(long Revision, IReadOnlyList<StoreDesiredItem> Items, DateTimeOffset? UpdatedAt);
 public sealed record StoreAppliedState(long Revision, IReadOnlyList<StoreAppliedItem> Items, DateTimeOffset? ReportedAt);
-public sealed record WorkerStoreState(Guid WorkerId, StoreDesiredState Desired, StoreAppliedState Applied);
+
+/// <summary>Écart d'un paquet entre l'état du central et le dernier rapport du worker. <c>Reason</c> : missing, version_mismatch, failed ou extra.</summary>
+public sealed record StoreGapItem(string Kind, string Id, string? Platform, string Reason, string? DesiredVersion, string? AppliedVersion, string? ErrorCode);
+
+/// <summary>Écart global : retard de révision et paquets qui diffèrent. <c>InSync</c> vaut vrai seulement si aucun paquet ne diffère.</summary>
+public sealed record StoreGap(long RevisionLag, bool InSync, IReadOnlyList<StoreGapItem> Items);
+
+/// <summary>État Store d'un worker : <c>Desired</c> est l'état global du central (identique pour tous les workers), <c>Applied</c> le dernier rapport du worker.</summary>
+public sealed record WorkerStoreState(Guid WorkerId, StoreDesiredState Desired, StoreAppliedState Applied, StoreGap Gap);
 
 public enum StoreReportOutcome { Accepted, StaleRevision, UnknownRevision, UnknownWorker }
 
@@ -23,8 +31,10 @@ public sealed record StoreReportResult(StoreReportOutcome Outcome, long DesiredR
 public sealed class StoreStateException(string message) : Exception(message);
 
 /// <summary>
-/// État Store par worker : l'état désiré (central, administrateur) et l'état appliqué (rapporté par le worker) sont persistés
-/// séparément, chacun avec une révision monotone. Un worker sans ligne a un état vide : rien n'est activé par défaut.
+/// État Store appliqué par worker (rapporté par le worker lui-même). L'état désiré n'est plus stocké par worker : c'est l'état global du
+/// central (<see cref="CentralStoreStateService"/>, ADR 0046). Les colonnes <c>desired_*</c> de la migration 0076 ne sont plus lues ;
+/// <c>desired_revision</c> reçoit seulement max(révision globale, révision appliquée) pour respecter le CHECK de 0076.
+/// Un worker sans rapport a un état appliqué vide (révision 0).
 /// </summary>
 public sealed partial class WorkerStoreStateRepository(DbDataSource dataSource)
 {
@@ -39,85 +49,56 @@ public sealed partial class WorkerStoreStateRepository(DbDataSource dataSource)
 
     public static readonly IReadOnlySet<string> AppliedStatuses = new HashSet<string>(["applied", "failed", "removed"], StringComparer.Ordinal);
 
-    /// <summary>Lit l'état d'un worker ; <c>null</c> si le worker est inconnu ou retiré.</summary>
-    public async Task<WorkerStoreState?> GetAsync(Guid workerId, CancellationToken ct)
+    /// <summary>Lit le dernier état appliqué d'un worker ; <c>null</c> si le worker est inconnu ou retiré.</summary>
+    public async Task<StoreAppliedState?> GetAppliedAsync(Guid workerId, CancellationToken ct)
     {
         await using var exists = dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM workers WHERE id = @id AND deleted_at IS NULL)");
         exists.Parameters.AddWithValue("id", workerId);
         if (!await exists.ScalarBoolAsync(ct)) return null;
-        await using var command = dataSource.CreateCommand("""
-            SELECT desired_revision, desired_items, desired_updated_at, applied_revision, applied_items, applied_reported_at
-            FROM worker_store_state WHERE worker_id = @id
-            """);
+        await using var command = dataSource.CreateCommand("SELECT applied_revision, applied_items, applied_reported_at FROM worker_store_state WHERE worker_id = @id");
         command.Parameters.AddWithValue("id", workerId);
         await using var reader = await command.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct))
-            return new WorkerStoreState(workerId, new(0, [], null), new(0, [], null));
-        return new WorkerStoreState(workerId,
-            new(reader.GetInt64(0), Parse<StoreDesiredItem>(reader.GetString(1)), Instant(reader, 2)),
-            new(reader.GetInt64(3), Parse<StoreAppliedItem>(reader.GetString(4)), Instant(reader, 5)));
-    }
-
-    /// <summary>
-    /// Remplace l'état désiré d'un worker et incrémente sa révision de façon atomique. Les éléments doivent déjà porter l'empreinte
-    /// officielle résolue par le central. Retourne <c>null</c> si le worker est inconnu.
-    /// </summary>
-    public async Task<StoreDesiredState?> ReplaceDesiredAsync(Guid workerId, IReadOnlyList<StoreDesiredItem> items, CancellationToken ct)
-    {
-        var normalized = ValidateDesired(items);
-        await using var command = dataSource.CreateCommand("""
-            INSERT INTO worker_store_state(worker_id, desired_revision, desired_items, desired_updated_at)
-            SELECT id, 1, @items, (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z') FROM workers WHERE id = @id AND deleted_at IS NULL
-            ON CONFLICT (worker_id) DO UPDATE SET
-                desired_revision = worker_store_state.desired_revision + 1,
-                desired_items = EXCLUDED.desired_items,
-                desired_updated_at = EXCLUDED.desired_updated_at
-            RETURNING desired_revision
-            """);
-        command.Parameters.AddWithValue("id", workerId);
-        command.Parameters.AddWithValue("items", SqlKind.Text, JsonSerializer.Serialize(normalized, Json));
-        var revision = await Int64Async(command, ct);
-        return revision is { } value ? new StoreDesiredState(value, normalized, DateTimeOffset.UtcNow) : null;
+        return await reader.ReadAsync(ct)
+            ? new StoreAppliedState(reader.GetInt64(0), Parse<StoreAppliedItem>(reader.GetString(1)), Instant(reader, 2))
+            : new StoreAppliedState(0, [], null);
     }
 
     /// <summary>
     /// Enregistre l'état appliqué rapporté par le worker authentifié <paramref name="workerId"/>. La révision ne peut ni reculer
-    /// (obsolète) ni dépasser la révision désirée (inconnue). Re-rapporter la même révision est idempotent.
+    /// (obsolète) ni dépasser la révision globale du central (inconnue). Re-rapporter la même révision est idempotent.
+    /// La ligne est créée au premier rapport (plus aucune écriture administrateur ne la précède).
     /// </summary>
     public async Task<StoreReportResult> ReportAppliedAsync(Guid workerId, long revision, IReadOnlyList<StoreAppliedItem> items, CancellationToken ct)
     {
         var normalized = ValidateApplied(items);
-        await using var update = dataSource.CreateCommand("""
-            UPDATE worker_store_state SET applied_revision = @revision, applied_items = @items,
-                applied_reported_at = (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
-            WHERE worker_id = @id AND @revision >= applied_revision AND @revision <= desired_revision
+        await using var upsert = dataSource.CreateCommand($"""
+            INSERT INTO worker_store_state(worker_id, desired_revision, desired_items, desired_updated_at, applied_revision, applied_items, applied_reported_at)
+            SELECT w.id, MAX(c.revision, @revision), '[]', c.updated_at, @revision, @items, {Sql.UtcNow}
+            FROM workers w, central_store_state c
+            WHERE w.id = @id AND w.deleted_at IS NULL AND c.id = 1 AND @revision <= c.revision
+            ON CONFLICT (worker_id) DO UPDATE SET
+                desired_revision = MAX(worker_store_state.desired_revision, EXCLUDED.desired_revision),
+                desired_updated_at = EXCLUDED.desired_updated_at,
+                applied_revision = EXCLUDED.applied_revision,
+                applied_items = EXCLUDED.applied_items,
+                applied_reported_at = EXCLUDED.applied_reported_at
+            WHERE EXCLUDED.applied_revision >= worker_store_state.applied_revision
             """);
-        update.Parameters.AddWithValue("id", workerId);
-        update.Parameters.AddWithValue("revision", SqlKind.Integer, revision);
-        update.Parameters.AddWithValue("items", SqlKind.Text, JsonSerializer.Serialize(normalized, Json));
-        if (await update.ExecuteNonQueryAsync(ct) == 1)
-            return new(StoreReportOutcome.Accepted, await DesiredRevisionAsync(workerId, ct) ?? revision);
+        upsert.Parameters.AddWithValue("id", workerId);
+        upsert.Parameters.AddWithValue("revision", SqlKind.Integer, revision);
+        upsert.Parameters.AddWithValue("items", SqlKind.Text, JsonSerializer.Serialize(normalized, Json));
+        if (await upsert.ExecuteNonQueryAsync(ct) == 1) return new(StoreReportOutcome.Accepted, await GlobalRevisionAsync(ct));
 
-        var state = await GetAsync(workerId, ct);
-        if (state is null) return new(StoreReportOutcome.UnknownWorker, 0);
-        var outcome = revision < state.Applied.Revision ? StoreReportOutcome.StaleRevision : StoreReportOutcome.UnknownRevision;
-        return new(outcome, state.Desired.Revision);
+        var applied = await GetAppliedAsync(workerId, ct);
+        if (applied is null) return new(StoreReportOutcome.UnknownWorker, 0);
+        var outcome = revision < applied.Revision ? StoreReportOutcome.StaleRevision : StoreReportOutcome.UnknownRevision;
+        return new(outcome, await GlobalRevisionAsync(ct));
     }
 
-    private async Task<long?> DesiredRevisionAsync(Guid workerId, CancellationToken ct)
+    private async Task<long> GlobalRevisionAsync(CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("SELECT desired_revision FROM worker_store_state WHERE worker_id = @id");
-        command.Parameters.AddWithValue("id", workerId);
-        return await Int64Async(command, ct);
-    }
-
-    public static IReadOnlyList<StoreDesiredItem> ValidateDesired(IReadOnlyList<StoreDesiredItem> items)
-    {
-        var result = items.Select(item => item with { Sha256 = (item.Sha256 ?? "").ToLowerInvariant() }).ToList();
-        foreach (var item in result) ValidateCommon(item.Kind, item.Id, item.Version, item.Platform, item.Sha256);
-        EnsureUnique(result.Select(item => (item.Kind, item.Id, item.Platform)));
-        return result.OrderBy(item => item.Kind, StringComparer.Ordinal).ThenBy(item => item.Id, StringComparer.Ordinal)
-            .ThenBy(item => item.Platform, StringComparer.Ordinal).ToList();
+        await using var command = dataSource.CreateCommand("SELECT revision FROM central_store_state WHERE id = 1");
+        return await Int64Async(command, ct) ?? 0;
     }
 
     public static IReadOnlyList<StoreAppliedItem> ValidateApplied(IReadOnlyList<StoreAppliedItem> items)
@@ -146,7 +127,7 @@ public sealed partial class WorkerStoreStateRepository(DbDataSource dataSource)
     private static void EnsureUnique(IEnumerable<(string, string, string?)> keys)
     {
         var list = keys.ToList();
-        if (list.Count > MaxItems) throw new StoreStateException($"Au plus {MaxItems} éléments par worker.");
+        if (list.Count > MaxItems) throw new StoreStateException($"Au plus {MaxItems} éléments dans un rapport.");
         if (list.Distinct().Count() != list.Count) throw new StoreStateException("Un élément ne peut apparaître qu'une fois.");
     }
 
