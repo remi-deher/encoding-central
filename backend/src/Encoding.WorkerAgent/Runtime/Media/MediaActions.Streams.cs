@@ -96,15 +96,17 @@ public sealed partial class MediaActions
     private async Task CopyKeptStreamsAsync(JsonElement streams, HashSet<int> toRemove, string current, string file, string directory, CancellationToken ct)
     {
         var args = new List<string> { "-nostdin", "-y", "-v", "error", "-i", current, "-map_metadata", "0", "-map_chapters", "0" };
-        var mapped = 0;
+        var kept = new List<JsonElement>();
         foreach (var stream in streams.EnumerateArray())
         {
             var index = stream.GetProperty("index").GetInt32();
             if (toRemove.Contains(index)) continue;
             args.AddRange(["-map", "0:" + index]);
-            mapped++;
+            kept.Add(stream);
         }
-        if (mapped == 0) throw new MediaToolException("sélection de pistes", 1);
+        if (kept.Count == 0) throw new MediaToolException("sélection de pistes", 1);
+        // Dispositions source explicites : retirer des pistes ne doit pas en marquer d'autres « default » (#24).
+        args.AddRange(PreservedDispositionArgs(kept));
         args.AddRange(["-c", "copy", file]);
         await tools.CheckedAsync("ffmpeg", args, directory, ct);
     }

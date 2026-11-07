@@ -65,6 +65,10 @@ public sealed partial class MediaActions
             var observed = inputMetadata ?? await scanner.ScanAsync(current, ct);
             args.AddRange(["-c:v", SameCodecVideoEncoder(FirstVideoCodec(observed))]);
         }
+        // Dispositions explicites : sans elles, la CLI FFmpeg marque d'office « default » la première piste de chaque type (#24).
+        inputMetadata ??= await scanner.ScanAsync(current, ct);
+        if (PlannedOutputSources(plan, inputMetadata.Value, preserve) is { } outputSources)
+            args.AddRange(PreservedDispositionArgs(outputSources));
         if (hardwareMode == "vaapi") videoFilters.AddRange(["format=nv12", "hwupload"]);
         if (videoFilters.Count > 0) args.AddRange(["-vf", string.Join(',', videoFilters)]);
         input.AddRange(["-i", current]);
@@ -105,28 +109,14 @@ public sealed partial class MediaActions
 
     private static void ConfigureStreamMapping(IReadOnlyList<RuntimePlanStep> plan, List<string> args, bool preserve)
     {
-        if (preserve || !plan.Any(p => p.ComponentId is
-            "base-transcode-video" or "video-transcode" or
-            "base-transcode-audio" or "audio-transcode" or
-            "base-normalize-audio" or "audio-normalize" or
-            "base-resize-video" or "video-resize" or
-            "base-auto-crop" or "video-auto-crop" or
-            "base-deinterlace-video" or "video-deinterlace"))
+        if (MapsWholeInput(plan, preserve))
         {
             args.AddRange(["-map", "0"]);
         }
         else
         {
-            if (plan.Any(p => p.ComponentId is
-                "base-transcode-video" or "video-transcode" or
-                "base-resize-video" or "video-resize" or
-                "base-auto-crop" or "video-auto-crop" or
-                "base-deinterlace-video" or "video-deinterlace"))
-                args.AddRange(["-map", "0:v?"]);
-            var audioTracks = plan
-                .Where(p => p.ComponentId is "base-transcode-audio" or "audio-transcode" or "base-normalize-audio" or "audio-normalize")
-                .Select(p => Number(p.Configuration, "trackId")).Distinct();
-            foreach (var track in audioTracks)
+            if (MapsVideo(plan)) args.AddRange(["-map", "0:v?"]);
+            foreach (var track in MappedAudioTracks(plan))
                 args.AddRange(["-map", "0:a:" + track]);
         }
     }
