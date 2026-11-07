@@ -164,7 +164,7 @@ public sealed class MatroskaActionHandler(IProcessToolRunner tools) : IMediaActi
         var ordinal = CountStreams(currentProbe, kind);
         var extraCodec = extraProbe.GetProperty("streams").EnumerateArray().First().GetProperty("codec_name").GetString() ?? "";
         var file = MediaActions.Output(directory, node, Path.GetExtension(current));
-        var args = new List<string> { "-nostdin", "-y", "-v", "error", "-i", current, "-i", extraPath, "-map", "0", "-map", "1:0", "-map_metadata", "0", "-c", "copy" };
+        List<string> args = ["-nostdin", "-y", "-v", "error", .. MediaActions.SourceInput(current), "-i", extraPath, "-map", "0", "-map", "1:0", "-map_metadata", "0", "-c", "copy"];
         if (subtitle && extraCodec is not ("mov_text" or "tx3g")) args.AddRange(["-c:s:" + ordinal, "mov_text"]);
         var specifier = (subtitle ? "s:s:" : "s:a:") + ordinal;
         var language = MediaActions.Text(c, "language");

@@ -95,7 +95,7 @@ public sealed partial class MediaActions
 
     private async Task CopyKeptStreamsAsync(JsonElement streams, HashSet<int> toRemove, string current, string file, string directory, CancellationToken ct)
     {
-        var args = new List<string> { "-nostdin", "-y", "-v", "error", "-i", current, "-map_metadata", "0", "-map_chapters", "0" };
+        List<string> args = ["-nostdin", "-y", "-v", "error", .. SourceInput(current), "-map_metadata", "0", "-map_chapters", "0"];
         var kept = new List<JsonElement>();
         foreach (var stream in streams.EnumerateArray())
         {

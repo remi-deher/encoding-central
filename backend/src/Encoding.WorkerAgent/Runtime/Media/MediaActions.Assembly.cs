@@ -126,7 +126,7 @@ public sealed partial class MediaActions
             if(structural.Length==0) return new(null,[],JsonSerializer.SerializeToElement(notes));
             if(planOnly) return new(null,[],null,null,true);
             var output=Output(directory,node,Path.GetExtension(current));
-            var args=new List<string>{"-nostdin","-y","-v","error","-i",current,"-map_metadata","0","-map_chapters","0"};
+            List<string> args=["-nostdin","-y","-v","error",..SourceInput(current),"-map_metadata","0","-map_chapters","0"];
             foreach(var stream in streams.Where(stream=>Kind(stream)!="subtitle"))
                 args.AddRange(["-map","0:"+stream.GetProperty("index").GetInt32()]);
             var outputOrdinal=0;
@@ -181,7 +181,7 @@ public sealed partial class MediaActions
         if(edits.Count==0) return new(null,[]);
         if(planOnly) return new(null,[],null,null,true);
         var output=Output(directory,node,Path.GetExtension(current));
-        var args=new List<string>{"-nostdin","-y","-v","error","-i",current,"-map","0","-map_metadata","0","-c","copy"};
+        List<string> args=["-nostdin","-y","-v","error",..SourceInput(current),"-map","0","-map_metadata","0","-c","copy"];
         foreach(var edit in edits)
         {
             var kind=edit.Type=="audio"?"a":"s";

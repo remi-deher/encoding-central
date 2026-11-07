@@ -71,7 +71,7 @@ public sealed partial class MediaActions
             args.AddRange(PreservedDispositionArgs(outputSources));
         if (hardwareMode == "vaapi") videoFilters.AddRange(["format=nv12", "hwupload"]);
         if (videoFilters.Count > 0) args.AddRange(["-vf", string.Join(',', videoFilters)]);
-        input.AddRange(["-i", current]);
+        input.AddRange(SourceInput(current));
         input.AddRange(args);
         input.Add(output);
 
