@@ -12,8 +12,10 @@ public static class WorkerStoreStateEndpoints
     public static void MapWorkerStoreStateEndpoints(this WebApplication app)
     {
         app.MapGet("/api/v1/workers/{workerId:guid}/store-state", async (Guid workerId, WorkerStoreStateService states, CancellationToken ct) =>
-            await states.GetAsync(workerId, ct) is { } state ? Results.Ok(state) : Results.NotFound())
-            .WithTags("Store").WithName("GetWorkerStoreState");
+        {
+            try { return await states.GetAsync(workerId, ct) is { } state ? Results.Ok(state) : Results.NotFound(); }
+            catch (StoreIndexUnreadableException) { return Unavailable(); }
+        }).WithTags("Store").WithName("GetWorkerStoreState");
 
         app.MapPut("/api/v1/store/applied-state", async (HttpContext http, AppliedStateRequest request, WorkerStoreStateService states, CancellationToken ct) =>
         {
@@ -48,20 +50,31 @@ public static class WorkerStoreStateEndpoints
                 await http.Response.WriteAsJsonAsync(new { code = "version_incompatible" }, ct);
                 return;
             }
+            var version = states.Changes.CurrentVersion; // lu avant l'état : un changement concurrent réveille la boucle
+            StoreDesiredState initial;
+            try { initial = await states.CurrentAsync(ct); }
+            catch (StoreIndexUnreadableException)
+            {
+                // État du central inconnu (index illisible) : aucun flux, donc aucun état vide diffusé ; le worker réessaie plus tard.
+                http.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                http.Response.Headers.RetryAfter = "30";
+                await http.Response.WriteAsJsonAsync(new { code = "store_state_unavailable" }, ct);
+                return;
+            }
             Encoding.Api.Executions.ExecutionStreamBroadcaster.PrepareResponse(http.Response);
             await http.Response.Body.FlushAsync(ct);
-            await StreamAsync(http, states, workerId, http.Request.Headers["Last-Event-ID"].ToString(), ct);
+            await StreamAsync(http, states, workerId, initial, version, http.Request.Headers["Last-Event-ID"].ToString(), ct);
         }).AllowNodeCredentials().WithTags("Store").WithName("StreamStoreEvents");
     }
 
     public static TimeSpan HeartbeatInterval { get; set; } = TimeSpan.FromSeconds(20);
 
-    private static async Task StreamAsync(HttpContext http, WorkerStoreStateService states, Guid workerId, string lastEventId, CancellationToken ct)
+    private static IResult Unavailable() => Results.Json(new { code = "store_state_unavailable" }, statusCode: StatusCodes.Status503ServiceUnavailable);
+
+    private static async Task StreamAsync(HttpContext http, WorkerStoreStateService states, Guid workerId, StoreDesiredState state, long version, string lastEventId, CancellationToken ct)
     {
         try
         {
-            var version = states.Changes.CurrentVersion; // lu avant l'état : un changement concurrent réveille la boucle
-            var state = await states.CurrentAsync(ct);
             var sent = state.Revision;
             var first = StoreEventStream.Initial(string.IsNullOrEmpty(lastEventId) ? null : lastEventId, state.Revision);
             if (first != StoreEventKind.None) await Write(http, StoreEventStream.Frame(first, state), ct);
@@ -71,8 +84,13 @@ public static class WorkerStoreStateEndpoints
                 var next = await states.Changes.WaitAsync(version, HeartbeatInterval, ct);
                 if (next == version) { await Write(http, StoreEventStream.Heartbeat, ct); continue; }
                 version = next;
-                if (await states.GetAsync(workerId, ct) is null) return; // worker retiré
-                var current = await states.CurrentAsync(ct);
+                StoreDesiredState current;
+                try
+                {
+                    if (await states.GetAsync(workerId, ct) is null) return; // worker retiré
+                    current = await states.CurrentAsync(ct);
+                }
+                catch (StoreIndexUnreadableException) { continue; } // état inconnu : on ne diffuse rien, le flux attend le prochain changement lisible
                 if (current.Revision > sent)
                 {
                     sent = current.Revision;

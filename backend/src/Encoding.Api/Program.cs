@@ -202,7 +202,8 @@ app.Services.GetRequiredService<ToolStoreService>().LoadInstalled();
 app.Services.GetRequiredService<PluginStoreService>().LoadInstalled();
 await DatabaseMigrator.ApplyAsync(localDatabase, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping, app.Logger);
 // Aligne la révision de l'état Store global sur les paquets installés (ADR 0046) : un index modifié hors du central compte comme un changement.
-await app.Services.GetRequiredService<CentralStoreStateService>().CurrentAsync(app.Lifetime.ApplicationStopping);
+try { await app.Services.GetRequiredService<CentralStoreStateService>().CurrentAsync(app.Lifetime.ApplicationStopping); }
+catch (StoreIndexUnreadableException) { } // état inconnu, déjà journalisé : le central démarre, la révision attend un index lisible
 await StandardFlowTemplateSeeder.EnsureAsync(
     localDatabase,
     flowRegistry,

@@ -311,6 +311,41 @@ public sealed class WorkerStoreEventsTests
     }
 
     [Fact]
+    public async Task UnreadableIndexMakesStreamAndStateUnavailableAndBroadcastsNothing()
+    {
+        await using var rig = await CreateAsync();
+        await rig.InstallAsync("1.0.0"); // révision globale 1
+        var broadcasts = rig.Service.Changes.CurrentVersion;
+        rig.Packages.CorruptPluginIndex();
+
+        var (blocked, _) = await OpenAsync(rig, "token-0");
+        Assert.Equal(System.Net.HttpStatusCode.ServiceUnavailable, blocked.StatusCode);
+        using var body = JsonDocument.Parse(await blocked.Content.ReadAsStringAsync());
+        Assert.Equal("store_state_unavailable", body.RootElement.GetProperty("code").GetString());
+        Assert.NotEqual("text/event-stream", blocked.Content.Headers.ContentType?.MediaType); // jamais un snapshot vide
+        using var state = await rig.Http.GetAsync($"/api/v1/workers/{rig.First}/store-state");
+        Assert.Equal(System.Net.HttpStatusCode.ServiceUnavailable, state.StatusCode);
+        Assert.Equal(broadcasts, rig.Service.Changes.CurrentVersion);
+        Assert.Equal(1, (await new CentralStoreStateRepository(rig.Database.Db).GetAsync(CancellationToken.None)).Revision);
+    }
+
+    [Fact]
+    public async Task OpenStreamStaysSilentWhileTheIndexIsUnreadableThenResumes()
+    {
+        await using var rig = await CreateAsync();
+        await rig.InstallAsync("1.0.0");
+        var (_, reader) = await OpenAsync(rig, "token-0");
+        Assert.Equal("v2.1", Parse((await ReadFrameAsync(reader))!).Id);
+
+        rig.Packages.CorruptPluginIndex();
+        rig.Service.Changes.Notify(); // le flux se réveille, ne peut pas lire l'état et ne diffuse rien
+        await rig.InstallAsync("1.1.0"); // index de nouveau lisible : révision 2
+        var change = Parse((await ReadFrameAsync(reader))!);
+        Assert.Equal(("desired-state", "v2.2"), (change.Event, change.Id)); // pas de snapshot vide entre les deux
+        Assert.Equal("1.1.0", change.Data.GetProperty("items")[0].GetProperty("version").GetString());
+    }
+
+    [Fact]
     public async Task WorkerStateReportsGlobalRevisionAppliedAndGap()
     {
         await using var rig = await CreateAsync();

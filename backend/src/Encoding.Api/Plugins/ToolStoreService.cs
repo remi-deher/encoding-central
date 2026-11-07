@@ -72,12 +72,22 @@ public sealed class ToolStoreService(IConfiguration configuration, ILogger<ToolS
         return null;
     }
 
-    public IReadOnlyList<InstalledToolPackage> Installed()
+    /// <summary>Index installé ; vide si le fichier n'existe pas, mais <see cref="StoreIndexUnreadableException"/> s'il est illisible (état inconnu, pas « aucun paquet »).</summary>
+    public IReadOnlyList<InstalledToolPackage> InstalledStrict()
     {
         try { return File.Exists(IndexPath) ? JsonSerializer.Deserialize<List<InstalledToolPackage>>(File.ReadAllText(IndexPath), Json) ?? [] : []; }
         catch (Exception exception) when (exception is JsonException or IOException)
         {
-            logger.LogError(exception, "L'index des outils installés est illisible : {Path}.", IndexPath);
+            throw new StoreIndexUnreadableException("outils", exception);
+        }
+    }
+
+    public IReadOnlyList<InstalledToolPackage> Installed()
+    {
+        try { return InstalledStrict(); }
+        catch (StoreIndexUnreadableException exception)
+        {
+            logger.LogError(exception.InnerException, "L'index des outils installés est illisible : {Path}.", IndexPath);
             return [];
         }
     }

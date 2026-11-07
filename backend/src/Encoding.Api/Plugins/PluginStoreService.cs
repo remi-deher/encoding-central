@@ -25,12 +25,22 @@ public sealed class PluginStoreService(IConfiguration configuration, FlowCompone
     private string PackageDirectory(string id, string version) => Path.Combine(Directory, "packages", id, version);
     public string PackagePath(string id, string version) => Path.Combine(PackageDirectory(id, version), "package.zip");
 
-    public IReadOnlyList<InstalledPlugin> Installed()
+    /// <summary>Index installé ; vide si le fichier n'existe pas, mais <see cref="StoreIndexUnreadableException"/> s'il est illisible (état inconnu, pas « aucun paquet »).</summary>
+    public IReadOnlyList<InstalledPlugin> InstalledStrict()
     {
         try { return File.Exists(IndexPath) ? JsonSerializer.Deserialize<List<InstalledPlugin>>(File.ReadAllText(IndexPath), Json) ?? [] : []; }
         catch (Exception exception) when (exception is JsonException or IOException)
         {
-            logger.LogError(exception, "L'index des plugins installés est illisible : {Path}.", IndexPath);
+            throw new StoreIndexUnreadableException("plugins", exception);
+        }
+    }
+
+    public IReadOnlyList<InstalledPlugin> Installed()
+    {
+        try { return InstalledStrict(); }
+        catch (StoreIndexUnreadableException exception)
+        {
+            logger.LogError(exception.InnerException, "L'index des plugins installés est illisible : {Path}.", IndexPath);
             return [];
         }
     }

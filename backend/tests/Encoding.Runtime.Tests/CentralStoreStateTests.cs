@@ -19,18 +19,31 @@ public sealed class CentralStoreStateTests
     {
         public required TestDatabase Database; public required string Directory;
         public required PluginStoreService Plugins; public required ToolStoreService Tools; public required CentralStoreStateService Central;
+        public required CentralStoreStateRepository Repository; public required StoreStateBroadcaster Broadcaster;
         public async ValueTask DisposeAsync()
         {
             await Database.DisposeAsync();
             if (System.IO.Directory.Exists(Directory)) System.IO.Directory.Delete(Directory, true);
         }
 
+        /// <summary>Rend un index illisible (JSON tronqué), comme après une écriture interrompue ou une corruption disque.</summary>
+        public void CorruptPluginIndex() => File.WriteAllText(Path.Combine(Plugins.Directory, "installed.json"), "[{ \"id\": \"base\", ");
+        public void CorruptToolIndex() => File.WriteAllText(Path.Combine(Tools.Directory, "installed.json"), "not json at all");
+
+        // Comme les services d'installation (fichier temporaire puis déplacement) : un lecteur concurrent ne voit jamais un index à moitié écrit.
+        private static void AtomicWrite(string path, string content)
+        {
+            var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            File.WriteAllText(temporary, content);
+            File.Move(temporary, path, overwrite: true);
+        }
+
         /// <summary>Écrit les index d'installation comme le feraient les installations réelles (installed.json de chaque Store).</summary>
         public void WriteIndexes(IEnumerable<InstalledPlugin> plugins, IEnumerable<InstalledToolPackage> tools)
         {
             System.IO.Directory.CreateDirectory(Plugins.Directory); System.IO.Directory.CreateDirectory(Tools.Directory);
-            File.WriteAllText(Path.Combine(Plugins.Directory, "installed.json"), JsonSerializer.Serialize(plugins.ToList(), Web));
-            File.WriteAllText(Path.Combine(Tools.Directory, "installed.json"), JsonSerializer.Serialize(tools.ToList(), Web));
+            AtomicWrite(Path.Combine(Plugins.Directory, "installed.json"), JsonSerializer.Serialize(plugins.ToList(), Web));
+            AtomicWrite(Path.Combine(Tools.Directory, "installed.json"), JsonSerializer.Serialize(tools.ToList(), Web));
         }
     }
 
@@ -43,8 +56,10 @@ public sealed class CentralStoreStateTests
             { ["PluginStore:Directory"] = directory, ["ToolStore:Directory"] = Path.Combine(directory, "tools") }).Build();
         var tools = new ToolStoreService(configuration, NullLogger<ToolStoreService>.Instance);
         var plugins = new PluginStoreService(configuration, StoreCatalogFixture.Create(), tools, NullLogger<PluginStoreService>.Instance);
-        var central = new CentralStoreStateService(new CentralStoreStateRepository(database.Db), plugins, tools, new StoreStateBroadcaster(), NullLogger<CentralStoreStateService>.Instance);
-        return new Rig { Database = database, Directory = directory, Plugins = plugins, Tools = tools, Central = central };
+        var repository = new CentralStoreStateRepository(database.Db);
+        var broadcaster = new StoreStateBroadcaster();
+        var central = new CentralStoreStateService(repository, plugins, tools, broadcaster, NullLogger<CentralStoreStateService>.Instance);
+        return new Rig { Database = database, Directory = directory, Plugins = plugins, Tools = tools, Central = central, Repository = repository, Broadcaster = broadcaster };
     }
 
     internal static InstalledPlugin Plugin(string id, string version, string sha) => new(id, version, id, sha, "repo:official", DateTimeOffset.UtcNow);
@@ -118,6 +133,82 @@ public sealed class CentralStoreStateTests
         // Un second service sur la même base (redémarrage du central) retrouve la même révision sans la modifier.
         var restarted = new CentralStoreStateService(new CentralStoreStateRepository(rig.Database.Db), rig.Plugins, rig.Tools, new StoreStateBroadcaster(), NullLogger<CentralStoreStateService>.Instance);
         Assert.Equal(2, (await restarted.CurrentAsync(CancellationToken.None)).Revision);
+    }
+
+    [Fact]
+    public async Task UnreadablePluginIndexIsAnUnknownStateNotAnEmptyOne()
+    {
+        await using var rig = await CreateAsync();
+        rig.WriteIndexes([Plugin("base", "1.0.0", ShaA), Plugin("nodes", "1.0.0", ShaB)], []);
+        Assert.Equal(1, (await rig.Central.CurrentAsync(CancellationToken.None)).Revision);
+        var broadcasts = rig.Broadcaster.CurrentVersion;
+
+        rig.CorruptPluginIndex();
+        await Assert.ThrowsAsync<StoreIndexUnreadableException>(() => rig.Central.CurrentAsync(CancellationToken.None));
+        Assert.Equal(1, (await rig.Repository.GetAsync(CancellationToken.None)).Revision); // la révision n'avance pas : ce n'est pas « aucun paquet »
+        Assert.Equal(broadcasts, rig.Broadcaster.CurrentVersion); // rien n'est diffusé aux workers (ils supprimeraient leurs plugins)
+
+        // Index de nouveau lisible avec le même ensemble : aucune révision n'a été consommée par l'incident.
+        rig.WriteIndexes([Plugin("base", "1.0.0", ShaA), Plugin("nodes", "1.0.0", ShaB)], []);
+        var state = await rig.Central.CurrentAsync(CancellationToken.None);
+        Assert.Equal(1, state.Revision); Assert.Equal(2, state.Items.Count);
+    }
+
+    [Fact]
+    public async Task UnreadableToolIndexIsAnUnknownStateToo()
+    {
+        await using var rig = await CreateAsync();
+        rig.WriteIndexes([Plugin("base", "1.0.0", ShaA)], [Tool("ffmpeg", "7.1.0", "linux-x64", ShaB)]);
+        Assert.Equal(1, (await rig.Central.CurrentAsync(CancellationToken.None)).Revision);
+        rig.CorruptToolIndex();
+        await Assert.ThrowsAsync<StoreIndexUnreadableException>(() => rig.Central.CurrentAsync(CancellationToken.None));
+        Assert.Equal(1, (await rig.Repository.GetAsync(CancellationToken.None)).Revision);
+    }
+
+    [Fact]
+    public async Task MissingIndexMeansNoPackageButUnreadableDoesNot()
+    {
+        await using var rig = await CreateAsync();
+        Assert.Empty(rig.Plugins.InstalledStrict()); // fichier absent : ensemble vide, révision 0
+        Assert.Equal(0, (await rig.Central.CurrentAsync(CancellationToken.None)).Revision);
+        System.IO.Directory.CreateDirectory(rig.Plugins.Directory);
+        rig.CorruptPluginIndex();
+        Assert.Throws<StoreIndexUnreadableException>(() => rig.Plugins.InstalledStrict());
+        Assert.Empty(rig.Plugins.Installed()); // l'accesseur historique garde son comportement (liste vide + journal)
+    }
+
+    [Fact]
+    public async Task ConcurrentReadsAfterAChangeAddExactlyOneToTheRevision()
+    {
+        await using var rig = await CreateAsync();
+        rig.WriteIndexes([Plugin("base", "1.0.0", ShaA)], []);
+        Assert.Equal(1, (await rig.Central.CurrentAsync(CancellationToken.None)).Revision);
+        rig.WriteIndexes([Plugin("base", "1.1.0", ShaB)], []);
+        var results = await Task.WhenAll(Enumerable.Range(0, 32).Select(_ => Task.Run(() => rig.Central.CurrentAsync(CancellationToken.None))));
+        Assert.All(results, state => { Assert.Equal(2, state.Revision); Assert.Equal("1.1.0", Assert.Single(state.Items).Version); });
+        Assert.Equal(2, (await rig.Repository.GetAsync(CancellationToken.None)).Revision);
+    }
+
+    [Fact]
+    public async Task ConcurrentReadsWhileThePackageSetKeepsChangingNeverRegressTheDigest()
+    {
+        await using var rig = await CreateAsync();
+        var readers = Enumerable.Range(0, 8).Select(_ => Task.Run(async () =>
+        {
+            for (var i = 0; i < 25; i++) await rig.Central.CurrentAsync(CancellationToken.None);
+        })).ToArray();
+        for (var version = 1; version <= 6; version++)
+        {
+            rig.WriteIndexes([Plugin("base", $"1.{version}.0", ShaA)], []);
+            await Task.Delay(5);
+        }
+        await Task.WhenAll(readers);
+        var final = await rig.Central.CurrentAsync(CancellationToken.None);
+        // La révision finale décrit l'ensemble réellement installé, et relire n'en consomme plus : l'empreinte n'a pas été ramenée à un état périmé.
+        Assert.Equal("1.6.0", Assert.Single(final.Items).Version);
+        Assert.Equal(final.Revision, (await rig.Central.CurrentAsync(CancellationToken.None)).Revision);
+        Assert.Equal(final.Revision, (await rig.Repository.GetAsync(CancellationToken.None)).Revision);
+        Assert.InRange(final.Revision, 1, 6); // au plus un cran par version écrite
     }
 
     [Fact]
