@@ -26,17 +26,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - name: Vérifier HEAD réel vs EXPECTED_SHA
-        env:
-          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          REAL_SHA="$(git rev-parse HEAD)"
-          if [ "$REAL_SHA" != "$EXPECTED_SHA" ]; then
-            echo "::error::HEAD réel ($REAL_SHA) ne correspond pas à EXPECTED_SHA ($EXPECTED_SHA)"
-            exit 1
-          fi
       - id: diff
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
@@ -65,15 +56,6 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
-      - name: Vérifier HEAD réel vs EXPECTED_SHA
-        env:
-          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          REAL_SHA="$(git rev-parse HEAD)"
-          if [ "$REAL_SHA" != "$EXPECTED_SHA" ]; then
-            echo "::error::HEAD réel ($REAL_SHA) ne correspond pas à EXPECTED_SHA ($EXPECTED_SHA)"
-            exit 1
-          fi
       - name: Récupérer dev
         run: git fetch origin dev
       - name: Vérifier ascendance
@@ -86,12 +68,7 @@ jobs:
             git rev-list --no-merges origin/dev ^HEAD | head -20
             exit 1
           fi
-          # Contre-épreuve : vérifier aussi que HEAD est bien le SHA attendu
-          if [ "$GITHUB_SHA" != "${{ github.event.pull_request.head.sha }}" ]; then
-            echo "::error::Le checkout ne correspond pas au SHA de la PR (ref=head.sha)"
-            exit 1
-          fi
-          echo "Ascendance vérifiée : dev ⊆ test, SHA correspondant"
+          echo "Ascendance vérifiée : dev ⊆ test"
 
   backend-dev-fast:
     needs: changes

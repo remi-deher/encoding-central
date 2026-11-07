@@ -64,6 +64,9 @@ jobs:
       (github.ref == 'refs/heads/test' || github.ref == 'refs/heads/dev')
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -82,9 +85,6 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Publier image central immuable
         uses: docker/build-push-action@v6
@@ -110,18 +110,20 @@ jobs:
           build-args: |
             APP_VERSION=${{ steps.sha.outputs.APP_VERSION }}
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/encoding-worker:${{ steps.sha.outputs.branche }}-${{ steps.sha.outputs.short_sha }}
+            ${{ env.DOCKERHUB_USERNAME }}/encoding-worker:${{ steps.sha.outputs.branche }}-${{ steps.sha.outputs.short_sha }}
           cache-from: type=gha,scope=encoding-worker-${{ steps.sha.outputs.branche }}
           cache-to: type=gha,scope=encoding-worker-${{ steps.sha.outputs.branche }},mode=max
 
       - name: Créer étiquettes flottantes via imagetools (sans rebuild)
+        env:
+          DOCKERHUB_USER: ${{ env.DOCKERHUB_USERNAME }}
         run: |
           # Utiliser imagetools pour créer les tags flottants à partir des images immuables
           # sans rebuild, conformément à l'ADR 0047
           docker buildx imagetools create \
-            ${{ env.DOCKERHUB_USERNAME }}/encoding-central:${{ steps.sha.outputs.branche }}-${{ steps.sha.outputs.short_sha }} \
-            --tag ${{ secrets.DOCKERHUB_USERNAME }}/encoding-central:${{ steps.sha.outputs.branche }}
+            "${DOCKERHUB_USER}/encoding-central:${{ steps.sha.outputs.branche }}-${{ steps.sha.outputs.short_sha }}" \
+            --tag "${DOCKERHUB_USER}/encoding-central:${{ steps.sha.outputs.branche }}"
           
           docker buildx imagetools create \
-            ${{ secrets.DOCKERHUB_USERNAME }}/encoding-worker:${{ steps.sha.outputs.branche }}-${{ steps.sha.outputs.short_sha }} \
-            --tag ${{ secrets.DOCKERHUB_USERNAME }}/encoding-worker:${{ steps.sha.outputs.branche }}
+            "${DOCKERHUB_USER}/encoding-worker:${{ steps.sha.outputs.branche }}-${{ steps.sha.outputs.short_sha }}" \
+            --tag "${DOCKERHUB_USER}/encoding-worker:${{ steps.sha.outputs.branche }}"

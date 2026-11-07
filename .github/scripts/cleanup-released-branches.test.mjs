@@ -9,7 +9,7 @@ import { join } from 'node:path';
 const repo = 'owner/repo';
 const branch = { name: 'feature/example', commit: { sha: 'original' }, protected: false };
 const pr = {
-  merged_at: '2026-10-21', base: { ref: 'dev' },
+  merged_at: '2026-10-21', base: { ref: 'test' },
   head: { ref: branch.name, sha: 'original', repo: { full_name: repo } },
   merge_commit_sha: 'rewritten',
 };
@@ -17,10 +17,9 @@ const check = (b = branch, p = pr, open = new Set(), included = () => true) => e
 
 test('accepts squash/rebase via the published merge result, not original ancestry (test only)', () => {
   // Depuis la correction : nettoyage base test uniquement
-  const prTest = { ...pr, base: { ref: 'test' } };
-  assert.equal(check(branch, prTest, new Set(), sha => sha === 'rewritten'), true);
+  assert.equal(check(branch, pr, new Set(), sha => sha === 'rewritten'), true);
   // PR vers dev ne sont plus acceptées
-  assert.equal(check(branch, pr, new Set(), sha => sha === 'rewritten'), false);
+  assert.equal(check(branch, { ...pr, base: { ref: 'dev' } }, new Set(), sha => sha === 'rewritten'), false);
 });
 test('retains main, dev, test, protected branches and open PRs', () => {
   for (const name of ['main', 'dev', 'test']) assert.equal(check({ ...branch, name }), false);
@@ -30,7 +29,7 @@ test('retains main, dev, test, protected branches and open PRs', () => {
 test('retains new commits, unmerged work, foreign branches and unpublished results', () => {
   assert.equal(check({ ...branch, commit: { sha: 'new-work' } }), false);
   assert.equal(check(branch, { ...pr, merged_at: null }), false);
-  assert.equal(check(branch, { ...pr, base: { ref: 'main' } }), false);
+  assert.equal(check(branch, { ...pr, base: { ref: 'dev' } }), false);
   assert.equal(check(branch, { ...pr, head: { ...pr.head, repo: null } }), false);
   assert.equal(check(branch, { ...pr, merge_commit_sha: null }), false);
   assert.equal(check(branch, pr, new Set(), () => false), false);

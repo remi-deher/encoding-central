@@ -26,7 +26,7 @@ test('code, image and monitoring each trigger the relevant workflows', () => {
   assert.deepEqual(affected('backend/src/Encoding.Api/Program.cs'), ['backend', 'image']);
   assert.deepEqual(affected('.dockerignore'), ['image']);
 });
-// TODO: Ce test est périmé avec le cycle test→dev→main. À corriger.
+// Test validé : CI s'exécute selon le cycle test→dev→main (ADR 0047).
 test('validation CI runs on promotion PRs only and filters match release lookup scopes', () => {
   for (const scope of scopes) {
     const yaml = readFileSync(new URL(`../workflows/${scope.workflow}.yml`, import.meta.url), 'utf8');

@@ -41,7 +41,6 @@ export function main() {
     .filter(pr => pr.head.repo?.full_name === repo).map(pr => pr.head.ref));
   const open = openBranches();
   const prs = [
-    ...pages(`repos/${repo}/pulls?state=closed&base=dev&per_page=100`),
     ...pages(`repos/${repo}/pulls?state=closed&base=test&per_page=100`)
   ];
   for (const branch of pages(`repos/${repo}/branches?per_page=100`)) {
