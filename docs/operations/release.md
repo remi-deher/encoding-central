@@ -48,6 +48,22 @@ Le central fonctionne seul ; sa base est `/var/lib/encoding-node/cluster.db`. Il
 
 Sur le central, la page **Workers** gère le worker intégré (adresse du central, départ) ; l'agent du même conteneur écoute en boucle locale (`LocalAgent__BaseUrl`, `http://127.0.0.1:8081/`) et exige le secret local créé par le lanceur. Le worker distant se pilote depuis le central.
 
+## Images de test
+
+Le workflow `.github/workflows/image-test.yml` publie **deux images de test** à chaque push vers `dev` (fusion de PR) :
+
+- `<utilisateur>/encoding-central:test` et `<utilisateur>/encoding-worker:test` (étiquette flottante, toujours la dernière version testée) ;
+- `<utilisateur>/encoding-central:test-<sha7>` et `<utilisateur>/encoding-worker:test-<sha7>` (étiquette immuable, 7 premiers caractères du commit) ;
+- `APP_VERSION` vaut `test-<sha7>` pour les deux images du même commit.
+
+Ces images sont **construites sans exécuter aucun test ni CI lourde** (docker/setup-buildx-action, docker/login-action, docker/build-push-action uniquement), pour une publication rapide. **NE PAS UTILISER EN PRODUCTION.**
+
+Règle : **test = sans tests, ne pas utiliser pour une release**.
+
+Le workflow utilise les mêmes secrets Docker Hub (`DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`) que `release.yml`, avec des caches GHA distincts (`encoding-central-test` et `encoding-worker-test`). Il échoue proprement avec un message clair si les secrets sont manquants.
+
+Déclenchement : push vers `dev` ou `workflow_dispatch`. Concurrency : un seul run à la fois par branche (`image-test-${{ github.ref }}`), avec `cancel-in-progress: false` pour éviter de publier un commit ancien après un récent.
+
 ## Notes de version et recherche de mises à jour
 
 La release génère `backend/src/Encoding.Api/release-manifest.json` avant le build Docker.
