@@ -106,7 +106,7 @@ public sealed class WorkerStoreStateTests
         var gap = WorkerStoreStateService.ComputeGap(desired, applied);
         Assert.False(gap.InSync);
         Assert.Equal(1, gap.RevisionLag);
-        Assert.Equal(["missing:d", "version_mismatch:b", "failed:c", "version_mismatch:e", "extra:z"].Order(),
+        Assert.Equal(new[] { "missing:d", "version_mismatch:b", "failed:c", "version_mismatch:e", "extra:z" }.Order(),
             gap.Items.Select(item => item.Reason + ":" + item.Id).Order());
         Assert.Equal("sha256_mismatch", gap.Items.Single(item => item.Reason == "failed").ErrorCode);
 
@@ -136,7 +136,7 @@ public sealed class WorkerStoreStateTests
     [Fact]
     public async Task WorkerTokenNeverGrantsWritesAndOnlyAdminsWrite()
     {
-        var (database, _, _, _) = await CreateAsync();
+        var (database, _, _, _, _) = await CreateAsync();
         await using var _ = database;
         var handler = new ManagementAccessHandler(new WorkerRepository(database.Db));
 
