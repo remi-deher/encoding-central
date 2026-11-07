@@ -39,7 +39,7 @@ Non vérifié :
 
 ## Reprendre l'environnement
 
-Piles de test (Docker), à exécuter en CI ou sur un environnement distant dédié, jamais sur le poste local :
+Piles de test Docker : CI ou environnement distant par défaut. Une recette manuelle locale est possible uniquement après tests unitaires verts en CI et accord explicite du propriétaire pour le build et le démarrage Compose (TEST_RULES.md §8). Attendre ensuite son retour avant fusion :
 ```
 cd backend
 CENTRAL_API_PORT=5082 docker compose -f docker-compose.central.yml up -d --build
@@ -50,7 +50,7 @@ CENTRAL_API_PORT=5082 docker compose -f docker-compose.central.yml down -v   # r
 - `down -v` supprime seulement les volumes nommés du projet ; les médias de test (`/home/remi/encoding-tests/*`, montés en bind) ne doivent jamais être supprimés. Adapter ces chemins sur une autre machine (`docker-compose.central.yml`).
 - Le central est initialisé par l'interface (`/setup`) ; ne pas laisser de mot de passe de test dans le dépôt.
 
-Vérifications : suivre strictement le profil local de TEST_RULES.md, section 8. En local, seuls les contrôles statiques légers ciblés sont autorisés, un à la fois, avec `timeout 15s nice -n 19`. Aucune compilation, aucun typecheck, aucun test unitaire ou scénario.
+Vérifications : suivre strictement le profil local de TEST_RULES.md, section 8. En local, seuls les contrôles statiques légers ciblés sont autorisés, un à la fois, avec `timeout 15s nice -n 19`. Aucune compilation, aucun typecheck, aucun test unitaire ou scénario hors exception de construction Docker approuvée ; les tests automatisés restent en CI.
 - Frontend (`frontend/`) : lint TypeScript (`npm run lint`, qui lance `tsc`), tests, compilation Angular et E2E sont réservés aux runners GitHub Actions. Le format peut être vérifié localement sur les seuls fichiers modifiés.
 - Backend (`backend/`) : la CI compile avec `-warnaserror` et le `.editorconfig` racine. Aucun test .NET ne doit être exécuté localement, même ciblé ou dans Docker. Compilation, restauration .NET et format .NET sont également réservés à la CI.
 - Tests média (Runtime et Plugins) : exécutés en CI. `LoadStressTests` : workflow `stress.yml` en déclenchement manuel seulement.
