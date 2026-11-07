@@ -50,19 +50,21 @@ Sur le central, la page **Workers** gère le worker intégré (adresse du centra
 
 ## Images de test
 
-Le workflow `.github/workflows/image-test.yml` publie **deux images de test** à chaque push vers `dev` (fusion de PR) :
+Le workflow `.github/workflows/image-test.yml` publie **deux images de test** depuis la **branche `dev` uniquement** (fusion de PR) :
 
 - `<utilisateur>/encoding-central:test` et `<utilisateur>/encoding-worker:test` (étiquette flottante, toujours la dernière version testée) ;
-- `<utilisateur>/encoding-central:test-<sha7>` et `<utilisateur>/encoding-worker:test-<sha7>` (étiquette immuable, 7 premiers caractères du commit) ;
+- `<utilisateur>/encoding-central:test-<sha7>` et `<utilisateur>/encoding-worker:test-<sha7>` (étiquette **stable par convention**, 7 premiers caractères du commit ; Docker Hub ne garantit pas l'immutabilité) ;
 - `APP_VERSION` vaut `test-<sha7>` pour les deux images du même commit.
+
+**Important** : L'étiquette `test` ne vient que de la **branche `dev` autorisée**. Un `workflow_dispatch` lancé depuis une autre branche est ignoré.
 
 Ces images sont **construites sans exécuter aucun test ni CI lourde** (docker/setup-buildx-action, docker/login-action, docker/build-push-action uniquement), pour une publication rapide. **NE PAS UTILISER EN PRODUCTION.**
 
 Règle : **test = sans tests, ne pas utiliser pour une release**.
 
-Le workflow utilise les mêmes secrets Docker Hub (`DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`) que `release.yml`, avec des caches GHA distincts (`encoding-central-test` et `encoding-worker-test`). Il échoue proprement avec un message clair si les secrets sont manquants.
+Le workflow utilise les mêmes secrets Docker Hub (`DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`) que `release.yml`, avec des caches GHA distincts (`encoding-central-test` et `encoding-worker-test`). Il échoue proprement avec un message clair si les secrets sont manquants. **Les dépôts Docker Hub sont créés au premier push avec la visibilité par défaut du compte** : public pour un dépôt GitHub public.
 
-Déclenchement : push vers `dev` ou `workflow_dispatch`. Concurrency : un seul run à la fois par branche (`image-test-${{ github.ref }}`), avec `cancel-in-progress: false` pour éviter de publier un commit ancien après un récent.
+Déclenchement : push vers `dev` uniquement (ou `workflow_dispatch` depuis dev). Concurrency : un seul run à la fois (`image-test`), avec `cancel-in-progress: false` pour éviter de publier un commit ancien après un récent.
 
 ## Notes de version et recherche de mises à jour
 

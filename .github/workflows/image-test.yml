@@ -1,5 +1,5 @@
 name: Image Test
-# Publie les images Docker :test et :test-<sha7> sur push vers dev (merge de PR)
+# Publie les images Docker :test et :test-<sha7> sur push vers dev uniquement
 # pour les tests de l'agent prod-tester. NE PAS UTILISER EN PRODUCTION.
 # Secrets requis (Settings > Secrets and variables > Actions) : DOCKERHUB_USERNAME, DOCKERHUB_TOKEN.
 # Si les secrets sont manquants, le workflow échoue proprement avec un message clair.
@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: image-test-${{ github.ref }}
+  group: image-test
   cancel-in-progress: false
 
 permissions:
@@ -28,23 +28,26 @@ jobs:
     steps:
       - id: check
         name: Vérification des secrets requis
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           # Vérifier la présence des secrets sans les afficher
-          if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
+          if [ -z "$DOCKERHUB_USERNAME" ]; then
             echo "::error::Le secret DOCKERHUB_USERNAME est manquant."
             echo "has_username=false" >> "$GITHUB_OUTPUT"
           else
             echo "has_username=true" >> "$GITHUB_OUTPUT"
           fi
           
-          if [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+          if [ -z "$DOCKERHUB_TOKEN" ]; then
             echo "::error::Le secret DOCKERHUB_TOKEN est manquant."
             echo "has_token=false" >> "$GITHUB_OUTPUT"
           else
             echo "has_token=true" >> "$GITHUB_OUTPUT"
           fi
           
-          if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ] || [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+          if [ -z "$DOCKERHUB_USERNAME" ] || [ -z "$DOCKERHUB_TOKEN" ]; then
             echo "::error::Les secrets Docker Hub (DOCKERHUB_USERNAME et DOCKERHUB_TOKEN) sont requis pour publier les images test."
             echo "Veuillez configurer ces secrets dans Settings > Secrets and variables > Actions." >> "$GITHUB_STEP_SUMMARY"
             exit 1
@@ -53,13 +56,11 @@ jobs:
   publish:
     name: Publier images test
     needs: verify-secrets
-    if: needs.verify-secrets.outputs.has_username == 'true' && needs.verify-secrets.outputs.has_token == 'true'
+    if: needs.verify-secrets.outputs.has_username == 'true' && needs.verify-secrets.outputs.has_token == 'true' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Extraire short SHA
         id: sha
