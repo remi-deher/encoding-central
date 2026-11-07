@@ -1,6 +1,6 @@
 ---
 domain: workers
-updated: 2026-11-03
+updated: 2026-11-07
 legacy_adr: [0001, 0002, 0017, 0034, 0036, 0037, 0038, 0039, 0040, 0041, 0044, 0045, 0046, 0047, 0048, 0050, 0051, 0052, 0053, 0066]
 code:
   - backend/src/Encoding.Api/Workers/
@@ -70,6 +70,7 @@ Dans **Ce worker** comme dans **Central**, l'icône correspond à l'environnemen
 
 ## Non livré / limites
 - État « Silencieux » (en ligne sans progrès) absent. Deux builds sans `APP_VERSION` portent tous deux `0.0.0-dev` : la règle de version ne les distingue pas.
+- Plugins et outils du Store : aujourd'hui un worker n'a que ce qu'un administrateur lui a attribué (état par worker, vide par défaut, voir [plugins.md](plugins.md)). **Décidé, non livré** ([ADR 0046](../adr/0046-etat-store-des-workers-suit-le-central.md), `proposed`) : chaque worker, y compris le worker intégré, suivra l'état Store du central (snapshot SSE à l'enrôlement et à chaque connexion, puis changements par SSE) ; une synchro en échec ou en retard ne change pas l'état de cycle de vie, l'éligibilité par nœud restant la seule garde, et ne touche à aucun bail.
 - Non vérifié en conditions réelles : GPU réel, parcours deux conteneurs avec navigateur, image Docker sous Landlock.
 
 ## Documents opérationnels
