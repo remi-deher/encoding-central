@@ -193,6 +193,7 @@ internal static partial class Harness
             await FullRecovery().ProcessOnceAsync(CancellationToken.None);
             var failed=await executions.GetAsync(id,CancellationToken.None);
             Check(failed!.State=="failed" && failed.Detail?.Contains("worker_perdu",StringComparison.Ordinal)==true,"Lease loss fails the assigned attempt explicitly.");
+            Check(failed.Failure?.Code=="worker_lost","Lease loss carries the dedicated failure code (#26), not execution_failed: "+failed.Failure?.Code);
             Check(await ScalarAsync<long>("SELECT count(*) FROM media_reservations WHERE execution_id=@id",("id",id))==0,"Failure releases the media reservation.");
             Check(await ScalarAsync<long>("SELECT count(*) FROM disk_locks WHERE execution_id=@id",("id",id))==0,"Failure releases disk locks.");
             Check(await runtime.ClaimAsync(b,CancellationToken.None) is null && await runtime.ClaimAsync(c,CancellationToken.None) is null,"No surviving worker resumes the failed execution.");
@@ -238,6 +239,7 @@ internal static partial class Harness
             Check(await executions.CancelAsync(id,CancellationToken.None),"Clean up the relay.");await ExpireAsync(id);await RecoverCancellationAsync(id);
             var expiredBusy=(await executions.GetAsync(busyId,CancellationToken.None))!;
             Check(expiredBusy.State=="failed" && expiredBusy.Detail?.Contains("worker_perdu",StringComparison.Ordinal)==true,"Recovery closes the expired busy attempt without reassignment.");
+            Check(expiredBusy.Failure?.Code=="worker_lost","An expired busy attempt fails with worker_lost.");
             Check(await ScalarAsync<long>("SELECT count(*) FROM media_reservations WHERE execution_id=@id",("id",busyId))==0,"Recovery releases the expired busy attempt's reservation.");
             Console.WriteLine("PASS: a relay waits for a busy destination.");
         }

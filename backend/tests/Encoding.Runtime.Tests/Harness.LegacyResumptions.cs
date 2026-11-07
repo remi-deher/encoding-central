@@ -49,7 +49,10 @@ internal static partial class Harness
             var closed = (await executions.GetAsync(id, CancellationToken.None))!;
             Check(closed.State == (state == "cancelling" ? "cancelled" : "failed"), "The old resumption must become terminal.");
             if (state != "cancelling")
+            {
                 Check(closed.Detail?.Contains("worker_perdu", StringComparison.Ordinal) == true, "The failure must explain the lost worker.");
+                Check(closed.Failure?.Code == "worker_lost", "A closed legacy resumption fails with worker_lost.");
+            }
             Check(await runtime.ClaimAsync(b, CancellationToken.None) is null, "No worker may continue the same execution after recovery.");
             Check(await ScalarAsync<long>("SELECT count(*) FROM media_reservations WHERE execution_id=@id", ("id", id)) == 0, "Release the retained media reservation.");
             Check(await ScalarAsync<long>("SELECT count(*) FROM disk_locks WHERE execution_id=@id", ("id", id)) == 0, "Release the disk lock.");
