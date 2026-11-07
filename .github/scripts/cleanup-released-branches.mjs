@@ -7,11 +7,11 @@ const api = (path) => JSON.parse(run('gh', ['api', path]));
 const pages = (path) => JSON.parse(run('gh', ['api', '--paginate', '--slurp', path])).flat();
 
 export function eligible(branch, pr, repo, openBranches, included) {
-  return !['main', 'dev'].includes(branch.name)
+  return !['main', 'dev', 'test'].includes(branch.name)
     && !branch.protected
     && !openBranches.has(branch.name)
     && pr.merged_at != null
-    && pr.base.ref === 'dev'
+    && (pr.base.ref === 'dev' || pr.base.ref === 'test')
     && pr.head.repo?.full_name === repo
     && pr.head.ref === branch.name
     && pr.head.sha === branch.commit.sha
@@ -40,7 +40,10 @@ export function main() {
   const openBranches = () => new Set(pages(`repos/${repo}/pulls?state=open&per_page=100`)
     .filter(pr => pr.head.repo?.full_name === repo).map(pr => pr.head.ref));
   const open = openBranches();
-  const prs = pages(`repos/${repo}/pulls?state=closed&base=dev&per_page=100`);
+  const prs = [
+    ...pages(`repos/${repo}/pulls?state=closed&base=dev&per_page=100`),
+    ...pages(`repos/${repo}/pulls?state=closed&base=test&per_page=100`)
+  ];
   for (const branch of pages(`repos/${repo}/branches?per_page=100`)) {
     const pr = prs.find(pr => eligible(branch, pr, repo, open, included));
     if (!pr) { console.log(`KEEP ${branch.name}`); continue; }

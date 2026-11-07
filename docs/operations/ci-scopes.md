@@ -42,22 +42,23 @@ concernées des suites en échec.
 
 ## Promotion et publication
 
-Les PR de fonctionnalité vers dev sont fusionnées en squash ; la PR de promotion dev vers main
-reste en fusion « Merge » pour que main demeure contenue dans dev.
+**Méthode de fusion** :
+- Les PR de travail vers `test` : **squash ou merge** autorisés
+- Les promotions `test` → `dev` et `dev` → `main` : **merge uniquement** (jamais squash ni rebase)
 
-`promotion-ci` contrôle le SHA exact de dev et les derniers résultats des domaines
-inchangés. Il est exécuté pour chaque PR vers main, sans filtre de chemins, et doit
-être requis dans une règle de protection de main. Cette règle ne doit pas offrir de
+`promotion-ci` contrôle le SHA exact de `dev` et les derniers résultats des domaines
+inchangés. Il est exécuté pour chaque PR vers `main`, sans filtre de chemins, et doit
+être requis dans une règle de protection de `main`. Cette règle ne doit pas offrir de
 dérogation aux intégrations qui activent l'auto-merge. La politique de PR désactive
-l'auto-merge existant et ne l'active de nouveau qu'après réussite de promotion-ci,
-avec vérification du SHA de tête. Il vérifie aussi que main ne porte aucun commit hors fusion absent de dev (les fusions de
-promotion précédentes sont normales) ; sinon il échoue en demandant de fusionner main dans dev. Un nouveau push invalide le contrôle précédent.
-Un échec impose une correction puis un nouveau contrôle, ou une relance si le test
-était transitoirement en panne.
+l'auto-merge existant et ne l'active de nouveau qu'après réussite de `promotion-ci`,
+avec vérification du SHA de tête.
+
+`dev-ancestry` (dans `backend-dev.yml`) vérifie que `dev` ne porte aucun commit absent de `test`.
+Ce job est exécuté uniquement sur les PR `test` → `dev` et doit réussir ou être sauté.
 
 La release réutilise la même vérification (`wait-ci.mjs`). Un échec CI, une erreur
 API, une source manquante ou un délai dépassé font échouer le job avec code non nul.
 Les contrôles en échec apparaissent dans les annotations et le résumé du job avec
-leur lien. Un push sur main sans PR dev vers main fusionnée (commit direct) ne publie rien : le job
+leur lien. Un push sur `main` sans PR `dev` → `main` fusionnée (commit direct) ne publie rien : le job
 échoue avec une annotation et un résumé explicites. Un lancement manuel ne contourne pas la CI. Un commit déjà publié reste
 un cas normal sans nouvelle publication.

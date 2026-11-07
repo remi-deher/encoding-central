@@ -18,8 +18,8 @@ const check = (b = branch, p = pr, open = new Set(), included = () => true) => e
 test('accepts squash/rebase via the published merge result, not original ancestry', () => {
   assert.equal(check(branch, pr, new Set(), sha => sha === 'rewritten'), true);
 });
-test('retains main, dev, protected branches and open PRs', () => {
-  for (const name of ['main', 'dev']) assert.equal(check({ ...branch, name }), false);
+test('retains main, dev, test, protected branches and open PRs', () => {
+  for (const name of ['main', 'dev', 'test']) assert.equal(check({ ...branch, name }), false);
   assert.equal(check({ ...branch, protected: true }), false);
   assert.equal(check(branch, pr, new Set([branch.name])), false);
 });
@@ -30,6 +30,11 @@ test('retains new commits, unmerged work, foreign branches and unpublished resul
   assert.equal(check(branch, { ...pr, head: { ...pr.head, repo: null } }), false);
   assert.equal(check(branch, { ...pr, merge_commit_sha: null }), false);
   assert.equal(check(branch, pr, new Set(), () => false), false);
+});
+
+test('accepts branches merged into test', () => {
+  const prTest = { ...pr, base: { ref: 'test' } };
+  assert.equal(check(branch, prTest), true);
 });
 test('deletion uses an exact expected SHA lease and a fully qualified ref', () => {
   assert.deepEqual(deletionArgs(branch.name, 'original'), [

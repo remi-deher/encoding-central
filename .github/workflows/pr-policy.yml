@@ -19,19 +19,28 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
         run: |
+          # Règles :
+          # - test accepte toute branche SAUF main (source = ce dépôt)
+          # - dev accepte test uniquement
+          # - main accepte dev uniquement
           if [ "$BASE_REF" = "main" ] && [ "$HEAD_REF" = "dev" ]; then
+            echo "Pull request autorisée : promotion $HEAD_REF vers $BASE_REF."
+            exit 0
+          fi
+          if [ "$BASE_REF" = "dev" ] && [ "$HEAD_REF" = "test" ]; then
+            echo "Pull request autorisée : promotion $HEAD_REF vers $BASE_REF."
+            exit 0
+          fi
+          if [ "$BASE_REF" = "test" ] && [ "$HEAD_REF" != "main" ] && [ "$HEAD_REPO" = "$GITHUB_REPOSITORY" ]; then
             echo "Pull request autorisée : $HEAD_REF vers $BASE_REF."
             exit 0
           fi
-          if [ "$BASE_REF" = "dev" ] && [ "$HEAD_REF" != "main" ]; then
-            echo "Pull request autorisée : $HEAD_REF vers dev."
-            exit 0
-          fi
 
-          echo "Seules les PR vers dev (hors main) et les promotions dev vers main sont autorisées."
+          echo "Seules les PR vers test (hors main, depuis ce dépôt), test vers dev, et dev vers main sont autorisées."
           gh pr close "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
-            --comment "PR fermée automatiquement : seules les PR vers dev et les promotions de dev vers main sont autorisées."
+            --comment "PR fermée automatiquement : seules les PR vers test (hors main, depuis ce dépôt), les promotions test vers dev, et dev vers main sont autorisées."
           exit 1
 
       - name: Enable auto-merge for a dev-to-main promotion
