@@ -89,7 +89,8 @@ internal sealed class StoreEventListener(WorkerAgentOptions options, WorkerIdent
     private static bool TryRevision(string? id, out long revision)
     {
         revision = 0;
-        return id is not null && id.StartsWith("v1.", StringComparison.Ordinal)
+        // v1.{n} : ancien état par worker ; v2.{n} : état global du central (ADR 0046). Le worker ne lit que la révision et la renvoie telle quelle comme curseur.
+        return id is not null && (id.StartsWith("v1.", StringComparison.Ordinal) || id.StartsWith("v2.", StringComparison.Ordinal))
             && long.TryParse(id.AsSpan(3), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out revision)
             && revision >= 0;
     }
