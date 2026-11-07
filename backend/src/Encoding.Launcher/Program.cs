@@ -28,25 +28,16 @@ IReadOnlyDictionary<string, string> ServerEnvironment()
     return environment;
 }
 
-// Le worker intégré au central rejoint toujours le serveur du même conteneur, sauf si l’opérateur a désigné une autre adresse.
-IReadOnlyDictionary<string, string> AgentEnvironment()
-{
-    var environment = new Dictionary<string, string>
-    {
-        ["ASPNETCORE_URLS"] = $"http://+:{agentPort}",
-        ["Worker__Roles"] = "server,worker",
-        ["Worker__DataDirectory"] = dataDirectory,
-        ["Worker__LocalEnrollmentSecretFile"] = localEnrollmentSecretFile,
-    };
-    if (string.IsNullOrWhiteSpace(configuration["Central:ApiBaseUrl"]))
-        environment["Central__ApiBaseUrl"] = $"http://127.0.0.1:{apiPort}";
-    return environment;
-}
+// Le worker intégré au central rejoint toujours le serveur de son conteneur en boucle locale (voir AgentEnvironment).
+if (AgentEnvironment.OverridesOperatorUrl(configuration, apiPort))
+    Console.WriteLine("[launcher] Central:ApiBaseUrl est ignoré pour le worker intégré : il rejoint toujours le serveur local en boucle locale (127.0.0.1). Utilisez un worker distinct pour joindre un autre central.");
+IReadOnlyDictionary<string, string> AgentEnvironmentFor() =>
+    AgentEnvironment.Build(dataDirectory, localEnrollmentSecretFile, agentPort, apiPort);
 
 builder.Services.AddSingleton(new ProcessSupervisor(
     new SystemProcess("serveur", Path.Combine(home, "api"), "Encoding.Api.dll"),
     new SystemProcess("agent", Path.Combine(home, "agent"), "Encoding.WorkerAgent.dll"),
-    ServerEnvironment, AgentEnvironment, TimeSpan.FromSeconds(45), () => DateTimeOffset.UtcNow));
+    ServerEnvironment, AgentEnvironmentFor, TimeSpan.FromSeconds(45), () => DateTimeOffset.UtcNow));
 builder.Services.AddHostedService<LauncherService>();
 
 await builder.Build().RunAsync();
