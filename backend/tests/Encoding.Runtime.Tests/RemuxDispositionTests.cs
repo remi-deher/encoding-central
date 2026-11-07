@@ -72,6 +72,36 @@ public sealed class RemuxDispositionTests
         Assert.Null(MediaActions.PlannedOutputSources([new("video-remux-media", Config(new { container = "mkv" }))], JsonSerializer.SerializeToElement(new { }), preserve: true));
     }
 
+    [Fact]
+    public void BlocksOnlyChangeTheDefaultFlagTheySetAndAddedStreamsHaveNone()
+    {
+        // #28 : noms de pistes (le bloc fixe « default ») et sous-titres traduits (une piste ajoutée en dernier).
+        Assert.Equal("default+forced", MediaActions.DispositionValue(Stream("subtitle", new { @default = 0, forced = 1 }), true));
+        Assert.Equal("forced+comment", MediaActions.DispositionValue(Stream("subtitle", new { @default = 1, forced = 1, comment = 1 }), false));
+        Assert.Equal("0", MediaActions.DispositionValue(Stream("audio", new { @default = 1 }), false));
+        Assert.Equal("original", MediaActions.DispositionValue(Stream("audio", new { original = 1 }), null));
+        var sources = new[] { Stream("video", new { @default = 1 }), Stream("audio", new { @default = 0, original = 1 }), Stream("subtitle", new { forced = 1 }) };
+        Assert.Equal(
+            ["-disposition:0", "default", "-disposition:1", "default+original", "-disposition:2", "forced", "-disposition:3", "0"],
+            MediaActions.PreservedDispositionArgs(sources, new Dictionary<int, bool> { [1] = true }, 1));
+    }
+
+    [Fact]
+    public void IsoMediaOutputsMayPromoteOnlyTheFirstTrackOfATypeWithoutDefault()
+    {
+        Assert.True(MediaActions.IsIsoMediaContainer(JsonSerializer.SerializeToElement(new { format = new { format_name = "mov,mp4,m4a,3gp,3g2,mj2" } })));
+        Assert.False(MediaActions.IsIsoMediaContainer(JsonSerializer.SerializeToElement(new { format = new { format_name = "matroska,webm" } })));
+        Assert.False(MediaActions.IsIsoMediaContainer(JsonSerializer.SerializeToElement(new { streams = Array.Empty<object>() })));
+
+        var none = new[] { Stream("subtitle", new { @default = 0 }), Stream("subtitle", new { @default = 0, forced = 1 }) };
+        Assert.True(MediaActions.ExpectedOutputDefault(none, 0, isoMediaOutput: true));   // le muxer mov active la première
+        Assert.False(MediaActions.ExpectedOutputDefault(none, 1, isoMediaOutput: true));
+        Assert.False(MediaActions.ExpectedOutputDefault(none, 0, isoMediaOutput: false));  // Matroska : identique à la source
+        var second = new[] { Stream("subtitle", new { @default = 0 }), Stream("subtitle", new { @default = 1 }) };
+        Assert.False(MediaActions.ExpectedOutputDefault(second, 0, isoMediaOutput: true)); // une piste « default » existe : rien n'est promu
+        Assert.True(MediaActions.ExpectedOutputDefault(second, 1, isoMediaOutput: true));
+    }
+
     [MediaToolsFact]
     public async Task MatroskaRemuxKeepsDefaultAndForcedExactlyAsInTheSource()
     {

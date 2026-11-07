@@ -137,7 +137,10 @@ public static partial class SubtitleTranslation
         await tools.CheckedAsync("ffmpeg", ["-nostdin", "-v", "error", .. MediaActions.SourceInput(sourcePath), "-i", translated.File,
             "-map", "0", "-map", "1:0", "-c", "copy", "-c:s:" + existingSubtitles, targetCodec,
             "-metadata:s:s:" + existingSubtitles, "language=" + language,
-            "-metadata:s:s:" + existingSubtitles, "title=Translated subtitles", "-y", target], directory, ct);
+            "-metadata:s:s:" + existingSubtitles, "title=Translated subtitles",
+            // Dispositions source explicites ; la piste traduite, ajoutée en dernier, n'a aucun drapeau (#28).
+            .. MediaActions.PreservedDispositionArgs(mediaMetadata.GetProperty("streams").EnumerateArray().ToArray(), new Dictionary<int, bool>(), 1),
+            "-y", target], directory, ct);
         return new(target);
     }
 }

@@ -49,6 +49,21 @@ internal static class TrackNamesMediaTests
             var snapshot = await actions.TrackNamesAsync(new Dictionary<string, JsonElement> { ["mode"] = JsonSerializer.SerializeToElement("snapshot") }, probe, null, source, directory, "snap", CancellationToken.None);
             Check(snapshot.Primary is null && snapshot.Value is not null, "Snapshot mode only returns the original tracks.");
             Console.WriteLine("PASS: track names on a synthetic MKV (names written on the copy, source untouched, snapshot mode).");
+
+            // #28 : en MP4 (FFmpeg -map 0 -c copy), nommer les pistes garde les dispositions de la source, piste par piste.
+            var mp4 = Path.Combine(directory, "source.mp4");
+            await tools.CheckedAsync("ffmpeg", ["-v", "error", "-y", "-i", source, "-map", "0:v", "-map", "0:a", "-c", "copy",
+                "-disposition:v:0", "default", "-disposition:a:0", "0", "-disposition:a:1", "default", mp4], directory, CancellationToken.None);
+            static string[] AudioDefaults(JsonElement scan) => scan.GetProperty("streams").EnumerateArray()
+                .Where(stream => stream.GetProperty("codec_type").GetString() == "audio")
+                .Select(stream => stream.GetProperty("disposition").GetProperty("default").GetInt32().ToString(System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+            var mp4Probe = await scanner.ScanAsync(mp4, CancellationToken.None);
+            Check(AudioDefaults(mp4Probe).SequenceEqual(["0", "1"]), "The MP4 fixture marks only the second audio track as default.");
+            var named = await actions.TrackNamesAsync(new Dictionary<string, JsonElement>(), mp4Probe, null, mp4, directory, "names-mp4", CancellationToken.None);
+            Check(named.Primary is not null && named.Primary != mp4, "An MP4 working copy is produced.");
+            Check(AudioDefaults(await scanner.ScanAsync(named.Primary!, CancellationToken.None)).SequenceEqual(["0", "1"]),
+                "Naming MP4 tracks keeps the source default flags (the second audio stays default, the first is not promoted).");
+            Console.WriteLine("PASS: MP4 track names keep the source dispositions.");
         }
         finally { Directory.Delete(directory, true); }
     }
