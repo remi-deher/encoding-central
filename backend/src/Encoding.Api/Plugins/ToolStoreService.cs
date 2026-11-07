@@ -194,12 +194,16 @@ public sealed class ToolStoreService(IConfiguration configuration, ILogger<ToolS
         finally { gate.Release(); }
     }
 
+    /// <summary>Signalé après chaque écriture de l'index (installation, mise à jour, retrait) : l'état Store global du central s'aligne (ADR 0046).</summary>
+    public event Action? Changed;
+
     private void Save(List<InstalledToolPackage> current)
     {
         System.IO.Directory.CreateDirectory(Directory);
         var temporary = IndexPath + ".tmp";
         File.WriteAllText(temporary, JsonSerializer.Serialize(current, Json));
         File.Move(temporary, IndexPath, overwrite: true);
+        Changed?.Invoke();
     }
 
     private static bool TryVersion(string value, out Version version)

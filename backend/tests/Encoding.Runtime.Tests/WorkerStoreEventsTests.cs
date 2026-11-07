@@ -29,24 +29,40 @@ public sealed class WorkerStoreEventsTests
     [InlineData(null, 3, StoreEventKind.Snapshot)]
     [InlineData("", 3, StoreEventKind.Snapshot)]
     [InlineData("garbage", 3, StoreEventKind.Snapshot)]
-    [InlineData("v1.-1", 3, StoreEventKind.Snapshot)]
-    [InlineData("v1.9", 3, StoreEventKind.Snapshot)]      // curseur postérieur au central (base restaurée)
-    [InlineData("v1.3", 3, StoreEventKind.Snapshot)]      // reconnexion : réconciliation complète
-    [InlineData("v1.1", 3, StoreEventKind.DesiredState)]  // changements manqués
+    [InlineData("v2.-1", 3, StoreEventKind.Snapshot)]
+    [InlineData("v2.9", 3, StoreEventKind.Snapshot)]      // curseur postérieur au central (base restaurée)
+    [InlineData("v2.3", 3, StoreEventKind.Snapshot)]      // reconnexion : réconciliation complète
+    [InlineData("v2.1", 3, StoreEventKind.DesiredState)]  // changements manqués
+    [InlineData("v1.1", 3, StoreEventKind.Snapshot)]      // curseur de l'ancien état par worker : illisible, état complet
+    [InlineData("v1.3", 3, StoreEventKind.Snapshot)]
     public void InitialEventFollowsTheCursor(string? lastEventId, long current, StoreEventKind expected) =>
         Assert.Equal(expected, StoreEventStream.Initial(lastEventId, current));
 
     private sealed class Rig : IAsyncDisposable
     {
         public required TestDatabase Database; public required WebApplication App; public required WorkerStoreStateRepository Repository;
-        public required WorkerStoreStateService Service; public required Guid First; public required Guid Second; public required HttpClient Http;
-        public async ValueTask DisposeAsync() { Http.Dispose(); await App.DisposeAsync(); await Database.DisposeAsync(); WorkerStoreStateEndpoints.HeartbeatInterval = TimeSpan.FromSeconds(20); }
+        public required WorkerStoreStateService Service; public required CentralStoreStateService Central; public required CentralStoreStateTests.Rig Packages;
+        public required Guid First; public required Guid Second; public required HttpClient Http;
+        public async ValueTask DisposeAsync()
+        {
+            Http.Dispose(); await App.DisposeAsync(); await Packages.DisposeAsync(); await Database.DisposeAsync();
+            WorkerStoreStateEndpoints.HeartbeatInterval = TimeSpan.FromSeconds(20);
+        }
+
+        /// <summary>Installe (index) ces plugins sur le central puis lit l'état : la révision globale augmente d'un cran si l'ensemble change.</summary>
+        public async Task<StoreDesiredState> InstallAsync(params string[] versions)
+        {
+            Packages.WriteIndexes(versions.Select((version, index) => CentralStoreStateTests.Plugin(index == 0 ? "official.sample" : "official.other" + index, version, Sha)), []);
+            var state = await Central.CurrentAsync(CancellationToken.None);
+            Service.Changes.Notify();
+            return state;
+        }
     }
 
     private static async Task<Rig> CreateAsync()
     {
-        var database = await TestDatabase.CreateSqliteAsync("store-events");
-        await DatabaseMigrator.ApplyAsync(database.Db, Harness.RepositoryRoot(), CancellationToken.None);
+        var packages = await CentralStoreStateTests.CreateAsync();
+        var database = packages.Database;
         var ids = new[] { Guid.NewGuid(), Guid.NewGuid() };
         for (var i = 0; i < 2; i++)
         {
@@ -55,14 +71,10 @@ public sealed class WorkerStoreEventsTests
             insert.Parameters.AddWithValue("hash", SqlKind.Bytes, SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("token-" + i)));
             await insert.ExecuteNonQueryAsync();
         }
-        var directory = Path.Combine(Path.GetTempPath(), "encoding-store-events-" + Guid.NewGuid().ToString("N"));
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-            { ["PluginStore:Directory"] = directory, ["ToolStore:Directory"] = Path.Combine(directory, "tools") }).Build();
-        var tools = new ToolStoreService(configuration, NullLogger<ToolStoreService>.Instance);
-        var plugins = new PluginStoreService(configuration, StoreCatalogFixture.Create(), tools, NullLogger<PluginStoreService>.Instance);
-        var repositories = new PluginRepositoryService(configuration, new HttpClientFactoryStub(), plugins, tools, NullLogger<PluginRepositoryService>.Instance);
         var repository = new WorkerStoreStateRepository(database.Db);
-        var service = new WorkerStoreStateService(repository, repositories, new StoreStateBroadcaster(), new WorkerRepository(database.Db));
+        var broadcaster = new StoreStateBroadcaster();
+        var central = new CentralStoreStateService(new CentralStoreStateRepository(database.Db), packages.Plugins, packages.Tools, broadcaster, NullLogger<CentralStoreStateService>.Instance);
+        var service = new WorkerStoreStateService(repository, central, broadcaster, new WorkerRepository(database.Db));
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseUrls("http://127.0.0.1:0");
@@ -71,13 +83,11 @@ public sealed class WorkerStoreEventsTests
         var app = builder.Build();
         app.MapWorkerStoreStateEndpoints();
         await app.StartAsync();
-        return new Rig { Database = database, App = app, Repository = repository, Service = service, First = ids[0], Second = ids[1],
+        return new Rig { Database = database, App = app, Repository = repository, Service = service, Central = central, Packages = packages, First = ids[0], Second = ids[1],
             Http = new HttpClient { BaseAddress = new Uri(app.Urls.Single()), Timeout = TimeSpan.FromSeconds(30) } };
     }
 
     private sealed class HttpClientFactoryStub : IHttpClientFactory { public HttpClient CreateClient(string name) => new(); }
-
-    private static StoreDesiredItem Item(string version) => new("plugin", "official.sample", version, null, Sha);
 
     private static async Task<(HttpResponseMessage Response, StreamReader Reader)> OpenAsync(Rig rig, string? token, string? lastEventId = null)
     {
@@ -126,7 +136,7 @@ public sealed class WorkerStoreEventsTests
     public async Task AppliedReportUsesTokenIdentityAndReturnsCurrentDesiredRevisionOnConflict()
     {
         await using var rig = await CreateAsync();
-        await rig.Repository.ReplaceDesiredAsync(rig.First, [Item("1.0.0")], CancellationToken.None);
+        await rig.InstallAsync("1.0.0"); // révision globale 1
         using var anonymous = await rig.Http.PutAsJsonAsync("/api/v1/store/applied-state", new { revision = 1, items = Array.Empty<object>() });
         Assert.Equal(System.Net.HttpStatusCode.Unauthorized, anonymous.StatusCode);
 
@@ -142,8 +152,8 @@ public sealed class WorkerStoreEventsTests
         acceptedRequest.Headers.Add("X-Node-Token", "token-0");
         using var accepted = await rig.Http.SendAsync(acceptedRequest);
         Assert.Equal(System.Net.HttpStatusCode.OK, accepted.StatusCode);
-        Assert.Equal(1, (await rig.Repository.GetAsync(rig.First, CancellationToken.None))!.Applied.Revision);
-        Assert.Equal(0, (await rig.Repository.GetAsync(rig.Second, CancellationToken.None))!.Applied.Revision);
+        Assert.Equal(1, (await rig.Repository.GetAppliedAsync(rig.First, CancellationToken.None))!.Revision);
+        Assert.Equal(0, (await rig.Repository.GetAppliedAsync(rig.Second, CancellationToken.None))!.Revision);
     }
 
     [Fact]
@@ -174,51 +184,63 @@ public sealed class WorkerStoreEventsTests
         var appliedDirectory = Path.Combine(pluginRoot, "official.sample", "1.0.0");
         Directory.CreateDirectory(appliedDirectory);
         await File.WriteAllTextAsync(Path.Combine(appliedDirectory, CustomPluginCatalog.VerifiedMarker), Sha);
-        var missing = new StoreDesiredItem("plugin", "official.missing", "1.0.0", null, Sha);
-        await rig.Repository.ReplaceDesiredAsync(rig.First,
-            [new("plugin", "official.sample", "1.0.0", null, Sha), missing], CancellationToken.None);
+        await rig.InstallAsync("1.0.0", "1.0.0"); // révision globale 1 : official.sample et official.other1
         var server = rig.Http.BaseAddress.ToString();
         await coordinator.ReconcileAsync(server, new WorkerStoreDesiredState(1,
             [new("plugin", "official.sample", "1.0.0", null, Sha), new("plugin", "official.missing", "1.0.0", null, Sha)]), CancellationToken.None);
-        var reported = (await rig.Repository.GetAsync(rig.First, CancellationToken.None))!.Applied.Items;
+        var reported = (await rig.Repository.GetAppliedAsync(rig.First, CancellationToken.None))!.Items;
         Assert.Contains(reported, item => item.Id == "official.sample" && item.Status == "applied");
         Assert.Contains(reported, item => item.Id == "official.missing" && item.Status == "failed" && item.ErrorCode == "install_failed");
 
-        await rig.Repository.ReplaceDesiredAsync(rig.First, [new("plugin", "official.sample", "1.0.0", null, Sha)], CancellationToken.None);
+        await rig.InstallAsync("1.0.0"); // révision globale 2 : official.other1 retiré du central
         await coordinator.ReconcileAsync(server, new WorkerStoreDesiredState(2,
             [new("plugin", "official.sample", "1.0.0", null, Sha)]), CancellationToken.None);
-        reported = (await rig.Repository.GetAsync(rig.First, CancellationToken.None))!.Applied.Items;
+        reported = (await rig.Repository.GetAppliedAsync(rig.First, CancellationToken.None))!.Items;
         Assert.Contains(reported, item => item.Id == "official.missing" && item.Status == "removed");
         Directory.Delete(data, recursive: true);
     }
 
     [Fact]
-    public async Task KeepsOfflineWorkerIsolatedWhileOnlineWorkerReceivesOnlyItsChanges()
+    public async Task EveryWorkerReceivesTheSameGlobalStateAndEachChangeOnce()
     {
         await using var rig = await CreateAsync();
-        await using (var offline = rig.Database.Db.CreateCommand("UPDATE workers SET last_seen_at=(strftime('%Y-%m-%d %H:%M:%f', 'now', '-2 hours') || '000Z') WHERE id=@id"))
-        { offline.Parameters.AddWithValue("id", rig.Second); await offline.ExecuteNonQueryAsync(); }
-        var (response, reader) = await OpenAsync(rig, "token-0");
+        await rig.InstallAsync("1.0.0"); // révision globale 1
+        var (response, first) = await OpenAsync(rig, "token-0");
+        var (_, second) = await OpenAsync(rig, "token-1");
         Assert.StartsWith("text/event-stream", response.Content.Headers.ContentType!.ToString());
-        var snapshot = Parse((await ReadFrameAsync(reader))!);
-        Assert.Equal("snapshot", snapshot.Event); Assert.Equal("v1.0", snapshot.Id);
-        Assert.Equal(0, snapshot.Data.GetProperty("revision").GetInt64()); Assert.Equal(0, snapshot.Data.GetProperty("items").GetArrayLength());
+        var snapshot = Parse((await ReadFrameAsync(first))!);
+        Assert.Equal("snapshot", snapshot.Event); Assert.Equal("v2.1", snapshot.Id);
+        Assert.Equal(1, snapshot.Data.GetProperty("revision").GetInt64());
+        Assert.Equal("official.sample", snapshot.Data.GetProperty("items")[0].GetProperty("id").GetString());
+        Assert.Equal(Sha, snapshot.Data.GetProperty("items")[0].GetProperty("sha256").GetString());
+        var other = Parse((await ReadFrameAsync(second))!);
+        Assert.Equal((snapshot.Id, snapshot.Event), (other.Id, other.Event)); // même état pour tous les workers : aucune liste par worker
 
-        await rig.Repository.ReplaceDesiredAsync(rig.Second, [Item("1.0.0")], CancellationToken.None); // autre worker : pas d'événement ici
-        rig.Service.Changes.Notify();
-        await rig.Repository.ReplaceDesiredAsync(rig.First, [Item("1.1.0")], CancellationToken.None);
-        rig.Service.Changes.Notify();
-        var change = Parse((await ReadFrameAsync(reader))!);
-        Assert.Equal("desired-state", change.Event); Assert.Equal("v1.1", change.Id);
+        await rig.InstallAsync("1.1.0"); // mise à jour du plugin : révision globale 2
+        var change = Parse((await ReadFrameAsync(first))!);
+        Assert.Equal(("desired-state", "v2.2"), (change.Event, change.Id));
         Assert.Equal("1.1.0", change.Data.GetProperty("items")[0].GetProperty("version").GetString());
-        Assert.Equal(Sha, change.Data.GetProperty("items")[0].GetProperty("sha256").GetString());
+        var otherChange = Parse((await ReadFrameAsync(second))!);
+        Assert.Equal("v2.2", otherChange.Id);
     }
 
     [Fact]
-    public async Task CentralRestartReplaysPersistedDesiredStateAsSnapshot()
+    public async Task FullStateCarriesInstalledPluginsAndToolsWithSha256()
     {
         await using var rig = await CreateAsync();
-        await rig.Repository.ReplaceDesiredAsync(rig.First, [Item("1.2.0")], CancellationToken.None);
+        rig.Packages.WriteIndexes([CentralStoreStateTests.Plugin("base", "1.10.3", Sha)], [CentralStoreStateTests.Tool("ffmpeg", "6.1.1", "linux-x64", new string('e', 64))]);
+        var (_, reader) = await OpenAsync(rig, "token-0");
+        var items = Parse((await ReadFrameAsync(reader))!).Data.GetProperty("items");
+        Assert.Equal(2, items.GetArrayLength());
+        Assert.Equal(("plugin", "base", "1.10.3", Sha), (items[0].GetProperty("kind").GetString(), items[0].GetProperty("id").GetString(), items[0].GetProperty("version").GetString(), items[0].GetProperty("sha256").GetString()));
+        Assert.Equal(("tool", "linux-x64", new string('e', 64)), (items[1].GetProperty("kind").GetString(), items[1].GetProperty("platform").GetString(), items[1].GetProperty("sha256").GetString()));
+    }
+
+    [Fact]
+    public async Task CentralRestartReplaysPersistedGlobalStateAsSnapshot()
+    {
+        await using var rig = await CreateAsync();
+        await rig.InstallAsync("1.2.0");
         rig.Http.Dispose();
         await rig.App.StopAsync();
         await rig.App.DisposeAsync();
@@ -240,26 +262,72 @@ public sealed class WorkerStoreEventsTests
     }
 
     [Fact]
-    public async Task ReconnectionReplaysMissedChangesAndFallsBackToSnapshotForInvalidCursor()
+    public async Task ReconnectionReplaysMissedChangesAndFallsBackToSnapshotForInvalidOrV1Cursor()
     {
         await using var rig = await CreateAsync();
-        for (var i = 1; i <= 3; i++) await rig.Repository.ReplaceDesiredAsync(rig.First, [Item($"1.{i}.0")], CancellationToken.None);
+        for (var i = 1; i <= 3; i++) await rig.InstallAsync($"1.{i}.0");
 
-        var (_, missed) = await OpenAsync(rig, "token-0", "v1.1");
+        var (_, missed) = await OpenAsync(rig, "token-0", "v2.1");
         var replay = Parse((await ReadFrameAsync(missed))!);
-        Assert.Equal(("desired-state", "v1.3"), (replay.Event, replay.Id)); // l'état courant couvre les révisions 2 et 3
+        Assert.Equal(("desired-state", "v2.3"), (replay.Event, replay.Id)); // l'état courant couvre les révisions 2 et 3
 
         var (_, expired) = await OpenAsync(rig, "token-0", "opaque-perime");
         Assert.Equal("snapshot", Parse((await ReadFrameAsync(expired))!).Event);
-        var (_, future) = await OpenAsync(rig, "token-0", "v1.99");
+        var (_, future) = await OpenAsync(rig, "token-0", "v2.99");
         Assert.Equal("snapshot", Parse((await ReadFrameAsync(future))!).Event);
 
+        // Un curseur v1 (ancien état par worker) est illisible : le worker reçoit l'état complet, même s'il pointe avant la révision courante.
+        var (_, legacy) = await OpenAsync(rig, "token-0", "v1.1");
+        var legacySnapshot = Parse((await ReadFrameAsync(legacy))!);
+        Assert.Equal(("snapshot", "v2.3"), (legacySnapshot.Event, legacySnapshot.Id));
+        Assert.Equal("1.3.0", legacySnapshot.Data.GetProperty("items")[0].GetProperty("version").GetString());
+
         // Même à jour, une reconnexion renvoie un snapshot complet pour vérifier la convergence locale.
-        var (_, current) = await OpenAsync(rig, "token-0", "v1.3");
+        var (_, current) = await OpenAsync(rig, "token-0", "v2.3");
         var currentSnapshot = Parse((await ReadFrameAsync(current))!);
-        Assert.Equal(("snapshot", "v1.3"), (currentSnapshot.Event, currentSnapshot.Id));
+        Assert.Equal(("snapshot", "v2.3"), (currentSnapshot.Event, currentSnapshot.Id));
         // Rejouer le même snapshot est sans effet côté central : il ne modifie jamais l'état.
         Assert.Equal(3, (await rig.Service.GetAsync(rig.First, CancellationToken.None))!.Desired.Revision);
+    }
+
+    [Fact]
+    public async Task IncompatibleWorkerGetsVersionIncompatibleAndNoStream()
+    {
+        await using var rig = await CreateAsync();
+        await rig.InstallAsync("1.0.0");
+        await using (var mark = rig.Database.Db.CreateCommand("UPDATE workers SET incompatible_reason = 'Version 0.0.1 différente de celle du central.' WHERE id = @id"))
+        { mark.Parameters.AddWithValue("id", rig.Second); await mark.ExecuteNonQueryAsync(); }
+
+        var (blocked, _) = await OpenAsync(rig, "token-1");
+        Assert.Equal(System.Net.HttpStatusCode.Conflict, blocked.StatusCode);
+        using var body = JsonDocument.Parse(await blocked.Content.ReadAsStringAsync());
+        Assert.Equal("version_incompatible", body.RootElement.GetProperty("code").GetString());
+        Assert.NotEqual("text/event-stream", blocked.Content.Headers.ContentType?.MediaType);
+
+        // Un worker compatible du même central reçoit toujours son flux.
+        var (ok, reader) = await OpenAsync(rig, "token-0");
+        Assert.Equal(System.Net.HttpStatusCode.OK, ok.StatusCode);
+        Assert.Equal("snapshot", Parse((await ReadFrameAsync(reader))!).Event);
+    }
+
+    [Fact]
+    public async Task WorkerStateReportsGlobalRevisionAppliedAndGap()
+    {
+        await using var rig = await CreateAsync();
+        await rig.InstallAsync("1.0.0");
+        await rig.InstallAsync("1.1.0"); // révision globale 2
+        using var report = new HttpRequestMessage(HttpMethod.Put, "/api/v1/store/applied-state")
+        { Content = System.Net.Http.Json.JsonContent.Create(new { revision = 1, items = new[] { new { kind = "plugin", id = "official.sample", version = "1.0.0", platform = (string?)null, sha256 = Sha, status = "applied", errorCode = (string?)null } } }) };
+        report.Headers.Add("X-Node-Token", "token-0");
+        Assert.Equal(System.Net.HttpStatusCode.OK, (await rig.Http.SendAsync(report)).StatusCode);
+
+        var state = (await rig.Service.GetAsync(rig.First, CancellationToken.None))!;
+        Assert.Equal(2, state.Desired.Revision); Assert.Equal(1, state.Applied.Revision);
+        Assert.Equal(1, state.Gap.RevisionLag); Assert.False(state.Gap.InSync);
+        var gap = Assert.Single(state.Gap.Items);
+        Assert.Equal(("version_mismatch", "1.1.0", "1.0.0"), (gap.Reason, gap.DesiredVersion, gap.AppliedVersion));
+        Assert.Equal(2, (await rig.Service.GetAsync(rig.Second, CancellationToken.None))!.Desired.Revision); // même révision globale pour un worker qui n'a rien rapporté
+        Assert.Equal("missing", Assert.Single((await rig.Service.GetAsync(rig.Second, CancellationToken.None))!.Gap.Items).Reason);
     }
 
     [Fact]

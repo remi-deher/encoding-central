@@ -11,15 +11,14 @@ using Xunit;
 
 namespace Encoding.Runtime.Tests;
 
-/// <summary>Issue #17, P0 : état Store désiré/appliqué par worker, révisions monotones, défauts vides, permissions.</summary>
+/// <summary>Issue #17 P0 et ADR 0046 (T1) : état appliqué par worker contre la révision globale du central, écart, validation, permissions.</summary>
 public sealed class WorkerStoreStateTests
 {
     private static readonly string Sha = new('a', 64);
-    private static StoreDesiredItem Plugin(string id = "acme.tools", string version = "1.0.0") => new("plugin", id, version, null, Sha);
     private static StoreAppliedItem Applied(string id = "acme.tools", string version = "1.0.0", string status = "applied", string? error = null) =>
         new("plugin", id, version, null, Sha, status, error);
 
-    private static async Task<(TestDatabase Database, WorkerStoreStateRepository States, Guid First, Guid Second)> CreateAsync()
+    private static async Task<(TestDatabase Database, WorkerStoreStateRepository States, CentralStoreStateRepository Central, Guid First, Guid Second)> CreateAsync()
     {
         var database = await TestDatabase.CreateSqliteAsync("store-state");
         await DatabaseMigrator.ApplyAsync(database.Db, Harness.RepositoryRoot(), CancellationToken.None);
@@ -31,80 +30,107 @@ public sealed class WorkerStoreStateTests
             insert.Parameters.AddWithValue("hash", SqlKind.Bytes, SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
             await insert.ExecuteNonQueryAsync();
         }
-        return (database, new WorkerStoreStateRepository(database.Db), first, second);
+        return (database, new WorkerStoreStateRepository(database.Db), new CentralStoreStateRepository(database.Db), first, second);
+    }
+
+    /// <summary>Fait avancer la révision globale du central sans installer de paquet : une empreinte différente par appel.</summary>
+    private static async Task AdvanceAsync(CentralStoreStateRepository central, int times = 1)
+    {
+        for (var i = 0; i < times; i++) await central.SyncAsync(Guid.NewGuid().ToString("N"), CancellationToken.None);
     }
 
     [Fact]
-    public async Task NewWorkerHasEmptyStateAndUnknownWorkerHasNone()
+    public async Task NewWorkerHasEmptyAppliedStateAndUnknownWorkerHasNone()
     {
-        var (database, states, first, _) = await CreateAsync();
+        var (database, states, _, first, _) = await CreateAsync();
         await using var _ = database;
-        var state = await states.GetAsync(first, CancellationToken.None);
-        Assert.NotNull(state);
-        Assert.Equal(0, state.Desired.Revision); Assert.Empty(state.Desired.Items);
-        Assert.Equal(0, state.Applied.Revision); Assert.Empty(state.Applied.Items);
-        Assert.Null(await states.GetAsync(Guid.NewGuid(), CancellationToken.None));
-        Assert.Null(await states.ReplaceDesiredAsync(Guid.NewGuid(), [Plugin()], CancellationToken.None));
+        var applied = await states.GetAppliedAsync(first, CancellationToken.None);
+        Assert.NotNull(applied);
+        Assert.Equal(0, applied.Revision); Assert.Empty(applied.Items);
+        Assert.Null(await states.GetAppliedAsync(Guid.NewGuid(), CancellationToken.None));
     }
 
     [Fact]
-    public async Task DesiredRevisionIsMonotonePerWorkerAndSeparateFromApplied()
+    public async Task AppliedReportIsBoundedByTheGlobalRevisionAndNeverGoesBackwards()
     {
-        var (database, states, first, second) = await CreateAsync();
+        var (database, states, central, first, second) = await CreateAsync();
         await using var _ = database;
-        Assert.Equal(1, (await states.ReplaceDesiredAsync(first, [Plugin()], CancellationToken.None))!.Revision);
-        Assert.Equal(2, (await states.ReplaceDesiredAsync(first, [Plugin(version: "1.1.0")], CancellationToken.None))!.Revision);
-        Assert.Equal(1, (await states.ReplaceDesiredAsync(second, [], CancellationToken.None))!.Revision);
+        Assert.Equal(StoreReportOutcome.UnknownRevision, (await states.ReportAppliedAsync(first, 1, [Applied()], CancellationToken.None)).Outcome); // central à 0
+        await AdvanceAsync(central, 2);
 
-        var state = (await states.GetAsync(first, CancellationToken.None))!;
-        Assert.Equal("1.1.0", Assert.Single(state.Desired.Items).Version);
-        Assert.Equal(0, state.Applied.Revision); // le désiré ne touche pas l'appliqué
-        Assert.Empty((await states.GetAsync(second, CancellationToken.None))!.Desired.Items);
-    }
-
-    [Fact]
-    public async Task AppliedReportIsBoundedByDesiredAndNeverGoesBackwards()
-    {
-        var (database, states, first, second) = await CreateAsync();
-        await using var _ = database;
-        Assert.Equal(StoreReportOutcome.UnknownRevision, (await states.ReportAppliedAsync(first, 1, [Applied()], CancellationToken.None)).Outcome);
-        await states.ReplaceDesiredAsync(first, [Plugin()], CancellationToken.None);
-        await states.ReplaceDesiredAsync(first, [Plugin(version: "1.1.0")], CancellationToken.None);
-
-        Assert.Equal(StoreReportOutcome.UnknownRevision, (await states.ReportAppliedAsync(first, 3, [Applied()], CancellationToken.None)).Outcome);
-        Assert.Equal(StoreReportOutcome.Accepted, (await states.ReportAppliedAsync(first, 2, [Applied(version: "1.1.0")], CancellationToken.None)).Outcome);
+        var unknown = await states.ReportAppliedAsync(first, 3, [Applied()], CancellationToken.None);
+        Assert.Equal(StoreReportOutcome.UnknownRevision, unknown.Outcome);
+        Assert.Equal(2, unknown.DesiredRevision); // le worker apprend la révision attendue
+        Assert.Equal(StoreReportOutcome.Accepted, (await states.ReportAppliedAsync(first, 2, [Applied(version: "1.1.0")], CancellationToken.None)).Outcome); // la ligne se crée au premier rapport
         Assert.Equal(StoreReportOutcome.Accepted, (await states.ReportAppliedAsync(first, 2, [Applied(version: "1.1.0")], CancellationToken.None)).Outcome); // idempotent
         var stale = await states.ReportAppliedAsync(first, 1, [Applied()], CancellationToken.None);
         Assert.Equal(StoreReportOutcome.StaleRevision, stale.Outcome);
         Assert.Equal(2, stale.DesiredRevision);
 
-        var state = (await states.GetAsync(first, CancellationToken.None))!;
-        Assert.Equal(2, state.Applied.Revision); Assert.Equal("1.1.0", Assert.Single(state.Applied.Items).Version);
+        var applied = (await states.GetAppliedAsync(first, CancellationToken.None))!;
+        Assert.Equal(2, applied.Revision); Assert.Equal("1.1.0", Assert.Single(applied.Items).Version);
         // Les rapports d'un worker n'affectent jamais un autre worker.
-        Assert.Equal(0, (await states.GetAsync(second, CancellationToken.None))!.Applied.Revision);
-        Assert.Equal(StoreReportOutcome.UnknownRevision, (await states.ReportAppliedAsync(second, 1, [Applied()], CancellationToken.None)).Outcome);
+        Assert.Equal(0, (await states.GetAppliedAsync(second, CancellationToken.None))!.Revision);
         Assert.Equal(StoreReportOutcome.UnknownWorker, (await states.ReportAppliedAsync(Guid.NewGuid(), 1, [], CancellationToken.None)).Outcome);
     }
 
-    [Theory]
-    [InlineData("plugin", "acme.tools", "latest", null)]
-    [InlineData("plugin", "acme.tools", "1.0", null)]
-    [InlineData("plugin", "acme.tools", "1.0.0", "linux-x64")]
-    [InlineData("tool", "ffmpeg", "7.1.0", null)]
-    [InlineData("other", "acme.tools", "1.0.0", null)]
-    [InlineData("plugin", "../etc", "1.0.0", null)]
-    public void InvalidDesiredItemsAreRefused(string kind, string id, string version, string? platform) =>
-        Assert.Throws<StoreStateException>(() => WorkerStoreStateRepository.ValidateDesired([new(kind, id, version, platform, Sha)]));
+    [Fact]
+    public async Task DesiredRevisionColumnKeepsTheMaxOfGlobalAndAppliedRevision()
+    {
+        var (database, states, central, first, _) = await CreateAsync();
+        await using var _ = database;
+        await AdvanceAsync(central, 3);
+        await states.ReportAppliedAsync(first, 2, [], CancellationToken.None);
+        await using var read = database.Db.CreateCommand("SELECT desired_revision, applied_revision FROM worker_store_state WHERE worker_id = @id");
+        read.Parameters.AddWithValue("id", first);
+        await using var reader = await read.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal(3, reader.GetInt64(0)); // max(globale, appliquée), jamais inférieure à l'appliquée (CHECK de 0076)
+        Assert.Equal(2, reader.GetInt64(1));
+    }
 
     [Fact]
-    public void DesiredItemsRequireShaAreUniqueAndAppliedErrorsStayCodes()
+    public void GapReportsMissingMismatchedFailedAndExtraPackages()
     {
-        Assert.Throws<StoreStateException>(() => WorkerStoreStateRepository.ValidateDesired([new("plugin", "acme.tools", "1.0.0", null, "")]));
-        Assert.Throws<StoreStateException>(() => WorkerStoreStateRepository.ValidateDesired([Plugin(), Plugin()]));
-        Assert.Single(WorkerStoreStateRepository.ValidateDesired([new("tool", "ffmpeg", "7.1.0", "linux-x64", Sha.ToUpperInvariant())]));
+        static StoreDesiredItem Want(string id, string version, string sha) => new("plugin", id, version, null, sha);
+        var desired = new StoreDesiredState(5, [Want("a", "1.0.0", Sha), Want("b", "1.0.0", Sha), Want("c", "1.0.0", Sha), Want("d", "1.0.0", Sha), Want("e", "1.0.0", Sha)], null);
+        var applied = new StoreAppliedState(4,
+        [
+            new("plugin", "a", "1.0.0", null, Sha, "applied", null),                        // conforme
+            new("plugin", "b", "0.9.0", null, Sha, "applied", null),                        // autre version
+            new("plugin", "c", "1.0.0", null, Sha, "failed", "sha256_mismatch"),            // échec rapporté
+            new("plugin", "e", "1.0.0", null, new string('f', 64), "applied", null),        // même version, autre empreinte
+            new("plugin", "z", "1.0.0", null, Sha, "applied", null),                        // plus installé sur le central
+            new("plugin", "y", "1.0.0", null, Sha, "removed", null)                         // déjà retiré : pas un écart
+        ], null);
+        var gap = WorkerStoreStateService.ComputeGap(desired, applied);
+        Assert.False(gap.InSync);
+        Assert.Equal(1, gap.RevisionLag);
+        Assert.Equal(["missing:d", "version_mismatch:b", "failed:c", "version_mismatch:e", "extra:z"].Order(),
+            gap.Items.Select(item => item.Reason + ":" + item.Id).Order());
+        Assert.Equal("sha256_mismatch", gap.Items.Single(item => item.Reason == "failed").ErrorCode);
+
+        var synced = WorkerStoreStateService.ComputeGap(new StoreDesiredState(2, [Want("a", "1.0.0", Sha)], null),
+            new StoreAppliedState(2, [new("plugin", "a", "1.0.0", null, Sha, "applied", null)], null));
+        Assert.True(synced.InSync); Assert.Equal(0, synced.RevisionLag); Assert.Empty(synced.Items);
+        // Un worker qui n'a rien rapporté a tout en retard.
+        var fresh = WorkerStoreStateService.ComputeGap(new StoreDesiredState(2, [Want("a", "1.0.0", Sha)], null), new StoreAppliedState(0, [], null));
+        Assert.Equal("missing", Assert.Single(fresh.Items).Reason); Assert.Equal(2, fresh.RevisionLag);
+    }
+
+    [Fact]
+    public void AppliedReportsAreValidatedAndErrorsStayCodes()
+    {
+        Assert.Throws<StoreStateException>(() => WorkerStoreStateRepository.ValidateApplied([new("plugin", "acme.tools", "latest", null, Sha, "applied", null)]));
+        Assert.Throws<StoreStateException>(() => WorkerStoreStateRepository.ValidateApplied([new("plugin", "acme.tools", "1.0.0", "linux-x64", Sha, "applied", null)]));
+        Assert.Throws<StoreStateException>(() => WorkerStoreStateRepository.ValidateApplied([new("tool", "ffmpeg", "7.1.0", null, Sha, "applied", null)]));
+        Assert.Throws<StoreStateException>(() => WorkerStoreStateRepository.ValidateApplied([new("plugin", "../etc", "1.0.0", null, Sha, "applied", null)]));
+        Assert.Throws<StoreStateException>(() => WorkerStoreStateRepository.ValidateApplied([new("plugin", "acme.tools", "1.0.0", null, "", "applied", null)]));
+        Assert.Throws<StoreStateException>(() => WorkerStoreStateRepository.ValidateApplied([Applied(), Applied()]));
         Assert.Throws<StoreStateException>(() => WorkerStoreStateRepository.ValidateApplied([Applied(status: "installing")]));
         Assert.Throws<StoreStateException>(() => WorkerStoreStateRepository.ValidateApplied([Applied(status: "failed", error: "System.IO.IOException: /home/x token=abc")]));
         Assert.Single(WorkerStoreStateRepository.ValidateApplied([Applied(status: "failed", error: "sha256_mismatch")]));
+        Assert.Equal(Sha, Assert.Single(WorkerStoreStateRepository.ValidateApplied([new("tool", "ffmpeg", "7.1.0", "linux-x64", Sha.ToUpperInvariant(), "applied", null)])).Sha256);
     }
 
     [Fact]

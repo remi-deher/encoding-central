@@ -3,15 +3,16 @@ namespace Encoding.Api.Plugins;
 public enum StoreEventKind { None, Snapshot, DesiredState }
 
 /// <summary>
-/// Règles du flux SSE <c>/api/v1/store/events</c> (issue #17, P2). L'identifiant d'événement est opaque pour le worker :
-/// <c>v1.{révision}</c>. Sans journal des révisions intermédiaires, une reprise envoie l'état désiré courant (qui contient tous les
-/// changements manqués) ; un curseur absent, illisible ou postérieur à l'état du central (base restaurée) redonne un snapshot complet.
+/// Règles du flux SSE <c>/api/v1/store/events</c> (issue #17 P2, ADR 0046 T1). L'identifiant d'événement est opaque pour le worker :
+/// <c>v2.{révision globale}</c>. Le flux est identique pour tous les workers : l'état complet des paquets installés sur le central.
+/// Sans journal des révisions intermédiaires, une reprise envoie l'état courant (qui contient tous les changements manqués) ; un curseur
+/// absent, illisible, au format <c>v1.*</c> (ancien état par worker) ou postérieur à l'état du central (base restaurée) redonne un snapshot complet.
 /// </summary>
 public static class StoreEventStream
 {
     public const string SnapshotEvent = "snapshot";
     public const string DesiredStateEvent = "desired-state";
-    private const string Prefix = "v1.";
+    private const string Prefix = "v2.";
 
     public static string EventId(long revision) => Prefix + revision.ToString(System.Globalization.CultureInfo.InvariantCulture);
 

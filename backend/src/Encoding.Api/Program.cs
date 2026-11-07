@@ -178,6 +178,8 @@ builder.Services.AddSingleton<CentralIdentityRepository>();
 builder.Services.AddSingleton<CentralId>();
 builder.Services.AddSingleton<RegisterRepository>();
 builder.Services.AddSingleton<WorkerStoreStateRepository>();
+builder.Services.AddSingleton<CentralStoreStateRepository>();
+builder.Services.AddSingleton<CentralStoreStateService>();
 builder.Services.AddSingleton<StoreStateBroadcaster>();
 builder.Services.AddSingleton<WorkerStoreStateService>();
 builder.Services.AddHostedService<CentralDiscoveryPublisher>();
@@ -199,6 +201,8 @@ var flowRegistry = app.Services.GetRequiredService<FlowComponentRegistry>();
 app.Services.GetRequiredService<ToolStoreService>().LoadInstalled();
 app.Services.GetRequiredService<PluginStoreService>().LoadInstalled();
 await DatabaseMigrator.ApplyAsync(localDatabase, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping, app.Logger);
+// Aligne la révision de l'état Store global sur les paquets installés (ADR 0046) : un index modifié hors du central compte comme un changement.
+await app.Services.GetRequiredService<CentralStoreStateService>().CurrentAsync(app.Lifetime.ApplicationStopping);
 await StandardFlowTemplateSeeder.EnsureAsync(
     localDatabase,
     flowRegistry,
