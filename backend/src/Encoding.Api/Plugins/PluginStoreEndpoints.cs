@@ -15,6 +15,13 @@ public static class PluginStoreEndpoints
     public static void MapPluginStoreEndpoints(this WebApplication app)
     {
         var store = app.MapGroup("/api/v1/store").WithTags("Store");
+        // Index installed.json illisible : l'état Store du central est inconnu. Toute mutation est refusée sans rien modifier, et aucune réponse
+        // n'affirme « rien d'installé » : 503 explicite, distinct d'un 404 « absent » ou d'un 422 « archive refusée ».
+        store.AddEndpointFilter(async (context, next) =>
+        {
+            try { return await next(context); }
+            catch (StoreIndexUnreadableException exception) { return IndexUnreadable(exception); }
+        });
         MapRepositoryRoutes(store);
         MapCatalogRoutes(store);
         MapInstallRoutes(store);
@@ -66,7 +73,7 @@ public static class PluginStoreEndpoints
     {
         store.MapGet("/packages", async (PluginRepositoryService repositories, PluginStoreService plugins, ToolStoreService tools, ResourceRepository resources, FlowRepository flows, CancellationToken ct) =>
         {
-            var installed = plugins.Installed().ToDictionary(item => item.Id, StringComparer.Ordinal);
+            var installed = plugins.InstalledStrict().ToDictionary(item => item.Id, StringComparer.Ordinal);
             var listed = new HashSet<string>(StringComparer.Ordinal);
             var result = new List<object>();
             foreach (var repository in repositories.List().Where(item => item.Enabled))
@@ -108,7 +115,7 @@ public static class PluginStoreEndpoints
                     RepositoryId = current.Source,
                     Icon = "📦"
                 });
-            var installedTools = tools.Available().ToDictionary(item => (item.Id, item.Platform));
+            var installedTools = tools.AvailableStrict().ToDictionary(item => (item.Id, item.Platform));
             var seenTools = new HashSet<string>(StringComparer.Ordinal);
             foreach (var repository in repositories.List().Where(item => item.Enabled))
                 foreach (var package in repository.Tools ?? [])
@@ -311,15 +318,15 @@ public static class PluginStoreEndpoints
 
         // Distribution aux workers, authentifiés par le jeton de leur worker (lecture seule).
         store.MapGet("/installed", (PluginStoreService plugins) =>
-            Results.Ok(plugins.Installed().Select(item => new { item.Id, item.Version, item.Sha256 }))).AllowNodeCredentials().WithName("ListInstalledPluginPackages");
+            Results.Ok(plugins.InstalledStrict().Select(item => new { item.Id, item.Version, item.Sha256 }))).AllowNodeCredentials().WithName("ListInstalledPluginPackages");
 
         store.MapGet("/tools/installed", (ToolStoreService tools) =>
-            Results.Ok(tools.Available().Select(item => new { item.Id, item.Version, item.Platform, item.ArchiveSha256 })))
+            Results.Ok(tools.AvailableStrict().Select(item => new { item.Id, item.Version, item.Platform, item.ArchiveSha256 })))
             .AllowNodeCredentials().WithName("ListInstalledToolPackages");
 
         store.MapGet("/packages/{pluginId}/{version}/download", (string pluginId, string version, PluginStoreService plugins) =>
         {
-            var installed = plugins.Installed().SingleOrDefault(item => item.Id == pluginId && item.Version == version);
+            var installed = plugins.InstalledStrict().SingleOrDefault(item => item.Id == pluginId && item.Version == version);
             if (installed is null) return Results.NotFound();
             var path = plugins.PackagePath(installed.Id, installed.Version);
             return FileResults.ServeOrNotFound(path, "application/zip", $"{pluginId}-{version}.zip");
@@ -327,12 +334,15 @@ public static class PluginStoreEndpoints
 
         store.MapGet("/tools/packages/{toolId}/{version}/{platform}/download", (string toolId, string version, string platform, ToolStoreService tools) =>
         {
-            var installed = tools.Available().SingleOrDefault(item => item.Id == toolId && item.Version == version && item.Platform == platform);
+            var installed = tools.AvailableStrict().SingleOrDefault(item => item.Id == toolId && item.Version == version && item.Platform == platform);
             if (installed is null) return Results.NotFound();
             var path = tools.PackagePath(installed.Id, installed.Version, installed.Platform);
             return FileResults.ServeOrNotFound(path, "application/zip", $"{toolId}-{version}-{platform}.zip");
         }).AllowNodeCredentials().WithName("DownloadToolPackage");
     }
+
+    internal static IResult IndexUnreadable(StoreIndexUnreadableException exception) =>
+        Results.Json(new { code = "store_index_unreadable", title = exception.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
 
     private static object Summary(PluginRepository item) => new
     {

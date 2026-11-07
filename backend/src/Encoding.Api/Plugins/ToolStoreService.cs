@@ -82,6 +82,10 @@ public sealed class ToolStoreService(IConfiguration configuration, ILogger<ToolS
         }
     }
 
+    /// <summary>
+    /// Variante tolérante : un index illisible est journalisé et vu comme vide. Réservée aux lectures sans écriture qui échouent fermé sur un ensemble vide
+    /// (vérification au démarrage, résolution locale d'un exécutable, contrôle de dépendance). Toute mutation lit <see cref="InstalledStrict"/>.
+    /// </summary>
     public IReadOnlyList<InstalledToolPackage> Installed()
     {
         try { return InstalledStrict(); }
@@ -116,7 +120,12 @@ public sealed class ToolStoreService(IConfiguration configuration, ILogger<ToolS
         }
     }
 
+    /// <summary>Paquets installés et vérifiés ; vide si l'index est illisible (aucun outil n'est alors utilisable : échec fermé).</summary>
     public IReadOnlyList<InstalledToolPackage> Available() => Installed()
+        .Where(item => verified.ContainsKey((item.Id, item.Version, item.Platform))).ToArray();
+
+    /// <summary>Comme <see cref="Available"/>, mais lève <see cref="StoreIndexUnreadableException"/> si l'index est illisible : pour les réponses qui affirment ce qui est installé.</summary>
+    public IReadOnlyList<InstalledToolPackage> AvailableStrict() => InstalledStrict()
         .Where(item => verified.ContainsKey((item.Id, item.Version, item.Platform))).ToArray();
 
     public async Task<InstalledToolPackage> ImportAsync(byte[] archive, string source, string? expectedSha256 = null, string? expectedId = null,
@@ -133,7 +142,9 @@ public sealed class ToolStoreService(IConfiguration configuration, ILogger<ToolS
         await gate.WaitAsync(ct);
         try
         {
-            var current = Installed().ToList();
+            // Lecture stricte sous verrou, avant toute mutation : un index illisible n'est pas « aucun outil ». Le réécrire avec le seul paquet importé
+            // tronquerait l'état global diffusé aux workers ; on refuse sans toucher à l'index, aux archives ni à la révision.
+            var current = InstalledStrict().ToList();
             var sameId = current.SingleOrDefault(item => item.Id == manifest.Id && item.Platform == manifest.Platform);
             if (sameId is not null && sameId.Version == manifest.Version)
             {
@@ -185,12 +196,13 @@ public sealed class ToolStoreService(IConfiguration configuration, ILogger<ToolS
         return maximumExclusiveText is null || TryVersion(maximumExclusiveText, out var maximum) && actual < maximum;
     }
 
+    /// <summary>Retire un paquet d'outil ; <c>false</c> s'il n'est pas installé. Lève <see cref="StoreIndexUnreadableException"/> si l'index est illisible (rien n'est modifié).</summary>
     public async Task<bool> RemoveAsync(string id, string platform, CancellationToken ct)
     {
         await gate.WaitAsync(ct);
         try
         {
-            var current = Installed().ToList();
+            var current = InstalledStrict().ToList(); // état inconnu : ni « absent » (404) ni réécriture
             var target = current.SingleOrDefault(item => item.Id == id && item.Platform == platform);
             if (target is null) return false;
             current.Remove(target);

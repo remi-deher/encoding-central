@@ -35,6 +35,10 @@ public sealed class PluginStoreService(IConfiguration configuration, FlowCompone
         }
     }
 
+    /// <summary>
+    /// Variante tolérante : un index illisible est journalisé et vu comme vide. Réservée aux lectures qui n'écrivent rien et ne décrivent pas l'état
+    /// aux workers (rechargement du catalogue au démarrage). Toute mutation, et toute réponse qui affirme ce qui est installé, lit <see cref="InstalledStrict"/>.
+    /// </summary>
     public IReadOnlyList<InstalledPlugin> Installed()
     {
         try { return InstalledStrict(); }
@@ -45,9 +49,10 @@ public sealed class PluginStoreService(IConfiguration configuration, FlowCompone
         }
     }
 
+    /// <summary>Un plugin installé requiert-il ce paquet d'outil ? Lecture stricte : avec un index illisible on ne peut pas prouver que l'outil est libre.</summary>
     public bool RequiresToolPackage(string id)
     {
-        foreach (var plugin in Installed())
+        foreach (var plugin in InstalledStrict())
         {
             try
             {
@@ -92,12 +97,16 @@ public sealed class PluginStoreService(IConfiguration configuration, FlowCompone
         if (expectedId is not null && expectedId != id) throw new PluginPackageException($"L'archive contient « {id} », pas « {expectedId} ».");
         if (expectedVersion is not null && expectedVersion != info.Manifest.Version) throw new PluginPackageException($"L'archive contient la version {info.Manifest.Version}, pas {expectedVersion}.");
         if (PluginIdentity.IsOfficialNamespace(id) && !allowOfficial) throw new PluginPackageException("L'espace de noms « official » est réservé au dépôt officiel.");
+        // Index des outils illisible : refus explicite (état inconnu) plutôt qu'un trompeur « dépendance absente ».
+        if ((info.Manifest.RequiredToolPackages ?? []).Any()) _ = tools.InstalledStrict();
         if ((info.Manifest.RequiredToolPackages ?? []).FirstOrDefault(dependency => !tools.Satisfies(dependency, ToolPackagePlatform.Current)) is { } missing)
             throw new PluginPackageException($"Dépendance requise absente : {missing.ToolPackageId} {missing.MinimumVersion} ou plus compatible pour {ToolPackagePlatform.Current}.");
         await gate.WaitAsync();
         try
         {
-            var current = Installed().ToList();
+            // Lecture stricte sous verrou, avant toute mutation : un index illisible n'est pas « aucun plugin ». Le réécrire avec le seul paquet importé
+            // tronquerait l'état global diffusé aux workers ; on refuse sans toucher à l'index, aux archives, au catalogue ni à la révision.
+            var current = InstalledStrict().ToList();
             var existing = current.SingleOrDefault(item => item.Id == id);
             if (existing is { } same && same.Version == info.Manifest.Version)
             {
@@ -132,12 +141,13 @@ public sealed class PluginStoreService(IConfiguration configuration, FlowCompone
         finally { gate.Release(); }
     }
 
+    /// <summary>Retire un plugin ; <c>false</c> s'il n'est pas installé. Lève <see cref="StoreIndexUnreadableException"/> si l'index est illisible (rien n'est modifié).</summary>
     public async Task<bool> RemoveAsync(string id)
     {
         await gate.WaitAsync();
         try
         {
-            var current = Installed().ToList();
+            var current = InstalledStrict().ToList(); // état inconnu : ni « absent » (404) ni réécriture
             var existing = current.SingleOrDefault(item => item.Id == id);
             if (existing is null) return false;
             registry.Uninstall(id);
