@@ -7,7 +7,7 @@ aucune suppression. Un échec du nettoyage reste visible sans annuler la release
 Une branche du dépôt est supprimable seulement si :
 - Une PR vers `test` (et uniquement `test`) est fusionnée,
 - Son SHA source correspond encore au dernier commit de la branche, et
-- Le `merge_commit_sha` de cette PR appartient à la fois à `test` et au commit publié.
+- Le `merge_commit_sha` de cette PR appartient à la fois à `dev` et au commit publié.
 
 **Important** : Les branches `main`, `dev` et `test` sont **jamais supprimées**.
 GitHub relie ainsi la branche à son résultat de fusion, y compris après squash
@@ -16,7 +16,7 @@ exemple), la branche est conservée. Une promotion `dev` vers `main` par merge
 commit conserve cette preuve ; une promotion squash peut conserver davantage de
 branches par précaution.
 
-`main`, `dev`, les branches protégées et les branches utilisées par une PR ouverte
+`main`, `dev`, `test`, les branches protégées et les branches utilisées par une PR ouverte
 sont conservées. Les PR de forks ne permettent pas de supprimer une branche locale
 homonyme. Les PR et branches sont relues avant suppression. Le push de suppression
 utilise un bail sur le SHA exact : un commit poussé entre la lecture et la suppression

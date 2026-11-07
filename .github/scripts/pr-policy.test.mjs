@@ -1,180 +1,81 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { URL } from 'node:url';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { readWorkflow, job, step, value } from './workflow-test-helpers.mjs';
 
-// Lire le vrai workflow pr-policy.yml
-const policyYamlPath = new URL('../workflows/pr-policy.yml', import.meta.url);
-const policyYaml = readFileSync(policyYamlPath, 'utf8');
+const script = value(step(job(readWorkflow('pr-policy'), 'policy'), 'Validate the source and target branches'), 'run');
+const repository = 'example/encoding-central';
 
-// Simulation de la logique du workflow pour les tests
-function simulatePolicy(env) {
-  // Règles du workflow :
-  // - test accepte toute branche SAUF main (source = ce dépôt)
-  // - dev accepte test uniquement
-  // - main accepte dev uniquement
-
-  const { BASE_REF, HEAD_REF, HEAD_REPO, GITHUB_REPOSITORY } = env;
-
-  if (BASE_REF === 'main' && HEAD_REF === 'dev') {
-    return { authorized: true, message: `Pull request autorisée : promotion ${HEAD_REF} vers ${BASE_REF}.` };
-  }
-  if (BASE_REF === 'dev' && HEAD_REF === 'test' && HEAD_REPO === GITHUB_REPOSITORY) {
-    return { authorized: true, message: `Pull request autorisée : promotion ${HEAD_REF} vers ${BASE_REF}.` };
-  }
-  if (BASE_REF === 'test' && HEAD_REF !== 'main' && HEAD_REPO === GITHUB_REPOSITORY) {
-    return { authorized: true, message: `Pull request autorisée : ${HEAD_REF} vers ${BASE_REF}.` };
-  }
-
-  return {
-    authorized: false,
-    message: 'Seules les PR vers test (hors main, depuis ce dépôt), test vers dev, et dev vers main sont autorisées.'
-  };
+function execute(base, head, source = repository, closeStatus = 0) {
+  const directory = mkdtempSync(join(tmpdir(), 'encoding-pr-policy-'));
+  const calls = join(directory, 'calls');
+  try {
+    writeFileSync(calls, '');
+    writeFileSync(join(directory, 'gh'), `#!/usr/bin/env node
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+fs.appendFileSync(process.env.POLICY_TEST_CALLS, JSON.stringify(args) + '\\n');
+if (args[0] !== 'pr' || args[1] !== 'close') process.exit(99);
+process.exit(Number(process.env.POLICY_TEST_CLOSE_STATUS));
+`, { mode: 0o755 });
+    const result = spawnSync('bash', ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', script], {
+      encoding: 'utf8', timeout: 5000,
+      env: {
+        ...process.env, PATH: `${directory}:${process.env.PATH}`, GH_TOKEN: 'test-only',
+        PR_NUMBER: '423', GITHUB_REPOSITORY: repository,
+        BASE_REF: base, HEAD_REF: head, HEAD_REPO: source,
+        POLICY_TEST_CALLS: calls, POLICY_TEST_CLOSE_STATUS: String(closeStatus),
+      },
+    });
+    assert.ifError(result.error);
+    assert.equal(result.signal, null);
+    return { ...result, calls: readFileSync(calls, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)) };
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 }
 
-// Tests pour la matrice de policy PR - vrais tests comportementaux
-// 1. Test sérialisation : la PR est correctement traitée en séquence
-test('PR vers test depuis ce dépôt : autorisée (sérialisation)', () => {
-  const env = {
-    BASE_REF: 'test',
-    HEAD_REF: 'feature/xyz',
-    HEAD_REPO: 'remi-deher/encoding-central',
-    GITHUB_REPOSITORY: 'remi-deher/encoding-central'
-  };
-  const result = simulatePolicy(env);
-  assert.equal(result.authorized, true);
-  assert.match(result.message, /Pull request autorisée/);
-});
+const cases = [
+  ['feature/xyz', 'test', true],
+  ['dev', 'test', true],
+  ['main', 'test', false],
+  ['test', 'dev', true],
+  ['feature/xyz', 'dev', false],
+  ['dev', 'main', true],
+  ['test', 'main', false],
+  ['feature/xyz', 'unknown', false],
+  ['main', 'dev', false],
+  ['feature/xyz', 'main', false],
+];
+for (const [head, base, allowed] of cases) {
+  test(`Validate executes ${head} -> ${base}: ${allowed ? 'allowed' : 'closed'}`, () => {
+    const result = execute(base, head);
+    assert.equal(result.status, allowed ? 0 : 1, result.stdout + result.stderr);
+    if (allowed) {
+      assert.deepEqual(result.calls, []);
+      assert.match(result.stdout, /Pull request autorisée/);
+    } else {
+      assert.equal(result.calls.length, 1);
+      const [args] = result.calls;
+      assert.deepEqual(args.slice(0, 6), ['pr', 'close', '423', '--repo', repository, '--comment']);
+      assert.match(args[6], /PR fermée automatiquement.*vers test.*test vers dev.*dev vers main/);
+      assert.equal(args.length, 7);
+    }
+  });
+}
 
-test('PR vers test depuis main : refusée (sérialisation)', () => {
-  const env = {
-    BASE_REF: 'test',
-    HEAD_REF: 'main',
-    HEAD_REPO: 'remi-deher/encoding-central',
-    GITHUB_REPOSITORY: 'remi-deher/encoding-central'
-  };
-  const result = simulatePolicy(env);
-  assert.equal(result.authorized, false);
-});
+for (const [head, base] of [['feature/xyz', 'test'], ['dev', 'test'], ['test', 'dev'], ['dev', 'main']]) {
+  test(`Validate closes fork ${head} -> ${base}`, () => {
+    const result = execute(base, head, 'fork/encoding-central');
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.equal(result.calls.length, 1);
+    assert.deepEqual(result.calls[0].slice(0, 5), ['pr', 'close', '423', '--repo', repository]);
+  });
+}
 
-// 2. Test auto-merge : dev→main avec checks réussis
-test('PR vers dev depuis test (même dépôt) : autorisée (auto-merge)', () => {
-  const env = {
-    BASE_REF: 'dev',
-    HEAD_REF: 'test',
-    HEAD_REPO: 'remi-deher/encoding-central',
-    GITHUB_REPOSITORY: 'remi-deher/encoding-central'
-  };
-  const result = simulatePolicy(env);
-  assert.equal(result.authorized, true);
-});
-
-test('PR vers dev depuis test (fork) : refusée (auto-merge)', () => {
-  const env = {
-    BASE_REF: 'dev',
-    HEAD_REF: 'test',
-    HEAD_REPO: 'fork/encoding-central',
-    GITHUB_REPOSITORY: 'remi-deher/encoding-central'
-  };
-  const result = simulatePolicy(env);
-  assert.equal(result.authorized, false);
-});
-
-// 3. Test SHA exact : dev→main avec SHA correspondant
-test('PR vers main depuis dev : autorisée (SHA exact)', () => {
-  const env = {
-    BASE_REF: 'main',
-    HEAD_REF: 'dev',
-    HEAD_REPO: 'remi-deher/encoding-central',
-    GITHUB_REPOSITORY: 'remi-deher/encoding-central'
-  };
-  const result = simulatePolicy(env);
-  assert.equal(result.authorized, true);
-});
-
-test('PR vers main depuis test : refusée (SHA exact)', () => {
-  const env = {
-    BASE_REF: 'main',
-    HEAD_REF: 'test',
-    HEAD_REPO: 'remi-deher/encoding-central',
-    GITHUB_REPOSITORY: 'remi-deher/encoding-central'
-  };
-  const result = simulatePolicy(env);
-  assert.equal(result.authorized, false);
-});
-
-// 4. Test idempotence : exécution en double ne change pas le résultat
-test('Idempotence : PR vers test depuis feature toujours autorisée', () => {
-  const env = {
-    BASE_REF: 'test',
-    HEAD_REF: 'feature/abc',
-    HEAD_REPO: 'remi-deher/encoding-central',
-    GITHUB_REPOSITORY: 'remi-deher/encoding-central'
-  };
-  const result1 = simulatePolicy(env);
-  const result2 = simulatePolicy(env);
-  assert.equal(result1.authorized, true);
-  assert.equal(result2.authorized, true);
-  assert.equal(result1.message, result2.message);
-});
-
-test('Idempotence : PR vers main depuis dev toujours autorisée', () => {
-  const env = {
-    BASE_REF: 'main',
-    HEAD_REF: 'dev',
-    HEAD_REPO: 'remi-deher/encoding-central',
-    GITHUB_REPOSITORY: 'remi-deher/encoding-central'
-  };
-  const result1 = simulatePolicy(env);
-  const result2 = simulatePolicy(env);
-  assert.equal(result1.authorized, true);
-  assert.equal(result2.authorized, true);
-});
-
-// 5. Test refus des checks échoués/PR fermées (simulé par fermées)
-test('Refus des PR fermées : base=test, head=feature (fermée)', () => {
-  // Dans le vrai workflow, une PR fermée serait détectée avant
-  // Ici on simule juste que la logique refuse si la PR n'est pas ouverte
-  const env = {
-    BASE_REF: 'test',
-    HEAD_REF: 'feature/closed',
-    HEAD_REPO: 'remi-deher/encoding-central',
-    GITHUB_REPOSITORY: 'remi-deher/encoding-central'
-  };
-  const result = simulatePolicy(env);
-  assert.equal(result.authorized, true); // La logique de base autorise, mais le workflow vérifie l'état
-});
-
-// Tests de la structure YAML
-test('PR policy YAML contient les bonnes règles', () => {
-  // Vérifier que test accepte toute branche sauf main depuis ce dépôt
-  assert.match(policyYaml, /if.*BASE_REF.*test.*HEAD_REF.*main.*HEAD_REPO.*GITHUB_REPOSITORY/);
-
-  // Vérifier que dev accepte test depuis ce dépôt
-  assert.match(policyYaml, /if.*BASE_REF.*dev.*HEAD_REF.*test.*HEAD_REPO.*GITHUB_REPOSITORY/);
-
-  // Vérifier que main accepte dev
-  assert.match(policyYaml, /if.*BASE_REF.*main.*HEAD_REF.*dev/);
-});
-
-test('PR policy YAML contient les bonnes actions', () => {
-  // Vérifier qu'il y a une action de fermeture pour les PR non autorisées
-  assert.match(policyYaml, /gh pr close/);
-
-  // Vérifier qu'il y a une action d'auto-merge pour dev→main
-  assert.match(policyYaml, /gh pr merge.*--auto/);
-
-  // Vérifier qu'il y a une action de désactivation auto-merge
-  assert.match(policyYaml, /--disable-auto/);
-});
-
-test('PR policy YAML contient la vérification SHA exacte', () => {
-  assert.match(policyYaml, /EXPECTED_SHA/);
-  assert.match(policyYaml, /headRefOid/);
-  assert.match(policyYaml, /match-head-commit/);
-});
-
-test('PR policy YAML vérifie les status checks', () => {
-  assert.match(policyYaml, /promotion-ci/);
-  assert.match(policyYaml, /statusCheckRollup/);
+test('Validate propagates a failure to close a forbidden PR', () => {
+  const result = execute('dev', 'feature/xyz', repository, 23);
+  assert.equal(result.status, 23);
+  assert.equal(result.calls.length, 1);
 });

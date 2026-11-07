@@ -33,9 +33,9 @@ test('validation CI runs on promotion PRs only and filters match release lookup 
     assert.doesNotMatch(yaml, /^  push:/m, scope.workflow);
     const pullRequest = yaml.split(/^  pull_request:\s*$/m)[1]?.split(/^  [a-z][\w-]*:\s*$/m)[0];
     assert.ok(pullRequest, scope.workflow);
-    // backend-dev.yml, frontend.yml: dev+main; others: main only
-    const devWorkflows = ["backend-dev", "frontend"];
-    const expected = devWorkflows.includes(scope.workflow) ? /.*branches: \[dev, main\].*/ : /.*branches: \[main\].*/;
+    // Frontend runs on dev and main; other scoped validation runs on main only.
+    // backend-dev runs on dev only and is deliberately absent from release scopes.
+    const expected = scope.workflow === 'frontend' ? /.*branches: \[dev, main\].*/ : /.*branches: \[main\].*/;
     assert.match(pullRequest, expected, scope.workflow);
     const lines = pullRequest.split('\n');
     const pathIndex = lines.findIndex(line => line.startsWith('    paths:'));

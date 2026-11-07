@@ -1,26 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { URL } from 'node:url';
+import { readWorkflow, job, value } from './workflow-test-helpers.mjs';
 
-// Test de la policy YAML réelle
-const policyYaml = readFileSync(new URL('../workflows/pr-policy.yml', import.meta.url), 'utf8');
+const workflow = readWorkflow('pr-policy');
 
-test('PR policy YAML contient les bonnes règles', () => {
-  // Vérifier que test accepte toute branche sauf main depuis ce dépôt
-  assert.match(policyYaml, /if.*BASE_REF.*test.*HEAD_REF.*main.*HEAD_REPO.*GITHUB_REPOSITORY/);
-  
-  // Vérifier que dev accepte test depuis ce dépôt
-  assert.match(policyYaml, /if.*BASE_REF.*dev.*HEAD_REF.*test.*HEAD_REPO.*GITHUB_REPOSITORY/);
-  
-  // Vérifier que main accepte dev
-  assert.match(policyYaml, /if.*BASE_REF.*main.*HEAD_REF.*dev/);
+test('policy serializes events for the same PR and cancels superseded runs', () => {
+  assert.match(workflow, /concurrency:\n  group: pr-policy-\$\{\{ github.event.pull_request.number \}\}\n  cancel-in-progress: true/);
 });
 
-test('PR policy YAML contient les bonnes actions', () => {
-  // Vérifier qu'il y a une action de fermeture pour les PR non autorisées
-  assert.match(policyYaml, /gh pr close/);
-  
-  // Vérifier qu'il y a une action d'auto-merge pour dev→main
-  assert.match(policyYaml, /gh pr merge.*--auto/);
+test('policy only validates branches and cannot enable automatic merging', () => {
+  const policy = job(workflow, 'policy');
+  assert.deepEqual([...policy.matchAll(/^      - name: (.+)$/gm)].map(match => match[1]), ['Validate the source and target branches']);
+  assert.doesNotMatch(workflow, /gh pr merge|--auto|--disable-auto|PAT_TOKEN/);
+  assert.equal(value(workflow, 'contents'), 'read');
+  assert.equal(value(workflow, 'pull-requests'), 'write');
 });

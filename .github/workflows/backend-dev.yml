@@ -41,7 +41,7 @@ jobs:
             echo "backend=false" >> "$GITHUB_OUTPUT"
           fi
   dev-ancestry:
-    name: Vérifier dev ⊆ test (contre-épreuve : ref=head.sha explicite)
+    name: "Vérifier dev ⊆ test (contre-épreuve : ref=head.sha explicite)"
     # Exécuté seulement sur PR test → dev depuis ce dépôt
     # Contre-épreuve : checkout avec ref=head.sha pour s'assurer de travailler sur le SHA exact de la PR
     if: >-

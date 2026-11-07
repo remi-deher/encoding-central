@@ -48,10 +48,15 @@ concernées des suites en échec.
 
 `promotion-ci` contrôle le SHA exact de `dev` et les derniers résultats des domaines
 inchangés. Il est exécuté pour chaque PR vers `main`, sans filtre de chemins, et doit
-être requis dans une règle de protection de `main`. Cette règle ne doit pas offrir de
-dérogation aux intégrations qui activent l'auto-merge. La politique de PR désactive
-l'auto-merge existant et ne l'active de nouveau qu'après réussite de `promotion-ci`,
-avec vérification du SHA de tête.
+être requis dans une règle de protection de `main`. Chaque fusion est décidée
+explicitement après une relecture indépendante favorable sur le SHA exact et des
+contrôles verts. L'auto-merge du dépôt reste désactivé ; `pr-policy` valide les
+branches et ferme les PR interdites, sans demander de fusion.
+
+`pr-policy` utilise `pull_request_target`, donc la version de la branche de base.
+Le retrait de son ancienne étape d'auto-merge ne s'applique aux promotions vers
+`main` qu'une fois le correctif arrivé sur `main`. D'ici là, l'ancienne étape y
+demande encore la fusion dès que `promotion-ci` réussit.
 
 `dev-ancestry` (dans `backend-dev.yml`) vérifie que `dev` ne porte aucun commit absent de `test`.
 Ce job est exécuté uniquement sur les PR `test` → `dev` et doit réussir ou être sauté.

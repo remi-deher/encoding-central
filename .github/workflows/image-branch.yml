@@ -41,14 +41,14 @@ jobs:
           else
             echo "has_username=true" >> "$GITHUB_OUTPUT"
           fi
-          
+
           if [ -z "$DOCKERHUB_TOKEN" ]; then
             echo "::error::Le secret DOCKERHUB_TOKEN est manquant."
             echo "has_token=false" >> "$GITHUB_OUTPUT"
           else
             echo "has_token=true" >> "$GITHUB_OUTPUT"
           fi
-          
+
           if [ -z "$DOCKERHUB_USERNAME" ] || [ -z "$DOCKERHUB_TOKEN" ]; then
             echo "::error::Les secrets Docker Hub (DOCKERHUB_USERNAME et DOCKERHUB_TOKEN) sont requis pour publier les images."
             echo "Veuillez configurer ces secrets dans Settings > Secrets and variables > Actions." >> "$GITHUB_STEP_SUMMARY"
@@ -123,7 +123,7 @@ jobs:
           docker buildx imagetools create \
             "${DOCKERHUB_USER}/encoding-central:${{ steps.sha.outputs.branche }}-${{ steps.sha.outputs.short_sha }}" \
             --tag "${DOCKERHUB_USER}/encoding-central:${{ steps.sha.outputs.branche }}"
-          
+
           docker buildx imagetools create \
             "${DOCKERHUB_USER}/encoding-worker:${{ steps.sha.outputs.branche }}-${{ steps.sha.outputs.short_sha }}" \
             --tag "${DOCKERHUB_USER}/encoding-worker:${{ steps.sha.outputs.branche }}"
