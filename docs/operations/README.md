@@ -15,3 +15,4 @@ Documents opérationnels (procédures, supervision, suivis). Pour l'état du sys
 | [fileflows-v3-flow.md](fileflows-v3-flow.md) | Reconstruire dans l'application le flow FileFlows V3 | plugins, flows | à jour ; non vérifié sur Plex/GPU/Landlock réels |
 | [todo-hardware-accelerated-tools-policy.md](todo-hardware-accelerated-tools-policy.md) | Règle d'or accélération matérielle (non codée) | plugins | à faire |
 | [flow-blocks-agent-handoff.md](flow-blocks-agent-handoff.md) | Note de reprise de la stabilisation des blocs | ui, plugins | historique |
+| [bascule-test-dev-main.md](bascule-test-dev-main.md) | Spécification et transition du cycle test → dev → main (ADR 0047) | auth-ops | à exécuter |

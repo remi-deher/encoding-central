@@ -64,3 +64,4 @@ Une décision structurante : nouveau principe, changement d'un invariant des fic
 | [0044](0044-echec-apres-perte-de-bail.md) | Échec après perte de bail sans réattribution automatique | implemented | runtime |
 | [0045](0045-websocket-telemetrie-worker.md) | WebSocket de télémétrie worker → central | accepted | runtime |
 | [0046](0046-etat-store-des-workers-suit-le-central.md) | L'état Store des workers suit celui du central ; worker non conforme sans attribution | proposed | plugins |
+| [0047](0047-cycle-test-dev-main-et-images-par-branche.md) | Cycle de branches test → dev → main et images Docker par branche | accepted | auth-ops |
