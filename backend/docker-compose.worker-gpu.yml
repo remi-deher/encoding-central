@@ -1,0 +1,11 @@
+# Surcharge facultative du compose worker pour Intel/AMD sous Linux.
+# Même worker, image, identité et volumes ; ce fichier ne se lance pas seul.
+# RENDER_GID est le GID de /dev/dri/renderD128 sur l'hôte.
+services:
+  worker:
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID:?Définir RENDER_GID avec le GID du périphérique de rendu}"
+    environment:
+      ENCODING_GPU_DEVICE: ${ENCODING_GPU_DEVICE:-/dev/dri/renderD128}

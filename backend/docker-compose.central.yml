@@ -1,53 +1,42 @@
-# Le central embarque API, interface et worker : il est autonome et reste l'autorité du cluster.
-# Le worker est une image distincte (worker et interface seulement), sans base de données ; il ne peut pas être autonome.
+# Banc local uniquement : API, interface, SQLite et worker intégré en boucle locale.
+# Voir DOCKER-COMPOSE-SPLIT.md. Aucun Central__ApiBaseUrl sur le central.
 name: encoding-central
 
 services:
   server:
-    image: backend-encoding-central
+    image: backend-encoding-central:${LOCAL_IMAGE_TAG:-local}
     build:
       context: ..
       dockerfile: backend/Dockerfile
       target: central
+      args:
+        APP_VERSION: ${APP_VERSION:-0.0.0-dev}
     hostname: encoding-central
     environment:
       Worker__Name: encoding-central
       Auth__SetupToken: ${AUTH_SETUP_TOKEN:-}
-      # Adresse annoncée en DNS-SD : le nom .local ne se résout pas dans le conteneur du worker.
-      Central__AdvertisedApiBaseUrl: http://server:8080
+      Central__AdvertisedApiBaseUrl: http://encoding-central:8080
     ports:
-      - "${CENTRAL_API_PORT:-5080}:8080"
+      - "127.0.0.1:${CENTRAL_API_PORT:-5080}:8080"
     volumes:
       - central-node-data:/var/lib/encoding-node
-      - /home/remi/encoding-tests/central-media:/libraries/central
-      - /home/remi/encoding-tests/shared-media:/libraries/shared
-      - /home/remi/encoding-tests/central-only:/libraries/central-only
+      - central-media:/libraries/central
+      - shared-media:/libraries/shared
+      - central-only:/libraries/central-only
+    networks:
+      encoding-network:
+        aliases:
+          - encoding-central
     restart: unless-stopped
 
-  worker:
-    image: backend-encoding-worker
-    build:
-      context: ..
-      dockerfile: backend/Dockerfile
-      target: worker
-    hostname: encoding-worker
-    environment:
-      Worker__Name: encoding-worker
-      WorkerUi__Port: 8081
-    ports:
-      - "5081:8081"
-    volumes:
-      - worker-node-data:/var/lib/encoding-node
-      - /home/remi/encoding-tests/worker-media:/libraries/worker
-      - /home/remi/encoding-tests/shared-media:/libraries/shared
-    devices:
-      - /dev/dri:/dev/dri
-    group_add:
-      - "987"
-    depends_on:
-      - server
-    restart: unless-stopped
+networks:
+  encoding-network:
+    name: encoding-network
+    external: true
 
 volumes:
   central-node-data:
-  worker-node-data:
+  central-media:
+  shared-media:
+    name: encoding-test-shared-media
+  central-only:
