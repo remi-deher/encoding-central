@@ -1,3 +1,4 @@
+using Encoding.Api.Infrastructure.Data.Sqlite;
 using System.Data.Common;
 using System.Security.Cryptography;
 using Encoding.Api.Infrastructure.Data;
@@ -81,16 +82,13 @@ public sealed class ApiTokenRepository(DbDataSource dataSource)
         var now = DateTimeOffset.UtcNow;
         if (lastUsedAt is null || lastUsedAt < now - TimeSpan.FromMinutes(1))
         {
-            try
+            // Télémétrie au mieux : un échec ou un écrivain SQLite occupé n'invalide ni ne ralentit l'authentification d'un jeton valide (#32).
+            await BestEffortWrite.TryAsync(async limit =>
             {
                 await using var touch = Sql.Command($"UPDATE api_tokens SET last_used_at = {Sql.UtcNow} WHERE id = @id", connection);
                 touch.Parameters.AddWithValue("id", id);
-                await touch.ExecuteNonQueryAsync(ct);
-            }
-            catch
-            {
-                // Un échec de mise à jour de télémétrie ne doit jamais invalider l'authentification d'un jeton valide.
-            }
+                await touch.ExecuteNonQueryAsync(limit);
+            }, ct);
         }
 
         return new ApiTokenRecord(id, name, role, scopes);
