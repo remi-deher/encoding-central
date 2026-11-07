@@ -64,7 +64,7 @@ Ces règles sont obligatoires pour les changements du projet. Les tests doivent 
 
 **Réservé à la CI :**
 
-- Le workflow `backend-dev.yml` compile avec `-warnaserror` et exécute `ArchitectureTests` et `SqlStatementsPrepareTests` sur les PR et push vers `dev`.
+- Le workflow `backend-dev.yml` compile avec `-warnaserror` et exécute `ArchitectureTests` et `SqlStatementsPrepareTests` sur les PR `test` → `dev` et push vers `dev`. `test` n'a aucune CI hormis la construction et la publication des images.
 - Tests média de `Encoding.Runtime.Tests` et de `Encoding.Plugins.Tests`.
 - Suite backend complète non filtrée (outils média exigés via `ENCODING_TEST_REQUIRE_MEDIA_TOOLS=1`, collecte de couverture, artefacts `.trx`) : job `backend-runtime-tests` de `.github/workflows/backend.yml`.
 - Contention de charge `Category=ContentionLoad` : scénario mixte de `LoadContentionTests`, exécuté par `backend-runtime-tests` sur la PR de promotion.

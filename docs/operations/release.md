@@ -1,9 +1,27 @@
 # Publication des images Docker
 
-## Parcours de développement et promotion
+## Cycle de vie des branches : test → dev → main
 
-- Les changements sont poussés directement sur `dev` ; ces pushes ne déclenchent pas les workflows de validation. Quand les changements sont prêts à sortir, ouvrir une PR de `dev` vers `main`. La CI Backend, Frontend, Image et Release scripts s'exécute sur cette PR et ses mises à jour. La policy active automatiquement l’auto-merge de la PR ; GitHub ne la fusionne qu'après réussite du contrôle `promotion-ci`, qui attend les validations du commit exact de `dev` et des domaines inchangés. La fusion utilise « Merge » (un squash casserait le contrôle qui vérifie que `main` est contenue dans `dev`).
-- La fusion de cette PR sur `main` déclenche le workflow de release. Celui-ci revérifie que les contrôles CI sont terminés et verts avant de publier sur Docker Hub ; ce push de `main` lance la publication, pas les workflows de validation. La PR de promotion échoue explicitement si `main` contient un commit hors fusion absent de `dev`, par exemple un commit direct (fusionner `main` dans `dev` ; ne jamais rebaser). Les fusions de promotion précédentes sont attendues sur `main` et ne bloquent pas. Un commit poussé directement sur `main` ne publie rien : le workflow de release échoue avec un message qui l'indique. Pour protéger `main`, exiger la PR et le contrôle `promotion-ci` dans les règles de branche, sans dérogation. Une PR de promotion peut être fermée ou son auto-merge désactivé si la release doit être reportée.
+**Nouveau cycle (ADR 0047)** : Le dépôt adopte un cycle à trois branches avec une image Docker Hub par branche.
+
+- **`test`** : branche d'intégration des PR de travail. Aucune CI hormis la construction et la publication des images.
+- **`dev`** : branche de consolidation. Reçoit uniquement les promotions depuis `test`. CI légère (`dev-ci`) exécutée sur chaque PR et push.
+- **`main`** : branche de production. Reçoit uniquement les promotions depuis `dev`. CI complète (`promotion-ci`) requise avant fusion.
+
+**Flux des PR** :
+1. Toute PR de fonctionnalité ou de correction cible **`test`** (jamais `dev` ni `main`)
+2. `test` → `dev` : promotion après validation
+3. `dev` → `main` : promotion après CI complète
+
+**Règles strictes** : Une PR vers `dev` ou `main` depuis une autre branche est refusée par `pr-policy` et fermée automatiquement.
+
+La fusion utilise **Merge** pour les promotions (`test` → `dev`, `dev` → `main`) afin de conserver l'ascendance. Les PR vers `test` acceptent **squash ou merge**.
+
+## Parcours de promotion et publication
+
+Quand les changements sont prêts sur `test`, ouvrir une PR `test` → `dev`. La CI légère (`dev-ci` de `backend-dev.yml`) s'exécute sur cette PR. Après fusion, ouvrir une PR `dev` → `main`. La CI complète s'exécute sur cette PR de promotion et ses mises à jour. Le contrôle `promotion-ci` attend les validations du commit exact de `dev` et des domaines inchangés. GitHub ne fusionne `main` qu'après réussite du contrôle `promotion-ci`.
+
+La fusion de la PR `dev` → `main` déclenche le workflow de release. Celui-ci revérifie que les contrôles CI sont terminés et verts avant de publier sur Docker Hub ; ce push de `main` lance la publication, pas les workflows de validation. La PR de promotion échoue explicitement si `main` contient un commit hors fusion absent de `dev`. Les fusions de promotion précédentes sont attendues sur `main` et ne bloquent pas. Un commit poussé directement sur `main` ne publie rien : le workflow de release échoue avec un message qui l'indique. Pour protéger `main`, exiger la PR et le contrôle `promotion-ci` dans les règles de branche, sans dérogation.
 
 Pour un domaine inchangé, `wait-ci.mjs` recherche les contrôles sur les ancêtres compris entre sa dernière modification et le commit cible. Chaque candidat doit avoir exactement les mêmes fichiers dans les chemins de ce domaine (`git diff` vide, suppressions comprises). Cela permet de retrouver une validation exécutée sur la tête d’une PR après le dernier commit ayant modifié le domaine. Un contrôle présent sur le commit cible garde toujours la priorité, même en attente ou en échec ; seuls les succès autorisent la promotion. Les échecs et nouvelles tentatives restent distingués par contrôle et par commit.
 
@@ -32,9 +50,29 @@ Calculé par `.github/scripts/next-version.sh` à partir du dernier tag `vX.Y.Z`
 
 ## Utiliser les images
 
-La release publie **deux images** ([ADR 0036](../architecture/adr/0036-separation-stricte-central-worker.md)) : `<utilisateur>/encoding-central` (API, interface, base SQLite, worker intégré, lanceur) et `<utilisateur>/encoding-worker` (agent et interface du worker, sans base). Chacune porte la version `X.Y.Z` et `latest`.
+**Images par branche (ADR 0047)** :
+
+| Branche | central | worker | Utilisation |
+|---------|---------|--------|-------------|
+| `test` | `test`, `test-<sha7>` | `test`, `test-<sha7>` | Tests rapides, déploiement par prod-tester |
+| `dev` | `dev`, `dev-<sha7>` | `dev`, `dev-<sha7>` | Validation de promotion |
+| `main` | `latest`, `<version>` | `latest`, `<version>` | Production (via `release.yml`) |
+
+**Note** : L'étiquette `test-<sha7>` est **stable par convention** (Docker Hub ne garantit pas l'immutabilité). Les étiquettes flottantes (`test`, `dev`) sont déplacées seulement après que les **deux** images (central + worker) du commit aient été publiées sous leur étiquette immuable.
+
+**Images de base** ([ADR 0036](../architecture/adr/0036-separation-stricte-central-worker.md)) : `<utilisateur>/encoding-central` (API, interface, base SQLite, worker intégré, lanceur) et `<utilisateur>/encoding-worker` (agent et interface du worker, sans base). Les deux images d'un même commit portent la même `APP_VERSION` (`test-<sha7>`, `dev-<sha7>` ou `<version>`).
 
 ```
+# Déploiement pour test (prod-tester)
+docker run -d --name encoding-central -p 8080:8080 \
+  -v encoding-node:/var/lib/encoding-node \
+  <utilisateur>/encoding-central:test-<sha7>
+
+docker run -d --name encoding-worker -p 8081:8081 \
+  -v encoding-worker:/var/lib/encoding-node \
+  <utilisateur>/encoding-worker:test-<sha7>
+
+# Déploiement pour production
 docker run -d --name encoding-central -p 8080:8080 \
   -v encoding-node:/var/lib/encoding-node \
   <utilisateur>/encoding-central:latest

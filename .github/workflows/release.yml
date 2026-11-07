@@ -32,7 +32,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.sha }}
         run: |
-          if [ "$GITHUB_REF_NAME" != "main" ]; then
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
             echo "::error::La publication n'est autorisée que depuis main."
             echo green=false >> "$GITHUB_OUTPUT"
             exit 1

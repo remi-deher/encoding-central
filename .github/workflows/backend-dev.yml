@@ -40,6 +40,32 @@ jobs:
             echo "backend=false" >> "$GITHUB_OUTPUT"
           fi
 
+  dev-ancestry:
+    name: Vérifier dev ⊆ test
+    # Exécuté seulement sur PR test → dev depuis ce dépôt
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.ref == 'test' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Récupérer dev
+        run: git fetch origin dev
+      - name: Vérifier ascendance
+        run: |
+          MISSING="$(git rev-list --no-merges origin/dev ^HEAD)"
+          if [ -n "$MISSING" ]; then
+            echo "::error::dev porte des commits absents de test : les reporter dans test par PR"
+            echo "Commits manquants dans test :"
+            git rev-list --no-merges origin/dev ^HEAD | head -20
+            exit 1
+          fi
+
   backend-dev-fast:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
@@ -71,7 +97,7 @@ jobs:
   # Contrôle agrégateur à rendre requis dans la protection de dev (et lui seul).
   dev-ci:
     if: always()
-    needs: [changes, backend-dev-fast]
+    needs: [changes, backend-dev-fast, dev-ancestry]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -79,7 +105,9 @@ jobs:
         env:
           CHANGES: ${{ needs.changes.result }}
           FAST: ${{ needs.backend-dev-fast.result }}
+          ANCESTRY: ${{ needs.dev-ancestry.result }}
         run: |
-          echo "changes=$CHANGES backend-dev-fast=$FAST"
+          echo "changes=$CHANGES backend-dev-fast=$FAST dev-ancestry=$ANCESTRY"
           test "$CHANGES" = success
           test "$FAST" = success || test "$FAST" = skipped
+          test "$ANCESTRY" = success || test "$ANCESTRY" = skipped

@@ -4,9 +4,12 @@ Le job `cleanup-branches` de Release ne démarre qu'après réussite du job
 `publish` (image publiée et tag Git poussé). Une publication ignorée ne déclenche
 aucune suppression. Un échec du nettoyage reste visible sans annuler la release.
 
-Une branche du dépôt est supprimable seulement si une PR vers `dev` est fusionnée,
-si son SHA source correspond encore au dernier commit de la branche, et si le
-`merge_commit_sha` de cette PR appartient à la fois à `dev` et au commit publié.
+Une branche du dépôt est supprimable seulement si :
+- Une PR vers `test` **ou** `dev` est fusionnée,
+- Son SHA source correspond encore au dernier commit de la branche, et
+- Le `merge_commit_sha` de cette PR appartient à la fois à la base de la PR et au commit publié.
+
+**Important** : Les branches `main`, `dev` et `test` sont **jamais supprimées**.
 GitHub relie ainsi la branche à son résultat de fusion, y compris après squash
 ou rebase de la PR. Si ce lien n'est plus démontrable (historique réécrit, par
 exemple), la branche est conservée. Une promotion `dev` vers `main` par merge
