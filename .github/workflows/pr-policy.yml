@@ -29,7 +29,7 @@ jobs:
             echo "Pull request autorisée : promotion $HEAD_REF vers $BASE_REF."
             exit 0
           fi
-          if [ "$BASE_REF" = "dev" ] && [ "$HEAD_REF" = "test" ]; then
+          if [ "$BASE_REF" = "dev" ] && [ "$HEAD_REF" = "test" ] && [ "$HEAD_REPO" = "$GITHUB_REPOSITORY" ]; then
             echo "Pull request autorisée : promotion $HEAD_REF vers $BASE_REF."
             exit 0
           fi

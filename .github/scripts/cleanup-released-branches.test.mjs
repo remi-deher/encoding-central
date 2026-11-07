@@ -15,8 +15,12 @@ const pr = {
 };
 const check = (b = branch, p = pr, open = new Set(), included = () => true) => eligible(b, p, repo, open, included);
 
-test('accepts squash/rebase via the published merge result, not original ancestry', () => {
-  assert.equal(check(branch, pr, new Set(), sha => sha === 'rewritten'), true);
+test('accepts squash/rebase via the published merge result, not original ancestry (test only)', () => {
+  // Depuis la correction : nettoyage base test uniquement
+  const prTest = { ...pr, base: { ref: 'test' } };
+  assert.equal(check(branch, prTest, new Set(), sha => sha === 'rewritten'), true);
+  // PR vers dev ne sont plus acceptées
+  assert.equal(check(branch, pr, new Set(), sha => sha === 'rewritten'), false);
 });
 test('retains main, dev, test, protected branches and open PRs', () => {
   for (const name of ['main', 'dev', 'test']) assert.equal(check({ ...branch, name }), false);
@@ -35,6 +39,10 @@ test('retains new commits, unmerged work, foreign branches and unpublished resul
 test('accepts branches merged into test', () => {
   const prTest = { ...pr, base: { ref: 'test' } };
   assert.equal(check(branch, prTest), true);
+});
+test('rejects branches merged into dev (test only)', () => {
+  const prDev = { ...pr, base: { ref: 'dev' } };
+  assert.equal(check(branch, prDev), false);
 });
 test('deletion uses an exact expected SHA lease and a fully qualified ref', () => {
   assert.deepEqual(deletionArgs(branch.name, 'original'), [
@@ -68,4 +76,47 @@ test('Git refuses a stale deletion lease and accepts an unchanged branch', () =>
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// Fixtures pour exercer toutes les gardes (base=test)
+test('fixtures : PR vers test avec merge_commit_sha valide', () => {
+  const prTest = {
+    merged_at: '2026-10-21',
+    base: { ref: 'test' },
+    head: { ref: branch.name, sha: 'original', repo: { full_name: repo } },
+    merge_commit_sha: 'rewritten',
+  };
+  const included = () => true;
+  assert.equal(check(branch, prTest, new Set(), included), true);
+});
+
+test('fixtures : PR vers test sans merge_commit_sha', () => {
+  const prTestNoMerge = {
+    merged_at: '2026-10-21',
+    base: { ref: 'test' },
+    head: { ref: branch.name, sha: 'original', repo: { full_name: repo } },
+    merge_commit_sha: null,
+  };
+  assert.equal(check(branch, prTestNoMerge), false);
+});
+
+test('fixtures : PR vers test depuis fork (repo différent)', () => {
+  const prFork = {
+    merged_at: '2026-10-21',
+    base: { ref: 'test' },
+    head: { ref: branch.name, sha: 'original', repo: { full_name: 'fork/repo' } },
+    merge_commit_sha: 'rewritten',
+  };
+  assert.equal(check(branch, prFork), false);
+});
+
+test('fixtures : PR vers test avec SHA de head différent du commit de la branche', () => {
+  const prDifferentSha = {
+    merged_at: '2026-10-21',
+    base: { ref: 'test' },
+    head: { ref: branch.name, sha: 'different-sha', repo: { full_name: repo } },
+    merge_commit_sha: 'rewritten',
+  };
+  const branchDifferent = { name: 'feature/example', commit: { sha: 'original' }, protected: false };
+  assert.equal(check(branchDifferent, prDifferentSha), false);
 });

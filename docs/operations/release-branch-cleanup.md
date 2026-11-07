@@ -5,7 +5,7 @@ Le job `cleanup-branches` de Release ne démarre qu'après réussite du job
 aucune suppression. Un échec du nettoyage reste visible sans annuler la release.
 
 Une branche du dépôt est supprimable seulement si :
-- Une PR vers `test` **ou** `dev` est fusionnée,
+- Une PR vers `test` est fusionnée,
 - Son SHA source correspond encore au dernier commit de la branche, et
 - Le `merge_commit_sha` de cette PR appartient à la fois à la base de la PR et au commit publié.
 

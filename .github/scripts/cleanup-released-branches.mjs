@@ -11,7 +11,7 @@ export function eligible(branch, pr, repo, openBranches, included) {
     && !branch.protected
     && !openBranches.has(branch.name)
     && pr.merged_at != null
-    && (pr.base.ref === 'dev' || pr.base.ref === 'test')
+    && pr.base.ref === 'test'
     && pr.head.repo?.full_name === repo
     && pr.head.ref === branch.name
     && pr.head.sha === branch.commit.sha

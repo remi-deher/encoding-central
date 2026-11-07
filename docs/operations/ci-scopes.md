@@ -1,6 +1,6 @@
 # Périmètres CI
 
-Les workflows utilisent les mêmes filtres de chemins ; ils se déclenchent sur les PR vers main, sauf Backend dev (PR et push vers dev) :
+Les workflows utilisent les mêmes filtres de chemins ; ils se déclenchent selon le cycle test→dev→main (ADR 0047) :
 
 | Workflow | Fichiers concernés |
 | --- | --- |
