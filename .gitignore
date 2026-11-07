@@ -35,3 +35,12 @@ Desktop.ini
 # Python bytecode
 __pycache__/
 *.pyc
+.mcp.json
+.agentsroom/handoff-transcript-*.txt
+.agentsroom/handoff-summary-*.md
+.agentsroom/fork-context-*.txt
+.agentsroom/transfer-context-*.txt
+.agentsroom/handoff-context-*.txt
+.agents/mcp_config.json
+.agents/hooks.json
+.vibe/config.toml
