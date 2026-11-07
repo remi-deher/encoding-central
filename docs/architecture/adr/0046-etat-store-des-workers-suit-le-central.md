@@ -4,40 +4,57 @@ title: L'état Store des workers suit celui du central
 status: proposed
 domain: plugins
 date: 2026-11-07
-decided_by: Rémi (2026-11-07, principe) ; modalités à valider
+decided_by: Rémi (2026-11-07, principe et blocage du worker non conforme) ; modalités à valider
 supersedes: []
 superseded_by: []
-tags: [store, plugins, outils, workers, sse, synchronisation]
+tags: [store, plugins, outils, workers, sse, synchronisation, conformité]
 ---
 
 # 0046 — L'état Store des workers suit celui du central
 
 ## Contexte
-Depuis l'issue #17 (migration 0076, `worker_store_state`), l'état Store d'un worker est une liste **désirée par worker**, écrite par un administrateur (`PUT /api/v1/workers/{id}/store-state`) et vide par défaut ([plugins.md](../domains/plugins.md)). Un worker fraîchement enrôlé n'a donc ni plugin ni outil du Store : sur le banc du 2026-11-07, les workers n'avaient aucun paquet et les placements échouaient (« outil manquant : ffmpeg, ffprobe »). Le transport, lui, convient : flux SSE `GET /api/v1/store/events` avec état complet à chaque connexion (`snapshot`, ou `desired-state` si le curseur est en retard), téléchargement depuis les routes du central, contrôle SHA-256, rapport `PUT /api/v1/store/applied-state` ([ADR 0041](0041-sse-a-la-place-du-sondage.md)). Rémi a décidé que les workers suivent le central.
+Depuis l'issue #17 (migration 0076, `worker_store_state`), l'état Store d'un worker est une liste **désirée par worker**, écrite par un administrateur (`PUT /api/v1/workers/{id}/store-state`) et vide par défaut ([plugins.md](../domains/plugins.md)). Un worker fraîchement enrôlé n'a donc ni plugin ni outil du Store : sur le banc du 2026-11-07, les workers n'avaient aucun paquet et les placements échouaient (« outil manquant : ffmpeg, ffprobe »). Le transport, lui, convient : flux SSE `GET /api/v1/store/events` avec état complet à chaque connexion (`snapshot`, ou `desired-state` si le curseur est en retard), téléchargement depuis les routes du central, contrôle SHA-256, rapport `PUT /api/v1/store/applied-state` ([ADR 0041](0041-sse-a-la-place-du-sondage.md)). Rémi a décidé que les workers suivent le central et qu'un worker non conforme ne traite rien.
 
 ## Décision
+
+### Ce que suit le worker
 1. **Source unique.** L'état désiré de **tous** les workers est l'ensemble des paquets **installés sur le central** : plugins, et paquets d'outils de chaque plateforme. Aucune liste par worker, aucune saisie administrateur. L'activation reste une préférence du central appliquée à l'attribution ([ADR 0021](0021-activation-cluster-plugins-outils.md), [ADR 0035](0035-depot-officiel-et-activation.md)) : installer n'est pas activer, désactiver ne désinstalle pas.
-2. **Révision globale.** Le central tient une révision monotone de son état Store, incrémentée à chaque installation ou retrait. Les événements SSE portent `id: v2.{révision}` ; un curseur `v1.*` est illisible et provoque un snapshot complet (même version d'application des deux côtés, [ADR 0039](0039-version-exacte-worker-central.md)).
-3. **Enrôlement et démarrage.** L'état complet envoyé à chaque connexion SSE (événement `snapshot`, ou `desired-state` si le curseur du worker est en retard : même contenu) est la vérification « au démarrage » : le worker compare, télécharge ce qui manque, puis rapporte. Ensuite chaque changement du central arrive par SSE.
-4. **Retrait.** Un paquet retiré du central quitte l'état désiré ; le worker ne le supprime que lorsque tout l'état a été appliqué sans échec **et** qu'aucune exécution locale ne l'utilise. Il ne supprime jamais rien sur une panne réseau.
-5. **Plateforme.** Un worker n'installe que les outils de sa plateforme. Un outil absent pour sa plateforme est rapporté `unsupported_platform` ; le worker reste admis, sans la capacité correspondante.
-6. **Outils lourds (jusqu'à 512 Mio).** Le worker télécharge en flux vers un fichier temporaire sur disque, calcule le SHA-256 au fil de l'eau et reprend un transfert interrompu par `Range` (déjà accepté par les routes du central). Le délai est un délai d'inactivité, pas une durée totale. Un worker installe un paquet à la fois, plugins avant outils. Le central borne le nombre de téléchargements d'outils simultanés (paramètre, `503` + `Retry-After` au-delà). Un paquet déjà vérifié (marqueur SHA-256) n'est jamais retéléchargé.
-7. **Échec ou retard.** Un paquet en échec est rapporté (`failed` + code) et retenté avec un délai croissant plafonné (15 min), même sans nouvel événement SSE. Pendant ce temps, l'**éligibilité par nœud reste la seule garde** : le worker n'annonce que les paquets vérifiés installés, donc il ne reçoit que les tâches qu'il sait traiter, à la version exigée par le flow. Aucun nouvel état de cycle de vie ; la page Workers affiche « Store en retard » (révision appliquée < révision du central) et les échecs.
-8. **Baux en cours.** La synchronisation ne touche ni aux baux ni aux attributions : pas de libération, pas de réattribution ([ADR 0044](0044-echec-apres-perte-de-bail.md)). Une exécution commencée garde la version de paquet qu'elle utilise jusqu'à sa fin.
-9. **Inchangé.** SHA-256 obligatoire et versions publiées immuables (même version, contenu différent : refus) ; capacités lues dans le `plugin.json` vérifié et appliquées par Landlock/seccomp ([ADR 0042](0042-reseau-plugins-capacite-et-seccomp.md)) ; la règle de version de l'[ADR 0039](0039-version-exacte-worker-central.md) (enrôlement refusé, worker `incompatible` sans tâche) ne change pas.
-10. **Nouveau : pas de flux Store pour un worker incompatible.** `GET /api/v1/store/events` répond `409` (code `version_incompatible`) à un worker marqué `incompatible` ; aujourd'hui seul le jeton est contrôlé. Il reprend le flux après sa mise à jour, ce qui évite d'installer des paquets qu'un moteur d'une autre version ne saurait pas exécuter.
-11. **Worker intégré.** Il suit le même mécanisme, par la boucle locale, sans cas particulier.
-12. **Stockage.** Migration additive (numéro suivant, unique) : table `central_store_state` à une ligne (`revision`, `updated_at`). Dans `worker_store_state`, seules les colonnes `applied_*` restent utilisées ; les colonnes `desired_*` sont abandonnées sans être supprimées ni modifiées, et la contrainte `applied_revision <= desired_revision` est respectée en écrivant `desired_revision = max(révision globale, applied_revision déjà stockée)` au moment du rapport. Une restauration de sauvegarde ramène ensemble `central_store_state` et `worker_store_state` ; seul le curseur gardé par le worker peut être en avance, cas déjà traité par un nouvel état complet. La route `PUT /api/v1/workers/{id}/store-state` est retirée ; `GET` reste et renvoie la révision globale, l'état appliqué et l'écart.
+2. **Révision globale.** Le central tient une révision monotone de son état Store, incrémentée à chaque installation ou retrait. Les événements SSE portent `id: v2.{révision}` ; un curseur `v1.*` est illisible et provoque un état complet (même version d'application des deux côtés, [ADR 0039](0039-version-exacte-worker-central.md)).
+3. **Enrôlement et démarrage.** L'état complet reçu à chaque connexion SSE déclenche la comparaison : le worker télécharge ce qui manque **depuis le central**, sonde ses outils, puis rapporte. Ensuite chaque changement du central arrive par SSE.
+4. **Plateforme.** Un worker n'installe que les paquets d'outils de sa plateforme ; un paquet sans version pour sa plateforme est rapporté `unsupported_platform`.
+
+### Conformité
+5. **Définition.** Un worker est **conforme** quand, pour la révision globale courante : (a) il a rapporté cette révision ; (b) chaque plugin et chaque paquet d'outil de sa plateforme est `applied` (archive vérifiée par SHA-256, marqueur présent) ; (c) les **binaires requis** `ffmpeg` et `ffprobe` répondent à la sonde (`-version`, et pour `ffmpeg` la liste des encodeurs), qu'ils viennent d'un paquet du Store ou de l'image ; (d) chaque plugin installé répond à sa poignée de main `describe` avec les capacités de son paquet vérifié. Un paquet `unsupported_platform` ne rend pas non conforme, sauf s'il fournit `ffmpeg` ou `ffprobe` et qu'aucun autre fournisseur ne passe la sonde.
+6. **États** (dérivés par le central de la révision globale, du dernier rapport et du dernier essai ; motif lisible pour chacun) :
+   - `syncing` : révision rapportée < révision globale (nouveau worker, démarrage, nouveau paquet sur le central) ;
+   - `compliant` : définition du point 5 satisfaite ;
+   - `non_compliant` : révision à jour mais un paquet en échec ou une sonde en échec ; le worker réessaie seul (délai croissant, plafond 15 min) ;
+   - `failed` : `non_compliant` depuis plus d'**1 heure** ou après **5 essais** ; les essais continuent toutes les 15 min, l'interface signale l'échec et propose « Relancer la synchronisation ».
+   Transitions : enrôlement ou démarrage → `syncing` ; rapport complet et sondes OK → `compliant` ; nouvelle révision → `syncing` ; échec → `non_compliant` → (seuil) `failed` ; tout rapport conforme ramène à `compliant`.
+7. **Blocage.** Hors `compliant`, le central **n'attribue rien** au worker : ni tâche, ni découverte de bibliothèque, ni rôle de source pour un nouveau transfert. `workers.accepts_work` étant une colonne générée (migration 0033), elle n'est pas modifiée : la conformité est une condition **supplémentaire**, exprimée par **un seul prédicat partagé** ajouté partout où `accepts_work` est testé (`BACKEND_RULES.md`). L'état de cycle de vie affiché gagne `StoreNotCompliant`, rangé entre `Incompatible` et `Draining`.
+8. **Garde de dernier recours.** L'éligibilité par nœud (outil et version de plugin exigés par le flow) reste en place : elle protège une tâche si un outil disparaît entre deux rapports.
+
+### Ce qui ne change pas ou est protégé
+9. **Baux en cours.** Passer hors `compliant` ressemble à une vidange : les exécutions et baux en cours **continuent jusqu'à leur fin**, avec la version de paquet qu'ils utilisent ; rien n'est libéré ni réattribué ([ADR 0044](0044-echec-apres-perte-de-bail.md)).
+10. **Retrait.** Un paquet retiré du central quitte l'état désiré ; le worker ne le supprime que lorsque tout l'état a été appliqué sans échec **et** qu'aucune exécution locale ne l'utilise. Jamais de suppression sur une panne réseau.
+11. **Outils lourds (jusqu'à 512 Mio).** Téléchargement en flux vers un fichier temporaire sur disque, SHA-256 calculé au fil de l'eau, reprise par `Range` (déjà accepté par les routes du central), délai d'inactivité plutôt que durée totale, un paquet à la fois, plugins avant outils. Le central borne les téléchargements d'outils simultanés (paramètre ; `503` + `Retry-After` au-delà). Un paquet déjà vérifié n'est jamais retéléchargé.
+12. **Intégrité et isolation.** SHA-256 obligatoire, versions publiées immuables ; capacités lues dans le `plugin.json` vérifié et appliquées par Landlock/seccomp ([ADR 0042](0042-reseau-plugins-capacite-et-seccomp.md)). La règle de version de l'ADR 0039 ne change pas.
+13. **Nouveau : pas de flux Store pour un worker incompatible.** `GET /api/v1/store/events` répond `409` (code `version_incompatible`) à un worker marqué `incompatible` ; aujourd'hui seul le jeton est contrôlé.
+14. **Worker intégré.** Même mécanisme et même contrôle, par la boucle locale : un central sans `ffmpeg` utilisable a un worker intégré non conforme, et le dit.
+
+### Stockage
+15. Migration additive (numéro suivant, unique) : table `central_store_state` à une ligne (`revision`, `updated_at`) ; colonnes ajoutées à `worker_store_state` pour la conformité (`compliance_state`, `compliance_reason`, `compliance_since`, `failed_attempts`, `probe_report`). Les colonnes `desired_*` ne sont plus lues ; `desired_revision` reçoit `max(révision globale, applied_revision)` au rapport pour respecter le `CHECK` de 0076. Une restauration ramène ensemble ces tables ; seul le curseur du worker peut être en avance, cas déjà traité. La route `PUT /api/v1/workers/{id}/store-state` est retirée ; `GET` renvoie révision globale, état appliqué, conformité et motif ; `POST /api/v1/workers/{id}/store-sync` (administrateur) relance la synchronisation.
 
 ## Alternatives écartées
-- **Garder l'état par worker, prérempli à l'enrôlement** : deux sources de vérité et dérive dès la première installation sur le central.
-- **Ne synchroniser que les paquets activés** : la désactivation forcerait un retrait puis un nouveau téléchargement à la réactivation ; ADR 0021 sépare déjà activation et installation.
-- **Bloquer tout le worker tant que la synchro n'est pas complète** : un worker privé d'un outil lourd ne traiterait plus rien, alors que l'éligibilité par nœud protège déjà chaque tâche.
-- **Le worker télécharge directement depuis le dépôt public** : contournerait le central, unique autorité, et exigerait un accès Internet sur chaque worker.
-- **Supprimer `worker_store_state.desired_*`** : interdit (migrations additives, jamais modifiées une fois appliquées).
+- **Garder l'état par worker, prérempli à l'enrôlement** : deux sources de vérité, dérive dès la première installation sur le central.
+- **Ne synchroniser que les paquets activés** : la désactivation forcerait retrait puis nouveau téléchargement ; ADR 0021 sépare activation et installation.
+- **Garde au seul placement (sonde `ffprobe` ou éligibilité par nœud)** : laisse travailler un worker à moitié équipé et rend son état illisible ; conservée seulement en dernier recours (point 8).
+- **Le worker télécharge directement depuis le dépôt public** : contourne le central, unique autorité, et exige Internet sur chaque worker.
+- **Modifier `accepts_work` ou supprimer `desired_*`** : interdit (migrations additives, jamais modifiées une fois appliquées).
 
 ## Conséquences et risques
-- Un central qui installe un outil de 512 Mio le pousse à tous les workers de la plateforme : charge réseau visible, bornée par la limite de téléchargements simultanés. Le disque des workers doit pouvoir contenir tous les paquets du central pour leur plateforme.
-- Les états désirés par worker déjà écrits sont ignorés dès le déploiement : un worker reçoit tout ce que possède le central. Aucune donnée n'est perdue.
-- Les capacités annoncées en dur pour les handlers natifs (`plugin/base` 1.9.0, `plugin/nodes` 1.8.0, `plugin/conditions` 1.2.0 dans `ToolCapabilityProbe`) ne sont pas traitées ici ; elles coexistent avec les paquets synchronisés (dette signalée au ticket #7).
-- Tests à écrire : premier snapshot après enrôlement, curseur `v1` → snapshot, échec puis reprise d'un outil (Range), retrait différé pendant une exécution, worker incompatible sans flux, plateforme absente. Non vérifié en conditions réelles : transfert de 512 Mio sur un lien lent, NAS.
+- **Chaque installation sur le central suspend les nouvelles attributions de tous les workers** jusqu'à leur rapport conforme. Pour un plugin c'est quelques secondes ; pour un outil de 512 Mio, la durée du téléchargement le plus lent. Option à valider par Rémi : ne pas suspendre quand la nouvelle révision ne fait qu'**ajouter** un paquet qu'aucun flow publié n'utilise encore.
+- Un central sans paquet `ffmpeg`/`ffprobe` ni binaire d'image utilisable rend tous les workers non conformes : c'est voulu, le motif l'indique.
+- Les états désirés par worker déjà écrits sont ignorés au déploiement ; aucune donnée perdue. Le disque des workers doit contenir tous les paquets du central pour leur plateforme.
+- Les capacités annoncées en dur pour les handlers natifs (`plugin/base` 1.9.0, `plugin/nodes` 1.8.0, `plugin/conditions` 1.2.0 dans `ToolCapabilityProbe`) restent hors de ce périmètre (ticket #7).
+- Tests à écrire : worker neuf `syncing` → `compliant` sans action ; aucune attribution hors `compliant` (tâche, scan, source de transfert) ; bail en cours mené à terme pendant `syncing` ; seuil `failed` puis relance ; curseur `v1` ; reprise `Range` ; retrait différé ; worker incompatible sans flux. Non vérifié en conditions réelles : 512 Mio sur lien lent, NAS.
