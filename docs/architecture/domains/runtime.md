@@ -1,6 +1,6 @@
 ---
 domain: runtime
-updated: 2026-11-04
+updated: 2026-11-07
 legacy_adr: [0005, 0009, 0015, 0016, 0018, 0020, 0021, 0028, 0030, 0033, 0054, 0058, 0059, 0064, 0066, 0075]
 code:
   - backend/src/Encoding.Api/Executions/
@@ -97,6 +97,7 @@ flowchart LR
 4. Le remplacement n'a lieu que par la politique explicite de la bibliothèque, jamais depuis un flow seul. Seule exception : `mkv-edit-in-place` modifie les en-têtes de la source (ADR [0002](../adr/0002-modification-mkv-sur-place.md)) avec copie intégrale vérifiée et restauration.
 
 ## Non livré / limites
+- **Publication par transfert et outils du worker d'accès** : le scan du résultat avant publication s'exécute sur le worker d'accès (`ffprobe`). Un worker d'accès sans `ffprobe` fait échouer la publication (`publication_failed`) **après** l'encodage complet ; le planificateur ne le vérifie pas encore (constaté au banc de test, 2026-11-07). Le refus d'un transfert est journalisé par le worker d'accès avec le type, le message et la pile de l'exception (aucun détail n'est renvoyé au central, sauf pour un refus d'accès `LibraryAccessException`, dont le message part avec le code `permission_denied`).
 - **Modification sur place** : bloc `mkv-edit-in-place` (ADR 0002) sur le worker à accès direct ; copie intégrale, contrôle `mkvmerge -J`, restauration. Pas d'événement `media.modified`, pas de reprise automatique depuis l'intention, non vérifié sur NFS/SMB.
 - Pas de réattribution automatique entre serveurs ; pas de relance déclenchée par `media.published` (les actualisations après publication se placent dans le flow, après `base-publish-result`) ; pas d'interface de suppression/recréation des verrous de disque par accès bibliothèque (nom saisi dans le bloc).
 - Non vérifié en réel : Landlock dans le conteneur de production, GPU, Plex/Jellyfin réels, NAS/NFS (atomicité du renommage), reprise multi-hôtes sous charge.
