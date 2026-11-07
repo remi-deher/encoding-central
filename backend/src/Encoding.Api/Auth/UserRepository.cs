@@ -1,4 +1,5 @@
 using Encoding.Api.Infrastructure.Data;
+using Encoding.Api.Infrastructure.Data.Sqlite;
 using System.Data.Common;
 using Encoding.Contracts.Auth;
 
@@ -188,18 +189,21 @@ public sealed class UserRepository(DbDataSource dataSource)
         return await ValidateSessionSqliteAsync(tokenHash, options, ct);
     }
 
-    // SQLite n'accepte pas d'écriture dans une expression de table : lecture puis prolongation en deux ordres, dans une transaction.
+    // Lecture simple (sans transaction d'écriture : elle ne passe pas par la file de l'écrivain SQLite), puis prolongation au mieux.
+    // Auparavant la validation ouvrait une transaction d'écriture à CHAQUE requête authentifiée par session : sous charge d'écriture
+    // (long traitement), l'admission dépassait 5 s et une simple lecture (GET /executions) répondait 503 sqlite_write_unavailable (#32).
+    // La prolongation n'a pas besoin d'être atomique avec la lecture : elle ne touche qu'une session encore valide (WHERE), une session
+    // retirée entre-temps (déconnexion, changement de mot de passe) n'est donc jamais recréée.
     private async Task<SessionUser?> ValidateSessionSqliteAsync(byte[] tokenHash, AuthOptions options, CancellationToken ct)
     {
-        await using var connection = await dataSource.OpenConnectionAsync(ct);
-        await using var transaction = await connection.BeginTransactionAsync(ct);
         SessionUser? user;
         DateTimeOffset createdAt, lastSeenAt;
+        await using (var connection = await dataSource.OpenConnectionAsync(ct))
         await using (var read = Sql.Command("""
             SELECT u.id, u.username, u.role, s.created_at, s.last_seen_at
             FROM user_sessions s JOIN users u ON u.id = s.user_id
             WHERE s.token_hash = @hash AND u.is_active AND s.expires_at > (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
-            """, connection, transaction))
+            """, connection))
         {
             read.Parameters.AddWithValue("hash", SqlKind.Bytes, tokenHash);
             await using var reader = await read.ExecuteReaderAsync(ct);
@@ -211,26 +215,20 @@ public sealed class UserRepository(DbDataSource dataSource)
         var now = DateTimeOffset.UtcNow;
         if (lastSeenAt < now - TimeSpan.FromMinutes(1))
         {
-            try
+            var absolute = createdAt + options.SessionAbsoluteLifetime;
+            var idle = now + options.SessionIdleTimeout;
+            // Un échec ou un écrivain occupé ne doit pas interrompre une session valide : la prolongation sera retentée à la requête suivante.
+            await BestEffortWrite.TryAsync(async limit =>
             {
-                var absolute = createdAt + options.SessionAbsoluteLifetime;
-                var idle = now + options.SessionIdleTimeout;
-                await using var touch = Sql.Command("UPDATE user_sessions SET last_seen_at = @now, expires_at = @expires WHERE token_hash = @hash", connection, transaction);
+                await using var touch = dataSource.CreateCommand("""
+                    UPDATE user_sessions SET last_seen_at = @now, expires_at = @expires
+                    WHERE token_hash = @hash AND expires_at > (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z')
+                    """);
                 touch.Parameters.AddWithValue("hash", SqlKind.Bytes, tokenHash);
                 touch.Parameters.AddWithValue("now", now);
                 touch.Parameters.AddWithValue("expires", absolute < idle ? absolute : idle);
-                await touch.ExecuteNonQueryAsync(ct);
-                await transaction.CommitAsync(ct);
-            }
-            catch
-            {
-                // Un échec de rafraîchissement d'expiration ne doit pas interrompre une session valide.
-            }
-        }
-        else
-        {
-            try { await transaction.CommitAsync(ct); }
-            catch { /* Ignorer si en lecture seule */ }
+                await touch.ExecuteNonQueryAsync(limit);
+            }, ct);
         }
         return user;
     }
