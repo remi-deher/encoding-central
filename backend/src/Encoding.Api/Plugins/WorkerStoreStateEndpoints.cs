@@ -35,7 +35,7 @@ public static class WorkerStoreStateEndpoints
                 };
             }
             catch (StoreStateException) { return Results.UnprocessableEntity(new { code = "invalid_report" }); }
-        }).AllowNodeCredentials().WithTags("Store").WithName("ReportWorkerAppliedStoreState");
+        }).AllowNodeCredentialReport().WithTags("Store").WithName("ReportWorkerAppliedStoreState");
 
         // Flux SSE worker ← central. L'identité vient du jeton X-Node-Token ; la route ne lit aucun identifiant fourni par le worker.
         app.MapGet("/api/v1/store/events", async (HttpContext http, WorkerStoreStateService states) =>
