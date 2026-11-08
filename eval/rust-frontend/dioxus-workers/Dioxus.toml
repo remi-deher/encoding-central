@@ -1,0 +1,7 @@
+[application]
+name = "dioxus-workers"
+[web.app]
+title = "Workers"
+[web.wasm_opt]
+level = "z"
+debug = false

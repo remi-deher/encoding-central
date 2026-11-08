@@ -1,0 +1,3 @@
+body{margin:0;font-family:system-ui,sans-serif}.page{max-width:72rem;margin:0 auto;padding:1.5rem}
+.page-header{display:flex;justify-content:space-between;align-items:center}
+.detail dl{display:grid;grid-template-columns:max-content 1fr;gap:.25rem 1rem;padding:0 1rem 1rem}

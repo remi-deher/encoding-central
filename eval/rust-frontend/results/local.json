@@ -1,0 +1,67 @@
+{
+  "angular-complet": {
+    "profile": "local",
+    "runs": 7,
+    "readyMsMedian": 863,
+    "fcpMedian": 416,
+    "transferredKiB": 444,
+    "idle": {
+      "cpuMsPerMin": 500,
+      "pssKiB": 103110,
+      "jsHeapKiB": 8915
+    },
+    "errors": []
+  },
+  "angular-minimal": {
+    "profile": "local",
+    "runs": 7,
+    "readyMsMedian": 334,
+    "fcpMedian": 228,
+    "transferredKiB": 144,
+    "idle": {
+      "cpuMsPerMin": 160,
+      "pssKiB": 75913,
+      "jsHeapKiB": 3853
+    },
+    "errors": []
+  },
+  "leptos": {
+    "profile": "local",
+    "runs": 7,
+    "readyMsMedian": 202,
+    "fcpMedian": 152,
+    "transferredKiB": 234,
+    "idle": {
+      "cpuMsPerMin": 40,
+      "pssKiB": 76848,
+      "jsHeapKiB": 1742
+    },
+    "errors": []
+  },
+  "dioxus": {
+    "profile": "local",
+    "runs": 7,
+    "readyMsMedian": 211,
+    "fcpMedian": 172,
+    "transferredKiB": 316,
+    "idle": {
+      "cpuMsPerMin": 60,
+      "pssKiB": 75633,
+      "jsHeapKiB": 1857
+    },
+    "errors": []
+  },
+  "page-vide": {
+    "profile": "local",
+    "runs": 7,
+    "readyMsMedian": 80,
+    "fcpMedian": 44,
+    "transferredKiB": 0,
+    "idle": {
+      "cpuMsPerMin": 80,
+      "pssKiB": 58778,
+      "jsHeapKiB": 1297
+    },
+    "errors": []
+  }
+}

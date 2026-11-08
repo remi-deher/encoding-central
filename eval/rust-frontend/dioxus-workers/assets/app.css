@@ -1,0 +1,5 @@
+body{margin:0;font-family:system-ui,sans-serif}.page{max-width:72rem;margin:0 auto;padding:1.5rem}
+.page-header{display:flex;justify-content:space-between;align-items:center}
+.data-table{width:100%;border-collapse:collapse}.data-table th,.data-table td{text-align:left;padding:.5rem;border-bottom:1px solid #ddd}
+.detail dl{display:grid;grid-template-columns:max-content 1fr;gap:.25rem 1rem}
+.field{display:grid;gap:.5rem;margin:1rem 0}.dialog-actions{display:flex;justify-content:flex-end;gap:.5rem}

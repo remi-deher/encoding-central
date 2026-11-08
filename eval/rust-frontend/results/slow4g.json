@@ -1,0 +1,67 @@
+{
+  "angular-complet": {
+    "profile": "slow4g",
+    "runs": 3,
+    "readyMsMedian": 5559,
+    "fcpMedian": 2368,
+    "transferredKiB": 444,
+    "idle": {
+      "cpuMsPerMin": 48240,
+      "pssKiB": 104682,
+      "jsHeapKiB": 11382
+    },
+    "errors": []
+  },
+  "angular-minimal": {
+    "profile": "slow4g",
+    "runs": 3,
+    "readyMsMedian": 1718,
+    "fcpMedian": 1408,
+    "transferredKiB": 144,
+    "idle": {
+      "cpuMsPerMin": 48120,
+      "pssKiB": 74909,
+      "jsHeapKiB": 4961
+    },
+    "errors": []
+  },
+  "leptos": {
+    "profile": "slow4g",
+    "runs": 3,
+    "readyMsMedian": 2521,
+    "fcpMedian": 1992,
+    "transferredKiB": 234,
+    "idle": {
+      "cpuMsPerMin": 47880,
+      "pssKiB": 77123,
+      "jsHeapKiB": 2661
+    },
+    "errors": []
+  },
+  "dioxus": {
+    "profile": "slow4g",
+    "runs": 3,
+    "readyMsMedian": 2942,
+    "fcpMedian": 2412,
+    "transferredKiB": 316,
+    "idle": {
+      "cpuMsPerMin": 48000,
+      "pssKiB": 79162,
+      "jsHeapKiB": 2841
+    },
+    "errors": []
+  },
+  "page-vide": {
+    "profile": "slow4g",
+    "runs": 3,
+    "readyMsMedian": 377,
+    "fcpMedian": 248,
+    "transferredKiB": 0,
+    "idle": {
+      "cpuMsPerMin": 48000,
+      "pssKiB": 55139,
+      "jsHeapKiB": 1935
+    },
+    "errors": []
+  }
+}

@@ -1,0 +1,20 @@
+[package]
+name = "leptos-workers"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Prototype d'évaluation (#30) : vue Workers en Leptos + Thaw. Ne pas intégrer au produit.
+[dependencies]
+leptos = { version = "=0.8.23", features = ["csr"] }
+thaw = { version = "=0.5.0-beta", features = ["csr"] }
+gloo-net = { version = "0.6", default-features = false, features = ["http", "json"] }
+serde = { version = "1", features = ["derive"] }
+console_error_panic_hook = "0.1"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = false

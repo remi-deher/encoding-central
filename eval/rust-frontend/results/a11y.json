@@ -1,0 +1,52 @@
+{
+  "angular-minimal": {
+    "lang": "fr",
+    "axePage": [],
+    "dialogRole": true,
+    "dialogAccessibleName": "Rattacher un worker",
+    "focusInDialogOnOpen": true,
+    "axeDialog": [],
+    "focusTrapped": true,
+    "escapeCloses": true,
+    "focusReturnsToOpener": true,
+    "inputLabelled": true,
+    "successAnnounced": true,
+    "successLiveRegion": true,
+    "_unused": true
+  },
+  "leptos": {
+    "lang": "fr",
+    "axePage": [],
+    "dialogRole": true,
+    "dialogAccessibleName": null,
+    "focusInDialogOnOpen": false,
+    "axeDialog": [],
+    "focusTrapped": false,
+    "escapeCloses": true,
+    "focusReturnsToOpener": false,
+    "inputLabelled": true,
+    "successAnnounced": true,
+    "successLiveRegion": false,
+    "_unused": false
+  },
+  "dioxus": {
+    "lang": null,
+    "axePage": [
+      "html-has-lang(serious,1)"
+    ],
+    "dialogRole": true,
+    "dialogAccessibleName": "Rattacher un worker",
+    "focusInDialogOnOpen": true,
+    "axeDialog": [
+      "color-contrast(serious,1)",
+      "html-has-lang(serious,1)"
+    ],
+    "focusTrapped": true,
+    "escapeCloses": true,
+    "focusReturnsToOpener": true,
+    "inputLabelled": true,
+    "successAnnounced": true,
+    "successLiveRegion": true,
+    "_unused": true
+  }
+}

@@ -1,0 +1,6 @@
+target/
+dist/
+node_modules
+results/*.raw.json
+dist-default/
+.angular/
