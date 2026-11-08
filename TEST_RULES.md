@@ -29,8 +29,8 @@ Ces règles sont obligatoires pour les changements du projet. Les tests doivent 
 
 ## 4. E2E
 
-- Prévoir un parcours E2E léger, déterministe et exécutable localement pour vérifier le chemin critique de l’application.
-- Réserver les E2E lourds, les scénarios multi-workers complets et les traitements longs aux workflows GitHub Actions adaptés (voir section 8 pour la liste complète des charges lourdes réservées à la CI).
+- Prévoir un parcours E2E léger et déterministe pour vérifier le chemin critique de l’application.
+- Exécuter les E2E uniquement dans les workflows GitHub Actions adaptés (voir section 8 pour la liste complète des charges réservées à la CI).
 - Garder les E2E indépendants des services personnels, des secrets locaux et des médias non versionnés.
 - En cas d’échec, fournir des journaux et des artefacts de diagnostic suffisants pour reproduire le problème.
 
@@ -60,11 +60,11 @@ Ces règles sont obligatoires pour les changements du projet. Les tests doivent 
 
 **Aucun test .NET en local**, y compris les tests ciblés, les projets de test lancés avec `dotnet run` et les tests dans Docker. Tous les tests .NET sont réservés à la CI GitHub Actions. Ne pas les lancer automatiquement ni manuellement sur le poste ; signaler dans le rapport qu'ils n'ont pas été exécutés localement.
 
-**Vérifications légères autorisées en local :** lint et format ciblés, compilation ou typecheck des projets touchés, tests frontend ciblés et E2E légers sans backend .NET. Vérifier d'abord les fichiers modifiés ; utiliser `nice -n 19` pour les commandes coûteuses et ne pas les exécuter en parallèle. Ne jamais lancer `dotnet format` sur la solution entière pendant le travail courant.
+**Seules vérifications autorisées en local :** lint et format ciblés sur les fichiers modifiés. Aucune compilation, aucun typecheck, aucun test frontend ciblé et aucun E2E local. Utiliser `nice -n 19` pour les commandes coûteuses et ne pas les exécuter en parallèle. Ne jamais lancer `dotnet format` sur la solution entière pendant le travail courant.
 
 **Réservé à la CI :**
 
-- Le workflow `backend-dev.yml` compile avec `-warnaserror` et exécute `ArchitectureTests` et `SqlStatementsPrepareTests` sur les PR `test` → `dev` et push vers `dev`. `test` n'a aucune CI hormis la construction et la publication des images.
+- Sur `dev`, `backend-dev.yml` exécute seulement le lint de la politique locale et `dotnet format` lorsque le backend change ; `frontend.yml` n'exécute que lint et format lorsque le frontend change, sur les PR `test` → `dev` et les pushes `dev`. Le contrôle requis `dev-ci` garde son nom et conclut toujours. La compilation et les tests .NET, dont `ArchitectureTests` et `SqlStatementsPrepareTests`, restent dans la CI complète sur les PR `dev` → `main`. `test` n'a aucune CI hormis la construction et la publication des images.
 - Tests média de `Encoding.Runtime.Tests` et de `Encoding.Plugins.Tests`.
 - Suite backend complète non filtrée (outils média exigés via `ENCODING_TEST_REQUIRE_MEDIA_TOOLS=1`, collecte de couverture, artefacts `.trx`) : job `backend-runtime-tests` de `.github/workflows/backend.yml`.
 - Contention de charge `Category=ContentionLoad` : scénario mixte de `LoadContentionTests`, exécuté par `backend-runtime-tests` sur la PR de promotion.

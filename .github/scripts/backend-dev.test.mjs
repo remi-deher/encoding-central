@@ -121,8 +121,8 @@ for (const path of ['backend/example.cs', 'documentation.md']) {
 test('dev-ci requires ancestry and propagates errors while allowing skipped jobs', () => {
   const ci = job(workflow, 'dev-ci');
   assert.equal(expression(value(ci, 'if'), { always: () => true }), true);
-  assert.deepEqual(value(ci, 'needs').slice(1, -1).split(',').map(name => name.trim()), ['changes', 'backend-dev-fast', 'dev-ancestry']);
-  for (const [diff, fast, ancestor, expected] of [
+  assert.deepEqual(value(ci, 'needs').slice(1, -1).split(',').map(name => name.trim()), ['changes', 'backend-dev-lint', 'dev-ancestry']);
+  for (const [diff, lint, ancestor, expected] of [
     ['success', 'success', 'success', 0],
     ['success', 'skipped', 'skipped', 0],
     ['success', 'success', 'failure', 1],
@@ -131,10 +131,17 @@ test('dev-ci requires ancestry and propagates errors while allowing skipped jobs
     ['success', 'failure', 'success', 1],
   ]) {
     const context = { needs: {
-      changes: { result: diff }, 'backend-dev-fast': { result: fast }, 'dev-ancestry': { result: ancestor },
+      changes: { result: diff }, 'backend-dev-lint': { result: lint }, 'dev-ancestry': { result: ancestor },
     } };
-    const env = Object.fromEntries(['CHANGES', 'FAST', 'ANCESTRY'].map(key => [key, expression(value(conclusion, key), context)]));
+    const env = Object.fromEntries(['CHANGES', 'LINT', 'ANCESTRY'].map(key => [key, expression(value(conclusion, key), context)]));
     const result = bash(value(conclusion, 'run'), undefined, env);
     assert.equal(result.status, expected, result.stdout + result.stderr);
   }
+});
+
+test('dev backend job checks format only and never compiles or runs tests', () => {
+  const lint = job(workflow, 'backend-dev-lint');
+  const steps = lint.steps.map(item => item.run || '').join('\n');
+  assert.match(steps, /dotnet format .*--verify-no-changes/);
+  assert.doesNotMatch(steps, /dotnet build|dotnet test/);
 });
