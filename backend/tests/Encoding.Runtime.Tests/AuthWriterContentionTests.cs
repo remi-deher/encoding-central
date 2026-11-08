@@ -88,6 +88,64 @@ public sealed class AuthWriterContentionTests
     }
 
     [Fact]
+    public async Task DeactivatedUsersAreRefused()
+    {
+        // R3 de la relecture sécurité de la PR #50 : la décision repose sur la lecture seule (u.is_active), jamais sur la prolongation.
+        var (database, _) = await CreateAsync();
+        await using var _db = database;
+        var (users, hash, userId) = await SessionAsync(database);
+        await ExecuteAsync(database, "UPDATE users SET is_active = 0 WHERE id = @id", ("id", userId));
+        Assert.Null(await users.ValidateSessionAsync(hash, Options, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task DeletedSessionsAreRefusedAndNeverRecreated()
+    {
+        // R3 : déconnexion (suppression de la ligne) puis validation : refus, et la prolongation au mieux ne recrée rien.
+        var (database, _) = await CreateAsync();
+        await using var _db = database;
+        var (users, hash, _) = await SessionAsync(database);
+        await users.DeleteSessionAsync(hash, CancellationToken.None);
+        Assert.Null(await users.ValidateSessionAsync(hash, Options, CancellationToken.None));
+        await using var count = database.Db.CreateCommand("SELECT count(*) FROM user_sessions WHERE token_hash = @hash");
+        count.Parameters.AddWithValue("hash", SqlKind.Bytes, hash);
+        Assert.Equal(0L, Convert.ToInt64(await count.ExecuteScalarAsync()));
+    }
+
+    [Fact]
+    public async Task CallerCancellationIsNotSwallowedByBestEffortWrites()
+    {
+        // Relecture QA / R4 de la PR #50 : une requête annulée remonte son annulation au lieu de continuer comme si de rien n'était.
+        var (database, writer) = await CreateAsync();
+        await using var _db = database;
+        Task Touch(CancellationToken limit) => database.Db.CreateCommand("UPDATE users SET updated_at = updated_at").ExecuteNonQueryAsync(limit);
+
+        using (var cancelled = new CancellationTokenSource())
+        {
+            cancelled.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => BestEffortWrite.TryAsync(Touch, cancelled.Token));
+        }
+        using (await writer.EnterAsync())
+        using (var request = new CancellationTokenSource(TimeSpan.FromMilliseconds(50))) // annulée pendant l'attente de l'écrivain, avant le budget
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => BestEffortWrite.TryAsync(Touch, request.Token));
+    }
+
+    [Fact]
+    public async Task AbandonedBestEffortWritesAreCountedWithoutIdentifiers()
+    {
+        // R1 : compteur /metrics encoding_sqlite_best_effort_abandoned_total{reason}. Compteurs du processus : on vérifie l'augmentation.
+        var (database, writer) = await CreateAsync();
+        await using var _db = database;
+        var before = BestEffortWrite.Abandoned;
+        using (await writer.EnterAsync())
+            Assert.False(await BestEffortWrite.TryAsync(limit => database.Db.CreateCommand("UPDATE users SET updated_at = updated_at").ExecuteNonQueryAsync(limit), CancellationToken.None));
+        Assert.False(await BestEffortWrite.TryAsync(_ => throw new InvalidOperationException("échec simulé"), CancellationToken.None));
+        var after = BestEffortWrite.Abandoned;
+        Assert.True(after.Timeout + after.Busy > before.Timeout + before.Busy, "L'abandon sur écrivain détenu doit être compté.");
+        Assert.True(after.Failed > before.Failed, "Un échec quelconque doit être compté.");
+    }
+
+    [Fact]
     public async Task ApiTokenValidationDoesNotWaitForABusyWriter()
     {
         var (database, writer) = await CreateAsync();
