@@ -1,6 +1,6 @@
 name: Backend dev
-# Garde-fou léger de la branche dev : compilation stricte + tests d'architecture seulement.
-# Les jobs lourds (runtime complet, multi-processus, Docker, stress, mesures) restent dans backend.yml,
+# Garde-fou léger de la branche dev : formatage/lint et contrôle d'ascendance seulement.
+# Compilation et tests restent dans backend.yml,
 # déclenchés par la PR de promotion vers main (TEST_RULES.md §8). Ce workflow est volontairement séparé :
 # backend.yml ne doit pas s'exécuter sur dev, sinon ses jobs ignorés produiraient des contrôles « skipped »
 # que .github/scripts/wait-ci.mjs lirait comme des échecs lors de la promotion.
@@ -70,7 +70,7 @@ jobs:
           fi
           echo "Ascendance vérifiée : dev ⊆ test"
 
-  backend-dev-fast:
+  backend-dev-lint:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
@@ -82,35 +82,25 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
-      - name: Check documented local runtime filters
-        run: node --test backend/tests/local-profile.test.mjs
       - run: dotnet restore backend/Encoding.sln
-      - run: dotnet build backend/Encoding.sln --configuration Release --no-restore -warnaserror
-      - name: Architecture and SQL prepare tests only
-        run: >-
-          dotnet test backend/tests/Encoding.Runtime.Tests --configuration Release --no-build
-          --filter "FullyQualifiedName~ArchitectureTests|FullyQualifiedName~SqlStatementsPrepareTests"
-          --logger "trx;LogFileName=architecture.trx" --results-directory test-results
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: backend-dev-architecture-results
-          path: test-results
-          retention-days: 7
+      - name: Lint local verification policy
+        run: node .github/scripts/lint-local-profile.mjs
+      - name: Vérifier le formatage et les règles de style C#
+        run: dotnet format backend/Encoding.sln --verify-no-changes --no-restore --verbosity quiet
   # Contrôle agrégateur à rendre requis dans la protection de dev (et lui seul).
   dev-ci:
     if: always()
-    needs: [changes, backend-dev-fast, dev-ancestry]
+    needs: [changes, backend-dev-lint, dev-ancestry]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Conclude
         env:
           CHANGES: ${{ needs.changes.result }}
-          FAST: ${{ needs.backend-dev-fast.result }}
+          LINT: ${{ needs.backend-dev-lint.result }}
           ANCESTRY: ${{ needs.dev-ancestry.result }}
         run: |
-          echo "changes=$CHANGES backend-dev-fast=$FAST dev-ancestry=$ANCESTRY"
+          echo "changes=$CHANGES backend-dev-lint=$LINT dev-ancestry=$ANCESTRY"
           test "$CHANGES" = success
-          test "$FAST" = success || test "$FAST" = skipped
+          test "$LINT" = success || test "$LINT" = skipped
           test "$ANCESTRY" = success || test "$ANCESTRY" = skipped

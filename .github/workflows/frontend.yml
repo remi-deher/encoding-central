@@ -1,5 +1,10 @@
 name: Frontend
 on:
+  push:
+    branches: [dev]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend.yml"
   pull_request:
     branches: [dev, main]
     paths:
@@ -9,7 +14,29 @@ concurrency:
   group: frontend-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
+  frontend-dev-lint:
+    if: >-
+      ${{ (github.event_name == 'push' && github.ref == 'refs/heads/dev') ||
+      (github.event_name == 'pull_request' && github.base_ref == 'dev') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit
+        working-directory: frontend
+      - run: npm run lint
+        working-directory: frontend
+      - run: npm run format:flows
+        working-directory: frontend
+      - run: npm run format:settings
+        working-directory: frontend
   frontend-fast:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -34,6 +61,7 @@ jobs:
       - run: npm run build
         working-directory: frontend
   frontend-e2e:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-latest
     needs: frontend-fast
     timeout-minutes: 25

@@ -1,23 +1,24 @@
 # Périmètres CI
 
-Les workflows utilisent les mêmes filtres de chemins ; ils se déclenchent selon le cycle test→dev→main (ADR 0047) :
+Les déclencheurs des workflows suivent le cycle test→dev→main (ADR 0047) et limitent les suites aux changements concernés :
 
 | Workflow | Fichiers concernés |
 | --- | --- |
 | Backend | backend et son workflow |
-| Backend dev | PR et push vers dev uniquement ; `backend-dev-fast` (build `-warnaserror` + `ArchitectureTests`) si backend ou son workflow changent ; agrégateur `dev-ci` toujours présent |
-| Frontend | frontend et son workflow |
+| Backend dev | PR et push vers dev ; lint/format C# et contrôle de politique locale si backend ou son workflow changent ; agrégateur `dev-ci` toujours présent |
+| Frontend | PR vers dev/main et push dev ; lint/format sur dev, suite complète sur main |
 | Image | backend, frontend, .dockerignore et son workflow |
 | Release scripts | scripts GitHub et workflows release*.yml |
 | Promotion CI | toutes les PR vers main, sans filtre de chemins |
 
 Backend dev est un workflow à part : `backend.yml` ne s'exécute pas sur dev, car ses jobs ignorés
 produiraient des contrôles « skipped » que `wait-ci.mjs` lirait comme des échecs. Le contrôle
-`backend-dev-fast` n'est pas dans `ci-scopes.mjs` : la promotion et la release l'ignorent.
+`backend-dev-lint` n'est pas dans `ci-scopes.mjs` : la promotion et la release l'ignorent.
 Le workflow n'a pas de filtre de chemins : un job `changes` détecte les fichiers backend, et le
-contrôle agrégateur `dev-ci` conclut toujours (succès si `backend-dev-fast` a réussi ou a été ignoré
-faute de changement backend, échec sinon). C'est `dev-ci`, et lui seul, qu'il faut rendre requis dans
-la protection de dev ; ne pas requérir `backend-dev-fast`, absent des PR hors backend.
+contrôle agrégateur `dev-ci` conclut toujours (succès si `backend-dev-lint` a réussi ou a été ignoré
+faute de changement backend, échec sinon). Le ruleset `dev` exige `policy` et `dev-ci` ; ne pas
+requérir `backend-dev-lint`, absent des PR hors backend. Le lint frontend est indépendant et n'est
+pas requis. Le ruleset `main` conserve uniquement `promotion-ci`.
 Tous les workflows déclarent `permissions: contents: read` au minimum ; seuls policy, promotion et release élargissent.
 
 Une documentation ordinaire ne déclenche aucune compilation. Les changements des
@@ -33,7 +34,7 @@ contrôles présents sur le commit publié restent prioritaires. Seule une concl
 En cas de relance, la dernière tentative du contrôle prime. Les filtres et le
 résolveur de .github/scripts/ci-scopes.mjs sont synchronisés par des tests.
 
-Validation locale et CI : `node --test .github/scripts/*.test.mjs`.
+Les tests structurels des workflows restent réservés à GitHub Actions.
 
 Ne pas rendre obligatoires dans les protections de branche les workflows qui peuvent
 être absents à cause des filtres : GitHub les laisserait en attente. Si une protection
