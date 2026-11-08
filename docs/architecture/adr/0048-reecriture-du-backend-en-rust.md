@@ -1,10 +1,10 @@
 ---
 id: 0048
 title: Réécriture du backend en Rust — cadrage
-status: proposed
+status: accepted
 domain: workers, storage, runtime, plugins, auth-ops
 date: 2026-11-08
-decided_by: à décider (principe de la réécriture décidé par Rémi le 2026-11-08 ; le cadrage ci-dessous attend sa décision)
+decided_by: Rémi (2026-11-08)
 supersedes: []
 superseded_by: []
 tags: [rust, réécriture, contrats, sqlite, migration, sécurité, lots]
@@ -17,7 +17,7 @@ Rémi a décidé de réécrire en Rust l'intégralité du backend : central (API
 
 Mesures et chiffres : comptage de lignes sur `test` au commit `edf6ddb` (fichiers `*.cs` hors `obj/` et `bin/`) ; nombre de routes approximé par les appels `Map{Get,Post,Put,Delete,Patch}` (306 occurrences). Lorsque cet ADR cite l'[ADR 0009](0009-ecrivain-sqlite-unique-par-noeud.md), il n'en retient que l'**écrivain SQLite local unique** et sa file à priorités : le maillage multi-nœuds mentionné dans l'ADR 0009 a été retiré par l'[ADR 0036](0036-separation-stricte-central-worker.md).
 
-## Décision proposée (à valider point par point)
+## Décision
 
 ### 1. Stratégie : progressive par composant, en commençant par l'agent worker
 
@@ -183,7 +183,7 @@ Contrairement à Kestrel qui applique des bornes par défaut, `hyper` et `axum` 
   - en CI légère sur `dev` : `cargo fmt --check`, `cargo clippy --locked -- -D warnings -D clippy::undocumented_unsafe_blocks -D missing_safety_doc`, `cargo build --locked`, `cargo deny check advisories licenses bans sources` et le test d'architecture vérifiant `#![forbid(unsafe_code)]` et les frontières entre crates ([ADR 0031](0031-frontieres-backend-verifiees-par-tests.md)) ;
   - en CI complète sur `main` (`promotion-ci`) : `cargo test --locked`, `cargo deny`, la suite de contrat (incluant les refus OpenAPI, les en-têtes de sécurité et les limites DoS) contre l'implémentation livrée, et les scénarios multi-conteneurs.
 - **Images** : construction en plusieurs étapes (`cargo build --release --locked`, puis image d'exécution Ubuntu inchangée avec FFmpeg, MKVToolNix et pilotes GPU) ; `APP_VERSION` injectée à la compilation. L'image n'embarque plus le runtime ASP.NET. Le gain de taille est attendu mais **non mesuré**.
-- **Règles de test locales** : `TEST_RULES.md` interdit les tests .NET locaux. Pour Rust, la règle est à décider avec l'ADR : proposition = mêmes limites (en local : `fmt`, `clippy`, `check` et tests unitaires ciblés légers avec `nice -n 19` ; suites lourdes en CI), comme le dit déjà le skill `rust-conventions-backend`.
+- **Règles de test locales** : `TEST_RULES.md` interdit les tests .NET locaux. Pour Rust, **aucun `cargo test` en local (CI uniquement)** : comme pour .NET aujourd'hui, seuls `cargo fmt --check`, `cargo clippy --locked` et `cargo check --locked` (avec `nice -n 19`) sont autorisés en local ; tous les tests (`cargo test --locked`, suite de contrat, multi-conteneurs) sont strictement réservés à la CI GitHub Actions.
 - **Pendant la transition**, les deux chaînes coexistent dans la CI : `dotnet` reste l'oracle tant qu'un composant n'est pas basculé.
 
 ### 8. Lots ordonnés, estimation, critères de fin
@@ -227,11 +227,11 @@ Total indicatif : **6 à 9 mois en équivalent temps plein**, avec une incertitu
   - la maturité des bibliothèques Rust pour le serveur MCP et le serveur WebDAV des transferts ;
   - la présence éventuelle de secrets IA préfixés `"protected:"` injectés par variable d'environnement ou fichier externe via `IConfiguration` sur les environnements déployés ;
   - le comportement de Landlock (`HardRequirement`) et seccomp en production et la version d'ABI Landlock des hôtes, déjà non vérifiés aujourd'hui ([open-questions](../open-questions.md), point 3).
-- **Décisions à prendre par Rémi** avant de démarrer le lot 0 :
-  1. la stratégie progressive (point 1, option B) ;
-  2. le maintien de SQLite et le choix de `sqlx` (point 3) ;
-  3. le protocole de transition des secrets Data Protection et la politique de retour arrière : conserver les textes chiffrés Data Protection en archive à côté d'`ENC1` jusqu'au lot 5 pour permettre un retour arrière au-delà de la release .NET de transition, ou accepter que la release .NET de transition (fin du lot 3, lisant les deux formats) soit l'unique point de retour arrière du lot 4 ;
-  4. la continuité des sessions à la bascule : conserver les sessions actives par défaut (avec vecteur de test PBKDF2/SHA-256 et option `Auth:RevokeSessionsOnStartup`), ou imposer la révocation des sessions au premier démarrage du central Rust (point 6, N1) ;
-  5. la règle de tests locaux pour Rust (point 7) ;
-  6. la règle de gel fonctionnel pendant les lots 2 à 4 ;
-  7. l'emplacement du code Rust dans le dépôt (proposition : `backend-rs/` à côté de `backend/`, retiré au lot 5).
+- **Décisions tranchées par Rémi (2026-11-08) avant de démarrer le lot 0** :
+  1. **Stratégie** : Progressive par composant (Option B : worker au lot 1, puis central d'un seul tenant au lot 4).
+  2. **Base de données** : Maintien de SQLite (écrivain unique, WAL) avec `sqlx`, sous réserve des résultats du banc de charge #37.
+  3. **Secrets Data Protection et retour arrière** : La release .NET de fin de lot 3 réchiffre vers `ENC1` (`AES-256-GCM` + AAD) et conserve en archive (`legacy_dataprotection_backup` et `.dp-backup` en `0600`) les anciens textes chiffrés et le trousseau XML jusqu'au lot 5 (destruction au lot 5).
+  4. **Sessions à la bascule** : Conserver les sessions actives par défaut (avec vecteur de test croisé PBKDF2/SHA-256 et option `Auth:RevokeSessionsOnStartup`).
+  5. **Tests locaux pour Rust** : **Aucun `cargo test` en local (CI uniquement)** — comme pour .NET aujourd'hui, seuls `cargo fmt --check`, `cargo clippy --locked` et `cargo check --locked` (avec `nice -n 19`) sont autorisés en local ; tous les tests (`cargo test --locked`, suite de contrat, multi-conteneurs) sont strictement réservés à la CI GitHub Actions.
+  6. **Gel fonctionnel (lots 2 à 4)** : Gel des nouvelles fonctionnalités backend pendant les lots 2 à 4 (seuls les correctifs sont autorisés et reportés dans les deux implémentations).
+  7. **Emplacement** : `backend-rs/` à côté de `backend/` (retiré au lot 5).
