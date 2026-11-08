@@ -26,13 +26,17 @@ test('code, image and monitoring each trigger the relevant workflows', () => {
   assert.deepEqual(affected('backend/src/Encoding.Api/Program.cs'), ['backend', 'image']);
   assert.deepEqual(affected('.dockerignore'), ['image']);
 });
+// Test validé : CI s'exécute selon le cycle test→dev→main (ADR 0047).
 test('validation CI runs on promotion PRs only and filters match release lookup scopes', () => {
   for (const scope of scopes) {
     const yaml = readFileSync(new URL(`../workflows/${scope.workflow}.yml`, import.meta.url), 'utf8');
     assert.doesNotMatch(yaml, /^  push:/m, scope.workflow);
     const pullRequest = yaml.split(/^  pull_request:\s*$/m)[1]?.split(/^  [a-z][\w-]*:\s*$/m)[0];
     assert.ok(pullRequest, scope.workflow);
-    assert.match(pullRequest, /^    branches: \[main\]$/m, scope.workflow);
+    // Frontend runs on dev and main; other scoped validation runs on main only.
+    // backend-dev runs on dev only and is deliberately absent from release scopes.
+    const expected = scope.workflow === 'frontend' ? /.*branches: \[dev, main\].*/ : /.*branches: \[main\].*/;
+    assert.match(pullRequest, expected, scope.workflow);
     const lines = pullRequest.split('\n');
     const pathIndex = lines.findIndex(line => line.startsWith('    paths:'));
     assert.notEqual(pathIndex, -1, scope.workflow);

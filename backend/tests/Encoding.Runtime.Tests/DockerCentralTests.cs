@@ -288,6 +288,7 @@ public sealed class DockerCentralTests
         Assert.True(lost.GetProperty("state").GetString() == "failed", $"{lost.GetProperty("detail")}\n{history}\n{await cluster.LogsAsync()}");
         Assert.Equal(executionId, lost.GetProperty("id").GetGuid());
         Assert.Contains("worker_perdu", lost.GetProperty("detail").GetString(), StringComparison.Ordinal);
+        Assert.Equal("worker_lost", lost.GetProperty("failure").GetProperty("code").GetString()); // #26 : code dédié
         Assert.DoesNotContain("reprise", history, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(sourceSha, Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(source))));
 

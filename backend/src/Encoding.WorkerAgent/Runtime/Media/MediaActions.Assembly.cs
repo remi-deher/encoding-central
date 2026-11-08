@@ -126,7 +126,7 @@ public sealed partial class MediaActions
             if(structural.Length==0) return new(null,[],JsonSerializer.SerializeToElement(notes));
             if(planOnly) return new(null,[],null,null,true);
             var output=Output(directory,node,Path.GetExtension(current));
-            var args=new List<string>{"-nostdin","-y","-v","error","-i",current,"-map_metadata","0","-map_chapters","0"};
+            List<string> args=["-nostdin","-y","-v","error",..SourceInput(current),"-map_metadata","0","-map_chapters","0"];
             foreach(var stream in streams.Where(stream=>Kind(stream)!="subtitle"))
                 args.AddRange(["-map","0:"+stream.GetProperty("index").GetInt32()]);
             var outputOrdinal=0;
@@ -181,34 +181,25 @@ public sealed partial class MediaActions
         if(edits.Count==0) return new(null,[]);
         if(planOnly) return new(null,[],null,null,true);
         var output=Output(directory,node,Path.GetExtension(current));
-        var args=new List<string>{"-nostdin","-y","-v","error","-i",current,"-map","0","-map_metadata","0","-c","copy"};
+        List<string> args=["-nostdin","-y","-v","error",..SourceInput(current),"-map","0","-map_metadata","0","-c","copy"];
+        // -map 0 : la piste de sortie i est la piste source i. Dispositions source explicites (sinon FFmpeg marque d'office « default »
+        // la première piste d'un type), le bloc ne changeant que le drapeau « default » qu'il fixe (#28).
+        var sources=streams.EnumerateArray().ToArray();
+        var defaults=new Dictionary<int,bool>();
         foreach(var edit in edits)
         {
             var kind=edit.Type=="audio"?"a":"s";
             args.AddRange(["-metadata:s:"+kind+":"+edit.Ordinal,"title="+edit.Name]);
-            if(edit.DefaultFlag is { } flag)
+            if(edit.DefaultFlag is not { } flag) continue;
+            var seen=0;
+            for(var i=0;i<sources.Length;i++)
             {
-                JsonElement? match=null;
-                var seen=0;
-                foreach(var stream in streams.EnumerateArray())
-                {
-                    var streamType=stream.TryGetProperty("codec_type",out var streamKind)?streamKind.GetString():null;
-                    if((edit.Type=="audio" && streamType=="audio") || (edit.Type=="subtitles" && streamType=="subtitle"))
-                    {
-                        if(seen==edit.Ordinal) { match=stream; break; }
-                        seen++;
-                    }
-                }
-                bool On(string name)=>match is { } found && found.TryGetProperty("disposition",out var disposition)&&disposition.TryGetProperty(name,out var value)
-                    && value.ValueKind==JsonValueKind.Number&&value.GetInt32()==1;
-                var marks=new List<string>();
-                if(flag) marks.Add("default");
-                if(On("forced")) marks.Add("forced");
-                if(On("hearing_impaired")) marks.Add("hearing_impaired");
-                if(On("comment")) marks.Add("comment");
-                args.AddRange(["-disposition:"+kind+":"+edit.Ordinal,marks.Count==0?"0":string.Join('+',marks)]);
+                var streamType=sources[i].TryGetProperty("codec_type",out var streamKind)?streamKind.GetString():null;
+                if(!((edit.Type=="audio" && streamType=="audio") || (edit.Type=="subtitles" && streamType=="subtitle"))) continue;
+                if(seen++==edit.Ordinal) { defaults[i]=flag; break; }
             }
         }
+        args.AddRange(PreservedDispositionArgs(sources,defaults,0));
         args.Add(output);
         await tools.CheckedAsync("ffmpeg",args,directory,ct);
         return new(output,[],JsonSerializer.SerializeToElement(edits.Select(edit=>edit.Note).ToArray()));

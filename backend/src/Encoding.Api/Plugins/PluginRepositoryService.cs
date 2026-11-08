@@ -372,6 +372,8 @@ public sealed partial class PluginRepositoryService(IConfiguration configuration
         if (!repository.Enabled) throw new PluginRepositoryException("Ce dépôt est désactivé.");
         var plugin = repository.Packages.SingleOrDefault(item => item.Id == pluginId) ?? throw new PluginRepositoryException("Ce paquet n'existe pas dans le dépôt.");
         var wanted = plugin.Versions.SingleOrDefault(item => item.Version == (version ?? plugin.LatestVersion)) ?? throw new PluginRepositoryException("Cette version n'existe pas dans le dépôt.");
+        // Index des plugins illisible : refus avant tout téléchargement et avant d'installer une dépendance d'outil (aucun Store n'est modifié).
+        _ = store.InstalledStrict();
         byte[] archive;
         try
         {

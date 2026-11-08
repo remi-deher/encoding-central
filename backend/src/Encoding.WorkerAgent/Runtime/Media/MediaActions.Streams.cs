@@ -95,16 +95,18 @@ public sealed partial class MediaActions
 
     private async Task CopyKeptStreamsAsync(JsonElement streams, HashSet<int> toRemove, string current, string file, string directory, CancellationToken ct)
     {
-        var args = new List<string> { "-nostdin", "-y", "-v", "error", "-i", current, "-map_metadata", "0", "-map_chapters", "0" };
-        var mapped = 0;
+        List<string> args = ["-nostdin", "-y", "-v", "error", .. SourceInput(current), "-map_metadata", "0", "-map_chapters", "0"];
+        var kept = new List<JsonElement>();
         foreach (var stream in streams.EnumerateArray())
         {
             var index = stream.GetProperty("index").GetInt32();
             if (toRemove.Contains(index)) continue;
             args.AddRange(["-map", "0:" + index]);
-            mapped++;
+            kept.Add(stream);
         }
-        if (mapped == 0) throw new MediaToolException("sélection de pistes", 1);
+        if (kept.Count == 0) throw new MediaToolException("sélection de pistes", 1);
+        // Dispositions source explicites : retirer des pistes ne doit pas en marquer d'autres « default » (#24).
+        args.AddRange(PreservedDispositionArgs(kept));
         args.AddRange(["-c", "copy", file]);
         await tools.CheckedAsync("ffmpeg", args, directory, ct);
     }
@@ -143,7 +145,7 @@ public sealed partial class MediaActions
         ValidateDuration(before, after, config, issues);
         ValidateTrackCounts(sourceStreams, outputStreams, sourceSubtitles, outputSubtitles, config, issues);
         ValidateAudio(sourceAudio, outputAudio, config, issues);
-        ValidateSubtitles(sourceSubtitles, outputSubtitles, config, issues);
+        ValidateSubtitles(sourceSubtitles, outputSubtitles, IsIsoMediaContainer(after), config, issues);
         ValidateChapters(before, after, config, issues);
         ValidateSizeGrowth(before, after, config, issues);
         await ValidateAttachmentsAsync(original, current, directory, config, issues, ct);
@@ -235,7 +237,7 @@ public sealed partial class MediaActions
         }
     }
 
-    private static void ValidateSubtitles(JsonElement[] sourceSubtitles, JsonElement[] outputSubtitles,
+    private static void ValidateSubtitles(JsonElement[] sourceSubtitles, JsonElement[] outputSubtitles, bool isoMediaOutput,
         IReadOnlyDictionary<string, JsonElement> config, List<string> issues)
     {
         var allowedSubtitles = Csv(config, "allowedSubtitleCodecs");
@@ -252,7 +254,10 @@ public sealed partial class MediaActions
                 var result = outputSubtitles[i];
                 foreach (var (tag, label) in new[] { ("language", "langue"), ("title", "titre") })
                     if (Tag(source, tag) != Tag(result, tag)) issues.Add($"La {label} de la piste de sous-titres {i + 1} a changé.");
-                foreach (var (flag, label) in new[] { ("default", "par défaut"), ("forced", "forcé"), ("hearing_impaired", "malentendant") })
+                // « default » : en MP4/MOV, le muxer active d'office la première piste d'un type qui n'en a aucune (limite du conteneur, #28).
+                if (ExpectedOutputDefault(sourceSubtitles, i, isoMediaOutput) != Disposition(result, "default"))
+                    issues.Add($"Le marqueur par défaut de la piste de sous-titres {i + 1} a changé.");
+                foreach (var (flag, label) in new[] { ("forced", "forcé"), ("hearing_impaired", "malentendant") })
                     if (Disposition(source, flag) != Disposition(result, flag)) issues.Add($"Le marqueur {label} de la piste de sous-titres {i + 1} a changé.");
             }
         }

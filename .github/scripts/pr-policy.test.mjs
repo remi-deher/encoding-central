@@ -1,69 +1,81 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync, rmSync, chmodSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { readWorkflow, job, step, value } from './workflow-test-helpers.mjs';
 
-const workflow = readFileSync(new URL('../workflows/pr-policy.yml', import.meta.url), 'utf8');
-const script = workflow.slice(workflow.lastIndexOf('        run: |\n') + '        run: |\n'.length)
-  .split('\n').map(line => line.replace(/^          /, '')).join('\n');
-const sha = 'a'.repeat(40);
-const snapshot = (state, conclusion = 'SUCCESS', headRefOid = sha) => ({
-  state, headRefOid, statusCheckRollup: [{ name: 'promotion-ci', status: 'COMPLETED', conclusion, startedAt: '2026-10-26T00:00:00Z' }],
-});
-function execute(snapshots) {
+const script = value(step(job(readWorkflow('pr-policy'), 'policy'), 'Validate the source and target branches'), 'run');
+const repository = 'example/encoding-central';
+
+function execute(base, head, source = repository, closeStatus = 0) {
   const directory = mkdtempSync(join(tmpdir(), 'encoding-pr-policy-'));
   const calls = join(directory, 'calls');
-  const stateFile = join(directory, 'snapshots.json');
-  writeFileSync(stateFile, JSON.stringify(snapshots));
-  writeFileSync(join(directory, 'gh'), `#!/usr/bin/env node
+  try {
+    writeFileSync(calls, '');
+    writeFileSync(join(directory, 'gh'), `#!/usr/bin/env node
 const fs = require('node:fs');
 const args = process.argv.slice(2);
 fs.appendFileSync(process.env.POLICY_TEST_CALLS, JSON.stringify(args) + '\\n');
-if (args[1] === 'view') {
-  const values = JSON.parse(fs.readFileSync(process.env.POLICY_TEST_STATE, 'utf8'));
-  const value = values.length > 1 ? values.shift() : values[0];
-  fs.writeFileSync(process.env.POLICY_TEST_STATE, JSON.stringify(values));
-  console.log(JSON.stringify(value));
-}
-`);
-  chmodSync(join(directory, 'gh'), 0o755);
-  let status = 0;
-  try {
-    execFileSync('bash', ['-e', '-c', script], { timeout: 3000, stdio: 'pipe', env: {
-      ...process.env, PATH: `${directory}:${process.env.PATH}`, PR_NUMBER: '423',
-      GITHUB_REPOSITORY: 'example/repo', EXPECTED_SHA: sha,
-      POLICY_TEST_CALLS: calls, POLICY_TEST_STATE: stateFile,
-    } });
-  } catch (error) { status = error.status; }
-  try { return { status, calls: readFileSync(calls, 'utf8').trim().split('\n').map(line => JSON.parse(line)) }; }
-  finally { rmSync(directory, { recursive: true, force: true }); }
+if (args[0] !== 'pr' || args[1] !== 'close') process.exit(99);
+process.exit(Number(process.env.POLICY_TEST_CLOSE_STATUS));
+`, { mode: 0o755 });
+    const result = spawnSync('bash', ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', script], {
+      encoding: 'utf8', timeout: 5000,
+      env: {
+        ...process.env, PATH: `${directory}:${process.env.PATH}`, GH_TOKEN: 'test-only',
+        PR_NUMBER: '423', GITHUB_REPOSITORY: repository,
+        BASE_REF: base, HEAD_REF: head, HEAD_REPO: source,
+        POLICY_TEST_CALLS: calls, POLICY_TEST_CLOSE_STATUS: String(closeStatus),
+      },
+    });
+    assert.ifError(result.error);
+    assert.equal(result.signal, null);
+    return { ...result, calls: readFileSync(calls, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)) };
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 }
 
-test('policy serializes events for the same PR and cancels superseded runs', () => {
-  assert.match(workflow, /concurrency:\n  group: pr-policy-\$\{\{ github.event.pull_request.number \}\}\n  cancel-in-progress: true/);
-});
-test('a completed promotion of the expected commit is an idempotent success', () => {
-  const result = execute([snapshot('MERGED')]);
-  assert.equal(result.status, 0);
-  assert.ok(result.calls.every(args => args[1] === 'view'));
-});
-test('a concurrent merge while awaiting CI succeeds without issuing another merge', () => {
-  const result = execute([snapshot('OPEN'), snapshot('MERGED')]);
-  assert.equal(result.status, 0);
-  assert.equal(result.calls.filter(args => args.includes('--disable-auto')).length, 1);
-  assert.ok(!result.calls.some(args => args.includes('--auto')));
-});
-test('an open promotion enables auto merge for the exact expected commit', () => {
-  const result = execute([snapshot('OPEN')]);
-  assert.equal(result.status, 0);
-  assert.ok(result.calls.some(args => args.includes('--auto') && args.includes('--match-head-commit') && args.includes(sha)));
-});
-test('a changed commit, unsuccessful gate or closed unmerged PR never authorizes a merge', () => {
-  for (const value of [snapshot('MERGED', 'SUCCESS', 'b'.repeat(40)), snapshot('MERGED', 'FAILURE'), snapshot('CLOSED'), snapshot('OPEN', 'FAILURE')]) {
-    const result = execute([value]);
-    assert.equal(result.status, 1);
-    assert.ok(!result.calls.some(args => args.includes('--auto')));
-  }
+const cases = [
+  ['feature/xyz', 'test', true],
+  ['dev', 'test', true],
+  ['main', 'test', false],
+  ['test', 'dev', true],
+  ['feature/xyz', 'dev', false],
+  ['dev', 'main', true],
+  ['test', 'main', false],
+  ['feature/xyz', 'unknown', false],
+  ['main', 'dev', false],
+  ['feature/xyz', 'main', false],
+];
+for (const [head, base, allowed] of cases) {
+  test(`Validate executes ${head} -> ${base}: ${allowed ? 'allowed' : 'closed'}`, () => {
+    const result = execute(base, head);
+    assert.equal(result.status, allowed ? 0 : 1, result.stdout + result.stderr);
+    if (allowed) {
+      assert.deepEqual(result.calls, []);
+      assert.match(result.stdout, /Pull request autorisée/);
+    } else {
+      assert.equal(result.calls.length, 1);
+      const [args] = result.calls;
+      assert.deepEqual(args.slice(0, 6), ['pr', 'close', '423', '--repo', repository, '--comment']);
+      assert.match(args[6], /PR fermée automatiquement.*vers test.*test vers dev.*dev vers main/);
+      assert.equal(args.length, 7);
+    }
+  });
+}
+
+for (const [head, base] of [['feature/xyz', 'test'], ['dev', 'test'], ['test', 'dev'], ['dev', 'main']]) {
+  test(`Validate closes fork ${head} -> ${base}`, () => {
+    const result = execute(base, head, 'fork/encoding-central');
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.equal(result.calls.length, 1);
+    assert.deepEqual(result.calls[0].slice(0, 5), ['pr', 'close', '423', '--repo', repository]);
+  });
+}
+
+test('Validate propagates a failure to close a forbidden PR', () => {
+  const result = execute('dev', 'feature/xyz', repository, 23);
+  assert.equal(result.status, 23);
+  assert.equal(result.calls.length, 1);
 });

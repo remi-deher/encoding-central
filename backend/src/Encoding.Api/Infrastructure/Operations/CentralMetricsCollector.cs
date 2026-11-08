@@ -48,6 +48,13 @@ public sealed class CentralMetricsCollector(DbDataSource dataSource, WorkerPrese
         writer.Counter("encoding_sqlite_writer_long_holds_total", "Détentions au-delà du seuil configuré.", state.LongHolds);
         writer.Counter("encoding_sqlite_writer_wait_seconds_total", "Temps cumulé d’attente des écritures admises.", state.WaitSeconds);
         writer.Counter("encoding_sqlite_writer_hold_seconds_total", "Temps cumulé de détention de l’écrivain.", state.HoldSeconds);
+        // Écritures accessoires abandonnées (prolongation de session, last_used_at des jetons), par motif, sans identifiant (#32).
+        var (busy, timeout, failed) = Infrastructure.Data.Sqlite.BestEffortWrite.Abandoned;
+        const string abandoned = "encoding_sqlite_best_effort_abandoned_total";
+        const string help = "Écritures accessoires abandonnées (écrivain occupé, budget de 250 ms dépassé, autre erreur).";
+        writer.Counter(abandoned, help, busy, ("reason", "busy"));
+        writer.Counter(abandoned, help, timeout, ("reason", "timeout"));
+        writer.Counter(abandoned, help, failed, ("reason", "error"));
     }
 
     private async Task WriteCentralAsync(PrometheusWriter writer, CancellationToken ct)

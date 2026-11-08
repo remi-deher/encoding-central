@@ -429,6 +429,14 @@ internal static class AuthScenarios
         Check(await anonymous.StatusAsync(get, execution, nodeToken: NodeToken()) == HttpStatusCode.Unauthorized, "An unknown node token cannot read executions.");
         Check(await anonymous.StatusAsync(get, "/api/v1/executions", nodeToken: token) == HttpStatusCode.Unauthorized, "A node token opens no other management route.");
         Check(await anonymous.StatusAsync(post, $"/api/v1/executions/{Guid.NewGuid()}/cancel", csrf: false, nodeToken: token) == HttpStatusCode.Unauthorized, "A node token cannot modify management state.");
+        // #23 : le rapport d'état Store appliqué est la seule écriture ouverte au jeton worker (AllowNodeCredentialReport) ; l'identité vient du jeton.
+        var report = new { revision = 0, items = Array.Empty<object>() };
+        var reported = await anonymous.StatusAsync(put, "/api/v1/store/applied-state", report, csrf: false, nodeToken: token);
+        Check(reported is HttpStatusCode.OK or HttpStatusCode.Conflict, $"An enrolled worker reports its applied Store state with its token only (got {(int)reported}).");
+        Check(await anonymous.StatusAsync(put, "/api/v1/store/applied-state", report, csrf: false) == HttpStatusCode.Unauthorized, "A Store report without a token is refused.");
+        Check(await anonymous.StatusAsync(put, "/api/v1/store/applied-state", report, csrf: false, nodeToken: NodeToken()) == HttpStatusCode.Unauthorized, "A Store report with an unknown token is refused.");
+        Check(await anonymous.StatusAsync(put, $"/api/v1/workers/{first.Id}/store-state", report, csrf: false, nodeToken: token) is HttpStatusCode.Unauthorized or HttpStatusCode.MethodNotAllowed or HttpStatusCode.NotFound,
+            "A node token still cannot write a worker's desired Store state.");
 
         // Jumelage par clé : demandes publiques bornées, approbation réservée aux administrateurs.
         var pairing = new[] { "0123456789ABCDEF", "FEDCBA9876543210", "AAAAAAAAAAAAAAAA" };
@@ -460,6 +468,8 @@ internal static class AuthScenarios
         Check(await anonymous.StatusAsync(post, leave, csrf: false, nodeToken: token) == HttpStatusCode.Unauthorized, "Another node's token cannot make a node leave.");
         Check(await anonymous.StatusAsync(post, leave, csrf: false, nodeToken: leaving.WorkerToken) == HttpStatusCode.NoContent, "A node leaves its cluster with its own token.");
         Check(await anonymous.StatusAsync(post, leave, csrf: false, nodeToken: leaving.WorkerToken) == HttpStatusCode.Unauthorized, "A node that left cannot act again with its old identity.");
+        Check(await anonymous.StatusAsync(put, "/api/v1/store/applied-state", new { revision = 0, items = Array.Empty<object>() }, csrf: false, nodeToken: leaving.WorkerToken) == HttpStatusCode.Unauthorized,
+            "A node that left cannot report a Store state with its old token.");
         Check(await anonymous.StatusAsync(put, $"/api/v1/workers/{leaving.Id}/heartbeat", new WorkerHeartbeatRequest(leaving.Name, leaving.Roles, 1, leaving.Capabilities), csrf: false, nodeToken: leaving.WorkerToken) == HttpStatusCode.Gone, "A node that left is not reactivated by a heartbeat (it is told its identity is revoked).");
         var after = (await (await admin.SendAsync(get, "/api/v1/workers")).Content.ReadFromJsonAsync<List<WorkerResponse>>(Json))!;
         Check(after.All(worker => worker.Id != leaving.Id), "A node that left no longer appears in the cluster.");
