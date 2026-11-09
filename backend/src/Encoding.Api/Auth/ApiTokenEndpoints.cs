@@ -32,8 +32,8 @@ public static class ApiTokenEndpoints
 
             var (scopes, unknown) = ApiTokenScopes.Normalize(request.Scopes);
             if (unknown.Count > 0)
-                return Results.ValidationProblem(new Dictionary<string,
-                    string[]> { ["scopes"] = [$"Portées inconnues : {string.Join(", ", unknown)}. Valeurs possibles : {string.Join(", ", ApiTokenScopes.Allowed)}."] });
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                    { ["scopes"] = [$"Portées inconnues : {string.Join(", ", unknown)}. Valeurs possibles : {string.Join(", ", ApiTokenScopes.Allowed)}."] });
             if (role == "viewer" && scopes.Count > 0)
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["scopes"] = ["Un jeton en lecture seule ne peut pas porter de portée d’écriture."] });
 

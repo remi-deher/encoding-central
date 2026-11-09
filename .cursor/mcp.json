@@ -1,0 +1,60 @@
+{
+  "mcpServers": {
+    "AgentsRoom-MCP": {
+      "command": "node",
+      "args": [
+        "/tmp/.mount_AgentsPBkOpo/resources/app-mcp-server.cjs"
+      ],
+      "env": {
+        "AR_PROJECT_ID": "proj-1794007269749-8icymp",
+        "AR_PROJECT_PATH": "/home/remi/GitHub/encoding-central",
+        "AR_API_BASE_URL": "https://agentsroom.dev",
+        "AR_SETTINGS_FILE": "/home/remi/.agentsroom/settings.json",
+        "AR_APP_VERSION": "1.261.0",
+        "AR_BRIDGE_FILE": "/home/remi/.agentsroom/browser-bridge.json"
+      }
+    },
+    "AgentsRoom-Test-Runner": {
+      "command": "node",
+      "args": [
+        "/tmp/.mount_AgentsPBkOpo/resources/test-runner-mcp-server.cjs"
+      ],
+      "env": {
+        "AR_BROWSER_BRIDGE_FILE": "/home/remi/.agentsroom/browser-bridge.json",
+        "AR_BROWSER_PROJECT_ID": "f46b44e1-7e50-48c9-899c-efafe678c5f3",
+        "AR_PROJECT_PATH": "/home/remi/GitHub/encoding-central"
+      }
+    },
+    "AgentsRoom-QA-Tester": {
+      "command": "node",
+      "args": [
+        "/tmp/.mount_AgentsPBkOpo/resources/qa-tester-mcp-server.cjs"
+      ],
+      "env": {
+        "AR_BROWSER_BRIDGE_FILE": "/home/remi/.agentsroom/browser-bridge.json",
+        "AR_BROWSER_PROJECT_ID": "f46b44e1-7e50-48c9-899c-efafe678c5f3"
+      }
+    },
+    "AgentsRoom-Browser": {
+      "command": "node",
+      "args": [
+        "/tmp/.mount_AgentsPBkOpo/resources/browser-mcp-server.cjs"
+      ],
+      "env": {
+        "AR_BROWSER_BRIDGE_FILE": "/home/remi/.agentsroom/browser-bridge.json",
+        "AR_BROWSER_PROJECT_ID": "f46b44e1-7e50-48c9-899c-efafe678c5f3"
+      }
+    },
+    "AgentsRoom-Chrome": {
+      "command": "node",
+      "args": [
+        "/tmp/.mount_AgentsPBkOpo/resources/browser-mcp-server.cjs"
+      ],
+      "env": {
+        "AR_BROWSER_BRIDGE_FILE": "/home/remi/.agentsroom/browser-bridge.json",
+        "AR_BROWSER_PROJECT_ID": "f46b44e1-7e50-48c9-899c-efafe678c5f3",
+        "AR_BROWSER_KIND": "chrome"
+      }
+    }
+  }
+}

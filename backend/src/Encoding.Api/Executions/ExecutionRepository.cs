@@ -10,7 +10,7 @@ namespace Encoding.Api.Executions;
 public sealed class ExecutionRepository(DbDataSource dataSource, FlowComponentRegistry? components = null,
     ExecutionStreamBroadcaster? broadcaster = null)
 {
-    private static readonly JsonSerializerOptions Json=new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     // Le bail vit dans la base du propriétaire : sans preuve locale et non expirée, l'état répliqué ne suffit pas.
     private static string ActivelyProcessingSql(string executionAlias) =>
         $"({executionAlias}.state='running' AND w.worker_id IS NOT NULL AND w.lease_until>(strftime('%Y-%m-%d %H:%M:%f', 'now') || '000Z'))";
@@ -34,13 +34,30 @@ public sealed class ExecutionRepository(DbDataSource dataSource, FlowComponentRe
  ,CASE WHEN {ActivelyProcessingSql("e")} THEN TRUE ELSE FALSE END
  """;
     private static ExecutionResponse Read(DbDataReader r) => new(
-    r.GetGuid(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetInt32(4), r.GetString(5),
-    r.IsDBNull(6) ? null : r.GetGuid(6), r.IsDBNull(7) ? null : r.GetString(7), r.IsDBNull(8) ? null : r.GetDecimal(8),
-    r.GetString(9), r.GetInt32(10), r.GetInt32(11), r.GetFieldValue<DateTimeOffset>(12),
-    r.IsDBNull(13) ? null : r.GetFieldValue<DateTimeOffset>(13), r.IsDBNull(14) ? null : r.GetFieldValue<DateTimeOffset>(14),
-        r.GetFieldValue<DateTimeOffset>(15),ReadMetadata(r,16),ReadMetadata(r,17),r.IsDBNull(18)?null:r.GetString(18),ReadVideoEncodings(r,19),
-            r.IsDBNull(20)?null:r.GetGuid(20),
-        ReadFailure(r), r.IsDBNull(22) ? null : r.GetString(22), r.GetBoolean(23));
+        r.GetGuid(0),
+        r.GetString(1),
+        r.GetString(2),
+        r.GetString(3),
+        r.GetInt32(4),
+        r.GetString(5),
+        r.IsDBNull(6) ? null : r.GetGuid(6),
+        r.IsDBNull(7) ? null : r.GetString(7),
+        r.IsDBNull(8) ? null : r.GetDecimal(8),
+        r.GetString(9),
+        r.GetInt32(10),
+        r.GetInt32(11),
+        r.GetFieldValue<DateTimeOffset>(12),
+        r.IsDBNull(13) ? null : r.GetFieldValue<DateTimeOffset>(13),
+        r.IsDBNull(14) ? null : r.GetFieldValue<DateTimeOffset>(14),
+        r.GetFieldValue<DateTimeOffset>(15),
+        ReadMetadata(r, 16),
+        ReadMetadata(r, 17),
+        r.IsDBNull(18) ? null : r.GetString(18),
+        ReadVideoEncodings(r, 19),
+        r.IsDBNull(20) ? null : r.GetGuid(20),
+        ReadFailure(r),
+        r.IsDBNull(22) ? null : r.GetString(22),
+        r.GetBoolean(23));
     private static ExecutionFailureInfo? ReadFailure(DbDataReader reader)
     {
         if (reader.GetString(5) != "failed") return null;
